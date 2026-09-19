@@ -395,9 +395,9 @@ namespace RetroBar.Utilities
         }
 
         /// <summary>
-        /// Saves (or, if x and y are both 0, clears) one tagged nudge for one monitor.
+        /// Saves (or, if the value is empty, clears) one tagged adjustment for one monitor.
         /// </summary>
-        public void SetMonitorOffset(string deviceName, string tag, double x, double y)
+        public void SetMonitorOffset(string deviceName, string tag, MonitorOffsetValue value)
         {
             if (string.IsNullOrEmpty(deviceName) || string.IsNullOrEmpty(tag))
             {
@@ -409,13 +409,13 @@ namespace RetroBar.Utilities
                 ? new Dictionary<string, MonitorOffsetValue>(existing)
                 : new Dictionary<string, MonitorOffsetValue>();
 
-            if (x == 0 && y == 0)
+            if (value == null || value.IsEmpty)
             {
                 perTag.Remove(tag);
             }
             else
             {
-                perTag[tag] = new MonitorOffsetValue { X = x, Y = y };
+                perTag[tag] = value;
             }
 
             if (perTag.Count == 0)

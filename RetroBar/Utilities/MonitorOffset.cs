@@ -17,10 +17,13 @@ namespace RetroBar.Utilities
     /// made up later for an element that doesn't have this attached yet; whatever tag is
     /// entered in the Properties tab is what gets looked for.
     ///
-    /// The offset is applied as a RenderTransform, not a Margin: it only ever changes where
-    /// the element is painted, never its layout size or its neighbors' positions, so unlike a
-    /// couple of past hand-tuned Margin fixes in this app, it cannot make a border overflow or
-    /// clip the space its parent thinks it occupies.
+    /// Position and scale are applied as a RenderTransform, not a Margin: they only ever change
+    /// how the element is painted, never its layout size or its neighbors' positions, so unlike
+    /// a couple of past hand-tuned Margin fixes in this app, they cannot make a border overflow
+    /// or clip the space its parent thinks it occupies. Width/Height are applied as ordinary
+    /// layout overrides (the same as setting them in XAML), and text rendering/bitmap scaling
+    /// mode are applied as the matching WPF rendering hints - see MonitorOffsetValue for details
+    /// on each.
     /// </summary>
     public static class MonitorOffset
     {
@@ -93,7 +96,51 @@ namespace RetroBar.Utilities
             string deviceName = FindDeviceName(element);
             MonitorOffsetValue offset = Settings.Instance.GetMonitorOffset(deviceName, tag);
 
-            element.RenderTransform = offset.IsEmpty ? null : new TranslateTransform(offset.X, offset.Y);
+            bool hasScale = offset.Scale.HasValue && offset.Scale.Value != 1;
+
+            if (offset.X != 0 || offset.Y != 0 || hasScale)
+            {
+                var group = new TransformGroup();
+
+                if (hasScale)
+                {
+                    // Scale from the element's own center rather than its top-left corner, so a
+                    // size nudge doesn't also shove the element sideways.
+                    element.RenderTransformOrigin = new Point(0.5, 0.5);
+                    group.Children.Add(new ScaleTransform(offset.Scale.Value, offset.Scale.Value));
+                }
+
+                group.Children.Add(new TranslateTransform(offset.X, offset.Y));
+                element.RenderTransform = group;
+            }
+            else
+            {
+                element.RenderTransform = null;
+            }
+
+            // Width/Height: an explicit override behaves exactly like setting them in XAML. This
+            // element opted in by being tagged, so resetting to NaN (WPF's "size to content")
+            // when no override is saved is the correct default, not a side effect.
+            element.Width = offset.Width ?? double.NaN;
+            element.Height = offset.Height ?? double.NaN;
+
+            if (offset.TextRendering != null && Enum.TryParse(offset.TextRendering, out TextRenderingMode renderingMode))
+            {
+                TextOptions.SetTextRenderingMode(element, renderingMode);
+            }
+            else
+            {
+                element.ClearValue(TextOptions.TextRenderingModeProperty);
+            }
+
+            if (offset.BitmapScaling != null && Enum.TryParse(offset.BitmapScaling, out BitmapScalingMode scalingMode))
+            {
+                RenderOptions.SetBitmapScalingMode(element, scalingMode);
+            }
+            else
+            {
+                element.ClearValue(RenderOptions.BitmapScalingModeProperty);
+            }
         }
 
         private static string FindDeviceName(DependencyObject element)

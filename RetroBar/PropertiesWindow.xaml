@@ -635,6 +635,11 @@
                                        TextWrapping="Wrap"
                                        MinWidth="0"
                                        Margin="0,0,0,6" />
+                            <TextBlock Text="{DynamicResource per_monitor_extra_description}"
+                                       TextWrapping="Wrap"
+                                       MinWidth="0"
+                                       FontStyle="Italic"
+                                       Margin="0,0,0,6" />
                             <DockPanel>
                                 <Label VerticalAlignment="Center"
                                        Target="{Binding ElementName=cboMonitor}">
@@ -658,30 +663,69 @@
                             <ItemsControl x:Name="icMonitorOffsets">
                                 <ItemsControl.ItemTemplate>
                                     <DataTemplate>
-                                        <Grid Margin="0,2">
-                                            <Grid.ColumnDefinitions>
-                                                <ColumnDefinition Width="*" />
-                                                <ColumnDefinition Width="50" />
-                                                <ColumnDefinition Width="50" />
-                                                <ColumnDefinition Width="24" />
-                                            </Grid.ColumnDefinitions>
-                                            <TextBlock Grid.Column="0"
-                                                       Text="{Binding Tag}"
-                                                       VerticalAlignment="Center"
-                                                       MinWidth="0" />
-                                            <TextBox Grid.Column="1"
-                                                     Margin="2,0"
-                                                     Text="{Binding X, UpdateSourceTrigger=PropertyChanged}" />
-                                            <TextBox Grid.Column="2"
-                                                     Margin="2,0"
-                                                     Text="{Binding Y, UpdateSourceTrigger=PropertyChanged}" />
-                                            <Button Grid.Column="3"
-                                                    Content="{DynamicResource remove}"
-                                                    Width="24"
-                                                    Padding="0"
-                                                    Click="RemoveOffsetRow_OnClick"
-                                                    Tag="{Binding}" />
-                                        </Grid>
+                                        <Border BorderThickness="0,0,0,1"
+                                                BorderBrush="#33000000"
+                                                Padding="0,4"
+                                                Margin="0,0,0,2">
+                                            <StackPanel Orientation="Vertical">
+                                                <Grid>
+                                                    <Grid.ColumnDefinitions>
+                                                        <ColumnDefinition Width="*" />
+                                                        <ColumnDefinition Width="50" />
+                                                        <ColumnDefinition Width="50" />
+                                                        <ColumnDefinition Width="24" />
+                                                    </Grid.ColumnDefinitions>
+                                                    <TextBlock Grid.Column="0"
+                                                               Text="{Binding Tag}"
+                                                               FontWeight="Bold"
+                                                               VerticalAlignment="Center"
+                                                               MinWidth="0" />
+                                                    <TextBox Grid.Column="1"
+                                                             Margin="2,0"
+                                                             Text="{Binding X, UpdateSourceTrigger=PropertyChanged}" />
+                                                    <TextBox Grid.Column="2"
+                                                             Margin="2,0"
+                                                             Text="{Binding Y, UpdateSourceTrigger=PropertyChanged}" />
+                                                    <Button Grid.Column="3"
+                                                            Content="{DynamicResource remove}"
+                                                            Width="24"
+                                                            Padding="0"
+                                                            Click="RemoveOffsetRow_OnClick"
+                                                            Tag="{Binding}" />
+                                                </Grid>
+                                                <Grid Margin="0,4,0,0">
+                                                    <Grid.ColumnDefinitions>
+                                                        <ColumnDefinition Width="*" />
+                                                        <ColumnDefinition Width="*" />
+                                                        <ColumnDefinition Width="*" />
+                                                        <ColumnDefinition Width="*" />
+                                                        <ColumnDefinition Width="*" />
+                                                    </Grid.ColumnDefinitions>
+                                                    <StackPanel Grid.Column="0" Margin="0,0,4,0">
+                                                        <TextBlock Text="{DynamicResource width}" FontSize="9" MinWidth="0" />
+                                                        <TextBox Text="{Binding WidthText, UpdateSourceTrigger=PropertyChanged}" />
+                                                    </StackPanel>
+                                                    <StackPanel Grid.Column="1" Margin="0,0,4,0">
+                                                        <TextBlock Text="{DynamicResource height}" FontSize="9" MinWidth="0" />
+                                                        <TextBox Text="{Binding HeightText, UpdateSourceTrigger=PropertyChanged}" />
+                                                    </StackPanel>
+                                                    <StackPanel Grid.Column="2" Margin="0,0,4,0">
+                                                        <TextBlock Text="{DynamicResource scale}" FontSize="9" MinWidth="0" />
+                                                        <TextBox Text="{Binding ScaleText, UpdateSourceTrigger=PropertyChanged}" />
+                                                    </StackPanel>
+                                                    <StackPanel Grid.Column="3" Margin="0,0,4,0">
+                                                        <TextBlock Text="{DynamicResource text_rendering}" FontSize="9" MinWidth="0" />
+                                                        <ComboBox ItemsSource="{Binding Source={x:Static Settings:MonitorOffsetRow.TextRenderingOptions}}"
+                                                                  SelectedItem="{Binding TextRendering}" />
+                                                    </StackPanel>
+                                                    <StackPanel Grid.Column="4">
+                                                        <TextBlock Text="{DynamicResource bitmap_scaling}" FontSize="9" MinWidth="0" />
+                                                        <ComboBox ItemsSource="{Binding Source={x:Static Settings:MonitorOffsetRow.BitmapScalingOptions}}"
+                                                                  SelectedItem="{Binding BitmapScaling}" />
+                                                    </StackPanel>
+                                                </Grid>
+                                            </StackPanel>
+                                        </Border>
                                     </DataTemplate>
                                 </ItemsControl.ItemTemplate>
                             </ItemsControl>

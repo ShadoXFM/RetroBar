@@ -503,7 +503,7 @@ namespace RetroBar
 
             foreach (var pair in Settings.Instance.GetMonitorOffsets(selected.DeviceName).OrderBy(p => p.Key))
             {
-                _monitorOffsetRows.Add(new MonitorOffsetRow(selected.DeviceName, pair.Key, pair.Value.X, pair.Value.Y));
+                _monitorOffsetRows.Add(new MonitorOffsetRow(selected.DeviceName, pair.Key, pair.Value));
             }
         }
 
@@ -527,11 +527,11 @@ namespace RetroBar
                 return;
             }
 
-            // Starts at (0,0), which Settings.SetMonitorOffset treats as "no adjustment" and
-            // won't persist - the row exists only in this list until the person edits X or Y
-            // to something non-zero. That matches every other value in this app: nothing is
-            // saved until it actually differs from the default.
-            _monitorOffsetRows.Add(new MonitorOffsetRow(selected.DeviceName, tag, 0, 0));
+            // Starts empty, which Settings.SetMonitorOffset treats as "no adjustment" and won't
+            // persist - the row exists only in this list until the person edits a field away
+            // from its default. That matches every other value in this app: nothing is saved
+            // until it actually differs from the default.
+            _monitorOffsetRows.Add(new MonitorOffsetRow(selected.DeviceName, tag, new MonitorOffsetValue()));
             cboNewOffsetTag.Text = "";
         }
 
@@ -542,7 +542,7 @@ namespace RetroBar
                 return;
             }
 
-            Settings.Instance.SetMonitorOffset(row.DeviceName, row.Tag, 0, 0);
+            Settings.Instance.SetMonitorOffset(row.DeviceName, row.Tag, null);
             _monitorOffsetRows.Remove(row);
         }
 
