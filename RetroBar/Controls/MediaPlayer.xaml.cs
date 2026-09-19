@@ -3,6 +3,7 @@ using RetroBar.Utilities;
 using System;
 using System.Windows;
 using System.Windows.Controls;
+using System.Windows.Documents;
 using System.Windows.Media;
 using System.Windows.Media.Animation;
 
@@ -27,6 +28,9 @@ namespace RetroBar.Controls
         private bool _marqueeRunning;
         private double _marqueeOverflow;
 
+        private UIElementAdorner _albumArtAdorner;
+        private Image _albumArtVisual;
+
         public MediaPlayer()
         {
             InitializeComponent();
@@ -42,6 +46,7 @@ namespace RetroBar.Controls
             _isLoaded = true;
 
             Settings.Instance.PropertyChanged += Settings_PropertyChanged;
+            MonitorAdjustments.Changed += MonitorAdjustments_Changed;
 
             if (!Settings.Instance.ShowMediaPlayer)
             {
@@ -88,6 +93,7 @@ namespace RetroBar.Controls
             StopMarquee();
             AlbumArtImage.Source = null;
             AlbumArtImage.Visibility = Visibility.Collapsed;
+            RemoveAlbumArtAdorner();
 
             Visibility = Visibility.Collapsed;
         }
@@ -136,6 +142,7 @@ namespace RetroBar.Controls
                 StopMarquee();
                 AlbumArtImage.Source = null;
                 AlbumArtImage.Visibility = Visibility.Collapsed;
+                RemoveAlbumArtAdorner();
                 return;
             }
 
@@ -178,7 +185,114 @@ namespace RetroBar.Controls
             ImageSource art = Settings.Instance.ShowMediaPlayerAlbumArt ? _sessionManager?.Thumbnail : null;
 
             AlbumArtImage.Source = art;
-            AlbumArtImage.Visibility = art == null ? Visibility.Collapsed : Visibility.Visible;
+            // Hidden, not Visible/Collapsed: it still reserves its normal layout slot (used
+            // to anchor the Adorner's base position/size) but is never actually painted -
+            // the Adorner-hosted copy is what's shown. See UpdateAlbumArtAdorner.
+            AlbumArtImage.Visibility = art == null ? Visibility.Collapsed : Visibility.Hidden;
+
+            if (art == null)
+            {
+                RemoveAlbumArtAdorner();
+            }
+            else
+            {
+                // AlbumArtImage.ActualWidth/Height (used below) isn't accurate until layout
+                // has run at least once after the Visibility change above, so defer.
+                Dispatcher.BeginInvoke(new Action(UpdateAlbumArtAdorner), System.Windows.Threading.DispatcherPriority.Loaded);
+            }
+        }
+
+        /// <summary>
+        /// Creates (on first use) or refreshes the Adorner-hosted copy of AlbumArtImage that's
+        /// actually shown on screen. Rendering through an Adorner - rather than AlbumArtImage
+        /// itself - means a per-monitor MonitorAdjustments offset can push the art outside
+        /// AlbumArtImage's own layout bounds without the Tray GroupBox's Padding/
+        /// BorderThickness (or any other ancestor's) clipping it. See
+        /// Utilities/UIElementAdorner.cs for why an Adorner specifically achieves that.
+        /// </summary>
+        private void UpdateAlbumArtAdorner()
+        {
+            if (AlbumArtImage.Source == null)
+            {
+                RemoveAlbumArtAdorner();
+                return;
+            }
+
+            AdornerLayer layer = AdornerLayer.GetAdornerLayer(AlbumArtImage);
+            if (layer == null)
+            {
+                return;
+            }
+
+            if (_albumArtAdorner == null)
+            {
+                _albumArtVisual = new Image
+                {
+                    Stretch = Stretch.UniformToFill,
+                    SnapsToDevicePixels = true,
+                    UseLayoutRounding = true,
+                    IsHitTestVisible = false,
+                };
+                RenderOptions.SetBitmapScalingMode(_albumArtVisual, BitmapScalingMode.HighQuality);
+
+                _albumArtAdorner = new UIElementAdorner(AlbumArtImage, _albumArtVisual);
+                layer.Add(_albumArtAdorner);
+            }
+
+            _albumArtVisual.Source = AlbumArtImage.Source;
+
+            string deviceName = (Window.GetWindow(this) as Taskbar)?.Screen.DeviceName;
+            MonitorOffsetValue offset = MonitorAdjustments.Get(deviceName, "MediaAlbumArt");
+
+            _albumArtVisual.Width = offset.Width ?? AlbumArtImage.ActualWidth;
+            _albumArtVisual.Height = offset.Height ?? AlbumArtImage.ActualHeight;
+
+            bool hasScale = offset.Scale.HasValue && offset.Scale.Value != 1;
+            if (offset.X != 0 || offset.Y != 0 || hasScale)
+            {
+                var group = new TransformGroup();
+
+                if (hasScale)
+                {
+                    _albumArtVisual.RenderTransformOrigin = new Point(0.5, 0.5);
+                    group.Children.Add(new ScaleTransform(offset.Scale.Value, offset.Scale.Value));
+                }
+
+                group.Children.Add(new TranslateTransform(offset.X, offset.Y));
+                _albumArtVisual.RenderTransform = group;
+            }
+            else
+            {
+                _albumArtVisual.RenderTransform = null;
+            }
+
+            if (offset.TextRendering != null && Enum.TryParse(offset.TextRendering, out TextRenderingMode renderingMode))
+            {
+                TextOptions.SetTextRenderingMode(_albumArtVisual, renderingMode);
+            }
+            else
+            {
+                _albumArtVisual.ClearValue(TextOptions.TextRenderingModeProperty);
+            }
+
+            if (offset.BitmapScaling != null && Enum.TryParse(offset.BitmapScaling, out BitmapScalingMode scalingMode))
+            {
+                RenderOptions.SetBitmapScalingMode(_albumArtVisual, scalingMode);
+            }
+
+            _albumArtAdorner.InvalidateMeasure();
+        }
+
+        private void RemoveAlbumArtAdorner()
+        {
+            if (_albumArtAdorner == null)
+            {
+                return;
+            }
+
+            AdornerLayer.GetAdornerLayer(AlbumArtImage)?.Remove(_albumArtAdorner);
+            _albumArtAdorner = null;
+            _albumArtVisual = null;
         }
 
         #region Marquee
@@ -312,8 +426,15 @@ namespace RetroBar.Controls
         private void UserControl_Unloaded(object sender, RoutedEventArgs e)
         {
             Settings.Instance.PropertyChanged -= Settings_PropertyChanged;
+            MonitorAdjustments.Changed -= MonitorAdjustments_Changed;
             Stop();
             _isLoaded = false;
+        }
+
+        private void MonitorAdjustments_Changed(object sender, EventArgs e)
+        {
+            // Fires on a background (file-watcher) thread.
+            Dispatcher.BeginInvoke(new Action(UpdateAlbumArtAdorner));
         }
     }
 }

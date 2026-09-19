@@ -363,16 +363,24 @@
                                             UseLayoutRounding="True"
                                             SnapsToDevicePixels="True">
                                         <Border Background="{DynamicResource CheckeredBackground}">
-                                            <!-- Matches TaskButton's IsPressed trigger exactly, so a
-                                                 focused tab's resting position is identical to how any
-                                                 tab looks while being pressed - no jump between the two. -->
+                                            <!-- The sunken bevel border stays, but content keeps the
+                                                 same padding as a normal, unpressed tab - matching
+                                                 IsPressed's content shift here too made an
+                                                 always-pressed-looking active tab's text/icon sit
+                                                 visibly offset from every other tab at rest. -->
                                             <Border BorderThickness="0,1,0,0"
-                                                    Padding="2,1,2,0"
+                                                    Padding="2,1"
                                                     BorderBrush="{DynamicResource ButtonInnerHighlight}"
                                                     UseLayoutRounding="True"
                                                     SnapsToDevicePixels="True">
+                                                <!-- -1 top: this border's own 1px top BorderThickness is an
+                                                     extra nested layer TaskButton's resting chain doesn't
+                                                     have (its equivalent innermost border's thickness IS
+                                                     one of the 4 standard bevel layers, not a 5th on top of
+                                                     them), so without this the content would sit 1px lower
+                                                     than a normal tab's. -->
                                                 <ContentPresenter Name="Content"
-                                                                  Margin="2,-1,0,0" />
+                                                                  Margin="0,-1,0,0" />
                                             </Border>
                                         </Border>
                                     </Border>
@@ -836,7 +844,7 @@
         <Setter Property="Height"
                 Value="16" />
         <Setter Property="Margin"
-                Value="0,1,3,-1" />
+                Value="-1,1,3,-1" /><!-- Left -1 (was 0): 1px further left, in both the resting and IsPressed states, since IsPressed's Content shift is additive on top of this. -->
     </Style>
 
     <Style TargetType="Image"
