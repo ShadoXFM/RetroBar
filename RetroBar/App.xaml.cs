@@ -99,11 +99,16 @@ namespace RetroBar
 
         private void setTaskIconSize()
         {
-            bool useLargeIcons = Settings.Instance.TaskbarScale > 1 || (FindResource("UseLargeIcons") as bool? ?? false);
-
-            if (_shellManager.TasksService.TaskIconSize != IconSize.Small != useLargeIcons)
+            // Always request the larger (typically 32x32) icon from the shell's icon
+            // cache and let the Image element's HighQuality scaling downsample it to
+            // the 16x16 we display. A big source icon downsampled looks noticeably
+            // crisper than a native 16x16 icon stretched up under DPI scaling, and
+            // most apps ship a purpose-drawn 32x32 rather than just a scaled 16x16.
+            // This is a source-resolution request only; it doesn't change the
+            // on-screen icon size, which stays fixed by the TaskIcon style.
+            if (_shellManager.TasksService.TaskIconSize != IconSize.Large)
             {
-                _shellManager.TasksService.TaskIconSize = useLargeIcons ? IconSize.Large : IconSize.Small;
+                _shellManager.TasksService.TaskIconSize = IconSize.Large;
             }
         }
 

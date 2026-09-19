@@ -279,7 +279,7 @@ namespace RetroBar.Controls
                 // across the columns so the row fills the taskbar.
                 double baseWidth = Math.Floor(maxWidth);
                 ButtonWidth = baseWidth;
-                ExtraWidthCount = (int)Math.Floor(TasksList.ActualWidth) - (int)baseWidth * ButtonsPerRow;
+                ExtraWidthCount = (int)Math.Round(TasksList.ActualWidth) - (int)baseWidth * ButtonsPerRow;
                 SetScrollable(false);
             }
         }

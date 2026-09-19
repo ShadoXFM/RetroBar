@@ -1516,6 +1516,7 @@
                                           Style="{DynamicResource TaskListScrollUpButton}"
                                           Grid.Column="0">
                                 <Path Fill="{DynamicResource TaskListScrollArrow}"
+                                      Style="{DynamicResource CrispGlyphPathStyle}"
                                       Data="{DynamicResource VArrow}"
                                       RenderTransformOrigin="0.5,0.5"
                                       RenderOptions.EdgeMode="Aliased">
@@ -1528,6 +1529,7 @@
                                           Style="{DynamicResource TaskListScrollDownButton}"
                                           Grid.Row="1">
                                 <Path Fill="{DynamicResource TaskListScrollArrow}"
+                                      Style="{DynamicResource CrispGlyphPathStyle}"
                                       Data="{DynamicResource VArrow}"
                                       RenderOptions.EdgeMode="Aliased">
                                 </Path>
@@ -1566,6 +1568,7 @@
                                                       Padding="7"
                                                       Grid.Column="0">
                                             <Path Fill="{DynamicResource TaskListScrollArrow}"
+                                                  Style="{DynamicResource CrispGlyphPathStyle}"
                                                   Data="{DynamicResource VArrow}"
                                                   Margin="7"
                                                   RenderTransformOrigin="0.5,0.5"
@@ -1580,6 +1583,7 @@
                                                       Padding="4"
                                                       Grid.Column="1">
                                             <Path Fill="{DynamicResource TaskListScrollArrow}"
+                                                  Style="{DynamicResource CrispGlyphPathStyle}"
                                                   Data="{DynamicResource VArrow}"
                                                   Margin="7"
                                                   RenderOptions.EdgeMode="Aliased">
@@ -1626,6 +1630,7 @@
                                     HorizontalAlignment="Center"
                                     Padding="{DynamicResource TrayToggleArrowPadding}">
                                 <Path Fill="{DynamicResource TrayToggleArrowForeground}"
+                                      Style="{DynamicResource CrispGlyphPathStyle}"
                                       Data="{DynamicResource HArrow}"
                                       RenderOptions.EdgeMode="Aliased"
                                       x:Name="ToggleArrow" />

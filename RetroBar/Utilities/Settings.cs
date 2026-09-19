@@ -99,6 +99,19 @@ namespace RetroBar.Utilities
             get => _showInputLanguage;
             set => Set(ref _showInputLanguage, value);
         }
+        private bool _showMediaPlayer = true;
+        public bool ShowMediaPlayer
+        {
+            get => _showMediaPlayer;
+            set => Set(ref _showMediaPlayer, value);
+        }
+
+        private bool _showMediaPlayerAlbumArt = true;
+        public bool ShowMediaPlayerAlbumArt
+        {
+            get => _showMediaPlayerAlbumArt;
+            set => Set(ref _showMediaPlayerAlbumArt, value);
+        }
 
         private bool _showClock = true;
         public bool ShowClock
@@ -338,6 +351,105 @@ namespace RetroBar.Utilities
         {
             get => _quickLaunchOrder;
             set => Set(ref _quickLaunchOrder, value);
+        }
+
+        // Outer key: AppBarScreen.DeviceName of the monitor. Inner key: an arbitrary tag set
+        // via the MonitorOffset.Tag attached property on some element in a theme/control's
+        // XAML (see Utilities/MonitorOffset.cs). Not touched directly - use the Get/Set/Reset
+        // helpers below, which keep this JSON-serializable and raise PropertyChanged
+        // correctly by always replacing it with a new dictionary instance.
+        private Dictionary<string, Dictionary<string, MonitorOffsetValue>> _monitorOffsets = new();
+        public Dictionary<string, Dictionary<string, MonitorOffsetValue>> MonitorOffsets
+        {
+            get => _monitorOffsets;
+            set => Set(ref _monitorOffsets, value);
+        }
+
+        /// <summary>
+        /// The saved nudge for one tagged element on one monitor, or (0,0) if none is set.
+        /// </summary>
+        public MonitorOffsetValue GetMonitorOffset(string deviceName, string tag)
+        {
+            if (!string.IsNullOrEmpty(deviceName) && !string.IsNullOrEmpty(tag)
+                && _monitorOffsets.TryGetValue(deviceName, out var perTag)
+                && perTag.TryGetValue(tag, out var value))
+            {
+                return value;
+            }
+
+            return new MonitorOffsetValue();
+        }
+
+        /// <summary>
+        /// All tagged nudges currently saved for one monitor, keyed by tag. Used to populate
+        /// the Per-Monitor Adjustments properties tab; empty if that monitor has none saved.
+        /// </summary>
+        public Dictionary<string, MonitorOffsetValue> GetMonitorOffsets(string deviceName)
+        {
+            if (!string.IsNullOrEmpty(deviceName) && _monitorOffsets.TryGetValue(deviceName, out var perTag))
+            {
+                return new Dictionary<string, MonitorOffsetValue>(perTag);
+            }
+
+            return new Dictionary<string, MonitorOffsetValue>();
+        }
+
+        /// <summary>
+        /// Saves (or, if x and y are both 0, clears) one tagged nudge for one monitor.
+        /// </summary>
+        public void SetMonitorOffset(string deviceName, string tag, double x, double y)
+        {
+            if (string.IsNullOrEmpty(deviceName) || string.IsNullOrEmpty(tag))
+            {
+                return;
+            }
+
+            var updated = new Dictionary<string, Dictionary<string, MonitorOffsetValue>>(_monitorOffsets);
+            var perTag = updated.TryGetValue(deviceName, out var existing)
+                ? new Dictionary<string, MonitorOffsetValue>(existing)
+                : new Dictionary<string, MonitorOffsetValue>();
+
+            if (x == 0 && y == 0)
+            {
+                perTag.Remove(tag);
+            }
+            else
+            {
+                perTag[tag] = new MonitorOffsetValue { X = x, Y = y };
+            }
+
+            if (perTag.Count == 0)
+            {
+                updated.Remove(deviceName);
+            }
+            else
+            {
+                updated[deviceName] = perTag;
+            }
+
+            MonitorOffsets = updated;
+        }
+
+        /// <summary>
+        /// Clears every tagged nudge saved for one monitor.
+        /// </summary>
+        public void ResetMonitorOffsets(string deviceName)
+        {
+            if (string.IsNullOrEmpty(deviceName) || !_monitorOffsets.ContainsKey(deviceName))
+            {
+                return;
+            }
+
+            var updated = new Dictionary<string, Dictionary<string, MonitorOffsetValue>>(_monitorOffsets);
+            updated.Remove(deviceName);
+            MonitorOffsets = updated;
+        }
+
+        private string _weatherLocation = "Perpignan";
+        public string WeatherLocation
+        {
+            get => _weatherLocation;
+            set => Set(ref _weatherLocation, value);
         }
 
         private bool _showTaskThumbnails = false;

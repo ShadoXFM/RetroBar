@@ -1857,6 +1857,7 @@
                                           Style="{DynamicResource TaskListScrollUpButton}"
                                           Grid.Column="0">
                                 <Path Fill="{Binding Foreground, RelativeSource={RelativeSource Mode=FindAncestor, AncestorType=RepeatButton}}"
+                                      Style="{DynamicResource SmoothGlyphPathStyle}"
                                       Data="{DynamicResource VArrow}"
                                       RenderTransformOrigin="0.5,0.5"
                                       RenderOptions.EdgeMode="Aliased">
@@ -1869,6 +1870,7 @@
                                           Style="{DynamicResource TaskListScrollDownButton}"
                                           Grid.Row="1">
                                 <Path Fill="{Binding Foreground, RelativeSource={RelativeSource Mode=FindAncestor, AncestorType=RepeatButton}}"
+                                      Style="{DynamicResource SmoothGlyphPathStyle}"
                                       Data="{DynamicResource VArrow}"
                                       RenderOptions.EdgeMode="Aliased">
                                 </Path>
@@ -1907,6 +1909,7 @@
                                                       Padding="7"
                                                       Grid.Column="0">
                                             <Path Fill="{Binding Foreground, RelativeSource={RelativeSource Mode=FindAncestor, AncestorType=RepeatButton}}"
+                                                  Style="{DynamicResource SmoothGlyphPathStyle}"
                                                   Data="{DynamicResource VArrow}"
                                                   Margin="7"
                                                   RenderTransformOrigin="0.5,0.5"
@@ -1921,6 +1924,7 @@
                                                       Padding="4"
                                                       Grid.Column="1">
                                             <Path Fill="{Binding Foreground, RelativeSource={RelativeSource Mode=FindAncestor, AncestorType=RepeatButton}}"
+                                                  Style="{DynamicResource SmoothGlyphPathStyle}"
                                                   Data="{DynamicResource VArrow}"
                                                   Margin="7"
                                                   RenderOptions.EdgeMode="Aliased">
@@ -1968,6 +1972,7 @@
                                     Padding="{DynamicResource TrayToggleArrowPadding}"
                                     x:Name="ButtonBorder">
                                 <Path Fill="{DynamicResource TrayToggleArrowForeground}"
+                                      Style="{DynamicResource SmoothGlyphPathStyle}"
                                       Data="{DynamicResource HArrow}"
                                       RenderOptions.EdgeMode="Unspecified"
                                       x:Name="ToggleArrow" />

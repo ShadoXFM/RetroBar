@@ -1,0 +1,12 @@
+<UserControl x:Class="RetroBar.Controls.WeatherDisplay"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+    <StackPanel Orientation="Horizontal" VerticalAlignment="Center" HorizontalAlignment="Center" Margin="4,0">
+        <!-- Weather Icon (Sizes itself using the theme style) -->
+        <Image Source="{Binding WeatherIconPath}" 
+               Style="{DynamicResource WeatherIconStyle}" />
+        <TextBlock Text="{Binding WeatherTemp}" 
+           Style="{DynamicResource WeatherTempStyle}" 
+           Foreground="{DynamicResource ClockForeground}" />
+    </StackPanel>
+</UserControl>

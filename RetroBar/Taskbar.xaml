@@ -115,10 +115,19 @@
                                  Path="Orientation"
                                  RelativeSource="{RelativeSource Mode=FindAncestor, AncestorType=Window}" />
                     </StackPanel.Orientation>
+                    <controls:MediaPlayer VerticalAlignment="Center" />
                     <controls:NotifyIconList NotificationArea="{Binding NotificationArea}" />
                     <controls:Clock VerticalAlignment="Center" />
                 </StackPanel>
             </GroupBox>
+            <controls:WeatherDisplay VerticalAlignment="Center">
+                <DockPanel.Dock>
+                    <Binding Converter="{StaticResource dockOrientationConverter}"
+                             ConverterParameter="trailing"
+                             Path="Orientation"
+                             RelativeSource="{RelativeSource Mode=FindAncestor, AncestorType=Window}" />
+                </DockPanel.Dock>
+            </controls:WeatherDisplay>
             <controls:InputLanguage VerticalAlignment="Stretch"
                                     HorizontalAlignment="Stretch"
                                     Host="{Binding RelativeSource={RelativeSource Mode=FindAncestor, AncestorType=Window}}">

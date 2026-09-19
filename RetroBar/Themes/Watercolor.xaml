@@ -617,12 +617,12 @@
                                         Margin="3,2,3,0"
                                         Name="ArrowPanel">
                                 <Path Fill="{DynamicResource ButtonForeground}"
-                                      Data="M 0,2.5 L 2,5 L 4.5,5 L 2,2.5 L 4.5,0 L 2,0 Z"
-                                      RenderOptions.EdgeMode="Aliased"
+                                      Data="{DynamicResource TrayToggleChevronGeometry}"
+                                      Style="{DynamicResource CrispGlyphPathStyle}"
                                       Name="Arrow1" />
                                 <Path Fill="{DynamicResource ButtonForeground}"
-                                      Data="M 0,2.5 L 2,5 L 4.5,5 L 2,2.5 L 4.5,0 L 2,0 Z"
-                                      RenderOptions.EdgeMode="Aliased"
+                                      Data="{DynamicResource TrayToggleChevronGeometry}"
+                                      Style="{DynamicResource CrispGlyphPathStyle}"
                                       Name="Arrow2" />
                             </StackPanel>
                         </Border>

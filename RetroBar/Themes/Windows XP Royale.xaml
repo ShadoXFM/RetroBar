@@ -586,6 +586,7 @@
                                     x:Name="ButtonBorder">
                                 <Border Effect="{DynamicResource TrayToggleArrowOuterShadow}">
                                     <Path Fill="{DynamicResource TrayToggleArrow}"
+                                          Style="{DynamicResource CrispGlyphPathStyle}"
                                           Data="{DynamicResource HArrow}"
                                           Effect="{DynamicResource TrayToggleArrowShadow}"
                                           x:Name="ToggleArrow" />

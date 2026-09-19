@@ -1,9 +1,14 @@
 ﻿<ResourceDictionary xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
                     xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
-                    xmlns:system="clr-namespace:System;assembly=mscorlib">
+                    xmlns:system="clr-namespace:System;assembly=mscorlib"
+                    xmlns:utilities="clr-namespace:RetroBar.Utilities">
 
     <system:Double x:Key="TaskbarHeight">28</system:Double>
     <system:Double x:Key="TaskbarRowHeight">25</system:Double>
+    <!-- The media row sits 1px shorter than the rest of the tray row - a
+         deliberate visual tweak, not a bug, so it gets its own resource
+         rather than reusing TaskbarRowHeight directly. -->
+    <system:Double x:Key="MediaPlayerRowHeight">24</system:Double>
     <system:Double x:Key="TaskbarWidth">98</system:Double>
     <system:Double x:Key="TaskbarUnlockedSize">0</system:Double>
     <system:Double x:Key="TaskButtonWidth">160</system:Double>
@@ -102,6 +107,10 @@
 
     <Style TargetType="Window"
            x:Key="TaskbarWindow">
+        <Setter Property="UseLayoutRounding"
+                Value="True" />
+        <Setter Property="TextOptions.TextFormattingMode"
+                Value="Display" />
         <Setter Property="Background"
                 Value="{DynamicResource ButtonFace}" />
         <Style.Triggers>
@@ -239,22 +248,32 @@
                 <ControlTemplate TargetType="Button">
                     <Border Background="Transparent"
                             Padding="0,2"
+                            UseLayoutRounding="True"
+                            SnapsToDevicePixels="True"
                             Name="ButtonBorder">
                         <Border BorderThickness="0,0,1,1"
                                 BorderBrush="{DynamicResource ButtonDarkShadow}"
+                                UseLayoutRounding="True"
+                                SnapsToDevicePixels="True"
                                 x:Name="ButtonOuterBottomBorder">
                             <Border BorderThickness="1,1,0,0"
                                     BorderBrush="{DynamicResource ButtonHighlight}"
+                                    UseLayoutRounding="True"
+                                    SnapsToDevicePixels="True"
                                     x:Name="ButtonOuterTopBorder">
                                 <Border BorderThickness="0,0,1,1"
                                         BorderBrush="{DynamicResource ButtonShadow}"
+                                        UseLayoutRounding="True"
+                                        SnapsToDevicePixels="True"
                                         x:Name="ButtonInnerBottomBorder">
                                     <Border BorderThickness="1,1,0,0"
                                             BorderBrush="{DynamicResource ButtonLight}"
                                             Background="{TemplateBinding Background}"
                                             Padding="2,1"
+                                            UseLayoutRounding="True"
+                                            SnapsToDevicePixels="True"
                                             x:Name="ButtonInnerTopBorder">
-                                        <ContentPresenter />
+                                        <ContentPresenter Name="Content" />
                                     </Border>
                                 </Border>
                             </Border>
@@ -283,6 +302,9 @@
                             <Setter TargetName="ButtonInnerTopBorder"
                                     Property="BorderBrush"
                                     Value="{DynamicResource ButtonShadow}" />
+                            <Setter TargetName="Content"
+                                    Property="Margin"
+                                    Value="1,1,-1,-1" />
                         </Trigger>
                     </ControlTemplate.Triggers>
                 </ControlTemplate>
@@ -321,20 +343,36 @@
                 <ControlTemplate TargetType="Button">
                     <Border Background="Transparent"
                             Padding="0,2"
+                            UseLayoutRounding="True"
+                            SnapsToDevicePixels="True"
                             Name="ButtonBorder">
                         <Border BorderThickness="0,0,1,1"
-                                BorderBrush="{DynamicResource ButtonHighlight}">
+                                BorderBrush="{DynamicResource ButtonLight}"
+                                UseLayoutRounding="True"
+                                SnapsToDevicePixels="True">
                             <Border BorderThickness="1,1,0,0"
-                                    BorderBrush="{DynamicResource ButtonDarkShadow}">
+                                    BorderBrush="{DynamicResource ButtonDarkShadow}"
+                                    UseLayoutRounding="True"
+                                    SnapsToDevicePixels="True">
                                 <Border BorderThickness="0,0,1,1"
-                                        BorderBrush="{DynamicResource ButtonLight}">
+                                        BorderBrush="{DynamicResource ButtonLight}"
+                                        UseLayoutRounding="True"
+                                        SnapsToDevicePixels="True">
                                     <Border BorderThickness="1,1,0,0"
-                                            BorderBrush="{DynamicResource ButtonShadow}">
+                                            BorderBrush="{DynamicResource ButtonShadow}"
+                                            UseLayoutRounding="True"
+                                            SnapsToDevicePixels="True">
                                         <Border Background="{DynamicResource CheckeredBackground}">
+                                            <!-- Matches TaskButton's IsPressed trigger exactly, so a
+                                                 focused tab's resting position is identical to how any
+                                                 tab looks while being pressed - no jump between the two. -->
                                             <Border BorderThickness="0,1,0,0"
                                                     Padding="2,1,2,0"
-                                                    BorderBrush="{DynamicResource ButtonInnerHighlight}">
-                                                <ContentPresenter />
+                                                    BorderBrush="{DynamicResource ButtonInnerHighlight}"
+                                                    UseLayoutRounding="True"
+                                                    SnapsToDevicePixels="True">
+                                                <ContentPresenter Name="Content"
+                                                                  Margin="2,-1,0,0" />
                                             </Border>
                                         </Border>
                                     </Border>
@@ -563,6 +601,8 @@
 
     <Style x:Key="TaskListWrapPanel"
            TargetType="WrapPanel">
+        <Setter Property="SnapsToDevicePixels"
+                Value="True" />
     </Style>
 
     <Style x:Key="ClassicFocusVisual">
@@ -604,26 +644,36 @@
         <Setter Property="FocusVisualStyle"
                 Value="{x:Null}" />
         <Setter Property="Padding"
-                Value="2,2,0,2" />
+                Value="3,2,0,2" />
         <Setter Property="Template">
             <Setter.Value>
                 <ControlTemplate TargetType="ToggleButton">
                     <Border Background="Transparent"
                             x:Name="ButtonPaddingBorder"
-                            Padding="{TemplateBinding Padding}">
+                            Padding="{TemplateBinding Padding}"
+                            UseLayoutRounding="True"
+                            SnapsToDevicePixels="True">
                         <Border BorderThickness="{TemplateBinding BorderThickness}"
                                 BorderBrush="{DynamicResource ButtonDarkShadow}"
+                                UseLayoutRounding="True"
+                                SnapsToDevicePixels="True"
                                 x:Name="ButtonOuterBottomBorder">
                             <Border BorderThickness="1,1,0,0"
                                     BorderBrush="{DynamicResource ButtonHighlight}"
+                                    UseLayoutRounding="True"
+                                    SnapsToDevicePixels="True"
                                     x:Name="ButtonOuterTopBorder">
                                 <Border BorderThickness="0,0,1,1"
                                         BorderBrush="{DynamicResource ButtonShadow}"
+                                        UseLayoutRounding="True"
+                                        SnapsToDevicePixels="True"
                                         x:Name="ButtonInnerBottomBorder">
                                     <Border BorderThickness="1,1,0,0"
                                             BorderBrush="{DynamicResource ButtonLight}"
                                             Background="{TemplateBinding Background}"
                                             Padding="2,1"
+                                            UseLayoutRounding="True"
+                                            SnapsToDevicePixels="True"
                                             x:Name="ButtonInnerTopBorder">
                                         <ContentPresenter Name="Content" />
                                     </Border>
@@ -786,7 +836,7 @@
         <Setter Property="Height"
                 Value="16" />
         <Setter Property="Margin"
-                Value="0,0,3,0" />
+                Value="0,1,3,-1" />
     </Style>
 
     <Style TargetType="Image"
@@ -802,6 +852,25 @@
                 Value="Bottom" />
         <Setter Property="Margin"
                 Value="0,0,2,-1" />
+        <Setter Property="RenderOptions.BitmapScalingMode"
+                Value="HighQuality" />
+        <Setter Property="UseLayoutRounding"
+                Value="True" />
+        <Setter Property="SnapsToDevicePixels"
+                Value="True" />
+    </Style>
+
+    <!-- start9x.png and friends are 16x16 pixel art. HighQuality scaling turns
+         them to mush at 125%/150%; nearest-neighbour keeps the pixels. -->
+    <Style TargetType="Image"
+           x:Key="PixelArtIcon"
+           BasedOn="{StaticResource TaskIcon}">
+        <Setter Property="RenderOptions.BitmapScalingMode"
+                Value="NearestNeighbor" />
+        <Setter Property="UseLayoutRounding"
+                Value="True" />
+        <Setter Property="SnapsToDevicePixels"
+                Value="True" />
     </Style>
 
     <Style TargetType="Image"
@@ -811,11 +880,13 @@
                 Value="0,0,2,0" />
         <Setter Property="Source"
                 Value="{DynamicResource StartIconImage}" />
+        <Setter Property="RenderOptions.BitmapScalingMode"
+                Value="HighQuality" />
     </Style>
 
     <Style TargetType="Image"
            x:Key="ShowDesktopIcon"
-           BasedOn="{StaticResource TaskIcon}">
+           BasedOn="{StaticResource PixelArtIcon}">
         <Setter Property="Margin"
                 Value="-1,0,0,0" />
         <Setter Property="Source"
@@ -868,6 +939,212 @@
                 Value="Bold" />
         <Setter Property="TextOptions.TextRenderingMode"
                 Value="Auto" />
+    </Style>
+
+    <Style TargetType="StackPanel"
+           x:Key="MediaPlayerPanelStyle">
+        <Setter Property="Margin"
+                Value="-1,0" />
+        <Setter Property="Height"
+                Value="{DynamicResource MediaPlayerRowHeight}" />
+        <Setter Property="VerticalAlignment"
+                Value="Center" />
+    </Style>
+
+    <Style TargetType="Button"
+           x:Key="MediaPlayerButtonStyle">
+        <Setter Property="OverridesDefaultStyle"
+                Value="True" />
+        <Setter Property="Background"
+                Value="{DynamicResource ButtonFace}" />
+        <Setter Property="VerticalAlignment"
+                Value="Center" />
+        <!-- Previously "1,-3,1,-2": negative top/bottom margins were used to stretch
+             the button beyond its own content size to reach the row's height. That's
+             fragile - the StackPanel sizes itself from the button's (margin-shrunk)
+             DesiredSize, and how far the render then overflows that slot depends on
+             exact fractional arithmetic that varies with DPI/rounding, which is what
+             was pushing the buttons up out of the taskbar entirely. Now that
+             MediaPlayerPanelStyle gives the whole row a fixed Height bound to
+             TaskbarRowHeight, every child (buttons, album art, track text) can just
+             use VerticalAlignment="Center" with a plain, non-negative Margin and they
+             all land on the same centerline regardless of DPI. -->
+        <Setter Property="Margin"
+                Value="1,-2,1,0" />
+        <Setter Property="Template">
+            <Setter.Value>
+                <ControlTemplate TargetType="Button">
+                    <Border Background="Transparent"
+                            UseLayoutRounding="True"
+                            SnapsToDevicePixels="True"
+                            Name="ButtonBorder">
+                        <Border BorderThickness="0,0,1,1"
+                                BorderBrush="{TemplateBinding Background}"
+                                UseLayoutRounding="True"
+                                SnapsToDevicePixels="True"
+                                x:Name="ButtonRightBottomBorder">
+                            <Border BorderThickness="1,1,0,0"
+                                    BorderBrush="{TemplateBinding Background}"
+                                    Background="{TemplateBinding Background}"
+                                    Padding="2"
+                                    UseLayoutRounding="True"
+                                    SnapsToDevicePixels="True"
+                                    x:Name="ButtonLeftTopBorder">
+                                <ContentPresenter />
+                            </Border>
+                        </Border>
+                    </Border>
+                    <ControlTemplate.Triggers>
+                        <DataTrigger Binding="{Binding Path=Orientation, RelativeSource={RelativeSource Mode=FindAncestor, AncestorType={x:Type Window}}}"
+                                     Value="Vertical">
+                            <DataTrigger.Setters>
+                                <Setter TargetName="ButtonBorder"
+                                        Property="Padding"
+                                        Value="0" />
+                            </DataTrigger.Setters>
+                        </DataTrigger>
+                        <Trigger Property="IsMouseOver"
+                                 Value="True">
+                            <Setter TargetName="ButtonLeftTopBorder"
+                                    Property="BorderBrush"
+                                    Value="{DynamicResource ButtonHighlight}" />
+                            <Setter TargetName="ButtonRightBottomBorder"
+                                    Property="BorderBrush"
+                                    Value="{DynamicResource ButtonShadow}" />
+                        </Trigger>
+                        <Trigger Property="IsPressed"
+                                 Value="True">
+                            <Setter TargetName="ButtonRightBottomBorder"
+                                    Property="BorderBrush"
+                                    Value="{DynamicResource ButtonHighlight}" />
+                            <Setter TargetName="ButtonLeftTopBorder"
+                                    Property="BorderBrush"
+                                    Value="{DynamicResource ButtonShadow}" />
+                        </Trigger>
+                    </ControlTemplate.Triggers>
+                </ControlTemplate>
+            </Setter.Value>
+        </Setter>
+        <Style.Triggers>
+            <DataTrigger Binding="{Binding Path=Orientation, RelativeSource={RelativeSource Mode=FindAncestor, AncestorType={x:Type Window}}}"
+                         Value="Vertical">
+                <Setter Property="Margin"
+                        Value="0" />
+            </DataTrigger>
+        </Style.Triggers>
+    </Style>
+
+    <!-- Media player transport glyphs are vector geometries rather than text.
+         Text glyphs pick up per-font ink heights and per-monitor DPI rounding,
+         which is why they used to sit at different heights on different displays.
+         A fixed-height Path renders identically on every monitor. -->
+    <system:Double x:Key="MediaPlayerGlyphHeight">7</system:Double>
+    <!-- One shared width box for every transport glyph. The previous/next
+         chevrons are drawn to fill this box exactly; the narrower play/pause
+         glyphs sit centered inside it. That's what makes all three buttons the
+         same size instead of each button hugging its own glyph's width. -->
+    <system:Double x:Key="MediaPlayerGlyphWidth">10</system:Double>
+
+    <PathGeometry x:Key="MediaPlayerPreviousGeometry"
+                  Figures="M 4,0 L 4,7 L 0,3.5 Z M 9,0 L 9,7 L 5,3.5 Z" />
+    <PathGeometry x:Key="MediaPlayerNextGeometry"
+                  Figures="M 0,0 L 4,3.5 L 0,7 Z M 5,0 L 8.5,3.5 L 5,7 Z" />
+    <PathGeometry x:Key="MediaPlayerPlayGeometry"
+                  Figures="M 0,0 L 6,3.5 L 0,7 Z" />
+    <PathGeometry x:Key="MediaPlayerPauseGeometry"
+                  Figures="M 0,0 L 2,0 L 2,7 L 0,7 Z M 4,0 L 6,0 L 6,7 L 4,7 Z" />
+
+    <!-- Shared base styles for every vector glyph in the shell chrome. Layout
+         rounding puts the glyph's box on whole device pixels, which is what keeps
+         it identical across monitors running different DPI scales. Crisp also
+         turns off edge antialiasing, for themes whose arrows are meant to look
+         like hand-placed pixels; Smooth keeps antialiasing for the Aero themes. -->
+    <Style TargetType="Path"
+           x:Key="SmoothGlyphPathStyle">
+        <Setter Property="SnapsToDevicePixels"
+                Value="True" />
+        <Setter Property="UseLayoutRounding"
+                Value="True" />
+    </Style>
+
+    <Style TargetType="Path"
+           x:Key="CrispGlyphPathStyle"
+           BasedOn="{StaticResource SmoothGlyphPathStyle}">
+        <Setter Property="RenderOptions.EdgeMode"
+                Value="Aliased" />
+    </Style>
+
+    <!-- The tray show/hide chevron, shared instead of repeated inline. -->
+    <PathGeometry x:Key="TrayToggleChevronGeometry"
+                  Figures="M 0,2.5 L 2,5 L 4.5,5 L 2,2.5 L 4.5,0 L 2,0 Z" />
+
+    <Style TargetType="Path"
+           x:Key="MediaPlayerGlyphStyle"
+           BasedOn="{StaticResource CrispGlyphPathStyle}">
+        <Setter Property="Width"
+                Value="{DynamicResource MediaPlayerGlyphWidth}" />
+        <Setter Property="Height"
+                Value="{DynamicResource MediaPlayerGlyphHeight}" />
+        <Setter Property="Stretch"
+                Value="Uniform" />
+        <Setter Property="HorizontalAlignment"
+                Value="Center" />
+        <Setter Property="VerticalAlignment"
+                Value="Center" />
+        <Setter Property="Fill"
+                Value="{Binding Path=(TextElement.Foreground), RelativeSource={RelativeSource Self}}" />
+    </Style>
+
+    <Style TargetType="Image"
+           x:Key="MediaPlayerAlbumArtStyle">
+        <Setter Property="Width"
+                Value="16" />
+        <Setter Property="Height"
+                Value="16" />
+        <Setter Property="Stretch"
+                Value="UniformToFill" />
+        <Setter Property="VerticalAlignment"
+                Value="Center" />
+        <!-- 3px on the right (before the transport buttons) but 0 on the left
+             left it sitting flush against the tray box's own inner edge -
+             visibly unequal. 3px on both sides matches it. -->
+        <Setter Property="Margin"
+                Value="3,0,3,0" />
+        <Setter Property="SnapsToDevicePixels"
+                Value="True" />
+        <Setter Property="UseLayoutRounding"
+                Value="True" />
+        <Setter Property="RenderOptions.BitmapScalingMode"
+                Value="HighQuality" />
+    </Style>
+
+    <!-- Host clips the track text; the text itself is laid out at its full
+         natural width inside it so the marquee can slide it back and forth. -->
+    <Style TargetType="Grid"
+           x:Key="MediaPlayerTrackTextHostStyle">
+        <Setter Property="VerticalAlignment"
+                Value="Center" />
+        <Setter Property="Margin"
+                Value="4,-1,10,1" />
+        <Setter Property="MaxWidth"
+                Value="150" />
+        <Setter Property="ClipToBounds"
+                Value="True" />
+    </Style>
+
+    <Style TargetType="TextBlock"
+           x:Key="MediaPlayerTrackTextStyle"
+           BasedOn="{StaticResource GlobalFonts}">
+        <Setter Property="FontSize"
+                Value="10" />
+        <Setter Property="Foreground"
+                Value="{DynamicResource ClockForeground}" />
+        <Setter Property="VerticalAlignment"
+                Value="Center" />
+        <Setter Property="HorizontalAlignment"
+                Value="Left" />
+        <Setter Property="TextWrapping"
+                Value="NoWrap" />
     </Style>
 
     <Style TargetType="TextBlock"
@@ -1073,10 +1350,12 @@
         <Setter Property="Template">
             <Setter.Value>
                 <ControlTemplate TargetType="{x:Type Thumb}">
+                    <!-- SnapsToDevicePixels removed: this border is zero-thickness on
+                         3 of 4 sides, the same shape that has the border-snapping bug
+                         elsewhere in this app (see the other button templates). -->
                     <Border BorderThickness="1,0,0,0"
                             BorderBrush="{DynamicResource ButtonShadow}"
-                            x:Name="OuterBorder1"
-                            SnapsToDevicePixels="True">
+                            x:Name="OuterBorder1">
                         <Border BorderThickness="1,0,0,0"
                                 BorderBrush="{DynamicResource ButtonHighlight}"
                                 x:Name="OuterBorder2">
@@ -1161,25 +1440,34 @@
                 <ControlTemplate TargetType="ToggleButton">
                     <Border Background="Transparent"
                             Padding="0,2"
-                            Name="ButtonBorder">
+                            UseLayoutRounding="True"
+                            SnapsToDevicePixels="True"
+                            Name="ButtonBorder"
+                            utilities:MonitorOffset.Tag="TrayToggleButton">
                         <Border BorderThickness="0,0,1,1"
                                 BorderBrush="{TemplateBinding Background}"
+                                UseLayoutRounding="True"
+                                SnapsToDevicePixels="True"
                                 x:Name="ButtonRightBottomBorder">
                             <Border BorderThickness="1,1,0,0"
                                     BorderBrush="{TemplateBinding Background}"
                                     Background="{TemplateBinding Background}"
+                                    UseLayoutRounding="True"
+                                    SnapsToDevicePixels="True"
                                     x:Name="ButtonLeftTopBorder">
                                 <StackPanel Orientation="Horizontal"
                                             Height="6"
                                             VerticalAlignment="Center"
                                             Margin="3,2,3,0"
+                                            UseLayoutRounding="True"
+                                            SnapsToDevicePixels="True"
                                             Name="ArrowPanel">
                                     <Path Fill="{DynamicResource ButtonForeground}"
-                                          Data="M 0,2.5 L 2,5 L 4.5,5 L 2,2.5 L 4.5,0 L 2,0 Z"
-                                          RenderOptions.EdgeMode="Aliased" />
+                                          Data="{DynamicResource TrayToggleChevronGeometry}"
+                                          Style="{DynamicResource CrispGlyphPathStyle}" />
                                     <Path Fill="{DynamicResource ButtonForeground}"
-                                          Data="M 0,2.5 L 2,5 L 4.5,5 L 2,2.5 L 4.5,0 L 2,0 Z"
-                                          RenderOptions.EdgeMode="Aliased" />
+                                          Data="{DynamicResource TrayToggleChevronGeometry}"
+                                          Style="{DynamicResource CrispGlyphPathStyle}" />
                                 </StackPanel>
                             </Border>
                         </Border>

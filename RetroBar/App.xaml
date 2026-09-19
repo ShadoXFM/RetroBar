@@ -14,6 +14,31 @@
                 <ResourceDictionary Source="Themes/System.xaml" />
             </ResourceDictionary.MergedDictionaries>
             <converters:BoolToTextRenderingModeConverter x:Key="menuTextRenderingModeConverter" />
+
+            <!-- Crisp chrome, the safe way. SnapsToDevicePixels was tried here first,
+                 but it invokes WPF's border-guideline snapping, which has a long-standing
+                 bug for Borders with a zero-thickness side - and this app's whole bevel
+                 style is built from exactly that (two borders, each "0,0,1,1" and
+                 "1,1,0,0", stacked to fake a 3D edge). That made entire button edges
+                 vanish. UseLayoutRounding was tried too, but rounding each element's
+                 arrange rect independently caused alternating 1px drift across rows of
+                 auto-width buttons, and pushed the media buttons' negative-margin sizing
+                 out of the taskbar's bounds.
+                 RenderOptions.EdgeMode="Aliased" avoids both: it only turns off
+                 antialiasing on the geometry that's already there - it never touches
+                 layout, arrange, or border-side computation, so it can't trigger either
+                 bug. It's also literally what this app already uses elsewhere (Watercolor,
+                 XP Blue, etc.) for exactly the same reason. Applied here as implicit
+                 (no x:Key) styles so it reaches every Border and Rectangle in every
+                 theme without editing each one. -->
+            <Style TargetType="Border">
+                <Setter Property="RenderOptions.EdgeMode"
+                        Value="Aliased" />
+            </Style>
+            <Style TargetType="Rectangle">
+                <Setter Property="RenderOptions.EdgeMode"
+                        Value="Aliased" />
+            </Style>
         </ResourceDictionary>
     </Application.Resources>
 </Application>
