@@ -9,9 +9,13 @@
              Visibility="Collapsed">
     <StackPanel Orientation="Horizontal"
                 Style="{DynamicResource MediaPlayerPanelStyle}">
+        <!-- A layout/position anchor only - always Hidden (never actually painted) when
+             there's art. The visible copy lives in an Adorner (see UpdateAlbumArtAdorner
+             in the code-behind) so a per-monitor MonitorAdjustments offset can push it
+             outside this control's own layout bounds without the Tray GroupBox's
+             Padding/BorderThickness clipping it - see Utilities/UIElementAdorner.cs. -->
         <Image x:Name="AlbumArtImage"
                Style="{DynamicResource MediaPlayerAlbumArtStyle}"
-               utilities:MonitorOffset.Tag="MediaAlbumArt"
                Visibility="Collapsed" />
         <Button x:Name="PreviousButton"
                 Style="{DynamicResource MediaPlayerButtonStyle}"

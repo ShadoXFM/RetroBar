@@ -1,6 +1,5 @@
 ﻿using System;
 using System.Collections.Generic;
-using System.Collections.ObjectModel;
 using System.ComponentModel;
 using System.Linq;
 using ManagedShell.Common.Helpers;
@@ -30,19 +29,6 @@ namespace RetroBar
         private readonly AppBarScreen _screen;
 
         private FileSystemWatcher _themesWatcher;
-
-        private static readonly string[] KnownMonitorOffsetTags =
-        {
-            "TaskIcon",
-            "MediaAlbumArt",
-            "MediaGlyphPrevious",
-            "MediaGlyphPlayPause",
-            "MediaGlyphNext",
-            "MediaTrackText",
-            "TrayToggleButton"
-        };
-
-        private readonly ObservableCollection<MonitorOffsetRow> _monitorOffsetRows = new();
 
         public event PropertyChangedEventHandler PropertyChanged;
 
@@ -101,7 +87,6 @@ namespace RetroBar
             LoadWidth();
             LoadAppInfo();
             LoadClockActions();
-            LoadMonitors();
 
             Settings.Instance.PropertyChanged += Settings_PropertyChanged;
         }
@@ -472,89 +457,6 @@ namespace RetroBar
             {
                 System.Windows.MessageBox.Show((string)System.Windows.Application.Current.FindResource("hotkey_warning_text"), (string)System.Windows.Application.Current.FindResource("hotkey_warning_title"), MessageBoxButton.OK, MessageBoxImage.Information);
             }
-        }
-
-        private void LoadMonitors()
-        {
-            icMonitorOffsets.ItemsSource = _monitorOffsetRows;
-            cboNewOffsetTag.ItemsSource = KnownMonitorOffsetTags;
-
-            foreach (AppBarScreen screen in AppBarScreen.FromAllScreens())
-            {
-                cboMonitor.Items.Add(new MonitorComboItem(screen));
-            }
-
-            // Default to whichever monitor this Properties window was opened from, since
-            // that's the one whose glitches the person most likely just noticed.
-            MonitorComboItem selected = cboMonitor.Items.Cast<MonitorComboItem>()
-                .FirstOrDefault(item => item.DeviceName == _screen.DeviceName);
-
-            cboMonitor.SelectedItem = selected ?? cboMonitor.Items.Cast<MonitorComboItem>().FirstOrDefault();
-        }
-
-        private void CboMonitor_OnSelectionChanged(object sender, System.Windows.Controls.SelectionChangedEventArgs e)
-        {
-            _monitorOffsetRows.Clear();
-
-            if (cboMonitor.SelectedItem is not MonitorComboItem selected)
-            {
-                return;
-            }
-
-            foreach (var pair in Settings.Instance.GetMonitorOffsets(selected.DeviceName).OrderBy(p => p.Key))
-            {
-                _monitorOffsetRows.Add(new MonitorOffsetRow(selected.DeviceName, pair.Key, pair.Value));
-            }
-        }
-
-        private void AddOffsetRow_OnClick(object sender, RoutedEventArgs e)
-        {
-            if (cboMonitor.SelectedItem is not MonitorComboItem selected)
-            {
-                return;
-            }
-
-            string tag = cboNewOffsetTag.Text?.Trim();
-            if (string.IsNullOrEmpty(tag))
-            {
-                return;
-            }
-
-            // A row for this tag on this monitor already exists - let the person edit that
-            // one instead of adding a confusing duplicate.
-            if (_monitorOffsetRows.Any(row => row.Tag == tag))
-            {
-                return;
-            }
-
-            // Starts empty, which Settings.SetMonitorOffset treats as "no adjustment" and won't
-            // persist - the row exists only in this list until the person edits a field away
-            // from its default. That matches every other value in this app: nothing is saved
-            // until it actually differs from the default.
-            _monitorOffsetRows.Add(new MonitorOffsetRow(selected.DeviceName, tag, new MonitorOffsetValue()));
-            cboNewOffsetTag.Text = "";
-        }
-
-        private void RemoveOffsetRow_OnClick(object sender, RoutedEventArgs e)
-        {
-            if ((sender as System.Windows.Controls.Button)?.Tag is not MonitorOffsetRow row)
-            {
-                return;
-            }
-
-            Settings.Instance.SetMonitorOffset(row.DeviceName, row.Tag, null);
-            _monitorOffsetRows.Remove(row);
-        }
-
-        private void ResetMonitorOffsets_OnClick(object sender, RoutedEventArgs e)
-        {
-            if (cboMonitor.SelectedItem is not MonitorComboItem selected)
-            {
-                return;
-            }
-
-            Settings.Instance.ResetMonitorOffsets(selected.DeviceName);
-            _monitorOffsetRows.Clear();
         }
 
         private void CustomizeNotifications_OnClick(object sender, RoutedEventArgs e)

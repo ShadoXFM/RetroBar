@@ -1,9 +1,9 @@
 namespace RetroBar.Utilities
 {
     /// <summary>
-    /// A per-monitor visual adjustment applied to a single tagged element, stored inside
-    /// Settings.MonitorOffsets and keyed first by the monitor's AppBarScreen.DeviceName and
-    /// then by the element's MonitorOffset.Tag.
+    /// A per-monitor visual adjustment applied to a single tagged element, stored inside the
+    /// hand-edited monitor-adjustments.json file (see MonitorAdjustments) and keyed first by
+    /// the monitor's AppBarScreen.DeviceName and then by the element's MonitorOffset.Tag.
     ///
     /// X/Y and Scale are applied as a RenderTransform rather than a Margin or a layout resize:
     /// a couple of past fixes in this app used a hand-tuned Margin to compensate for a

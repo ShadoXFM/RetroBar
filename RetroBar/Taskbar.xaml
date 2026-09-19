@@ -53,6 +53,12 @@
                             CenterX="0"
                             CenterY="0" />
         </ContentControl.LayoutTransform>
+        <!-- Wraps the whole bar in an AdornerLayer, above every nested Border's own
+             Padding/BorderThickness-driven clip (e.g. the Tray GroupBox's). MediaPlayer
+             uses this so MediaAlbumArt can be nudged via a per-monitor offset without
+             ever being clipped by an ancestor it's still logically positioned within -
+             see MediaPlayer.xaml.cs and Utilities/UIElementAdorner.cs. -->
+        <AdornerDecorator>
         <DockPanel>
             <Button Visibility="Collapsed" x:Name="FocusDummyButton" />
             <controls:StartButton x:Name="StartButton"
@@ -142,6 +148,7 @@
                                Host="{Binding RelativeSource={RelativeSource Mode=FindAncestor, AncestorType=Window}}"
                                Tasks="{Binding Tasks}"></controls:TaskList>
         </DockPanel>
+        </AdornerDecorator>
     </ContentControl>
     <appbar:AppBarWindow.ContextMenu>
         <ContextMenu Opened="ContextMenu_Opened">

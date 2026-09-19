@@ -1,21 +1,19 @@
 ﻿using System;
-using System.ComponentModel;
 using System.Windows;
 using System.Windows.Media;
 
 namespace RetroBar.Utilities
 {
     /// <summary>
-    /// Lets any element in a theme or control's XAML opt in to a per-monitor pixel nudge that
-    /// the person can set from the Properties window's "Per-Monitor Adjustments" tab, instead
-    /// of a hand-tuned XAML value that can only ever be correct on one monitor's DPI at a time.
+    /// Lets any element in a theme or control's XAML opt in to a per-monitor adjustment read
+    /// from MonitorAdjustments (a hand-edited JSON file - see that class), instead of a
+    /// hand-tuned XAML value that can only ever be correct on one monitor's DPI at a time.
     ///
     /// Usage: <Image utilities:MonitorOffset.Tag="TaskIcon" .../>
     ///
-    /// "TaskIcon" here is just a label - it's the key this element's saved offset is stored
-    /// and looked up under (see Settings.MonitorOffsets). Any string works, including ones
-    /// made up later for an element that doesn't have this attached yet; whatever tag is
-    /// entered in the Properties tab is what gets looked for.
+    /// "TaskIcon" here is just a label - it's the key this element's saved adjustment is stored
+    /// and looked up under in monitor-adjustments.json (see MonitorAdjustments). Any string
+    /// works, including ones made up later for an element that doesn't have this attached yet.
     ///
     /// Position and scale are applied as a RenderTransform, not a Margin: they only ever change
     /// how the element is painted, never its layout size or its neighbors' positions, so unlike
@@ -32,6 +30,25 @@ namespace RetroBar.Utilities
 
         public static string GetTag(DependencyObject obj) => (string)obj.GetValue(TagProperty);
         public static void SetTag(DependencyObject obj, string value) => obj.SetValue(TagProperty, value);
+
+        // Tracks whether we ourselves last set an explicit Width/Height on this element, so we
+        // know it's ours to clear (via ClearValue, which restores whatever was there before -
+        // including a Binding) when the adjustment is removed, and so we never touch Width or
+        // Height at all on an element that never had an override. Some tagged elements (e.g.
+        // MediaPlayer's TrackTextCanvas) have their Height driven by a Binding in XAML; directly
+        // assigning FrameworkElement.Height/Width in code replaces a Binding outright, so doing
+        // that unconditionally - even to "reset" to NaN - permanently destroys it.
+        private static readonly DependencyProperty AppliedWidthProperty = DependencyProperty.RegisterAttached(
+            "AppliedWidth", typeof(bool), typeof(MonitorOffset), new PropertyMetadata(false));
+        private static readonly DependencyProperty AppliedHeightProperty = DependencyProperty.RegisterAttached(
+            "AppliedHeight", typeof(bool), typeof(MonitorOffset), new PropertyMetadata(false));
+
+        // Guards against subscribing a new MonitorAdjustments.Changed handler every time Tag
+        // changes value on an already-loaded element (e.g. a tag that switches based on a
+        // DataTrigger, like TaskButton's active-state icon) - every prior usage set Tag once
+        // and never again, so this never mattered until that usage pattern existed.
+        private static readonly DependencyProperty IsAttachedProperty = DependencyProperty.RegisterAttached(
+            "IsAttached", typeof(bool), typeof(MonitorOffset), new PropertyMetadata(false));
 
         private static void OnTagChanged(DependencyObject d, DependencyPropertyChangedEventArgs e)
         {
@@ -61,16 +78,22 @@ namespace RetroBar.Utilities
         {
             Apply(element);
 
-            // Re-apply whenever any monitor's offsets change (cheaper checks aren't worth it -
-            // this only runs when the person is actively editing the Properties tab).
-            PropertyChangedEventHandler handler = null;
+            if ((bool)element.GetValue(IsAttachedProperty))
+            {
+                // Already subscribed below from an earlier Tag value on this same element -
+                // that handler re-reads GetTag(element) on every invocation, so it already
+                // picks up whatever the tag is now without needing a second subscription.
+                return;
+            }
+
+            element.SetValue(IsAttachedProperty, true);
+
+            // Re-apply whenever the monitor-adjustments.json file changes on disk. Changed
+            // fires on a background (file-watcher) thread, so this always has to hop back to
+            // the element's own dispatcher before touching it.
+            EventHandler handler = null;
             handler = (s, args) =>
             {
-                if (args.PropertyName != nameof(Settings.MonitorOffsets))
-                {
-                    return;
-                }
-
                 if (!element.Dispatcher.CheckAccess())
                 {
                     element.Dispatcher.BeginInvoke(new Action(() => Apply(element)));
@@ -81,8 +104,12 @@ namespace RetroBar.Utilities
                 }
             };
 
-            Settings.Instance.PropertyChanged += handler;
-            element.Unloaded += (s, args) => Settings.Instance.PropertyChanged -= handler;
+            MonitorAdjustments.Changed += handler;
+            element.Unloaded += (s, args) =>
+            {
+                MonitorAdjustments.Changed -= handler;
+                element.SetValue(IsAttachedProperty, false);
+            };
         }
 
         private static void Apply(FrameworkElement element)
@@ -94,7 +121,7 @@ namespace RetroBar.Utilities
             }
 
             string deviceName = FindDeviceName(element);
-            MonitorOffsetValue offset = Settings.Instance.GetMonitorOffset(deviceName, tag);
+            MonitorOffsetValue offset = MonitorAdjustments.Get(deviceName, tag);
 
             bool hasScale = offset.Scale.HasValue && offset.Scale.Value != 1;
 
@@ -118,11 +145,13 @@ namespace RetroBar.Utilities
                 element.RenderTransform = null;
             }
 
-            // Width/Height: an explicit override behaves exactly like setting them in XAML. This
-            // element opted in by being tagged, so resetting to NaN (WPF's "size to content")
-            // when no override is saved is the correct default, not a side effect.
-            element.Width = offset.Width ?? double.NaN;
-            element.Height = offset.Height ?? double.NaN;
+            // Width/Height: an explicit override behaves exactly like setting them in XAML. Only
+            // touch the property at all when there's an override to apply or to remove - never
+            // as a blanket "reset to NaN" - so an element whose Width/Height comes from a XAML
+            // Binding (or a Style, or nothing at all) is left completely alone until someone
+            // actually sets an adjustment for it.
+            ApplySize(element, offset.Width, FrameworkElement.WidthProperty, AppliedWidthProperty);
+            ApplySize(element, offset.Height, FrameworkElement.HeightProperty, AppliedHeightProperty);
 
             if (offset.TextRendering != null && Enum.TryParse(offset.TextRendering, out TextRenderingMode renderingMode))
             {
@@ -140,6 +169,20 @@ namespace RetroBar.Utilities
             else
             {
                 element.ClearValue(RenderOptions.BitmapScalingModeProperty);
+            }
+        }
+
+        private static void ApplySize(FrameworkElement element, double? value, DependencyProperty sizeProperty, DependencyProperty appliedFlagProperty)
+        {
+            if (value.HasValue)
+            {
+                element.SetValue(sizeProperty, value.Value);
+                element.SetValue(appliedFlagProperty, true);
+            }
+            else if ((bool)element.GetValue(appliedFlagProperty))
+            {
+                element.ClearValue(sizeProperty);
+                element.SetValue(appliedFlagProperty, false);
             }
         }
 
