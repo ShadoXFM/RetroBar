@@ -1,10 +1,14 @@
+using RetroBar.Utilities;
 using System;
 using System.ComponentModel;
+using System.Globalization;
 using System.IO;
 using System.Net.Http;
 using System.Runtime.CompilerServices;
+using System.Text.Json;
 using System.Threading.Tasks;
 using System.Windows.Controls;
+using System.Windows.Media;
 using System.Windows.Threading;
 
 namespace RetroBar.Controls
@@ -31,16 +35,38 @@ namespace RetroBar.Controls
 
             // Set up the timer
             _timer = new DispatcherTimer();
-            _timer.Interval = TimeSpan.FromSeconds(30);
+            _timer.Interval = TimeSpan.FromMinutes(5);
 
             _timer.Tick += async (sender, args) => await vm.UpdateWeatherAsync();
             _timer.Start();
         }
     }
 
+    /// <summary>
+    /// Weather data comes from Open-Meteo (open-meteo.com) rather than wttr.in: it's free, needs
+    /// no API key (important since RetroBar is distributed to other users, not just run by one
+    /// person who could register their own key), has generous rate limits, and returns a proper
+    /// WMO weather code instead of a free-text condition string that has to be guessed at via
+    /// keyword matching. It takes latitude/longitude rather than a place name, so a location is
+    /// resolved once via Open-Meteo's own (also free, keyless) geocoding endpoint and cached
+    /// until Settings.WeatherLocation changes. It also reports is_day and the current lunar
+    /// phase, which a clear sky (WMO 0/1) uses to show the correct one of the 8 moon phase icons
+    /// at night instead of the sun icon - see GetIconFileName/GetMoonPhaseIconFileName.
+    /// </summary>
     public class WeatherViewModel : INotifyPropertyChanged
     {
         private static readonly HttpClient _httpClient = new HttpClient();
+
+        // Icon tint at the deepest point of night/day - fades in from the theme's own neutral
+        // foreground color (see NeutralIconColor) as night/day progresses, so it's most vivid at
+        // solar midnight/noon and neutral right at sunset/sunrise. Requested as literal colors,
+        // not theme resources, since the whole point is a color shift independent of theme.
+        private static readonly Color NightColor = Color.FromRgb(0x00, 0x6F, 0xBF);
+        private static readonly Color DayColor = Color.FromRgb(0xFF, 0xD7, 0x00);
+
+        private string _geocodedLocation;
+        private double _latitude;
+        private double _longitude;
 
         private string _weatherIconPath;
         public string WeatherIconPath
@@ -51,6 +77,20 @@ namespace RetroBar.Controls
                 if (_weatherIconPath != value)
                 {
                     _weatherIconPath = value;
+                    OnPropertyChanged();
+                }
+            }
+        }
+
+        private Brush _weatherIconTint;
+        public Brush WeatherIconTint
+        {
+            get => _weatherIconTint;
+            set
+            {
+                if (_weatherIconTint != value)
+                {
+                    _weatherIconTint = value;
                     OnPropertyChanged();
                 }
             }
@@ -78,61 +118,196 @@ namespace RetroBar.Controls
 
         public async Task UpdateWeatherAsync()
         {
-            string location = "Perpignan";
+            string location = Settings.Instance.WeatherLocation;
+
+            if (string.IsNullOrWhiteSpace(location))
+            {
+                WeatherTemp = "N/A";
+                return;
+            }
 
             try
             {
-                string encodedLocation = Uri.EscapeDataString(location);
+                if (!string.Equals(location, _geocodedLocation, StringComparison.OrdinalIgnoreCase)
+                    && !await GeocodeAsync(location))
+                {
+                    WeatherTemp = "N/A";
+                    return;
+                }
 
-                Task<string> conditionTask = _httpClient.GetStringAsync($"https://wttr.in/{encodedLocation}?format=%C");
-                Task<string> tempTask = _httpClient.GetStringAsync($"https://wttr.in/{encodedLocation}?format=%t");
+                // past_days=1/forecast_days=2 gives yesterday/today/tomorrow's sunrise+sunset,
+                // which TintForNow needs to find the current day/night period's boundaries even
+                // in the early morning before today's own sunrise (still "last night").
+                string url = string.Format(CultureInfo.InvariantCulture,
+                    "https://api.open-meteo.com/v1/forecast?latitude={0}&longitude={1}&current=temperature_2m,weather_code,is_day&daily=moon_phase,sunrise,sunset&past_days=1&forecast_days=2&timezone=auto&temperature_unit=celsius",
+                    _latitude, _longitude);
 
-                await Task.WhenAll(conditionTask, tempTask);
+                string json = await _httpClient.GetStringAsync(url);
+                using JsonDocument doc = JsonDocument.Parse(json);
+                JsonElement current = doc.RootElement.GetProperty("current");
+                JsonElement daily = doc.RootElement.GetProperty("daily");
 
-                string condition = (await conditionTask).ToLower().Trim();
-                WeatherTemp = (await tempTask).Trim();
+                double temperature = current.GetProperty("temperature_2m").GetDouble();
+                int weatherCode = current.GetProperty("weather_code").GetInt32();
+                bool isDay = current.GetProperty("is_day").GetInt32() != 0;
 
-                if (condition.Contains("thunder") || condition.Contains("lightning") || condition.Contains("storm"))
-                {
-                    WeatherIconPath = GetImagePath("thunder.png");
-                }
-                else if (condition.Contains("snow") || condition.Contains("blizzard") || condition.Contains("sleet") || condition.Contains("ice"))
-                {
-                    WeatherIconPath = GetImagePath("snow.png");
-                }
-                else if ((condition.Contains("partly") || condition.Contains("patchy") || condition.Contains("scattered")) && condition.Contains("rain"))
-                {
-                    WeatherIconPath = GetImagePath("partly_cloudy_rain.png");
-                }
-                else if (condition.Contains("rain") || condition.Contains("shower") || condition.Contains("drizzle"))
-                {
-                    WeatherIconPath = GetImagePath("rain.png");
-                }
-                else if (condition.Contains("fog") || condition.Contains("mist") || condition.Contains("haze") || condition.Contains("smoke"))
-                {
-                    WeatherIconPath = GetImagePath("fog.png");
-                }
-                else if (condition.Contains("partly") || condition.Contains("patchy") || condition.Contains("scattered"))
-                {
-                    WeatherIconPath = GetImagePath("partly_cloudy.png");
-                }
-                else if (condition.Contains("cloud") || condition.Contains("overcast"))
-                {
-                    WeatherIconPath = GetImagePath("cloud.png");
-                }
-                else if (condition.Contains("sun") || condition.Contains("clear") || condition.Contains("fair"))
-                {
-                    WeatherIconPath = GetImagePath("sun.png");
-                }
-                else
-                {
-                    WeatherIconPath = GetImagePath("default.png");
-                }
+                // Index 1, not 0: past_days=1 shifts the array to [yesterday, today, tomorrow].
+                double moonPhase = daily.GetProperty("moon_phase")[1].GetDouble();
+
+                WeatherTemp = FormatTemperature(temperature);
+                WeatherIconPath = GetImagePath(GetIconFileName(weatherCode, isDay, moonPhase));
+                WeatherIconTint = new SolidColorBrush(TintForNow(isDay, daily));
             }
             catch
             {
                 WeatherTemp = "N/A";
             }
+        }
+
+        // Interpolates directly between NightColor and DayColor (no neutral stop in between) -
+        // bluest right at sunrise (the end of night), steadily warming to yellowest right at
+        // sunset (the end of day), then steadily cooling back to blue overnight.
+        private static Color TintForNow(bool isDay, JsonElement daily)
+        {
+            DateTime[] sunrise = ParseDailyTimes(daily, "sunrise");
+            DateTime[] sunset = ParseDailyTimes(daily, "sunset");
+            if (sunrise == null || sunset == null)
+            {
+                return NightColor;
+            }
+
+            DateTime now = DateTime.Now;
+            DateTime periodStart, periodEnd;
+            Color from, to;
+
+            if (isDay)
+            {
+                // Today's daylight: sunrise[1] (today) to sunset[1] (today).
+                periodStart = sunrise[1];
+                periodEnd = sunset[1];
+                from = NightColor;
+                to = DayColor;
+            }
+            else if (now < sunrise[1])
+            {
+                // Still before today's sunrise - this is the tail end of last night.
+                periodStart = sunset[0];
+                periodEnd = sunrise[1];
+                from = DayColor;
+                to = NightColor;
+            }
+            else
+            {
+                // Past today's sunset - tonight, heading toward tomorrow's sunrise.
+                periodStart = sunset[1];
+                periodEnd = sunrise[2];
+                from = DayColor;
+                to = NightColor;
+            }
+
+            double totalSeconds = (periodEnd - periodStart).TotalSeconds;
+            double progress = totalSeconds > 0 ? (now - periodStart).TotalSeconds / totalSeconds : 0;
+            progress = Math.Clamp(progress, 0, 1);
+
+            return LerpColor(from, to, progress);
+        }
+
+        private static DateTime[] ParseDailyTimes(JsonElement daily, string propertyName)
+        {
+            if (!daily.TryGetProperty(propertyName, out JsonElement array) || array.GetArrayLength() < 3)
+            {
+                return null;
+            }
+
+            var result = new DateTime[array.GetArrayLength()];
+            for (int i = 0; i < result.Length; i++)
+            {
+                if (!DateTime.TryParse(array[i].GetString(), CultureInfo.InvariantCulture,
+                        DateTimeStyles.None, out result[i]))
+                {
+                    return null;
+                }
+            }
+
+            return result;
+        }
+
+        private static Color LerpColor(Color from, Color to, double t)
+        {
+            byte Lerp(byte a, byte b) => (byte)Math.Round(a + (b - a) * t);
+            return Color.FromRgb(Lerp(from.R, to.R), Lerp(from.G, to.G), Lerp(from.B, to.B));
+        }
+
+        private async Task<bool> GeocodeAsync(string location)
+        {
+            string encodedLocation = Uri.EscapeDataString(location);
+            string url = $"https://geocoding-api.open-meteo.com/v1/search?name={encodedLocation}&count=1&language=en&format=json";
+
+            string json = await _httpClient.GetStringAsync(url);
+            using JsonDocument doc = JsonDocument.Parse(json);
+
+            if (!doc.RootElement.TryGetProperty("results", out JsonElement results) || results.GetArrayLength() == 0)
+            {
+                return false;
+            }
+
+            JsonElement first = results[0];
+            _latitude = first.GetProperty("latitude").GetDouble();
+            _longitude = first.GetProperty("longitude").GetDouble();
+            _geocodedLocation = location;
+            return true;
+        }
+
+        private static string FormatTemperature(double celsius)
+        {
+            int rounded = (int)Math.Round(celsius, MidpointRounding.AwayFromZero);
+            string sign = rounded > 0 ? "+" : rounded < 0 ? "-" : "";
+            return $"{sign}{Math.Abs(rounded)}°C";
+        }
+
+        // WMO weather codes (https://open-meteo.com/en/docs, "WMO Weather interpretation codes").
+        // Icons are monochrome PNGs pre-rendered (at high resolution, then downscaled with
+        // high-quality bitmap scaling) from the same vector shapes this app briefly rendered
+        // live via WPF Path - live vector rendering came out visibly aliased on at least one
+        // real system regardless of EdgeMode/rendering-tier/software-rendering settings (a
+        // WPF/driver-level quirk outside the app's control), while bitmap rendering has always
+        // been reliably smooth, so the shapes are delivered as bitmaps instead. Only clear sky
+        // (0/1) gets a night variant - the only assets on hand are the 8 moon phases, and
+        // overcast/rain/snow/fog/thunder icons don't have a sun/moon in them to begin with, so
+        // there's nothing for a "night" version to change. Falls back to cloud.png for any
+        // WMO code Open-Meteo might add later that isn't one of the above.
+        private static string GetIconFileName(int weatherCode, bool isDay, double moonPhase) => weatherCode switch
+        {
+            0 or 1 => isDay ? "sun.png" : GetMoonPhaseIconFileName(moonPhase),
+            2 => "partly_cloudy.png",
+            3 => "cloud.png",
+            45 or 48 => "fog.png",
+            51 or 53 or 55 or 61 or 63 or 65 or 81 or 82 => "rain.png",
+            56 or 57 or 66 or 67 or 71 or 73 or 75 or 77 or 85 or 86 => "snow.png",
+            80 => "partly_cloudy_rain.png",
+            95 or 96 or 99 => "thunder.png",
+            _ => "cloud.png",
+        };
+
+        // moonPhase is a 0-1 fraction of the lunar cycle (0/1 = new, 0.25 = first quarter,
+        // 0.5 = full, 0.75 = last quarter). Bucketed into 8 equal slices, each centered on one
+        // of the 8 standard phase names.
+        private static string GetMoonPhaseIconFileName(double moonPhase)
+        {
+            double phase = moonPhase - Math.Floor(moonPhase); // normalize into [0, 1)
+            int bucket = (int)Math.Round(phase / 0.125) % 8;
+
+            return bucket switch
+            {
+                0 => "moon_new.png",
+                1 => "moon_waxing_crescent.png",
+                2 => "moon_first_quarter.png",
+                3 => "moon_waxing_gibbous.png",
+                4 => "moon_full.png",
+                5 => "moon_waning_gibbous.png",
+                6 => "moon_last_quarter.png",
+                _ => "moon_waning_crescent.png",
+            };
         }
 
         public event PropertyChangedEventHandler PropertyChanged;

@@ -9,18 +9,11 @@
              Visibility="Collapsed">
     <StackPanel Orientation="Horizontal"
                 Style="{DynamicResource MediaPlayerPanelStyle}">
-        <!-- A layout/position anchor only - always Hidden (never actually painted) when
-             there's art. The visible copy lives in an Adorner (see UpdateAlbumArtAdorner
-             in the code-behind) so a per-monitor MonitorAdjustments offset can push it
-             outside this control's own layout bounds without the Tray GroupBox's
-             Padding/BorderThickness clipping it - see Utilities/UIElementAdorner.cs. -->
-        <Image x:Name="AlbumArtImage"
-               Style="{DynamicResource MediaPlayerAlbumArtStyle}"
-               Visibility="Collapsed" />
         <Button x:Name="PreviousButton"
                 Style="{DynamicResource MediaPlayerButtonStyle}"
                 Click="PreviousButton_OnClick"
-                ToolTip="{DynamicResource media_previous}">
+                ToolTip="{DynamicResource media_previous}"
+                utilities:MonitorOffset.Tag="MediaButtonPrevious">
             <Path Data="{DynamicResource MediaPlayerPreviousGeometry}"
                   Style="{DynamicResource MediaPlayerGlyphStyle}"
                   utilities:MonitorOffset.Tag="MediaGlyphPrevious" />
@@ -28,7 +21,8 @@
         <Button x:Name="PlayPauseButton"
                 Style="{DynamicResource MediaPlayerButtonStyle}"
                 Click="PlayPauseButton_OnClick"
-                ToolTip="{DynamicResource media_play_pause}">
+                ToolTip="{DynamicResource media_play_pause}"
+                utilities:MonitorOffset.Tag="MediaButtonPlayPause">
             <Path x:Name="PlayPauseGlyph"
                   Data="{DynamicResource MediaPlayerPlayGeometry}"
                   Style="{DynamicResource MediaPlayerGlyphStyle}"
@@ -37,11 +31,20 @@
         <Button x:Name="NextButton"
                 Style="{DynamicResource MediaPlayerButtonStyle}"
                 Click="NextButton_OnClick"
-                ToolTip="{DynamicResource media_next}">
+                ToolTip="{DynamicResource media_next}"
+                utilities:MonitorOffset.Tag="MediaButtonNext">
             <Path Data="{DynamicResource MediaPlayerNextGeometry}"
                   Style="{DynamicResource MediaPlayerGlyphStyle}"
                   utilities:MonitorOffset.Tag="MediaGlyphNext" />
         </Button>
+        <!-- A layout/position anchor only - always Hidden (never actually painted) when
+             there's art. The visible copy lives in an Adorner (see UpdateAlbumArtAdorner
+             in the code-behind) so a per-monitor MonitorAdjustments offset can push it
+             outside this control's own layout bounds without the Tray GroupBox's
+             Padding/BorderThickness clipping it - see Utilities/UIElementAdorner.cs. -->
+        <Image x:Name="AlbumArtImage"
+               Style="{DynamicResource MediaPlayerAlbumArtStyle}"
+               Visibility="Collapsed" />
         <Grid x:Name="TrackTextHost"
               Style="{DynamicResource MediaPlayerTrackTextHostStyle}">
             <!-- A Canvas measures and arranges its children at their full natural
@@ -49,7 +52,10 @@
                  width. The host Grid clips it and the marquee slides it. -->
             <Canvas x:Name="TrackTextCanvas"
                     Height="{Binding ActualHeight, ElementName=TrackText}"
-                    utilities:MonitorOffset.Tag="MediaTrackText">
+                    utilities:MonitorOffset.Tag="MediaTrackText"
+                    Background="Transparent"
+                    Cursor="Hand"
+                    MouseLeftButtonUp="TrackTextCanvas_OnMouseLeftButtonUp">
                 <TextBlock x:Name="TrackText"
                            Canvas.Left="0"
                            Canvas.Top="0"
@@ -62,5 +68,91 @@
                 </TextBlock>
             </Canvas>
         </Grid>
+
+        <!-- Opens on a click on the track text (see TrackTextCanvas_OnMouseLeftButtonUp) - lets
+             seeking within the current track, which doesn't fit as a permanently-visible part of
+             the compact taskbar widget. StaysOpen="False" closes it on any click outside. -->
+        <Popup x:Name="SeekPopup"
+               PlacementTarget="{Binding ElementName=TrackTextCanvas}"
+               Placement="Top"
+               HorizontalOffset="-10"
+               VerticalOffset="-8"
+               AllowsTransparency="True"
+               StaysOpen="False"
+               Opened="SeekPopup_OnOpened"
+               Closed="SeekPopup_OnClosed">
+            <!-- Same 4-line raised bevel as a resting (non-pressed) tab (see TaskButton's own
+                 template, not TaskButtonActive's sunken one): an outer DarkShadow/Highlight pair
+                 around an inner Shadow/Light pair. -->
+            <Border BorderThickness="0"
+                    Padding="1">
+                <Border BorderThickness="0,0,1,1"
+                        BorderBrush="{DynamicResource ButtonDarkShadow}">
+                    <Border BorderThickness="1,1,0,0"
+                            BorderBrush="{DynamicResource ButtonHighlight}">
+                        <Border BorderThickness="0,0,1,1"
+                                BorderBrush="{DynamicResource ButtonShadow}">
+                            <Border BorderThickness="1,1,0,0"
+                                    BorderBrush="{DynamicResource ButtonLight}"
+                                    Background="{DynamicResource ButtonFace}"
+                                    Padding="2,3">
+                                <StackPanel Orientation="Horizontal">
+                                    <Button x:Name="SeekBackButton"
+                                            Style="{DynamicResource MediaPlayerButtonStyle}"
+                                            Click="SeekBackButton_OnClick"
+                                            ToolTip="-10s"
+                                            utilities:MonitorOffset.Tag="MediaSeekButtonBack">
+                                        <!-- One triangle from MediaPlayerPreviousGeometry (which
+                                             is two, for the "skip track" glyph elsewhere) -
+                                             seeking within a track only needs a single arrow. -->
+                                        <Path Data="M 4,0 L 4,7 L 0,3.5 Z"
+                                              Style="{DynamicResource MediaPlayerGlyphStyle}"
+                                              utilities:MonitorOffset.Tag="MediaSeekGlyphBack" />
+                                    </Button>
+                                    <Button x:Name="SeekPlayPauseButton"
+                                            Style="{DynamicResource MediaPlayerButtonStyle}"
+                                            Click="PlayPauseButton_OnClick"
+                                            ToolTip="{DynamicResource media_play_pause}"
+                                            utilities:MonitorOffset.Tag="MediaSeekButtonPlayPause">
+                                        <Path x:Name="SeekPlayPauseGlyph"
+                                              Data="{DynamicResource MediaPlayerPlayGeometry}"
+                                              Style="{DynamicResource MediaPlayerGlyphStyle}"
+                                              utilities:MonitorOffset.Tag="MediaSeekGlyphPlayPause" />
+                                    </Button>
+                                    <Button x:Name="SeekForwardButton"
+                                            Style="{DynamicResource MediaPlayerButtonStyle}"
+                                            Click="SeekForwardButton_OnClick"
+                                            ToolTip="+10s"
+                                            utilities:MonitorOffset.Tag="MediaSeekButtonForward">
+                                        <!-- One triangle from MediaPlayerNextGeometry - see
+                                             SeekBackButton's comment above. -->
+                                        <Path Data="M 0,0 L 4,3.5 L 0,7 Z"
+                                              Style="{DynamicResource MediaPlayerGlyphStyle}"
+                                              utilities:MonitorOffset.Tag="MediaSeekGlyphForward" />
+                                    </Button>
+                                    <Slider x:Name="SeekSlider"
+                                            Width="90"
+                                            VerticalAlignment="Center"
+                                            Margin="2,0"
+                                            Minimum="0"
+                                            Maximum="1"
+                                            IsMoveToPointEnabled="True"
+                                            PreviewMouseDown="SeekSlider_OnPreviewMouseDown"
+                                            PreviewMouseUp="SeekSlider_OnPreviewMouseUp"
+                                            utilities:MonitorOffset.Tag="MediaSeekSlider" />
+                                    <TextBlock x:Name="SeekTimeText"
+                                               Style="{DynamicResource MediaPlayerTrackTextStyle}"
+                                               FontWeight="Bold"
+                                               VerticalAlignment="Center"
+                                               Margin="2,0,0,0"
+                                               Text="0:00 / 0:00"
+                                               utilities:MonitorOffset.Tag="MediaSeekTimeText" />
+                                </StackPanel>
+                            </Border>
+                        </Border>
+                    </Border>
+                </Border>
+            </Border>
+        </Popup>
     </StackPanel>
 </UserControl>

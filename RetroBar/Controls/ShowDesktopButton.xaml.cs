@@ -43,14 +43,9 @@ namespace RetroBar.Controls
 
         private void SetIconSize()
         {
-            if (DpiHelper.DpiScale > 1 || Settings.Instance.TaskbarScale > 1)
-            {
-                ShowDesktopIcon.Source = (System.Windows.Media.ImageSource)FindResource("ShowDesktopIconImageLarge");
-            }
-            else
-            {
-                ShowDesktopIcon.Source = (System.Windows.Media.ImageSource)FindResource("ShowDesktopIconImageSmall");
-            }
+            // TEMP DEBUG: forced to Small to compare against the Large icon this normally
+            // resolves to on a >100%-scaled primary monitor (DpiHelper.DpiScale > 1).
+            ShowDesktopIcon.Source = (System.Windows.Media.ImageSource)FindResource("ShowDesktopIconImageSmall");
         }
 
         private void ContextMenu_Opened(object sender, RoutedEventArgs e)

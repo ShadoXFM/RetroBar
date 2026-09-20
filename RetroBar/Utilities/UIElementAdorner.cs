@@ -16,11 +16,15 @@ namespace RetroBar.Utilities
     {
         private readonly UIElement _child;
 
-        public UIElementAdorner(UIElement adornedElement, UIElement child) : base(adornedElement)
+        /// <param name="isHitTestVisible">false (the default) makes the adorner - and so the
+        /// child too, since hit-test traversal stops at a non-hit-testable ancestor - purely
+        /// visual, same as most adorners (resize handles being the usual exception). Pass true
+        /// when the child needs to be clickable, e.g. MediaPlayer's album art.</param>
+        public UIElementAdorner(UIElement adornedElement, UIElement child, bool isHitTestVisible = false) : base(adornedElement)
         {
             _child = child;
             AddVisualChild(_child);
-            IsHitTestVisible = false;
+            IsHitTestVisible = isHitTestVisible;
         }
 
         protected override int VisualChildrenCount => 1;

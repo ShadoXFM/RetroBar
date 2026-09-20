@@ -3,6 +3,7 @@ using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Text.Json;
+using System.Text.Json.Serialization;
 
 namespace RetroBar.Utilities
 {
@@ -20,6 +21,7 @@ namespace RetroBar.Utilities
     /// Format:
     /// {
     ///   "\\\\.\\DISPLAY1": {
+    ///     "RowCount": 2,
     ///     "TaskIcon": { "Y": 1 },
     ///     "MediaGlyphPrevious": { "Scale": 1.1, "TextRendering": "ClearType" }
     ///   }
@@ -28,13 +30,29 @@ namespace RetroBar.Utilities
     /// The outer key is a monitor's AppBarScreen.DeviceName (Windows' internal display name,
     /// typically \.\DISPLAY1, \.\DISPLAY2, etc. - JSON-escaped that's "\\\\.\\DISPLAY1" since
     /// each backslash needs doubling; if you're not sure which is which, just try one and see
-    /// whether the adjustment shows up on the monitor you expected). The inner
-    /// key is whatever string an element's utilities:MonitorOffset.Tag="..." attribute uses in
-    /// the app's XAML (TaskIcon, TaskIconActive, TaskLabel, MediaGlyphPrevious,
-    /// MediaGlyphPlayPause, MediaGlyphNext, MediaAlbumArt, MediaTrackText, TrayToggleButton, or
-    /// a new one you tag yourself). Every
-    /// field on MonitorOffsetValue is optional - X, Y, Width, Height, Scale, TextRendering,
-    /// BitmapScaling - omit whatever you don't want to change.
+    /// whether the adjustment shows up on the monitor you expected).
+    ///
+    /// "RowCount" is optional and overrides Settings.RowCount (the global row-count setting) on
+    /// just this one monitor - useful since that setting is otherwise shared across every
+    /// monitor, but how many task buttons fit before they start getting silently dropped (see
+    /// TaskList.SetTaskButtonWidth) depends on that monitor's own available width in DIPs, which
+    /// a higher-DPI monitor has less of even at the same physical resolution.
+    ///
+    /// Every other key is whatever string an element's utilities:MonitorOffset.Tag="..."
+    /// attribute uses in the app's XAML (TaskIcon, TaskIconActive, TaskLabel, TaskLabelActive,
+    /// TaskOverlayIcon, TaskOverlayIconActive, MediaButtonPrevious, MediaButtonPlayPause,
+    /// MediaButtonNext (the whole button, not just its glyph), MediaGlyphPrevious,
+    /// MediaGlyphPlayPause, MediaGlyphNext, MediaAlbumArt, MediaTrackText, MediaSeekButtonBack,
+    /// MediaSeekButtonPlayPause, MediaSeekButtonForward, MediaSeekGlyphBack,
+    /// MediaSeekGlyphPlayPause, MediaSeekGlyphForward, MediaSeekSlider, MediaSeekTimeText (the
+    /// seek popup's own buttons/glyphs/slider/time text, separate from the main taskbar's),
+    /// TrayToggleButton, Clock, WeatherIcon, WeatherTemp, StartIcon, StartLabel, TrayIcon,
+    /// TrayBox (the whole tray GroupBox as one rigid unit - media player, tray icons and clock
+    /// move together), or a new one you tag yourself), and every field on MonitorOffsetValue is
+    /// optional - X, Y, Width, Height, Scale, TextRendering, BitmapScaling, Bold, Margin,
+    /// Background, Geometry (Path mini-language Figures, only meaningful on a Path - e.g. one of
+    /// the MediaGlyph* tags - to replace its vector shape entirely per monitor) - omit whatever
+    /// you don't want to change.
     ///
     /// The file is re-read automatically whenever it changes on disk (save it in any editor
     /// while RetroBar is running and the change applies immediately - no restart needed).
@@ -61,31 +79,61 @@ namespace RetroBar.Utilities
             "  // duplication if you paste it in):\n" +
             "  //\n" +
             "  // \"\\\\\\\\.\\\\DISPLAY1\": {\n" +
+            "  //   \"RowCount\": 2,\n" +
             "  //   \"TaskIcon\": { \"Y\": 1 },\n" +
             "  //   \"MediaGlyphPrevious\": { \"Scale\": 1.1, \"TextRendering\": \"ClearType\" }\n" +
             "  // }\n" +
             "}\n";
 
-        private static Dictionary<string, Dictionary<string, MonitorOffsetValue>> _offsets;
+        /// <summary>One monitor's entry: an optional RowCount, plus every other (tag-keyed) field
+        /// captured by JsonExtensionData rather than a fixed set of named properties.</summary>
+        private class MonitorEntry
+        {
+            public int? RowCount { get; set; }
+
+            [JsonExtensionData]
+            public Dictionary<string, JsonElement> Tags { get; set; }
+        }
+
+        private static Dictionary<string, MonitorEntry> _monitors;
         private static FileSystemWatcher _watcher;
 
         static MonitorAdjustments()
         {
             EnsureFileExists();
-            _offsets = Load();
+            _monitors = Load();
             _watcher = CreateWatcher();
         }
 
         public static MonitorOffsetValue Get(string deviceName, string tag)
         {
             if (!string.IsNullOrEmpty(deviceName) && !string.IsNullOrEmpty(tag)
-                && _offsets.TryGetValue(deviceName, out var perTag)
-                && perTag.TryGetValue(tag, out var value))
+                && _monitors.TryGetValue(deviceName, out MonitorEntry entry)
+                && entry.Tags != null && entry.Tags.TryGetValue(tag, out JsonElement element))
             {
-                return value ?? new MonitorOffsetValue();
+                try
+                {
+                    return element.Deserialize<MonitorOffsetValue>() ?? new MonitorOffsetValue();
+                }
+                catch (JsonException ex)
+                {
+                    ShellLogger.Error($"MonitorAdjustments: Error reading '{tag}' for '{deviceName}', ignoring it until it's fixed: {ex.Message}");
+                }
             }
 
             return new MonitorOffsetValue();
+        }
+
+        /// <summary>The RowCount override for this monitor, or null if it has none (meaning: use
+        /// the global Settings.RowCount instead, same as before this override existed).</summary>
+        public static int? GetRowCount(string deviceName)
+        {
+            if (!string.IsNullOrEmpty(deviceName) && _monitors.TryGetValue(deviceName, out MonitorEntry entry))
+            {
+                return entry.RowCount;
+            }
+
+            return null;
         }
 
         private static void EnsureFileExists()
@@ -106,28 +154,28 @@ namespace RetroBar.Utilities
             }
         }
 
-        private static Dictionary<string, Dictionary<string, MonitorOffsetValue>> Load()
+        private static Dictionary<string, MonitorEntry> Load()
         {
             try
             {
                 if (!File.Exists(FilePath))
                 {
-                    return new Dictionary<string, Dictionary<string, MonitorOffsetValue>>();
+                    return new Dictionary<string, MonitorEntry>();
                 }
 
                 string json = File.ReadAllText(FilePath);
                 if (string.IsNullOrWhiteSpace(json))
                 {
-                    return new Dictionary<string, Dictionary<string, MonitorOffsetValue>>();
+                    return new Dictionary<string, MonitorEntry>();
                 }
 
-                var loaded = JsonSerializer.Deserialize<Dictionary<string, Dictionary<string, MonitorOffsetValue>>>(json, ReadOptions);
-                return loaded ?? new Dictionary<string, Dictionary<string, MonitorOffsetValue>>();
+                var loaded = JsonSerializer.Deserialize<Dictionary<string, MonitorEntry>>(json, ReadOptions);
+                return loaded ?? new Dictionary<string, MonitorEntry>();
             }
             catch (Exception ex)
             {
                 ShellLogger.Error($"MonitorAdjustments: Error reading {FilePath}, ignoring it until it's fixed: {ex.Message}");
-                return new Dictionary<string, Dictionary<string, MonitorOffsetValue>>();
+                return new Dictionary<string, MonitorEntry>();
             }
         }
 
@@ -162,7 +210,7 @@ namespace RetroBar.Utilities
             // Whatever just saved the file may still be mid-write; give it a moment so a
             // half-written file isn't read as empty or invalid.
             System.Threading.Thread.Sleep(150);
-            _offsets = Load();
+            _monitors = Load();
             Changed?.Invoke(null, EventArgs.Empty);
         }
     }

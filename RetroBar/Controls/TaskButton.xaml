@@ -34,10 +34,14 @@
                    Grid.Column="0"
                    Style="{DynamicResource TaskIcon}"
                    utilities:MonitorOffset.Tag="{Binding Path=State, Converter={StaticResource taskStateToMonitorTagConverter}, ConverterParameter=TaskIcon}" />
+            <!-- MonitorOffset.Tag is TaskOverlayIcon normally, TaskOverlayIconActive while
+                 State==Active - see TaskStateToMonitorTagConverter for why the active state
+                 needs its own tag. -->
             <Image Source="{Binding Path=OverlayIcon, Mode=OneWay}"
                    Grid.Column="0"
                    Style="{DynamicResource TaskOverlayIcon}"
-                   Visibility="{Binding Source={x:Static utilities:Settings.Instance}, Path=ShowTaskBadges, UpdateSourceTrigger=PropertyChanged, Converter={StaticResource boolToVisibilityConverter}}" />
+                   Visibility="{Binding Source={x:Static utilities:Settings.Instance}, Path=ShowTaskBadges, UpdateSourceTrigger=PropertyChanged, Converter={StaticResource boolToVisibilityConverter}}"
+                   utilities:MonitorOffset.Tag="{Binding Path=State, Converter={StaticResource taskStateToMonitorTagConverter}, ConverterParameter=TaskOverlayIcon}" />
             <!-- MonitorOffset.Tag is TaskLabel normally, TaskLabelActive while State==Active -
                  see TaskStateToMonitorTagConverter for why the active state needs its own tag. -->
             <TextBlock Grid.Column="1"

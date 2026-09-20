@@ -213,17 +213,28 @@
            x:Key="Tray">
         <Setter Property="OverridesDefaultStyle"
                 Value="True" />
+        <Setter Property="Background"
+                Value="{DynamicResource ButtonFace}" />
         <Setter Property="Template">
             <Setter.Value>
+                <!-- Sunken bevel: a single Highlight/DarkShadow pair. This used to also have an
+                     inner Light/Shadow pair (a 4-line bevel matching TaskButton's IsPressed
+                     trigger), but that inner pair was too visually noticeable, so it's back to
+                     just this one pair - positioned at the same coordinates the inner pair used
+                     to sit at (outer Padding="2" instead of "1", pushing the border in that
+                     extra 1 DIP). The inner Padding is reduced from "2" to "1" to compensate, so
+                     the border moves in by 1 DIP on every side but the content inside doesn't
+                     shift at all - only the outer Padding increasing would push the content in
+                     too, along with the border. -->
                 <ControlTemplate TargetType="GroupBox">
                     <Border BorderThickness="0"
                             Padding="2">
                         <Border BorderThickness="0,0,1,1"
                                 BorderBrush="{DynamicResource ButtonHighlight}">
                             <Border BorderThickness="1,1,0,0"
-                                    BorderBrush="{DynamicResource ButtonShadow}"
-                                    Background="{DynamicResource ButtonFace}"
-                                    Padding="2">
+                                    BorderBrush="{DynamicResource ButtonDarkShadow}"
+                                    Background="{TemplateBinding Background}"
+                                    Padding="1">
                                 <ContentPresenter />
                             </Border>
                         </Border>
@@ -346,8 +357,12 @@
                             UseLayoutRounding="True"
                             SnapsToDevicePixels="True"
                             Name="ButtonBorder">
+                        <!-- Outer bottom-right is Highlight, inner bottom-right is Light - two
+                             distinct shades, matching TaskButton's IsPressed trigger and the Tray
+                             box's own sunken bevel. Previously both used Light, so they rendered
+                             as one indistinguishable line instead of two. -->
                         <Border BorderThickness="0,0,1,1"
-                                BorderBrush="{DynamicResource ButtonLight}"
+                                BorderBrush="{DynamicResource ButtonHighlight}"
                                 UseLayoutRounding="True"
                                 SnapsToDevicePixels="True">
                             <Border BorderThickness="1,1,0,0"
@@ -982,7 +997,12 @@
         <Setter Property="Template">
             <Setter.Value>
                 <ControlTemplate TargetType="Button">
+                    <!-- Outer Border's own Padding is invisible (nothing draws here, just
+                         Background="Transparent" - which still hit-tests) - it extends the
+                         clickable area a bit beyond the visible bordered box below, without
+                         making that box itself look any bigger. -->
                     <Border Background="Transparent"
+                            Padding="0,1"
                             UseLayoutRounding="True"
                             SnapsToDevicePixels="True"
                             Name="ButtonBorder">
@@ -991,14 +1011,16 @@
                                 UseLayoutRounding="True"
                                 SnapsToDevicePixels="True"
                                 x:Name="ButtonRightBottomBorder">
+                            <!-- Padding "2,2,2,3" (extra 1 at the bottom) instead of a uniform
+                                 "2": makes the visible box 1px taller. -->
                             <Border BorderThickness="1,1,0,0"
                                     BorderBrush="{TemplateBinding Background}"
                                     Background="{TemplateBinding Background}"
-                                    Padding="2"
+                                    Padding="2,2,2,3"
                                     UseLayoutRounding="True"
                                     SnapsToDevicePixels="True"
                                     x:Name="ButtonLeftTopBorder">
-                                <ContentPresenter />
+                                <ContentPresenter Name="Content" />
                             </Border>
                         </Border>
                     </Border>
@@ -1028,6 +1050,11 @@
                             <Setter TargetName="ButtonLeftTopBorder"
                                     Property="BorderBrush"
                                     Value="{DynamicResource ButtonShadow}" />
+                            <!-- Same content shift as TaskButton's IsPressed trigger, for the
+                                 same "pushed in" 3D look. -->
+                            <Setter TargetName="Content"
+                                    Property="Margin"
+                                    Value="1,1,-1,-1" />
                         </Trigger>
                     </ControlTemplate.Triggers>
                 </ControlTemplate>
@@ -1053,10 +1080,17 @@
          same size instead of each button hugging its own glyph's width. -->
     <system:Double x:Key="MediaPlayerGlyphWidth">10</system:Double>
 
+    <!-- Two 4-wide triangles with a 1-unit gap (2*4+1=9), each an exact mirror of the other -
+         these glyphs render with RenderOptions.EdgeMode=Aliased (see CrispGlyphPathStyle) for a
+         crisp, no-antialiasing retro look, so a triangle's flat vertical edge has to land on a
+         whole-pixel X coordinate or it renders as a blurry half-lit column instead of a clean
+         line; a half-integer X (this file's first attempt used 4.5/5.5, to fill the 10-wide box
+         exactly) breaks that. The diagonal edges to each apex still alias into a "staircase" the
+         same as any aliased diagonal, which is the intended pixel-art look, not a bug. -->
     <PathGeometry x:Key="MediaPlayerPreviousGeometry"
                   Figures="M 4,0 L 4,7 L 0,3.5 Z M 9,0 L 9,7 L 5,3.5 Z" />
     <PathGeometry x:Key="MediaPlayerNextGeometry"
-                  Figures="M 0,0 L 4,3.5 L 0,7 Z M 5,0 L 8.5,3.5 L 5,7 Z" />
+                  Figures="M 0,0 L 4,3.5 L 0,7 Z M 5,0 L 9,3.5 L 5,7 Z" />
     <PathGeometry x:Key="MediaPlayerPlayGeometry"
                   Figures="M 0,0 L 6,3.5 L 0,7 Z" />
     <PathGeometry x:Key="MediaPlayerPauseGeometry"
@@ -1100,7 +1134,7 @@
         <Setter Property="VerticalAlignment"
                 Value="Center" />
         <Setter Property="Fill"
-                Value="{Binding Path=(TextElement.Foreground), RelativeSource={RelativeSource Self}}" />
+                Value="{DynamicResource ClockForeground}" />
     </Style>
 
     <Style TargetType="Image"
@@ -1181,7 +1215,8 @@
                      x:Key="ClockTemplateKey">
         <TextBlock Style="{DynamicResource Clock}"
                    Text="{Binding Path=Now, StringFormat=t, Mode=OneWay}"
-                   Name="ClockText">
+                   Name="ClockText"
+                   utilities:MonitorOffset.Tag="Clock">
         </TextBlock>
     </ControlTemplate>
 

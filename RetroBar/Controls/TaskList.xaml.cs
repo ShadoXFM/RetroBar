@@ -18,7 +18,6 @@ namespace RetroBar.Controls
         private bool isLoaded;
         private bool isScrollable;
         private double DefaultButtonWidth;
-        private double MinButtonWidth;
         private double TaskButtonLeftMargin;
         private double TaskButtonRightMargin;
         private ICollectionView taskbarItems;
@@ -49,6 +48,22 @@ namespace RetroBar.Controls
             set { SetValue(ExtraWidthCountProperty, value); }
         }
 
+        // The DIP size of one physical device pixel on whatever monitor this taskbar is
+        // currently on (e.g. 0.8 at 125% scale, 1 at 100%). ButtonWidth is snapped to a multiple
+        // of this so every button's width is exactly representable in physical pixels - without
+        // that, identical buttons that all share the same non-grid-aligned DIP width (e.g. 118 at
+        // 125% scale, where 118*1.25=147.5 isn't a whole pixel) can each drift the same direction
+        // when WPF's layout rounding snaps them, and that drift accumulates across a whole row of
+        // buttons until it's enough to wrap the last one into a row the taskbar's fixed height
+        // has no room for - which looked like a tab just disappearing.
+        public static DependencyProperty PixelStepProperty = DependencyProperty.Register(nameof(PixelStep), typeof(double), typeof(TaskList), new PropertyMetadata(1d));
+
+        public double PixelStep
+        {
+            get { return (double)GetValue(PixelStepProperty); }
+            set { SetValue(PixelStepProperty, value); }
+        }
+
         public static DependencyProperty TasksProperty = DependencyProperty.Register(nameof(Tasks), typeof(Tasks), typeof(TaskList), new PropertyMetadata(TasksChangedCallback));
 
         public Tasks Tasks
@@ -73,7 +88,6 @@ namespace RetroBar.Controls
         private void SetStyles()
         {
             DefaultButtonWidth = Application.Current.FindResource("TaskButtonWidth") as double? ?? 0;
-            MinButtonWidth = Application.Current.FindResource("TaskButtonMinWidth") as double? ?? 0;
             Thickness buttonMargin;
 
             if (Settings.Instance.Edge == AppBarEdge.Left || Settings.Instance.Edge == AppBarEdge.Right)
@@ -254,11 +268,13 @@ namespace RetroBar.Controls
             int taskCount = TasksList.Items.Count;
             TasksList.AlternationCount = taskCount; // keep in sync for correct AlternationIndex
 
+            double dpiScale = System.Windows.Media.VisualTreeHelper.GetDpi(this).DpiScaleX;
+            PixelStep = dpiScale > 0 ? 1.0 / dpiScale : 1.0;
+
             double margin = TaskButtonLeftMargin + TaskButtonRightMargin;
             ButtonsPerRow = Math.Max(1, (int)Math.Ceiling((double)taskCount / rows));
             double maxWidth = TasksList.ActualWidth / ButtonsPerRow;
             double defaultWidth = DefaultButtonWidth + margin;
-            double minWidth = MinButtonWidth + margin;
 
             if (maxWidth > defaultWidth)
             {
@@ -267,19 +283,28 @@ namespace RetroBar.Controls
                 ButtonWidth = defaultWidth;
                 SetScrollable(false);
             }
-            else if (maxWidth < minWidth)
-            {
-                ExtraWidthCount = 0;
-                ButtonWidth = Math.Ceiling(defaultWidth / 2);
-                SetScrollable(true);
-            }
             else
             {
-                // Buttons are shrunk to fit a full row: spread the pixels lost to flooring
-                // across the columns so the row fills the taskbar.
-                double baseWidth = Math.Floor(maxWidth);
+                // Shrink every button to fit exactly ButtonsPerRow columns x rows rows - even
+                // below the "MinButtonWidth" design target, if there are enough windows open to
+                // force it - so a button is always visible (if cramped) instead of disappearing.
+                // This used to special-case going below that minimum by setting ButtonWidth to a
+                // fixed defaultWidth/2, decoupled from ButtonsPerRow/maxWidth entirely; that let
+                // the WrapPanel wrap into more rows than the taskbar's fixed height (from
+                // Host.Rows) could show, and the scroll viewer's tiny paging buttons didn't
+                // reliably surface the overflow - tabs past that point just vanished.
+                //
+                // ButtonWidth is snapped down to a multiple of PixelStep (not just floored to a
+                // whole DIP) so it's exactly representable in physical pixels on this monitor -
+                // otherwise every button sharing the same non-grid-aligned width can drift the
+                // same direction under layout rounding, and that drift accumulates across a row
+                // until it's enough to push the last button into an unplanned extra row on a
+                // non-100%-scale monitor. The "extra 1 DIP" per-column bonus becomes "extra one
+                // PixelStep" for the same reason (see TaskButtonWidthConverter).
+                double baseWidth = Math.Floor(maxWidth / PixelStep) * PixelStep;
                 ButtonWidth = baseWidth;
-                ExtraWidthCount = (int)Math.Round(TasksList.ActualWidth) - (int)baseWidth * ButtonsPerRow;
+                double totalGridSafeWidth = Math.Floor(TasksList.ActualWidth / PixelStep) * PixelStep;
+                ExtraWidthCount = Math.Max(0, (int)Math.Round((totalGridSafeWidth - baseWidth * ButtonsPerRow) / PixelStep));
                 SetScrollable(false);
             }
         }

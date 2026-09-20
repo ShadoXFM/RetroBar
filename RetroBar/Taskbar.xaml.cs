@@ -29,7 +29,13 @@ namespace RetroBar
 
         public int Rows
         {
-            get => Settings.Instance.RowCount;
+            // A per-monitor RowCount in monitor-adjustments.json overrides the global setting on
+            // just this monitor - how many task buttons fit before they're silently dropped (see
+            // TaskList.SetTaskButtonWidth) depends on this monitor's own available width in DIPs,
+            // which a single shared RowCount can't account for. The setter still targets the
+            // global setting: this override is static hand-edited config, not something the
+            // in-app row +/- hotkeys are meant to reach into.
+            get => MonitorAdjustments.GetRowCount(Screen?.DeviceName) ?? Settings.Instance.RowCount;
             set => Settings.Instance.RowCount = value;
         }
 
@@ -68,6 +74,7 @@ namespace RetroBar
             FlowDirection = Application.Current.FindResource("flow_direction") as FlowDirection? ?? FlowDirection.LeftToRight;
 
             Settings.Instance.PropertyChanged += Settings_PropertyChanged;
+            MonitorAdjustments.Changed += MonitorAdjustments_Changed;
 
             if (Settings.Instance.ShowQuickLaunch)
             {
@@ -124,6 +131,20 @@ namespace RetroBar
 
             _fullScreenSuppressed = true;
             base.OnFullScreenLeave();
+        }
+
+        private void MonitorAdjustments_Changed(object sender, EventArgs e)
+        {
+            // Fires on a background (file-watcher) thread; a RowCount override is the only field
+            // here that affects window size/Rows, but there's no cheap way to tell from this
+            // event alone whether that's what changed, so this just always re-checks - redundant
+            // but harmless when it wasn't.
+            Dispatcher.BeginInvoke(new Action(() =>
+            {
+                PeekDuringAutoHide();
+                RecalculateSize();
+                OnPropertyChanged(nameof(Rows));
+            }));
         }
 
         private void Settings_PropertyChanged(object sender, PropertyChangedEventArgs e)
@@ -272,6 +293,7 @@ namespace RetroBar
                 QuickLaunchToolbar.Visibility = Visibility.Collapsed;
 
                 Settings.Instance.PropertyChanged -= Settings_PropertyChanged;
+                MonitorAdjustments.Changed -= MonitorAdjustments_Changed;
                 _startMenuMonitor.StartMenuVisibilityChanged -= StartMenuMonitor_StartMenuVisibilityChanged;
                 _shellManager.TasksService.WindowActivated -= TasksService_WindowActivated;
             }
