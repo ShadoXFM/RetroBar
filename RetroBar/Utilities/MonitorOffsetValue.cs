@@ -34,9 +34,37 @@ namespace RetroBar.Utilities
         /// <summary>A System.Windows.Media.BitmapScalingMode name (NearestNeighbor/Linear/HighQuality/Fant), or null to leave it inherited.</summary>
         public string BitmapScaling { get; set; }
 
+        /// <summary>true for bold text, false for normal, or null to leave it inherited. Applied
+        /// via TextElement.FontWeightProperty, which is an inherited property - it doesn't need
+        /// to target a TextBlock directly, tagging an ancestor (e.g. a hosting Canvas) works too.</summary>
+        public bool? Bold { get; set; }
+
+        /// <summary>A WPF Thickness string ("5", "5,0", or "5,0,0,0" - same syntax as a plain
+        /// XAML Margin="..." attribute), or null to leave the element's own Style/XAML Margin
+        /// alone. Unlike X/Y, this is real layout space - it pushes neighboring elements over
+        /// and can make an element overflow the space its ancestors think it occupies, which is
+        /// exactly the failure mode X/Y's RenderTransform was chosen to avoid (see the class
+        /// remarks) - so a Margin override can reproduce the clipping issues that a plain X/Y
+        /// nudge on the same element can't. Use X/Y instead whenever a visual nudge is enough;
+        /// reach for this only when neighboring content genuinely needs to move too.</summary>
+        public string Margin { get; set; }
+
+        /// <summary>A WPF color string - "#RRGGBB", "#AARRGGBB", or a named color like "Red" -
+        /// applied to the element's own Background property, or null to leave its Style/XAML
+        /// background alone. Only meaningful on an element that actually has a Background
+        /// property (Control, Panel, Border, ...).</summary>
+        public string Background { get; set; }
+
+        /// <summary>WPF path mini-language Figures (the same syntax as a PathGeometry's own
+        /// Figures="..." - e.g. "M 0,0 L 6,3.5 L 0,7 Z"), applied to the element's own Data
+        /// property to replace its vector shape entirely, or null to leave the element's own
+        /// Style/XAML geometry alone. Only meaningful on a Path.</summary>
+        public string Geometry { get; set; }
+
         public bool IsEmpty =>
             X == 0 && Y == 0 &&
             Width == null && Height == null && Scale == null &&
-            TextRendering == null && BitmapScaling == null;
+            TextRendering == null && BitmapScaling == null && Bold == null && Margin == null &&
+            Background == null && Geometry == null;
     }
 }

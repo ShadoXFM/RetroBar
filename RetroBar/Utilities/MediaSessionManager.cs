@@ -2,6 +2,7 @@
 using System;
 using System.IO;
 using System.Runtime.Versioning;
+using System.Threading;
 using System.Threading.Tasks;
 using System.Windows.Media;
 using System.Windows.Media.Imaging;
@@ -32,10 +33,26 @@ namespace RetroBar.Utilities
         private GlobalSystemMediaTransportControlsSession _session;
         private bool _disposed;
 
+        // Fallback for SMTC bridges (foobar2000's, at least) that don't reliably or promptly
+        // raise PlaybackInfoChanged - polls the actual status directly so play/pause state
+        // never gets stuck showing stale data.
+        private const int PlaybackPollIntervalMs = 500;
+        private Timer _playbackPollTimer;
+
         public bool HasSession => _session != null;
         public string Title { get; private set; } = "";
         public string Artist { get; private set; } = "";
         public MediaPlaybackState PlaybackState { get; private set; } = MediaPlaybackState.None;
+
+        /// <summary>Whether the source app has told SMTC it supports seeking to an arbitrary
+        /// position (TryChangePlaybackPositionAsync) - not every app implements this even when
+        /// it reports a Position/Duration, so callers should hide/disable seek UI when false
+        /// rather than assume it'll work.</summary>
+        public bool CanSeek { get; private set; }
+
+        /// <summary>The AppUserModelID of whatever app owns the current session, or "" if there
+        /// isn't one - used to find and activate that app's own window.</summary>
+        public string SourceAppUserModelId { get; private set; } = "";
 
         /// <summary>
         /// Album/track artwork for the current session, or null if the app doesn't
@@ -68,14 +85,22 @@ namespace RetroBar.Utilities
 
             if (_session != null)
             {
+                SourceAppUserModelId = _session.SourceAppUserModelId ?? "";
+
                 _session.MediaPropertiesChanged += Session_MediaPropertiesChanged;
                 _session.PlaybackInfoChanged += Session_PlaybackInfoChanged;
 
                 RefreshPlaybackState();
                 _ = RefreshPropertiesAsync();
+
+                _playbackPollTimer ??= new Timer(_ => RefreshPlaybackState(), null, PlaybackPollIntervalMs, PlaybackPollIntervalMs);
             }
             else
             {
+                _playbackPollTimer?.Dispose();
+                _playbackPollTimer = null;
+
+                SourceAppUserModelId = "";
                 Title = "";
                 Artist = "";
                 Thumbnail = null;
@@ -173,10 +198,13 @@ namespace RetroBar.Utilities
 
         private void RefreshPlaybackState()
         {
+            MediaPlaybackState previous = PlaybackState;
+
             try
             {
+                GlobalSystemMediaTransportControlsSessionPlaybackInfo info = _session?.GetPlaybackInfo();
                 GlobalSystemMediaTransportControlsSessionPlaybackStatus status =
-                    _session?.GetPlaybackInfo()?.PlaybackStatus ?? GlobalSystemMediaTransportControlsSessionPlaybackStatus.Closed;
+                    info?.PlaybackStatus ?? GlobalSystemMediaTransportControlsSessionPlaybackStatus.Closed;
 
                 PlaybackState = status switch
                 {
@@ -185,14 +213,87 @@ namespace RetroBar.Utilities
                     GlobalSystemMediaTransportControlsSessionPlaybackStatus.Changing => MediaPlaybackState.Playing,
                     _ => MediaPlaybackState.None
                 };
+                CanSeek = info?.Controls?.IsPlaybackPositionEnabled ?? false;
             }
             catch (Exception e)
             {
                 ShellLogger.Debug($"MediaSessionManager: Unable to read playback info: {e.Message}");
                 PlaybackState = MediaPlaybackState.None;
+                CanSeek = false;
             }
 
-            MediaChanged?.Invoke(this, EventArgs.Empty);
+            // Polling calls this every 500ms regardless of whether anything changed - only
+            // notify the UI (which would otherwise reset the marquee/tooltip) on a real change.
+            if (PlaybackState != previous)
+            {
+                MediaChanged?.Invoke(this, EventArgs.Empty);
+            }
+        }
+
+        /// <summary>
+        /// Reads the current playback position and total duration fresh from the session (not
+        /// cached) - callers polling this for a live seek bar should call it on their own timer
+        /// rather than relying on an event, since SMTC has no "position changed" notification.
+        /// </summary>
+        public (TimeSpan Position, TimeSpan Duration) GetTimeline()
+        {
+            try
+            {
+                GlobalSystemMediaTransportControlsSessionTimelineProperties timeline = _session?.GetTimelineProperties();
+                if (timeline == null)
+                {
+                    return (TimeSpan.Zero, TimeSpan.Zero);
+                }
+
+                TimeSpan duration = timeline.EndTime - timeline.StartTime;
+                TimeSpan position = timeline.Position;
+
+                // Most SMTC sources only update Position at track/seek/pause boundaries, not
+                // continuously - while playing, estimate how far it's advanced since the last
+                // update so the bar moves smoothly instead of jumping every poll.
+                if (PlaybackState == MediaPlaybackState.Playing)
+                {
+                    position += DateTimeOffset.Now - timeline.LastUpdatedTime;
+                }
+
+                if (position < TimeSpan.Zero)
+                {
+                    position = TimeSpan.Zero;
+                }
+                else if (duration > TimeSpan.Zero && position > duration)
+                {
+                    position = duration;
+                }
+
+                return (position, duration);
+            }
+            catch (Exception e)
+            {
+                ShellLogger.Debug($"MediaSessionManager: Unable to read timeline: {e.Message}");
+                return (TimeSpan.Zero, TimeSpan.Zero);
+            }
+        }
+
+        public async Task SeekAsync(TimeSpan position)
+        {
+            if (_session == null || !CanSeek)
+            {
+                return;
+            }
+
+            try
+            {
+                if (position < TimeSpan.Zero)
+                {
+                    position = TimeSpan.Zero;
+                }
+
+                await _session.TryChangePlaybackPositionAsync(position.Ticks);
+            }
+            catch (Exception e)
+            {
+                ShellLogger.Debug($"MediaSessionManager: Unable to seek: {e.Message}");
+            }
         }
 
         public async Task TogglePlayPauseAsync()
@@ -204,7 +305,32 @@ namespace RetroBar.Utilities
 
             try
             {
-                await _session.TryTogglePlayPauseAsync();
+                // Read status fresh rather than trusting the cached PlaybackState field, which
+                // can be stale by up to one poll interval (or racing the poll timer's background
+                // thread) and would otherwise sometimes pick the wrong direction (e.g. sending
+                // Play when it's already playing, which is a no-op).
+                GlobalSystemMediaTransportControlsSessionPlaybackStatus currentStatus =
+                    _session.GetPlaybackInfo()?.PlaybackStatus ?? GlobalSystemMediaTransportControlsSessionPlaybackStatus.Closed;
+                bool isPlaying = currentStatus is GlobalSystemMediaTransportControlsSessionPlaybackStatus.Playing
+                    or GlobalSystemMediaTransportControlsSessionPlaybackStatus.Changing;
+
+                // Send the explicit Play/Pause command rather than TryTogglePlayPauseAsync -
+                // some SMTC bridges (e.g. foobar2000's) wire up the discrete Play and Pause
+                // buttons but don't reliably honor a generic toggle command.
+                if (isPlaying)
+                {
+                    await _session.TryPauseAsync();
+                }
+                else
+                {
+                    await _session.TryPlayAsync();
+                }
+
+                // Some SMTC bridges (e.g. foobar2000's) don't reliably (or promptly) raise
+                // PlaybackInfoChanged after a command they themselves handled. This refresh
+                // catches it immediately when the app already updated its status by the time
+                // the command's await returned; the poll timer catches it otherwise.
+                RefreshPlaybackState();
             }
             catch (Exception e)
             {
@@ -254,6 +380,9 @@ namespace RetroBar.Utilities
             }
 
             _disposed = true;
+
+            _playbackPollTimer?.Dispose();
+            _playbackPollTimer = null;
 
             if (_manager != null)
             {

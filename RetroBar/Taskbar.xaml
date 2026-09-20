@@ -91,7 +91,8 @@
                              RelativeSource="{RelativeSource Mode=FindAncestor, AncestorType=Window}" />
                 </DockPanel.Dock>
             </controls:ShowDesktopButton>
-            <GroupBox Style="{DynamicResource Tray}">
+            <GroupBox Style="{DynamicResource Tray}"
+                      utilities:MonitorOffset.Tag="TrayBox">
                 <GroupBox.ContextMenu>
                     <ContextMenu>
                         <TextOptions.TextRenderingMode>
@@ -121,7 +122,8 @@
                                  Path="Orientation"
                                  RelativeSource="{RelativeSource Mode=FindAncestor, AncestorType=Window}" />
                     </StackPanel.Orientation>
-                    <controls:MediaPlayer VerticalAlignment="Center" />
+                    <controls:MediaPlayer VerticalAlignment="Center"
+                                          ShellManager="{Binding}" />
                     <controls:NotifyIconList NotificationArea="{Binding NotificationArea}" />
                     <controls:Clock VerticalAlignment="Center" />
                 </StackPanel>

@@ -54,6 +54,7 @@
                                     <Binding Path="ButtonWidth" RelativeSource="{RelativeSource Mode=FindAncestor, AncestorType=local:TaskList}" />
                                     <Binding Path="ExtraWidthCount" RelativeSource="{RelativeSource Mode=FindAncestor, AncestorType=local:TaskList}" />
                                     <Binding Path="ButtonsPerRow" RelativeSource="{RelativeSource Mode=FindAncestor, AncestorType=local:TaskList}" />
+                                    <Binding Path="PixelStep" RelativeSource="{RelativeSource Mode=FindAncestor, AncestorType=local:TaskList}" />
                                 </MultiBinding>
                             </local:TaskButton.Width>
                         </local:TaskButton>
