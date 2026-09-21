@@ -1,7 +1,8 @@
 ﻿<!--Windows XFM by XFM | my music: zingbong.com-->
 <ResourceDictionary xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
                     xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
-                    xmlns:system="clr-namespace:System;assembly=mscorlib">
+                    xmlns:system="clr-namespace:System;assembly=mscorlib"
+                    xmlns:utilities="clr-namespace:RetroBar.Utilities;assembly=RetroBar">
     <system:Boolean x:Key="InvertSystemNotifyIcons">False</system:Boolean>
     <system:Double x:Key="TaskButtonWidth">120</system:Double>
     <system:Double x:Key="GlobalFontSize">10</system:Double>
@@ -85,36 +86,70 @@
         <Setter Property="Template">
             <Setter.Value>
                 <ControlTemplate TargetType="ToggleButton">
-                    <Border Background="Transparent"
+                    <!--
+                        A single Border (content-driven size, same as before) with four 1px
+                        Rectangles overlaid inside it for the bevel lines, instead of two nested
+                        Borders each drawing a partial (top+left vs bottom+right) stroke. Nested
+                        Borders each independently pixel-snap their own bounds based on their
+                        parent's content-area inset, which at fractional DPI can round to a
+                        physical pixel row/column that doesn't quite match its neighbor's -
+                        producing exactly the kind of 1px corner overhang/gap this replaced. The
+                        Rectangles live inside the SAME Border (sized by its own Padding+content,
+                        not by their own Stretch alignment) so they can't inflate its bounds the
+                        way they could as top-level Grid children with no fixed size to stretch
+                        against.
+                    -->
+                    <Border x:Name="ButtonBorder"
+                            Background="Transparent"
                             Padding="0,2"
-                            Name="ButtonBorder">
-                        <Border BorderThickness="0,0,1,1"
-                                BorderBrush="{TemplateBinding Background}"
-                                x:Name="ButtonRightBottomBorder">
-                            <Border BorderThickness="1,1,0,0"
-                                    BorderBrush="{TemplateBinding Background}"
-                                    Background="{TemplateBinding Background}"
-                                    x:Name="ButtonLeftTopBorder">
-                                <StackPanel Orientation="Horizontal"
-                                            Height="12"
-                                            VerticalAlignment="Center"
-                                            Margin="4,0,4,-2"
-                                            Name="ArrowPanel">
-                                    <TextBlock Text="^"
-                                            FontSize="12"
-                                            FontFamily="Tahoma"
-                                            Foreground="{DynamicResource ButtonForeground}"
-                                            HorizontalAlignment="Center"
-                                            VerticalAlignment="Center"
-                                            RenderTransformOrigin="0.5,0.5"
-                                            Name="ArrowText">
-                                        <TextBlock.RenderTransform>
-                                            <RotateTransform Angle="0" />
-                                        </TextBlock.RenderTransform>
-                                    </TextBlock>
-                                </StackPanel>
-                            </Border>
-                        </Border>
+                            utilities:MonitorOffset.Tag="TrayToggleButton"
+                            SnapsToDevicePixels="True"
+                            UseLayoutRounding="True">
+                        <Grid Background="{TemplateBinding Background}">
+                            <StackPanel Orientation="Horizontal"
+                                        Height="12"
+                                        VerticalAlignment="Center"
+                                        Margin="4,0,4,-2"
+                                        Name="ArrowPanel"
+                                        utilities:MonitorOffset.Tag="TrayToggleButtonArrow">
+                                <TextBlock Text="^"
+                                        FontSize="12"
+                                        FontFamily="Tahoma"
+                                        Foreground="{DynamicResource ButtonForeground}"
+                                        HorizontalAlignment="Center"
+                                        VerticalAlignment="Center"
+                                        RenderTransformOrigin="0.5,0.5"
+                                        Name="ArrowText">
+                                    <TextBlock.RenderTransform>
+                                        <RotateTransform Angle="0" />
+                                    </TextBlock.RenderTransform>
+                                </TextBlock>
+                            </StackPanel>
+                            <Rectangle x:Name="TopLine"
+                                       Height="1"
+                                       VerticalAlignment="Top"
+                                       Fill="{TemplateBinding Background}"
+                                       SnapsToDevicePixels="True"
+                                       utilities:MonitorOffset.Tag="TrayToggleButtonTop" />
+                            <Rectangle x:Name="LeftLine"
+                                       Width="1"
+                                       HorizontalAlignment="Left"
+                                       Fill="{TemplateBinding Background}"
+                                       SnapsToDevicePixels="True"
+                                       utilities:MonitorOffset.Tag="TrayToggleButtonLeft" />
+                            <Rectangle x:Name="BottomLine"
+                                       Height="1"
+                                       VerticalAlignment="Bottom"
+                                       Fill="{TemplateBinding Background}"
+                                       SnapsToDevicePixels="True"
+                                       utilities:MonitorOffset.Tag="TrayToggleButtonBottom" />
+                            <Rectangle x:Name="RightLine"
+                                       Width="1"
+                                       HorizontalAlignment="Right"
+                                       Fill="{TemplateBinding Background}"
+                                       SnapsToDevicePixels="True"
+                                       utilities:MonitorOffset.Tag="TrayToggleButtonRight" />
+                        </Grid>
                     </Border>
                     <ControlTemplate.Triggers>
                         <!-- Rotate arrow AND adjust only the text/panel position when open -->
@@ -127,24 +162,22 @@
                             <!-- Change this internal margin to shift/tweak spacing of just the arrow -->
                             <Setter TargetName="ArrowText" Property="Margin" Value="0,-3,0,4" />
                         </Trigger>
-                        
+
                         <Trigger Property="IsMouseOver"
                                 Value="True">
-                            <Setter TargetName="ButtonLeftTopBorder"
-                                    Property="BorderBrush"
-                                    Value="{DynamicResource ButtonHighlight}" />
-                            <Setter TargetName="ButtonRightBottomBorder"
-                                    Property="BorderBrush"
-                                    Value="{DynamicResource ButtonShadow}" />
+                            <Setter TargetName="TopLine" Property="Fill" Value="{DynamicResource ButtonHighlight}" />
+                            <Setter TargetName="LeftLine" Property="Fill" Value="{DynamicResource ButtonHighlight}" />
+                            <Setter TargetName="BottomLine" Property="Fill" Value="{DynamicResource ButtonShadow}" />
+                            <Setter TargetName="RightLine" Property="Fill" Value="{DynamicResource ButtonShadow}" />
                         </Trigger>
                         <Trigger Property="IsPressed"
                                 Value="True">
-                            <Setter TargetName="ButtonRightBottomBorder"
-                                    Property="BorderBrush"
-                                    Value="{DynamicResource ButtonHighlight}" />
-                            <Setter TargetName="ButtonLeftTopBorder"
-                                    Property="BorderBrush"
-                                    Value="{DynamicResource ButtonShadow}" />
+                            <Setter TargetName="TopLine" Property="Fill" Value="{DynamicResource ButtonShadow}" />
+                            <Setter TargetName="LeftLine" Property="Fill" Value="{DynamicResource ButtonShadow}" />
+                            <Setter TargetName="BottomLine" Property="Fill" Value="{DynamicResource ButtonHighlight}" />
+                            <Setter TargetName="RightLine" Property="Fill" Value="{DynamicResource ButtonHighlight}" />
+                            <!-- Same content shift as TaskButton's IsPressed trigger, for the same "pushed in" 3D look. -->
+                            <Setter TargetName="ArrowPanel" Property="Margin" Value="5,1,3,-3" />
                         </Trigger>
                     </ControlTemplate.Triggers>
                 </ControlTemplate>

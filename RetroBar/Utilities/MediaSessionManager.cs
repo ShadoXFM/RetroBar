@@ -144,6 +144,14 @@ namespace RetroBar.Utilities
             MediaChanged?.Invoke(this, EventArgs.Empty);
         }
 
+        // Applies to whichever axis (width or height) is larger, so a widescreen source -
+        // a YouTube video frame via a browser's SMTC session, say, 16:9 instead of a square
+        // album cover - can't decode any bigger than a normal cover art thumbnail on its long
+        // side. Capping only DecodePixelHeight (as this used to) left DecodePixelWidth
+        // unconstrained, so a 16:9 source decoded proportionally wider than a 1:1 one ever
+        // would, making video thumbnails look inconsistently larger than regular album art.
+        private const int ThumbnailMaxDimension = 64;
+
         /// <summary>
         /// Reads the SMTC thumbnail stream into a frozen BitmapImage. Decoding is
         /// capped to a small size since this only ever renders as a taskbar icon.
@@ -173,13 +181,30 @@ namespace RetroBar.Utilities
                     reader.ReadBytes(bytes);
                 }
 
+                // Peek the source's natural pixel dimensions (a separate, disposable stream -
+                // cheap, since BitmapCacheOption.None only reads the header) to know which axis
+                // to constrain before the real decode below.
+                bool constrainWidth;
+                using (MemoryStream peekStream = new MemoryStream(bytes))
+                {
+                    BitmapFrame frame = BitmapFrame.Create(peekStream, BitmapCreateOptions.DelayCreation, BitmapCacheOption.None);
+                    constrainWidth = frame.PixelWidth > frame.PixelHeight;
+                }
+
                 BitmapImage bitmap = new BitmapImage();
 
                 using (MemoryStream memoryStream = new MemoryStream(bytes))
                 {
                     bitmap.BeginInit();
                     bitmap.CacheOption = BitmapCacheOption.OnLoad;
-                    bitmap.DecodePixelHeight = 64;
+                    if (constrainWidth)
+                    {
+                        bitmap.DecodePixelWidth = ThumbnailMaxDimension;
+                    }
+                    else
+                    {
+                        bitmap.DecodePixelHeight = ThumbnailMaxDimension;
+                    }
                     bitmap.StreamSource = memoryStream;
                     bitmap.EndInit();
                 }

@@ -39,10 +39,32 @@ namespace RetroBar.Utilities
 
         protected override Size ArrangeOverride(Size finalSize)
         {
-            // Arrange the child at its own desired size, not stretched to finalSize -
-            // otherwise an explicit Width/Height smaller than the AdornedElement's own
-            // size (the common case) would get silently overridden.
-            _child.Arrange(new Rect(new Point(0, 0), _child.DesiredSize));
+            // Arrange the child at its own explicit Width/Height when it has one, not just
+            // DesiredSize - an Image with Stretch="UniformToFill" can report a DesiredSize
+            // larger than its own explicit Width/Height when the source's aspect ratio doesn't
+            // match the box (e.g. a browser's widescreen video-frame thumbnail vs. square album
+            // art), and that inflated DesiredSize propagates upward through any wrapping
+            // container's own DesiredSize too (a Border just passes its child's DesiredSize
+            // through), so trusting DesiredSize alone would arrange the child at the inflated
+            // size regardless of what explicit size it was given. Falls back to DesiredSize for
+            // children that don't set an explicit size (most adorners, e.g. resize handles).
+            double width = _child.DesiredSize.Width;
+            double height = _child.DesiredSize.Height;
+
+            if (_child is FrameworkElement fe)
+            {
+                if (!double.IsNaN(fe.Width))
+                {
+                    width = fe.Width;
+                }
+
+                if (!double.IsNaN(fe.Height))
+                {
+                    height = fe.Height;
+                }
+            }
+
+            _child.Arrange(new Rect(new Point(0, 0), new Size(width, height)));
             return finalSize;
         }
     }

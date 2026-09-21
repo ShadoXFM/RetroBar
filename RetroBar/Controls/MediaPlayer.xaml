@@ -44,7 +44,8 @@
              Padding/BorderThickness clipping it - see Utilities/UIElementAdorner.cs. -->
         <Image x:Name="AlbumArtImage"
                Style="{DynamicResource MediaPlayerAlbumArtStyle}"
-               Visibility="Collapsed" />
+               Visibility="Collapsed"
+               utilities:MonitorOffset.Tag="MediaAlbumArt" />
         <Grid x:Name="TrackTextHost"
               Style="{DynamicResource MediaPlayerTrackTextHostStyle}">
             <!-- A Canvas measures and arranges its children at their full natural
@@ -75,7 +76,7 @@
         <Popup x:Name="SeekPopup"
                PlacementTarget="{Binding ElementName=TrackTextCanvas}"
                Placement="Top"
-               HorizontalOffset="-10"
+               HorizontalOffset="-35"
                VerticalOffset="-8"
                AllowsTransparency="True"
                StaysOpen="False"
@@ -102,12 +103,13 @@
                                             Click="SeekBackButton_OnClick"
                                             ToolTip="-10s"
                                             utilities:MonitorOffset.Tag="MediaSeekButtonBack">
-                                        <!-- One triangle from MediaPlayerPreviousGeometry (which
-                                             is two, for the "skip track" glyph elsewhere) -
-                                             seeking within a track only needs a single arrow. -->
+                                        <!-- Same tag as the main taskbar's own previous/next
+                                             glyph, so any per-monitor Geometry override applies
+                                             to this popup too instead of staying its own
+                                             separate (single-triangle) default shape. -->
                                         <Path Data="M 4,0 L 4,7 L 0,3.5 Z"
                                               Style="{DynamicResource MediaPlayerGlyphStyle}"
-                                              utilities:MonitorOffset.Tag="MediaSeekGlyphBack" />
+                                              utilities:MonitorOffset.Tag="MediaGlyphPrevious" />
                                     </Button>
                                     <Button x:Name="SeekPlayPauseButton"
                                             Style="{DynamicResource MediaPlayerButtonStyle}"
@@ -117,18 +119,18 @@
                                         <Path x:Name="SeekPlayPauseGlyph"
                                               Data="{DynamicResource MediaPlayerPlayGeometry}"
                                               Style="{DynamicResource MediaPlayerGlyphStyle}"
-                                              utilities:MonitorOffset.Tag="MediaSeekGlyphPlayPause" />
+                                              utilities:MonitorOffset.Tag="MediaGlyphPlayPause" />
                                     </Button>
                                     <Button x:Name="SeekForwardButton"
                                             Style="{DynamicResource MediaPlayerButtonStyle}"
                                             Click="SeekForwardButton_OnClick"
                                             ToolTip="+10s"
                                             utilities:MonitorOffset.Tag="MediaSeekButtonForward">
-                                        <!-- One triangle from MediaPlayerNextGeometry - see
+                                        <!-- Same tag as the main taskbar's own next glyph - see
                                              SeekBackButton's comment above. -->
                                         <Path Data="M 0,0 L 4,3.5 L 0,7 Z"
                                               Style="{DynamicResource MediaPlayerGlyphStyle}"
-                                              utilities:MonitorOffset.Tag="MediaSeekGlyphForward" />
+                                              utilities:MonitorOffset.Tag="MediaGlyphNext" />
                                     </Button>
                                     <Slider x:Name="SeekSlider"
                                             Width="90"

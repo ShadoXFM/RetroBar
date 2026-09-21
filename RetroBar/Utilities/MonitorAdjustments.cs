@@ -42,11 +42,21 @@ namespace RetroBar.Utilities
     /// attribute uses in the app's XAML (TaskIcon, TaskIconActive, TaskLabel, TaskLabelActive,
     /// TaskOverlayIcon, TaskOverlayIconActive, MediaButtonPrevious, MediaButtonPlayPause,
     /// MediaButtonNext (the whole button, not just its glyph), MediaGlyphPrevious,
-    /// MediaGlyphPlayPause, MediaGlyphNext, MediaAlbumArt, MediaTrackText, MediaSeekButtonBack,
-    /// MediaSeekButtonPlayPause, MediaSeekButtonForward, MediaSeekGlyphBack,
-    /// MediaSeekGlyphPlayPause, MediaSeekGlyphForward, MediaSeekSlider, MediaSeekTimeText (the
-    /// seek popup's own buttons/glyphs/slider/time text, separate from the main taskbar's),
-    /// TrayToggleButton, Clock, WeatherIcon, WeatherTemp, StartIcon, StartLabel, TrayIcon,
+    /// MediaGlyphPlayPause, MediaGlyphNext (the seek popup's own back/play-pause/forward glyphs
+    /// share these same three tags, not separate ones, so any per-monitor Geometry override
+    /// applies identically to both the main taskbar row and the popup), MediaAlbumArt,
+    /// MediaTrackText, MediaSeekButtonBack, MediaSeekButtonPlayPause, MediaSeekButtonForward,
+    /// MediaSeekSlider, MediaSeekTimeText (the seek popup's own buttons/slider/time text, separate
+    /// from the main taskbar's),
+    /// TrayToggleButton, TrayToggleButtonTop, TrayToggleButtonLeft, TrayToggleButtonBottom,
+    /// TrayToggleButtonRight (its four independent 1px bevel-line Rectangles, tunable separately
+    /// to close a fractional-DPI gap at any one edge without affecting the others),
+    /// TrayToggleButtonArrow (the StackPanel wrapping the "^" glyph, not the glyph itself - the
+    /// glyph has its own IsChecked-triggered RotateTransform, and a MonitorOffset X/Y/Scale on
+    /// the same element would permanently override it, since a code-set RenderTransform is a
+    /// local value and always beats a ControlTemplate trigger's Setter in WPF's precedence
+    /// order), Clock,
+    /// WeatherIcon, WeatherTemp, StartIcon, StartLabel, TrayIcon,
     /// TrayBox (the whole tray GroupBox as one rigid unit - media player, tray icons and clock
     /// move together), or a new one you tag yourself), and every field on MonitorOffsetValue is
     /// optional - X, Y, Width, Height, Scale, TextRendering, BitmapScaling, Bold, Margin,

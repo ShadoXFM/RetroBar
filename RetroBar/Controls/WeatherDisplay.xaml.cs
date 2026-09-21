@@ -8,7 +8,6 @@ using System.Runtime.CompilerServices;
 using System.Text.Json;
 using System.Threading.Tasks;
 using System.Windows.Controls;
-using System.Windows.Media;
 using System.Windows.Threading;
 
 namespace RetroBar.Controls
@@ -35,7 +34,7 @@ namespace RetroBar.Controls
 
             // Set up the timer
             _timer = new DispatcherTimer();
-            _timer.Interval = TimeSpan.FromMinutes(5);
+            _timer.Interval = TimeSpan.FromMinutes(1);
 
             _timer.Tick += async (sender, args) => await vm.UpdateWeatherAsync();
             _timer.Start();
@@ -57,13 +56,6 @@ namespace RetroBar.Controls
     {
         private static readonly HttpClient _httpClient = new HttpClient();
 
-        // Icon tint at the deepest point of night/day - fades in from the theme's own neutral
-        // foreground color (see NeutralIconColor) as night/day progresses, so it's most vivid at
-        // solar midnight/noon and neutral right at sunset/sunrise. Requested as literal colors,
-        // not theme resources, since the whole point is a color shift independent of theme.
-        private static readonly Color NightColor = Color.FromRgb(0x00, 0x6F, 0xBF);
-        private static readonly Color DayColor = Color.FromRgb(0xFF, 0xD7, 0x00);
-
         private string _geocodedLocation;
         private double _latitude;
         private double _longitude;
@@ -77,20 +69,6 @@ namespace RetroBar.Controls
                 if (_weatherIconPath != value)
                 {
                     _weatherIconPath = value;
-                    OnPropertyChanged();
-                }
-            }
-        }
-
-        private Brush _weatherIconTint;
-        public Brush WeatherIconTint
-        {
-            get => _weatherIconTint;
-            set
-            {
-                if (_weatherIconTint != value)
-                {
-                    _weatherIconTint = value;
                     OnPropertyChanged();
                 }
             }
@@ -135,11 +113,8 @@ namespace RetroBar.Controls
                     return;
                 }
 
-                // past_days=1/forecast_days=2 gives yesterday/today/tomorrow's sunrise+sunset,
-                // which TintForNow needs to find the current day/night period's boundaries even
-                // in the early morning before today's own sunrise (still "last night").
                 string url = string.Format(CultureInfo.InvariantCulture,
-                    "https://api.open-meteo.com/v1/forecast?latitude={0}&longitude={1}&current=temperature_2m,weather_code,is_day&daily=moon_phase,sunrise,sunset&past_days=1&forecast_days=2&timezone=auto&temperature_unit=celsius",
+                    "https://api.open-meteo.com/v1/forecast?latitude={0}&longitude={1}&current=temperature_2m,weather_code,is_day&daily=moon_phase&timezone=auto&temperature_unit=celsius",
                     _latitude, _longitude);
 
                 string json = await _httpClient.GetStringAsync(url);
@@ -150,92 +125,15 @@ namespace RetroBar.Controls
                 double temperature = current.GetProperty("temperature_2m").GetDouble();
                 int weatherCode = current.GetProperty("weather_code").GetInt32();
                 bool isDay = current.GetProperty("is_day").GetInt32() != 0;
-
-                // Index 1, not 0: past_days=1 shifts the array to [yesterday, today, tomorrow].
-                double moonPhase = daily.GetProperty("moon_phase")[1].GetDouble();
+                double moonPhase = daily.GetProperty("moon_phase")[0].GetDouble();
 
                 WeatherTemp = FormatTemperature(temperature);
                 WeatherIconPath = GetImagePath(GetIconFileName(weatherCode, isDay, moonPhase));
-                WeatherIconTint = new SolidColorBrush(TintForNow(isDay, daily));
             }
             catch
             {
                 WeatherTemp = "N/A";
             }
-        }
-
-        // Interpolates directly between NightColor and DayColor (no neutral stop in between) -
-        // bluest right at sunrise (the end of night), steadily warming to yellowest right at
-        // sunset (the end of day), then steadily cooling back to blue overnight.
-        private static Color TintForNow(bool isDay, JsonElement daily)
-        {
-            DateTime[] sunrise = ParseDailyTimes(daily, "sunrise");
-            DateTime[] sunset = ParseDailyTimes(daily, "sunset");
-            if (sunrise == null || sunset == null)
-            {
-                return NightColor;
-            }
-
-            DateTime now = DateTime.Now;
-            DateTime periodStart, periodEnd;
-            Color from, to;
-
-            if (isDay)
-            {
-                // Today's daylight: sunrise[1] (today) to sunset[1] (today).
-                periodStart = sunrise[1];
-                periodEnd = sunset[1];
-                from = NightColor;
-                to = DayColor;
-            }
-            else if (now < sunrise[1])
-            {
-                // Still before today's sunrise - this is the tail end of last night.
-                periodStart = sunset[0];
-                periodEnd = sunrise[1];
-                from = DayColor;
-                to = NightColor;
-            }
-            else
-            {
-                // Past today's sunset - tonight, heading toward tomorrow's sunrise.
-                periodStart = sunset[1];
-                periodEnd = sunrise[2];
-                from = DayColor;
-                to = NightColor;
-            }
-
-            double totalSeconds = (periodEnd - periodStart).TotalSeconds;
-            double progress = totalSeconds > 0 ? (now - periodStart).TotalSeconds / totalSeconds : 0;
-            progress = Math.Clamp(progress, 0, 1);
-
-            return LerpColor(from, to, progress);
-        }
-
-        private static DateTime[] ParseDailyTimes(JsonElement daily, string propertyName)
-        {
-            if (!daily.TryGetProperty(propertyName, out JsonElement array) || array.GetArrayLength() < 3)
-            {
-                return null;
-            }
-
-            var result = new DateTime[array.GetArrayLength()];
-            for (int i = 0; i < result.Length; i++)
-            {
-                if (!DateTime.TryParse(array[i].GetString(), CultureInfo.InvariantCulture,
-                        DateTimeStyles.None, out result[i]))
-                {
-                    return null;
-                }
-            }
-
-            return result;
-        }
-
-        private static Color LerpColor(Color from, Color to, double t)
-        {
-            byte Lerp(byte a, byte b) => (byte)Math.Round(a + (b - a) * t);
-            return Color.FromRgb(Lerp(from.R, to.R), Lerp(from.G, to.G), Lerp(from.B, to.B));
         }
 
         private async Task<bool> GeocodeAsync(string location)

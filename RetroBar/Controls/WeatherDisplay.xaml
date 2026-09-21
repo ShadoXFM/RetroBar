@@ -3,20 +3,20 @@
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
              xmlns:utilities="clr-namespace:RetroBar.Utilities">
     <StackPanel Orientation="Horizontal" VerticalAlignment="Center" HorizontalAlignment="Center" Margin="4,0">
-        <TextBlock Text="{Binding WeatherTemp}"
-           Style="{DynamicResource WeatherTempStyle}"
-           Foreground="{DynamicResource ClockForeground}"
-           utilities:MonitorOffset.Tag="WeatherTemp" />
-        <!-- Weather Icon (sizes itself using the theme style). A Rectangle tinted by
-             WeatherIconTint, masked to the icon's own shape via OpacityMask, rather than a plain
-             Image - lets the day/night color progression (see WeatherViewModel.TintForNow) tint
-             the icon at render time instead of needing a separately-colored bitmap per shade. -->
-        <Rectangle Fill="{Binding WeatherIconTint}"
+        <!-- Weather Icon (sizes itself using the theme style). A Rectangle masked to the icon's
+             own shape via OpacityMask, rather than a plain Image - lets the icon be tinted to
+             match the theme's foreground color at render time instead of needing a
+             separately-colored bitmap per theme. -->
+        <Rectangle Fill="{DynamicResource ClockForeground}"
                    Style="{DynamicResource WeatherIconStyle}"
                    utilities:MonitorOffset.Tag="WeatherIcon">
             <Rectangle.OpacityMask>
                 <ImageBrush ImageSource="{Binding WeatherIconPath}" Stretch="Uniform" />
             </Rectangle.OpacityMask>
         </Rectangle>
+        <TextBlock Text="{Binding WeatherTemp}"
+           Style="{DynamicResource WeatherTempStyle}"
+           Foreground="{DynamicResource ClockForeground}"
+           utilities:MonitorOffset.Tag="WeatherTemp" />
     </StackPanel>
 </UserControl>

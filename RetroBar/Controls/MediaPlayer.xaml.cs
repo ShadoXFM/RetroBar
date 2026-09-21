@@ -9,6 +9,7 @@ using System.Windows.Documents;
 using System.Windows.Input;
 using System.Windows.Media;
 using System.Windows.Media.Animation;
+using System.Windows.Shapes;
 using System.Windows.Threading;
 
 namespace RetroBar.Controls
@@ -33,10 +34,21 @@ namespace RetroBar.Controls
         private double _marqueeOverflow;
 
         private UIElementAdorner _albumArtAdorner;
-        private Image _albumArtVisual;
+        private Border _albumArtContainer;
+        private Rectangle _albumArtVisual;
+        private ImageBrush _albumArtBrush;
 
         private DispatcherTimer _seekPopupTimer;
         private bool _seekSliderDragging;
+
+        // Tracks album-art-click toggle state ourselves rather than reading the window's live
+        // Active/foreground state at click time - clicking anywhere in RetroBar's own window
+        // (including the album art itself) can make RetroBar the foreground app before our own
+        // click handler runs, so the target app's window would never actually read back as
+        // "Active" and the toggle would always just re-activate, never minimize. Reset whenever
+        // the source app itself changes, so a new track/app always starts at "click to show".
+        private bool _sourceAppShown;
+        private string _lastSourceAumid;
 
         // Bound from Taskbar.xaml as "{Binding}" - Taskbar's own DataContext is already the
         // ShellManager instance (see Taskbar.xaml.cs), so this just captures it explicitly
@@ -168,6 +180,13 @@ namespace RetroBar.Controls
 
             Visibility = Visibility.Visible;
 
+            string currentAumid = _sessionManager.SourceAppUserModelId;
+            if (!string.Equals(currentAumid, _lastSourceAumid, StringComparison.OrdinalIgnoreCase))
+            {
+                _lastSourceAumid = currentAumid;
+                _sourceAppShown = false;
+            }
+
             string trackText = string.IsNullOrEmpty(_sessionManager.Artist)
                 ? _sessionManager.Title
                 : $"{_sessionManager.Title} \u2014 {_sessionManager.Artist}";
@@ -248,9 +267,20 @@ namespace RetroBar.Controls
 
             if (_albumArtAdorner == null)
             {
-                _albumArtVisual = new Image
+                // A Rectangle filled with an ImageBrush, not an Image element - an Image with
+                // Stretch="UniformToFill" can both report a DesiredSize larger than its own
+                // explicit Width/Height when the source's aspect ratio doesn't match the box
+                // (e.g. a browser's widescreen video-frame thumbnail vs. square album art), and
+                // anchor its crop to that inflated size instead of the actually-arranged one -
+                // showing an off-center sliver of the source instead of a centered crop. A Brush
+                // isn't a FrameworkElement with its own Measure/Arrange pass, so it has neither
+                // problem: it simply paints, UniformToFill-cropped and centered (ImageBrush's
+                // default AlignmentX/Y), within whatever area it's given. Same technique already
+                // used for the weather icon (see WeatherDisplay.xaml's Rectangle/OpacityMask).
+                _albumArtBrush = new ImageBrush { Stretch = Stretch.UniformToFill };
+                _albumArtVisual = new Rectangle
                 {
-                    Stretch = Stretch.UniformToFill,
+                    Fill = _albumArtBrush,
                     SnapsToDevicePixels = true,
                     UseLayoutRounding = true,
                     Cursor = Cursors.Hand,
@@ -258,18 +288,36 @@ namespace RetroBar.Controls
                 RenderOptions.SetBitmapScalingMode(_albumArtVisual, BitmapScalingMode.HighQuality);
                 _albumArtVisual.MouseLeftButtonUp += ActivateSourceApp;
 
-                _albumArtAdorner = new UIElementAdorner(AlbumArtImage, _albumArtVisual, isHitTestVisible: true);
+                // The explicit size lives on this wrapping Border - a plain Rectangle sizes
+                // itself from whatever space it's arranged into, so the Border is what actually
+                // establishes (and, via ClipToBounds, enforces) the fixed square box.
+                _albumArtContainer = new Border
+                {
+                    ClipToBounds = true,
+                    Child = _albumArtVisual,
+                };
+
+                _albumArtAdorner = new UIElementAdorner(AlbumArtImage, _albumArtContainer, isHitTestVisible: true);
                 layer.Add(_albumArtAdorner);
             }
 
-            _albumArtVisual.Source = AlbumArtImage.Source;
+            _albumArtBrush.ImageSource = AlbumArtImage.Source;
 
             string deviceName = (Window.GetWindow(this) as Taskbar)?.Screen.DeviceName;
             MonitorOffsetValue offset = MonitorAdjustments.Get(deviceName, "MediaAlbumArt");
 
-            _albumArtVisual.Width = offset.Width ?? AlbumArtImage.ActualWidth;
-            _albumArtVisual.Height = offset.Height ?? AlbumArtImage.ActualHeight;
+            // AlbumArtImage.Width/Height (the style-set explicit value), not ActualWidth/
+            // ActualHeight - ActualWidth inherits the exact same Image+UniformToFill inflation
+            // this whole fix is working around, so it can't be trusted as a fallback either.
+            _albumArtContainer.Width = offset.Width ?? AlbumArtImage.Width;
+            _albumArtContainer.Height = offset.Height ?? AlbumArtImage.Height;
 
+            // On the container, not _albumArtVisual: the Image now sits inside a fixed-size
+            // clipped Border (see above), so a transform on the Image itself shifts its content
+            // within that fixed clip window - cropping it off-center - instead of moving the
+            // whole box the way this offset is meant to. Transforming the container moves/scales
+            // the box (clip window and all) as a single unit, leaving the image centered and
+            // cleanly UniformToFill-cropped inside it.
             bool hasScale = offset.Scale.HasValue && offset.Scale.Value != 1;
             if (offset.X != 0 || offset.Y != 0 || hasScale)
             {
@@ -277,25 +325,16 @@ namespace RetroBar.Controls
 
                 if (hasScale)
                 {
-                    _albumArtVisual.RenderTransformOrigin = new Point(0.5, 0.5);
+                    _albumArtContainer.RenderTransformOrigin = new Point(0.5, 0.5);
                     group.Children.Add(new ScaleTransform(offset.Scale.Value, offset.Scale.Value));
                 }
 
                 group.Children.Add(new TranslateTransform(offset.X, offset.Y));
-                _albumArtVisual.RenderTransform = group;
+                _albumArtContainer.RenderTransform = group;
             }
             else
             {
-                _albumArtVisual.RenderTransform = null;
-            }
-
-            if (offset.TextRendering != null && Enum.TryParse(offset.TextRendering, out TextRenderingMode renderingMode))
-            {
-                TextOptions.SetTextRenderingMode(_albumArtVisual, renderingMode);
-            }
-            else
-            {
-                _albumArtVisual.ClearValue(TextOptions.TextRenderingModeProperty);
+                _albumArtContainer.RenderTransform = null;
             }
 
             if (offset.BitmapScaling != null && Enum.TryParse(offset.BitmapScaling, out BitmapScalingMode scalingMode))
@@ -315,7 +354,9 @@ namespace RetroBar.Controls
 
             AdornerLayer.GetAdornerLayer(AlbumArtImage)?.Remove(_albumArtAdorner);
             _albumArtAdorner = null;
+            _albumArtContainer = null;
             _albumArtVisual = null;
+            _albumArtBrush = null;
         }
 
         #region Marquee
@@ -423,8 +464,10 @@ namespace RetroBar.Controls
         #endregion
 
         /// <summary>
-        /// Brings the current media session's app to the foreground - the same thing clicking
-        /// its taskbar button would do.
+        /// Toggles the current media session's app window - the same thing clicking its taskbar
+        /// button would do: brings it to the foreground if it isn't already active, or minimizes
+        /// it if it is (so clicking the album art a second time puts the app back out of the way
+        /// instead of doing nothing).
         ///
         /// SMTC's SourceAppUserModelId is a real AppUserModelID for UWP apps, matching
         /// ApplicationWindow.AppUserModelID directly - but for a classic desktop app that never
@@ -448,22 +491,28 @@ namespace RetroBar.Controls
                     continue;
                 }
 
-                if (!string.IsNullOrEmpty(window.AppUserModelID)
-                    && string.Equals(window.AppUserModelID, aumid, StringComparison.OrdinalIgnoreCase))
+                bool isMatch = (!string.IsNullOrEmpty(window.AppUserModelID)
+                        && string.Equals(window.AppUserModelID, aumid, StringComparison.OrdinalIgnoreCase))
+                    || (!string.IsNullOrEmpty(window.WinFileName)
+                        && string.Equals(System.IO.Path.GetFileName(window.WinFileName), aumid, StringComparison.OrdinalIgnoreCase));
+
+                if (!isMatch)
                 {
-                    window.BringToFront();
-                    return;
+                    continue;
                 }
 
-                string exeFileName = string.IsNullOrEmpty(window.WinFileName)
-                    ? null
-                    : System.IO.Path.GetFileName(window.WinFileName);
-
-                if (!string.IsNullOrEmpty(exeFileName) && string.Equals(exeFileName, aumid, StringComparison.OrdinalIgnoreCase))
+                if (_sourceAppShown && !window.IsMinimized)
+                {
+                    window.Minimize();
+                    _sourceAppShown = false;
+                }
+                else
                 {
                     window.BringToFront();
-                    return;
+                    _sourceAppShown = true;
                 }
+
+                return;
             }
         }
 

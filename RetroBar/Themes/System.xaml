@@ -1116,9 +1116,12 @@
                 Value="Aliased" />
     </Style>
 
-    <!-- The tray show/hide chevron, shared instead of repeated inline. -->
+    <!-- The tray show/hide chevron, shared instead of repeated inline. Whole-pixel coordinates
+         only (the original used 2.5/4.5) - this renders with RenderOptions.EdgeMode="Aliased"
+         (see CrispGlyphPathStyle), so a half-integer coordinate renders as a blurry half-lit
+         line instead of a clean one, same issue the media prev/next glyphs had. -->
     <PathGeometry x:Key="TrayToggleChevronGeometry"
-                  Figures="M 0,2.5 L 2,5 L 4.5,5 L 2,2.5 L 4.5,0 L 2,0 Z" />
+                  Figures="M 0,2 L 2,4 L 4,4 L 2,2 L 4,0 L 2,0 Z" />
 
     <Style TargetType="Path"
            x:Key="MediaPlayerGlyphStyle"
@@ -1487,17 +1490,27 @@
                             SnapsToDevicePixels="True"
                             Name="ButtonBorder"
                             utilities:MonitorOffset.Tag="TrayToggleButton">
+                        <!-- Both of these nested borders draw in the same color as the button's
+                             own Background (they're only here to add the outer Transparent
+                             Border's Padding as visible fill area), so at 100% DPI they read as
+                             one seamless rectangle - but a fractional-DPI scale (e.g. 125%) can
+                             round each one's edges to a different physical pixel, leaving a
+                             sliver of the transparent gap between them visible as a thin
+                             double-line. Tagged separately so each can be nudged independently
+                             per monitor to close that gap. -->
                         <Border BorderThickness="0,0,1,1"
                                 BorderBrush="{TemplateBinding Background}"
                                 UseLayoutRounding="True"
                                 SnapsToDevicePixels="True"
-                                x:Name="ButtonRightBottomBorder">
+                                x:Name="ButtonRightBottomBorder"
+                                utilities:MonitorOffset.Tag="TrayToggleButtonOuter">
                             <Border BorderThickness="1,1,0,0"
                                     BorderBrush="{TemplateBinding Background}"
                                     Background="{TemplateBinding Background}"
                                     UseLayoutRounding="True"
                                     SnapsToDevicePixels="True"
-                                    x:Name="ButtonLeftTopBorder">
+                                    x:Name="ButtonLeftTopBorder"
+                                    utilities:MonitorOffset.Tag="TrayToggleButtonInner">
                                 <StackPanel Orientation="Horizontal"
                                             Height="6"
                                             VerticalAlignment="Center"
