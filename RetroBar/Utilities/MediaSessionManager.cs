@@ -60,6 +60,14 @@ namespace RetroBar.Utilities
         /// </summary>
         public ImageSource Thumbnail { get; private set; }
 
+        /// <summary>
+        /// The same artwork as Thumbnail, decoded at a higher resolution (see
+        /// LargeThumbnailMaxDimension) for the seek popup's own bigger display - Thumbnail
+        /// itself is deliberately capped small since it only ever renders as a 16-ish px
+        /// taskbar icon, which would look visibly soft blown back up to the popup's size.
+        /// </summary>
+        public ImageSource LargeThumbnail { get; private set; }
+
         public async Task InitializeAsync()
         {
             _manager = await GlobalSystemMediaTransportControlsSessionManager.RequestAsync();
@@ -131,7 +139,13 @@ namespace RetroBar.Utilities
                 GlobalSystemMediaTransportControlsSessionMediaProperties props = await _session.TryGetMediaPropertiesAsync();
                 Title = props?.Title ?? "";
                 Artist = props?.Artist ?? "";
-                Thumbnail = await LoadThumbnailAsync(props?.Thumbnail);
+
+                // Read the raw bytes once and decode them twice at different sizes, rather than
+                // calling OpenReadAsync twice - the reference supports it, but there's no reason
+                // to make the source app serve the same image stream over again.
+                byte[] thumbnailBytes = await ReadThumbnailBytesAsync(props?.Thumbnail);
+                Thumbnail = DecodeThumbnail(thumbnailBytes, ThumbnailMaxDimension);
+                LargeThumbnail = DecodeThumbnail(thumbnailBytes, LargeThumbnailMaxDimension);
             }
             catch (Exception e)
             {
@@ -139,6 +153,7 @@ namespace RetroBar.Utilities
                 Title = "";
                 Artist = "";
                 Thumbnail = null;
+                LargeThumbnail = null;
             }
 
             MediaChanged?.Invoke(this, EventArgs.Empty);
@@ -152,11 +167,19 @@ namespace RetroBar.Utilities
         // would, making video thumbnails look inconsistently larger than regular album art.
         private const int ThumbnailMaxDimension = 64;
 
-        /// <summary>
-        /// Reads the SMTC thumbnail stream into a frozen BitmapImage. Decoding is
-        /// capped to a small size since this only ever renders as a taskbar icon.
-        /// </summary>
-        private static async Task<ImageSource> LoadThumbnailAsync(IRandomAccessStreamReference reference)
+        // The seek popup displays its own copy much bigger than the taskbar's icon-sized one, at
+        // a fixed 160 DIP (see SeekAlbumArtImage in MediaPlayer.xaml) - this is that size's
+        // physical-pixel ceiling at up to 200% DPI scaling (160*2=320), so it stays sharp on a
+        // scaled monitor instead of decoding at exactly 160px and then getting upscaled back out
+        // by DPI on top of that. Most SMTC sources (Spotify included) publish art comfortably
+        // above this already, so it's a "don't bother keeping a needlessly huge bitmap in
+        // memory" ceiling, not a meaningful quality cap the way ThumbnailMaxDimension is for the
+        // tiny taskbar icon.
+        private const int LargeThumbnailMaxDimension = 320;
+
+        /// <summary>Reads an SMTC thumbnail reference's raw bytes, or null if it's missing,
+        /// empty, or too large to hold as a single byte[].</summary>
+        private static async Task<byte[]> ReadThumbnailBytesAsync(IRandomAccessStreamReference reference)
         {
             if (reference == null)
             {
@@ -175,12 +198,32 @@ namespace RetroBar.Utilities
                 uint size = (uint)stream.Size;
                 byte[] bytes = new byte[size];
 
-                using (DataReader reader = new DataReader(stream.GetInputStreamAt(0)))
-                {
-                    await reader.LoadAsync(size);
-                    reader.ReadBytes(bytes);
-                }
+                using DataReader reader = new DataReader(stream.GetInputStreamAt(0));
+                await reader.LoadAsync(size);
+                reader.ReadBytes(bytes);
 
+                return bytes;
+            }
+            catch (Exception e)
+            {
+                ShellLogger.Debug($"MediaSessionManager: Unable to read thumbnail: {e.Message}");
+
+                return null;
+            }
+        }
+
+        /// <summary>Decodes already-read thumbnail bytes into a frozen BitmapImage, capped to
+        /// maxDimension on whichever axis is larger (see ThumbnailMaxDimension's own comment for
+        /// why only the larger axis is constrained).</summary>
+        private static ImageSource DecodeThumbnail(byte[] bytes, int maxDimension)
+        {
+            if (bytes == null)
+            {
+                return null;
+            }
+
+            try
+            {
                 // Peek the source's natural pixel dimensions (a separate, disposable stream -
                 // cheap, since BitmapCacheOption.None only reads the header) to know which axis
                 // to constrain before the real decode below.
@@ -199,11 +242,11 @@ namespace RetroBar.Utilities
                     bitmap.CacheOption = BitmapCacheOption.OnLoad;
                     if (constrainWidth)
                     {
-                        bitmap.DecodePixelWidth = ThumbnailMaxDimension;
+                        bitmap.DecodePixelWidth = maxDimension;
                     }
                     else
                     {
-                        bitmap.DecodePixelHeight = ThumbnailMaxDimension;
+                        bitmap.DecodePixelHeight = maxDimension;
                     }
                     bitmap.StreamSource = memoryStream;
                     bitmap.EndInit();
@@ -215,7 +258,7 @@ namespace RetroBar.Utilities
             }
             catch (Exception e)
             {
-                ShellLogger.Debug($"MediaSessionManager: Unable to read thumbnail: {e.Message}");
+                ShellLogger.Debug($"MediaSessionManager: Unable to decode thumbnail: {e.Message}");
 
                 return null;
             }

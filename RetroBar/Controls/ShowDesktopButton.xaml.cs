@@ -43,9 +43,27 @@ namespace RetroBar.Controls
 
         private void SetIconSize()
         {
-            // TEMP DEBUG: forced to Small to compare against the Large icon this normally
-            // resolves to on a >100%-scaled primary monitor (DpiHelper.DpiScale > 1).
-            ShowDesktopIcon.Source = (System.Windows.Media.ImageSource)FindResource("ShowDesktopIconImageSmall");
+            string deviceName = (Window.GetWindow(this) as Taskbar)?.Screen.DeviceName;
+
+            // DISPLAY1 gets its own Medium variant when the active theme defines one (only
+            // Windows XFM does, via desktopMe2k-md.png); DISPLAY2 always gets Small. Falls back
+            // to the normal Small/Large pick (by DpiHelper.DpiScale on the primary monitor) for
+            // every other monitor, or if the active theme has no Medium variant.
+            string resourceKey;
+            if (deviceName == "\\\\.\\DISPLAY1" && TryFindResource("ShowDesktopIconImageMedium") is not null)
+            {
+                resourceKey = "ShowDesktopIconImageMedium";
+            }
+            else if (deviceName == "\\\\.\\DISPLAY2")
+            {
+                resourceKey = "ShowDesktopIconImageSmall";
+            }
+            else
+            {
+                resourceKey = DpiHelper.DpiScale > 1 ? "ShowDesktopIconImageLarge" : "ShowDesktopIconImageSmall";
+            }
+
+            ShowDesktopIcon.Source = (System.Windows.Media.ImageSource)FindResource(resourceKey);
         }
 
         private void ContextMenu_Opened(object sender, RoutedEventArgs e)

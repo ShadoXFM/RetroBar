@@ -24,6 +24,22 @@ namespace RetroBar
 
         public bool IsScaled => DpiScale > 1 || Settings.Instance.TaskbarScale > 1;
 
+        public static readonly DependencyProperty IsMediaPlayingProperty = DependencyProperty.Register(
+            nameof(IsMediaPlaying), typeof(bool), typeof(Taskbar), new PropertyMetadata(false));
+
+        /// <summary>
+        /// Set by MediaPlayer whenever it starts/stops actively playing - lets the Tray
+        /// GroupBox's own template (see System.xaml's TrayBoxBevel tag Binding) shrink the tray
+        /// box's left-side "no media" extension back down while media is playing, via a
+        /// per-monitor MonitorOffset.Tag switch - the same pattern TaskButton already uses for
+        /// its own active-state tag (see TaskStateToMonitorTagConverter).
+        /// </summary>
+        public bool IsMediaPlaying
+        {
+            get => (bool)GetValue(IsMediaPlayingProperty);
+            set => SetValue(IsMediaPlayingProperty, value);
+        }
+
         private double _unlockedMargin;
         public double DesiredRowHeight { get; private set; }
 

@@ -199,6 +199,8 @@
     <!-- Images -->
     <BitmapImage x:Key="ShowDesktopIconImageSmall"
                  UriSource="../Resources/desktopMe2k-sm.png" />
+    <BitmapImage x:Key="ShowDesktopIconImageMedium"
+                 UriSource="../Resources/desktopMe2k-md.png" />
     <BitmapImage x:Key="ShowDesktopIconImageLarge"
                  UriSource="../Resources/desktopMe2k-lg.png" />
     <BitmapImage x:Key="StartIconImage"

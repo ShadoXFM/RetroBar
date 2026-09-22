@@ -49,6 +49,20 @@ namespace RetroBar.Utilities
         /// reach for this only when neighboring content genuinely needs to move too.</summary>
         public string Margin { get; set; }
 
+        /// <summary>A WPF Thickness string (same syntax as Margin), applied to the element's own
+        /// Padding property, or null to leave the element's own Style/XAML Padding alone. Only
+        /// meaningful on an element that actually has a Padding property (Control, Border, ...) -
+        /// like Background, it's looked up per-instance since it isn't declared on
+        /// FrameworkElement itself. Unlike Margin, Padding is real layout space that's entirely
+        /// internal to the element (it insets the element's own content, rather than pushing the
+        /// element itself around relative to its siblings), so growing it genuinely grows the
+        /// element's own rendered/auto-sized box without the overflow-past-the-parent failure
+        /// mode Margin has, and without reflowing neighboring siblings the way growing an
+        /// element's overall Width can. Growing Padding does push the element's own content
+        /// inward though - pair it with an X nudge on the content itself (or a child tagged
+        /// separately) to keep that content's own position fixed if that matters.</summary>
+        public string Padding { get; set; }
+
         /// <summary>A WPF color string - "#RRGGBB", "#AARRGGBB", or a named color like "Red" -
         /// applied to the element's own Background property, or null to leave its Style/XAML
         /// background alone. Only meaningful on an element that actually has a Background
@@ -65,6 +79,6 @@ namespace RetroBar.Utilities
             X == 0 && Y == 0 &&
             Width == null && Height == null && Scale == null &&
             TextRendering == null && BitmapScaling == null && Bold == null && Margin == null &&
-            Background == null && Geometry == null;
+            Padding == null && Background == null && Geometry == null;
     }
 }

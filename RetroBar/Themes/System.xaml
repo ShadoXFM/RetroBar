@@ -1,7 +1,8 @@
 ﻿<ResourceDictionary xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
                     xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
                     xmlns:system="clr-namespace:System;assembly=mscorlib"
-                    xmlns:utilities="clr-namespace:RetroBar.Utilities">
+                    xmlns:utilities="clr-namespace:RetroBar.Utilities"
+                    xmlns:converters="clr-namespace:RetroBar.Converters">
 
     <system:Double x:Key="TaskbarHeight">28</system:Double>
     <system:Double x:Key="TaskbarRowHeight">25</system:Double>
@@ -15,6 +16,8 @@
     <system:Double x:Key="TaskButtonMinWidth">45</system:Double>
     <Thickness x:Key="TaskButtonMargin" Right="3" />
     <Thickness x:Key="TaskButtonVerticalMargin" />
+
+    <converters:MediaPlayingToMonitorTagConverter x:Key="mediaPlayingToMonitorTagConverter" />
 
     <SolidColorBrush x:Key="ButtonHighlight" Color="{x:Static SystemColors.ControlLightLightColor}" />
     <SolidColorBrush x:Key="ButtonInnerHighlight" Color="{x:Static SystemColors.ControlLightLightColor}" />
@@ -231,10 +234,22 @@
                             Padding="2">
                         <Border BorderThickness="0,0,1,1"
                                 BorderBrush="{DynamicResource ButtonHighlight}">
+                            <!-- Tagged (not the outer Borders above) since this is the one that
+                                 actually draws the visible bevel line - growing ITS OWN Padding
+                                 via a per-monitor override genuinely grows the drawn box, unlike
+                                 growing either outer (BorderThickness="0", invisible) Border's
+                                 Padding, which would just add empty space between the true edge
+                                 and the still visually-unchanged box. -->
+                            <!-- MonitorOffset.Tag is TrayBoxBevel normally, TrayBoxBevelPlaying
+                                 while Taskbar.IsMediaPlaying is true - lets the tray box's own
+                                 "no media" left extension shrink back down while media is
+                                 playing (see MediaPlayer.xaml.cs, which sets IsMediaPlaying).
+                                 Same pattern TaskButton uses for its own active-state tag. -->
                             <Border BorderThickness="1,1,0,0"
                                     BorderBrush="{DynamicResource ButtonDarkShadow}"
                                     Background="{TemplateBinding Background}"
-                                    Padding="1">
+                                    Padding="1"
+                                    utilities:MonitorOffset.Tag="{Binding Path=IsMediaPlaying, RelativeSource={RelativeSource Mode=FindAncestor, AncestorType={x:Type Window}}, Converter={StaticResource mediaPlayingToMonitorTagConverter}, ConverterParameter=TrayBoxBevel}">
                                 <ContentPresenter />
                             </Border>
                         </Border>
@@ -921,6 +936,12 @@
            BasedOn="{StaticResource TaskIcon}">
         <Setter Property="Margin"
                 Value="0,0,4,0" />
+        <!-- TaskIcon (the base style) never sets this, so it fell back to WPF's default
+             (lower-quality) scaling whenever the 16x16 icon needed upscaling for the monitor's
+             DPI - visibly soft on a 125%+ scaled display, fine on one needing little/no
+             upscaling, which is why this looked inconsistent between monitors. -->
+        <Setter Property="RenderOptions.BitmapScalingMode"
+                Value="HighQuality" />
         <Style.Triggers>
             <DataTrigger Binding="{Binding Path=Orientation, RelativeSource={RelativeSource Mode=FindAncestor, AncestorType={x:Type Window}}}"
                          Value="Vertical">
@@ -978,6 +999,11 @@
            x:Key="MediaPlayerButtonStyle">
         <Setter Property="OverridesDefaultStyle"
                 Value="True" />
+        <!-- Without this, WPF's default focus rectangle shows up around whichever button was
+             last clicked (Buttons get keyboard focus on click) - a dotted/solid box that, on
+             this dark theme, is easy to mistake for a stray background-colored rectangle. -->
+        <Setter Property="FocusVisualStyle"
+                Value="{x:Null}" />
         <Setter Property="Background"
                 Value="{DynamicResource ButtonFace}" />
         <Setter Property="VerticalAlignment"
@@ -1161,6 +1187,87 @@
                 Value="True" />
         <Setter Property="RenderOptions.BitmapScalingMode"
                 Value="HighQuality" />
+    </Style>
+
+    <!-- The seek popup's scrub bar. A plain Slider has no theme-driven style of its own, so
+         without this it falls back to WPF's stock (Aero/Fluent) chrome - fixed system-accent
+         colors that don't track this or any other RetroBar theme's own ButtonFace/Shadow/
+         Highlight brushes the way every other bevel in the shell does. This gives it the same
+         sunken-groove/raised-thumb bevel look, built from those same DynamicResource brushes, so
+         it reskins along with everything else. -->
+    <Style TargetType="Thumb"
+           x:Key="MediaSeekSliderThumbStyle">
+        <Setter Property="OverridesDefaultStyle"
+                Value="True" />
+        <Setter Property="Template">
+            <Setter.Value>
+                <ControlTemplate TargetType="Thumb">
+                    <Border Width="8"
+                            Height="14"
+                            BorderThickness="0,0,1,1"
+                            BorderBrush="{DynamicResource ButtonDarkShadow}">
+                        <Border BorderThickness="1,1,0,0"
+                                BorderBrush="{DynamicResource ButtonHighlight}"
+                                Background="{DynamicResource ButtonFace}" />
+                    </Border>
+                </ControlTemplate>
+            </Setter.Value>
+        </Setter>
+    </Style>
+
+    <!-- Transparent hit-test-only regions either side of the thumb - Track requires both as
+         template parts, but SeekSlider sets IsMoveToPointEnabled="True" so a click jumps the
+         thumb straight there instead of paging, leaving these with nothing to actually draw. -->
+    <Style TargetType="RepeatButton"
+           x:Key="MediaSeekSliderRepeatButtonStyle">
+        <Setter Property="OverridesDefaultStyle"
+                Value="True" />
+        <Setter Property="Focusable"
+                Value="False" />
+        <Setter Property="IsTabStop"
+                Value="False" />
+        <Setter Property="Template">
+            <Setter.Value>
+                <ControlTemplate TargetType="RepeatButton">
+                    <Border Background="Transparent" />
+                </ControlTemplate>
+            </Setter.Value>
+        </Setter>
+    </Style>
+
+    <Style TargetType="Slider"
+           x:Key="MediaSeekSliderStyle">
+        <Setter Property="FocusVisualStyle"
+                Value="{x:Null}" />
+        <Setter Property="Template">
+            <Setter.Value>
+                <ControlTemplate TargetType="Slider">
+                    <Grid>
+                        <Border VerticalAlignment="Center"
+                                Height="4"
+                                BorderThickness="0,0,1,1"
+                                BorderBrush="{DynamicResource ButtonHighlight}">
+                            <Border BorderThickness="1,1,0,0"
+                                    BorderBrush="{DynamicResource ButtonDarkShadow}"
+                                    Background="{DynamicResource ButtonShadow}" />
+                        </Border>
+                        <Track x:Name="PART_Track">
+                            <Track.DecreaseRepeatButton>
+                                <RepeatButton Style="{StaticResource MediaSeekSliderRepeatButtonStyle}"
+                                              Command="Slider.DecreaseLarge" />
+                            </Track.DecreaseRepeatButton>
+                            <Track.IncreaseRepeatButton>
+                                <RepeatButton Style="{StaticResource MediaSeekSliderRepeatButtonStyle}"
+                                              Command="Slider.IncreaseLarge" />
+                            </Track.IncreaseRepeatButton>
+                            <Track.Thumb>
+                                <Thumb Style="{StaticResource MediaSeekSliderThumbStyle}" />
+                            </Track.Thumb>
+                        </Track>
+                    </Grid>
+                </ControlTemplate>
+            </Setter.Value>
+        </Setter>
     </Style>
 
     <!-- Host clips the track text; the text itself is laid out at its full
