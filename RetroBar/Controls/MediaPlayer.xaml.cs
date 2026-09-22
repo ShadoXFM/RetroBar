@@ -38,6 +38,14 @@ namespace RetroBar.Controls
         private Rectangle _albumArtVisual;
         private ImageBrush _albumArtBrush;
 
+        private UIElementAdorner _previousButtonAdorner;
+        private UIElementAdorner _playPauseButtonAdorner;
+        private UIElementAdorner _nextButtonAdorner;
+        private Button _previousButton;
+        private Button _playPauseButton;
+        private Button _nextButton;
+        private Path _playPauseGlyph;
+
         private DispatcherTimer _seekPopupTimer;
         private bool _seekSliderDragging;
 
@@ -126,8 +134,18 @@ namespace RetroBar.Controls
             AlbumArtImage.Source = null;
             AlbumArtImage.Visibility = Visibility.Collapsed;
             RemoveAlbumArtAdorner();
+            RemoveTransportButtonAdorners();
+            SetIsMediaPlaying(false);
 
             Visibility = Visibility.Collapsed;
+        }
+
+        private void SetIsMediaPlaying(bool isPlaying)
+        {
+            if (Window.GetWindow(this) is Taskbar taskbar)
+            {
+                taskbar.IsMediaPlaying = isPlaying;
+            }
         }
 
         private void Settings_PropertyChanged(object sender, System.ComponentModel.PropertyChangedEventArgs e)
@@ -165,6 +183,7 @@ namespace RetroBar.Controls
             {
                 Visibility = Visibility.Collapsed;
                 StopMarquee();
+                SetIsMediaPlaying(false);
                 return;
             }
 
@@ -175,10 +194,18 @@ namespace RetroBar.Controls
                 AlbumArtImage.Source = null;
                 AlbumArtImage.Visibility = Visibility.Collapsed;
                 RemoveAlbumArtAdorner();
+                RemoveTransportButtonAdorners();
+                SetIsMediaPlaying(false);
                 return;
             }
 
             Visibility = Visibility.Visible;
+            SetIsMediaPlaying(true);
+
+            if (_previousButton == null)
+            {
+                Dispatcher.BeginInvoke(new Action(InitializeTransportButtonAdorners), DispatcherPriority.Loaded);
+            }
 
             string currentAumid = _sessionManager.SourceAppUserModelId;
             if (!string.Equals(currentAumid, _lastSourceAumid, StringComparison.OrdinalIgnoreCase))
@@ -196,6 +223,12 @@ namespace RetroBar.Controls
                 TrackText.Text = trackText;
             }
 
+            SeekTitleText.Text = _sessionManager.Title;
+            SeekArtistText.Text = _sessionManager.Artist;
+            SeekArtistText.Visibility = string.IsNullOrEmpty(_sessionManager.Artist)
+                ? Visibility.Collapsed
+                : Visibility.Visible;
+
             // Measurement has to happen after the text has been laid out. This also
             // covers becoming visible again with a track we were already showing.
             Dispatcher.BeginInvoke(new Action(UpdateMarquee), System.Windows.Threading.DispatcherPriority.Loaded);
@@ -205,7 +238,10 @@ namespace RetroBar.Controls
             Geometry playPauseGlyph = GetGlyph(_sessionManager.PlaybackState == MediaPlaybackState.Playing
                 ? "MediaPlayerPauseGeometry"
                 : "MediaPlayerPlayGeometry");
-            PlayPauseGlyph.Data = playPauseGlyph;
+            if (_playPauseGlyph != null)
+            {
+                _playPauseGlyph.Data = playPauseGlyph;
+            }
             SeekPlayPauseGlyph.Data = playPauseGlyph;
 
             UpdateAlbumArt();
@@ -230,6 +266,14 @@ namespace RetroBar.Controls
             // to anchor the Adorner's base position/size) but is never actually painted -
             // the Adorner-hosted copy is what's shown. See UpdateAlbumArtAdorner.
             AlbumArtImage.Visibility = art == null ? Visibility.Collapsed : Visibility.Hidden;
+
+            // The seek popup's own copy - a plain Image, so (unlike AlbumArtImage above) it
+            // paints directly and just needs an ordinary Visible/Collapsed toggle. Uses
+            // LargeThumbnail, not the same (deliberately icon-sized) Thumbnail the taskbar row
+            // uses, since the popup shows it much bigger.
+            ImageSource largeArt = Settings.Instance.ShowMediaPlayerAlbumArt ? _sessionManager?.LargeThumbnail : null;
+            SeekAlbumArtImage.Source = largeArt;
+            SeekAlbumArtImage.Visibility = largeArt == null ? Visibility.Collapsed : Visibility.Visible;
 
             if (art == null)
             {
@@ -357,6 +401,93 @@ namespace RetroBar.Controls
             _albumArtContainer = null;
             _albumArtVisual = null;
             _albumArtBrush = null;
+        }
+
+        /// <summary>
+        /// Builds the three transport buttons in code (rather than XAML) and hosts each in its
+        /// own Adorner anchored to a same-styled, always-Hidden spacer left behind in the
+        /// StackPanel (see MediaPlayer.xaml) to reserve their layout slot. Needed for the same
+        /// reason MediaAlbumArt uses an Adorner: a per-monitor MonitorAdjustments Margin/X large
+        /// enough to close the gap to the tray box's edge pushes the button past the Tray
+        /// GroupBox's own Padding/BorderThickness-driven clip (see Taskbar.xaml's
+        /// AdornerDecorator comment) - rendering through the Adorner escapes that clip
+        /// entirely, the same way it already does for the album art. The existing
+        /// utilities:MonitorOffset.Tag system still applies to these buttons exactly as before,
+        /// since it just tracks the live element - it doesn't care which visual parent hosts it.
+        /// </summary>
+        private void InitializeTransportButtonAdorners()
+        {
+            if (_previousButton != null)
+            {
+                return;
+            }
+
+            _previousButton = CreateTransportButton("MediaButtonPrevious", "MediaGlyphPrevious", "MediaPlayerPreviousGeometry", "media_previous", PreviousButton_OnClick, out _);
+            AttachTransportButtonAdorner(PreviousButtonSpacer, _previousButton, ref _previousButtonAdorner);
+
+            _playPauseButton = CreateTransportButton("MediaButtonPlayPause", "MediaGlyphPlayPause", "MediaPlayerPlayGeometry", "media_play_pause", PlayPauseButton_OnClick, out _playPauseGlyph);
+            AttachTransportButtonAdorner(PlayPauseButtonSpacer, _playPauseButton, ref _playPauseButtonAdorner);
+
+            _nextButton = CreateTransportButton("MediaButtonNext", "MediaGlyphNext", "MediaPlayerNextGeometry", "media_next", NextButton_OnClick, out _);
+            AttachTransportButtonAdorner(NextButtonSpacer, _nextButton, ref _nextButtonAdorner);
+
+            if (_sessionManager != null)
+            {
+                _playPauseGlyph.Data = GetGlyph(_sessionManager.PlaybackState == MediaPlaybackState.Playing
+                    ? "MediaPlayerPauseGeometry"
+                    : "MediaPlayerPlayGeometry");
+            }
+        }
+
+        private static Button CreateTransportButton(string buttonTag, string glyphTag, string geometryResourceKey, string tooltipResourceKey, RoutedEventHandler onClick, out Path glyph)
+        {
+            glyph = new Path();
+            glyph.SetResourceReference(StyleProperty, "MediaPlayerGlyphStyle");
+            glyph.SetResourceReference(Path.DataProperty, geometryResourceKey);
+            MonitorOffset.SetTag(glyph, glyphTag);
+
+            var button = new Button { Content = glyph };
+            button.SetResourceReference(StyleProperty, "MediaPlayerButtonStyle");
+            button.SetResourceReference(ToolTipProperty, tooltipResourceKey);
+            button.Click += onClick;
+            MonitorOffset.SetTag(button, buttonTag);
+
+            return button;
+        }
+
+        private static void AttachTransportButtonAdorner(FrameworkElement spacer, UIElement button, ref UIElementAdorner adorner)
+        {
+            AdornerLayer layer = AdornerLayer.GetAdornerLayer(spacer);
+            if (layer == null)
+            {
+                return;
+            }
+
+            adorner = new UIElementAdorner(spacer, button, isHitTestVisible: true);
+            layer.Add(adorner);
+        }
+
+        private void RemoveTransportButtonAdorners()
+        {
+            RemoveTransportButtonAdorner(PreviousButtonSpacer, ref _previousButtonAdorner);
+            RemoveTransportButtonAdorner(PlayPauseButtonSpacer, ref _playPauseButtonAdorner);
+            RemoveTransportButtonAdorner(NextButtonSpacer, ref _nextButtonAdorner);
+
+            _previousButton = null;
+            _playPauseButton = null;
+            _nextButton = null;
+            _playPauseGlyph = null;
+        }
+
+        private static void RemoveTransportButtonAdorner(FrameworkElement spacer, ref UIElementAdorner adorner)
+        {
+            if (adorner == null)
+            {
+                return;
+            }
+
+            AdornerLayer.GetAdornerLayer(spacer)?.Remove(adorner);
+            adorner = null;
         }
 
         #region Marquee

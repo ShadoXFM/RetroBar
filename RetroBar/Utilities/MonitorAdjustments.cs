@@ -58,11 +58,18 @@ namespace RetroBar.Utilities
     /// order), Clock,
     /// WeatherIcon, WeatherTemp, StartIcon, StartLabel, TrayIcon,
     /// TrayBox (the whole tray GroupBox as one rigid unit - media player, tray icons and clock
-    /// move together), or a new one you tag yourself), and every field on MonitorOffsetValue is
-    /// optional - X, Y, Width, Height, Scale, TextRendering, BitmapScaling, Bold, Margin,
-    /// Background, Geometry (Path mini-language Figures, only meaningful on a Path - e.g. one of
-    /// the MediaGlyph* tags - to replace its vector shape entirely per monitor) - omit whatever
-    /// you don't want to change.
+    /// move together), TrayBoxBevel (the inner Border that actually draws TrayBox's own visible
+    /// bevel line - grow its Padding to grow the visible box itself without reflowing neighbors
+    /// the way growing TrayBox's own Width/Margin would, and without shifting its content either:
+    /// the content's own inset from the bevel's edge grows by the same amount the bevel's own
+    /// edge moves outward by, so the two cancel out and the content stays exactly where it was),
+    /// TrayBoxBevelPlaying (the same Border, but used instead of TrayBoxBevel while media is
+    /// actively playing - see System.xaml's TrayBoxBevel tag Binding and Taskbar.IsMediaPlaying),
+    /// or a new one you tag yourself), and every field on
+    /// MonitorOffsetValue is optional - X, Y, Width, Height, Scale, TextRendering, BitmapScaling,
+    /// Bold, Margin, Padding, Background, Geometry (Path mini-language Figures, only meaningful
+    /// on a Path - e.g. one of the MediaGlyph* tags - to replace its vector shape entirely per
+    /// monitor) - omit whatever you don't want to change.
     ///
     /// The file is re-read automatically whenever it changes on disk (save it in any editor
     /// while RetroBar is running and the change applies immediately - no restart needed).

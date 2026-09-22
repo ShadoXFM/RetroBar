@@ -47,6 +47,8 @@ namespace RetroBar.Utilities
             "AppliedHeight", typeof(bool), typeof(MonitorOffset), new PropertyMetadata(false));
         private static readonly DependencyProperty AppliedMarginProperty = DependencyProperty.RegisterAttached(
             "AppliedMargin", typeof(bool), typeof(MonitorOffset), new PropertyMetadata(false));
+        private static readonly DependencyProperty AppliedPaddingProperty = DependencyProperty.RegisterAttached(
+            "AppliedPadding", typeof(bool), typeof(MonitorOffset), new PropertyMetadata(false));
         private static readonly DependencyProperty AppliedBackgroundProperty = DependencyProperty.RegisterAttached(
             "AppliedBackground", typeof(bool), typeof(MonitorOffset), new PropertyMetadata(false));
         private static readonly DependencyProperty AppliedGeometryProperty = DependencyProperty.RegisterAttached(
@@ -78,9 +80,15 @@ namespace RetroBar.Utilities
 
         private static void Element_Loaded(object sender, RoutedEventArgs e)
         {
-            FrameworkElement element = (FrameworkElement)sender;
-            element.Loaded -= Element_Loaded;
-            Attach(element);
+            // Deliberately never unsubscribes itself: most elements only ever load once (the
+            // main window loads at startup and never unloads), so that was harmless before, but
+            // a Popup's content (e.g. the seek popup's buttons/slider/time text) genuinely
+            // Loads/Unloads every time the popup opens/closes - unsubscribing after the first
+            // firing left it permanently stuck on whatever monitor-adjustments.json said the
+            // very first time it ever opened, since nothing was left to re-attach it on later
+            // reopens. Attach() below already guards against double-subscribing its own
+            // MonitorAdjustments.Changed handler, so calling it again on every reload is safe.
+            Attach((FrameworkElement)sender);
         }
 
         private static void Attach(FrameworkElement element)
@@ -162,6 +170,7 @@ namespace RetroBar.Utilities
             ApplySize(element, offset.Width, FrameworkElement.WidthProperty, AppliedWidthProperty);
             ApplySize(element, offset.Height, FrameworkElement.HeightProperty, AppliedHeightProperty);
             ApplyMargin(element, offset.Margin);
+            ApplyPadding(element, offset.Padding);
             ApplyBackground(element, offset.Background);
 
             if (offset.TextRendering != null && Enum.TryParse(offset.TextRendering, out TextRenderingMode renderingMode))
@@ -243,6 +252,40 @@ namespace RetroBar.Utilities
             {
                 element.ClearValue(FrameworkElement.MarginProperty);
                 element.SetValue(AppliedMarginProperty, false);
+            }
+        }
+
+        private static void ApplyPadding(FrameworkElement element, string paddingText)
+        {
+            // "Padding" isn't declared on FrameworkElement itself - Control and Border each
+            // register their own independent DP of that name - so it's looked up per-instance,
+            // same as ApplyBackground below.
+            DependencyPropertyDescriptor descriptor = DependencyPropertyDescriptor.FromName(
+                "Padding", element.GetType(), element.GetType());
+
+            if (descriptor == null)
+            {
+                return;
+            }
+
+            if (!string.IsNullOrWhiteSpace(paddingText))
+            {
+                try
+                {
+                    var thickness = (Thickness)ThicknessConverter.ConvertFromString(null, CultureInfo.InvariantCulture, paddingText);
+                    element.SetValue(descriptor.DependencyProperty, thickness);
+                    element.SetValue(AppliedPaddingProperty, true);
+                }
+                catch (Exception ex) when (ex is FormatException or NotSupportedException)
+                {
+                    ManagedShell.Common.Logging.ShellLogger.Warning(
+                        $"MonitorOffset: Invalid Padding '{paddingText}' for tag '{GetTag(element)}', ignoring it: {ex.Message}");
+                }
+            }
+            else if ((bool)element.GetValue(AppliedPaddingProperty))
+            {
+                element.ClearValue(descriptor.DependencyProperty);
+                element.SetValue(AppliedPaddingProperty, false);
             }
         }
 
