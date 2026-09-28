@@ -113,6 +113,13 @@ namespace RetroBar.Utilities
             set => Set(ref _showMediaPlayerAlbumArt, value);
         }
 
+        private bool _showCpuTemp = true;
+        public bool ShowCpuTemp
+        {
+            get => _showCpuTemp;
+            set => Set(ref _showCpuTemp, value);
+        }
+
         private bool _showClock = true;
         public bool ShowClock
         {

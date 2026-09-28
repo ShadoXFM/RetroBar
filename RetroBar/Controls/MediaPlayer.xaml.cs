@@ -1,10 +1,12 @@
 ﻿using ManagedShell;
 using ManagedShell.Common.Logging;
 using ManagedShell.WindowsTasks;
+using RetroBar.Converters;
 using RetroBar.Utilities;
 using System;
 using System.Windows;
 using System.Windows.Controls;
+using System.Windows.Data;
 using System.Windows.Documents;
 using System.Windows.Input;
 using System.Windows.Media;
@@ -46,6 +48,25 @@ namespace RetroBar.Controls
         private Button _nextButton;
         private Path _playPauseGlyph;
 
+        // Lives on the button's Adorner, NOT the button itself, since MonitorOffset already owns
+        // the button's own RenderTransform for per-monitor X/Y nudges (see MonitorOffset.Apply,
+        // which unconditionally overwrites RenderTransform) - a second transform on the same
+        // property would fight that the next time monitor-adjustments.json is reloaded. The
+        // Adorner is a separate FrameworkElement with its own independent RenderTransform, so
+        // this never collides. No longer animated (the old hover-triggered slide/swap with an
+        // in-place visualizer is gone - see AttachTransportButtonAdorner's own remarks), but the
+        // wrapper Grid built there still needs a RenderTransform target to exist.
+        private TranslateTransform _previousButtonSlide;
+        private TranslateTransform _playPauseButtonSlide;
+        private TranslateTransform _nextButtonSlide;
+
+        // Capture only runs while there's an active session to visualize, started/stopped
+        // alongside the transport buttons themselves in UpdateFromSession/Stop. Feeds the VU
+        // meter behind the track text (VisualizerCapture_OnLevelUpdated) - the only visualizer
+        // RetroBar has left, now that the old in-place and relocated-spectrum-bars displays are
+        // both gone.
+        private AudioSpectrumCapture _visualizerCapture;
+
         private DispatcherTimer _seekPopupTimer;
         private bool _seekSliderDragging;
 
@@ -84,6 +105,8 @@ namespace RetroBar.Controls
 
             _isLoaded = true;
 
+            InitializeVuMeterAccentBrush();
+
             Settings.Instance.PropertyChanged += Settings_PropertyChanged;
             MonitorAdjustments.Changed += MonitorAdjustments_Changed;
 
@@ -96,6 +119,38 @@ namespace RetroBar.Controls
             await StartAsync();
         }
 
+        // The Windows accent color at full saturation read as too strong/colorful for a subtle
+        // background fill - blending it toward its own perceptual gray (rather than just adding
+        // transparency, which is Opacity's own separate job - see VuMeterAccentBrush's own
+        // remarks in the XAML) mutes the color itself while keeping it recognizably tinted.
+        // Mutates the brush's Color in place, so every {DynamicResource VuMeterAccentBrush}
+        // usage picks it up without needing the resource entry itself replaced. Computed once
+        // (SystemColors.HighlightColor itself is a static read, not something that would ever
+        // change without the whole app restarting anyway).
+        private const double VuMeterAccentDesaturation = 0.95;
+
+        private void InitializeVuMeterAccentBrush()
+        {
+            if (Resources["VuMeterAccentBrush"] is not SolidColorBrush brush)
+            {
+                return;
+            }
+
+            brush.Color = DesaturateColor(SystemColors.HighlightColor, VuMeterAccentDesaturation);
+        }
+
+        // factor 0 = original color, 1 = fully gray. Blends each channel toward the color's own
+        // perceptual luminance (standard luma weights) rather than a fixed neutral gray, so
+        // brightness stays roughly the same and only how colorful it looks changes.
+        private static Color DesaturateColor(Color color, double factor)
+        {
+            double luminance = 0.299 * color.R + 0.587 * color.G + 0.114 * color.B;
+
+            byte Blend(byte channel) => (byte)Math.Clamp(channel + (luminance - channel) * factor, 0, 255);
+
+            return Color.FromRgb(Blend(color.R), Blend(color.G), Blend(color.B));
+        }
+
         private async System.Threading.Tasks.Task StartAsync()
         {
             // GlobalSystemMediaTransportControlsSessionManager requires Windows 10 1809 (build 17763) or later.
@@ -104,6 +159,17 @@ namespace RetroBar.Controls
                 // Media session APIs aren't available on this version of Windows; stay hidden.
                 Visibility = Visibility.Collapsed;
                 return;
+            }
+
+            // Guards against orphaning a previous instance (and its own background poll timer,
+            // which would otherwise keep running forever with nothing left reading from it) if
+            // this is ever called again while one's already active - confirmed happening via two
+            // independent, interleaved RefreshPlaybackState poll sequences in the log.
+            if (_sessionManager != null)
+            {
+                _sessionManager.MediaChanged -= SessionManager_MediaChanged;
+                _sessionManager.Dispose();
+                _sessionManager = null;
             }
 
             try
@@ -135,7 +201,9 @@ namespace RetroBar.Controls
             AlbumArtImage.Visibility = Visibility.Collapsed;
             RemoveAlbumArtAdorner();
             RemoveTransportButtonAdorners();
+            StopVisualizer();
             SetIsMediaPlaying(false);
+            UpdateVisualizerActiveState(false);
 
             Visibility = Visibility.Collapsed;
         }
@@ -145,6 +213,21 @@ namespace RetroBar.Controls
             if (Window.GetWindow(this) is Taskbar taskbar)
             {
                 taskbar.IsMediaPlaying = isPlaying;
+            }
+        }
+
+        // Unlike SetIsMediaPlaying above (which really means "has a session", not literally
+        // playing), isPlaying here tracks actual PlaybackState - the VU meter behind the track
+        // text shouldn't show for a paused/silent track.
+        private void UpdateVisualizerActiveState(bool isPlaying)
+        {
+            VuMeterContainer.Visibility = isPlaying ? Visibility.Visible : Visibility.Collapsed;
+            if (!isPlaying)
+            {
+                // So the next time it reappears, it doesn't flash whatever width either bar last
+                // had before VisualizerCapture_OnLevelUpdated's own next update arrives.
+                VuMeterFillLeft.Width = 0;
+                VuMeterFillRight.Width = 0;
             }
         }
 
@@ -183,7 +266,9 @@ namespace RetroBar.Controls
             {
                 Visibility = Visibility.Collapsed;
                 StopMarquee();
+                StopVisualizer();
                 SetIsMediaPlaying(false);
+                UpdateVisualizerActiveState(false);
                 return;
             }
 
@@ -195,17 +280,22 @@ namespace RetroBar.Controls
                 AlbumArtImage.Visibility = Visibility.Collapsed;
                 RemoveAlbumArtAdorner();
                 RemoveTransportButtonAdorners();
+                StopVisualizer();
                 SetIsMediaPlaying(false);
+                UpdateVisualizerActiveState(false);
                 return;
             }
 
             Visibility = Visibility.Visible;
             SetIsMediaPlaying(true);
+            UpdateVisualizerActiveState(_sessionManager.PlaybackState == MediaPlaybackState.Playing);
 
             if (_previousButton == null)
             {
                 Dispatcher.BeginInvoke(new Action(InitializeTransportButtonAdorners), DispatcherPriority.Loaded);
             }
+
+            StartVisualizer();
 
             string currentAumid = _sessionManager.SourceAppUserModelId;
             if (!string.Equals(currentAumid, _lastSourceAumid, StringComparison.OrdinalIgnoreCase))
@@ -259,7 +349,13 @@ namespace RetroBar.Controls
 
         private void UpdateAlbumArt()
         {
-            ImageSource art = Settings.Instance.ShowMediaPlayerAlbumArt ? _sessionManager?.Thumbnail : null;
+            // Falls back to the source app's own taskbar icon (e.g. foobar2000's) when the track
+            // itself has no embedded/reported cover art, instead of showing nothing - any player,
+            // not just one specific app. FindSourceAppWindow does a small linear search, so it's
+            // looked up once and reused for both images below rather than twice.
+            ApplicationWindow sourceWindow = Settings.Instance.ShowMediaPlayerAlbumArt ? FindSourceAppWindow() : null;
+
+            ImageSource art = Settings.Instance.ShowMediaPlayerAlbumArt ? (_sessionManager?.Thumbnail ?? sourceWindow?.Icon) : null;
 
             AlbumArtImage.Source = art;
             // Hidden, not Visible/Collapsed: it still reserves its normal layout slot (used
@@ -267,11 +363,13 @@ namespace RetroBar.Controls
             // the Adorner-hosted copy is what's shown. See UpdateAlbumArtAdorner.
             AlbumArtImage.Visibility = art == null ? Visibility.Collapsed : Visibility.Hidden;
 
-            // The seek popup's own copy - a plain Image, so (unlike AlbumArtImage above) it
-            // paints directly and just needs an ordinary Visible/Collapsed toggle. Uses
-            // LargeThumbnail, not the same (deliberately icon-sized) Thumbnail the taskbar row
-            // uses, since the popup shows it much bigger.
-            ImageSource largeArt = Settings.Instance.ShowMediaPlayerAlbumArt ? _sessionManager?.LargeThumbnail : null;
+            // The seek popup's own copy - a plain Image (Stretch="Uniform", see the XAML's own
+            // remarks), so it paints directly and just needs an ordinary Visible/Collapsed
+            // toggle. Uses LargeThumbnail, not the same (deliberately icon-sized) Thumbnail the
+            // taskbar row uses, since the popup shows it much bigger - the app icon fallback has
+            // no separate large version, so it's reused as-is here too (a small icon, upscaled by
+            // the popup's own Image, beats nothing).
+            ImageSource largeArt = Settings.Instance.ShowMediaPlayerAlbumArt ? (_sessionManager?.LargeThumbnail ?? sourceWindow?.Icon) : null;
             SeekAlbumArtImage.Source = largeArt;
             SeekAlbumArtImage.Visibility = largeArt == null ? Visibility.Collapsed : Visibility.Visible;
 
@@ -423,13 +521,13 @@ namespace RetroBar.Controls
             }
 
             _previousButton = CreateTransportButton("MediaButtonPrevious", "MediaGlyphPrevious", "MediaPlayerPreviousGeometry", "media_previous", PreviousButton_OnClick, out _);
-            AttachTransportButtonAdorner(PreviousButtonSpacer, _previousButton, ref _previousButtonAdorner);
+            _previousButtonSlide = AttachTransportButtonAdorner(PreviousButtonSpacer, _previousButton, ref _previousButtonAdorner);
 
             _playPauseButton = CreateTransportButton("MediaButtonPlayPause", "MediaGlyphPlayPause", "MediaPlayerPlayGeometry", "media_play_pause", PlayPauseButton_OnClick, out _playPauseGlyph);
-            AttachTransportButtonAdorner(PlayPauseButtonSpacer, _playPauseButton, ref _playPauseButtonAdorner);
+            _playPauseButtonSlide = AttachTransportButtonAdorner(PlayPauseButtonSpacer, _playPauseButton, ref _playPauseButtonAdorner);
 
             _nextButton = CreateTransportButton("MediaButtonNext", "MediaGlyphNext", "MediaPlayerNextGeometry", "media_next", NextButton_OnClick, out _);
-            AttachTransportButtonAdorner(NextButtonSpacer, _nextButton, ref _nextButtonAdorner);
+            _nextButtonSlide = AttachTransportButtonAdorner(NextButtonSpacer, _nextButton, ref _nextButtonAdorner);
 
             if (_sessionManager != null)
             {
@@ -437,6 +535,79 @@ namespace RetroBar.Controls
                     ? "MediaPlayerPauseGeometry"
                     : "MediaPlayerPlayGeometry");
             }
+
+            // Freshly (re)created buttons default to visible - the transport buttons are always
+            // shown now (the old hover-triggered swap with an in-place visualizer is gone), so
+            // nothing further to fold in here.
+            if (_previousButton != null)
+            {
+                _previousButton.Visibility = Visibility.Visible;
+            }
+            if (_playPauseButton != null)
+            {
+                _playPauseButton.Visibility = Visibility.Visible;
+            }
+            if (_nextButton != null)
+            {
+                _nextButton.Visibility = Visibility.Visible;
+            }
+        }
+
+        private void StartVisualizer()
+        {
+            try
+            {
+                if (_visualizerCapture != null)
+                {
+                    return;
+                }
+
+                _visualizerCapture = new AudioSpectrumCapture();
+                _visualizerCapture.LevelUpdated += VisualizerCapture_OnLevelUpdated;
+                _visualizerCapture.Start();
+            }
+            catch (Exception ex)
+            {
+                ShellLogger.Error($"MediaPlayer: StartVisualizer threw: {ex}");
+            }
+        }
+
+        private void StopVisualizer()
+        {
+            if (_visualizerCapture == null)
+            {
+                return;
+            }
+
+            _visualizerCapture.LevelUpdated -= VisualizerCapture_OnLevelUpdated;
+            _visualizerCapture.Dispose();
+            _visualizerCapture = null;
+        }
+
+        // Fires on AudioSpectrumCapture's own capture thread, not the UI thread. Only actually
+        // moves the bars when the VU-meter style is selected and VuMeterContainer is currently
+        // Visible (see UpdateVisualizerActiveState) - no need to keep computing a Width nobody can
+        // see, and this way a track that's paused (Visibility already Collapsed) doesn't leave
+        // either bar holding whatever width it last had once playback resumes and they reappear.
+        private void VisualizerCapture_OnLevelUpdated(float left, float right)
+        {
+            Dispatcher.BeginInvoke(new Action(() =>
+            {
+                if (_visualizerCapture == null || VuMeterContainer.Visibility != Visibility.Visible)
+                {
+                    return;
+                }
+
+                // TrackText's own ActualWidth (its natural, un-clipped text length), not
+                // TrackTextHost's - the host can reserve more width than a short title/artist
+                // string actually needs, which was letting the bars reach past the end of the text
+                // at full volume. Still capped by the host's own width too, for a long marquee-
+                // scrolling title, where TrackText's natural width can run well past what's
+                // actually visible.
+                double textWidth = Math.Min(TrackText.ActualWidth, TrackTextHost.ActualWidth);
+                VuMeterFillLeft.Width = Math.Clamp(left, 0, 1) * textWidth;
+                VuMeterFillRight.Width = Math.Clamp(right, 0, 1) * textWidth;
+            }));
         }
 
         private static Button CreateTransportButton(string buttonTag, string glyphTag, string geometryResourceKey, string tooltipResourceKey, RoutedEventHandler onClick, out Path glyph)
@@ -455,16 +626,78 @@ namespace RetroBar.Controls
             return button;
         }
 
-        private static void AttachTransportButtonAdorner(FrameworkElement spacer, UIElement button, ref UIElementAdorner adorner)
+        private static TranslateTransform AttachTransportButtonAdorner(FrameworkElement spacer, FrameworkElement button, ref UIElementAdorner adorner)
         {
             AdornerLayer layer = AdornerLayer.GetAdornerLayer(spacer);
             if (layer == null)
             {
-                return;
+                return null;
             }
 
-            adorner = new UIElementAdorner(spacer, button, isHitTestVisible: true);
+            // The slide transform goes on a plain Grid wrapping the button, not on the Adorner
+            // itself - see UIElementAdorner's own remarks on why a RenderTransform set directly on
+            // an Adorner doesn't work. Stretch (overriding MediaPlayerButtonStyle's own
+            // VerticalAlignment="Center") instead of leaving the button Center-aligned inside this
+            // wrapper: the wrapper is always arranged at exactly the button's own DesiredSize (see
+            // UIElementAdorner.ArrangeOverride), so there's never really any leftover space to
+            // center within, but Center still runs its (available-desired)/2 offset arithmetic
+            // even when that's expected to land on exactly 0 - and at a fractional DPI scale that
+            // computation landed a device pixel off often enough to visibly rest the buttons
+            // 1-2px too high. Stretch skips that arithmetic entirely instead of relying on it to
+            // round to zero.
+            button.VerticalAlignment = VerticalAlignment.Stretch;
+            button.HorizontalAlignment = HorizontalAlignment.Stretch;
+
+            var wrapper = new Grid();
+            // Top, not the Grid default of Stretch: clipContainer below is deliberately made a
+            // few px taller than the button (see ClipBottomSlack), and if wrapper were left to
+            // Stretch into that extra height, the button's own explicit Height would win the
+            // sizing fight but the leftover space would then split into equal top/bottom slack
+            // (WPF centers a fixed-size element within a Stretch slot it can't actually fill) -
+            // quietly shifting the button ~half the slack lower than its real resting position.
+            // Top anchors wrapper (and so the button) flush with the top of clipContainer, exactly
+            // as before slack existed, leaving 100% of the added room at the bottom where it's
+            // actually needed.
+            wrapper.VerticalAlignment = VerticalAlignment.Top;
+            wrapper.Children.Add(button);
+            var slide = new TranslateTransform();
+            wrapper.RenderTransform = slide;
+
+            // Wraps the slide wrapper in an outer container that clips to its own bounds - which
+            // UIElementAdorner.ArrangeOverride would otherwise size to exactly the button's own
+            // natural DesiredSize (Stretch above means that's never inflated by any centering
+            // slop). Since Clip is evaluated in this container's own LOCAL space, BEFORE the
+            // wrapper's RenderTransform is applied to what's inside it, the clip rect itself stays
+            // fixed at that resting position while the button slides within/past it - so sliding
+            // down visibly sinks the button below a hard edge and gets it swallowed there, instead
+            // of just floating freely past the tray box with nothing to cut it off.
+            //
+            // ClipBottomSlack extends that clip window a few px past the button's own bare height
+            // - a per-monitor MonitorOffset Y nudge on the button (e.g. the current +2ish DIPs
+            // used to align it against the tray box) is a RenderTransform on the button itself,
+            // applied entirely independently of this clip container's own size, so without this
+            // slack the clip window (sized to the button's UN-nudged height) would permanently
+            // slice off the bottom of the nudged-down button's own outline even at rest. Bound to
+            // the real BUTTON's own ActualHeight, not the spacer's - the spacer's own tag
+            // (MediaButtonPreviousSpacer/etc., separate from the button's own MediaButtonPrevious/
+            // etc.) is only ever given Width/Margin overrides, never Height, so a per-monitor
+            // custom Height (e.g. "MediaButtonPrevious": {"Height": 19}) only ever lands on the
+            // button, never the spacer; binding to the spacer here previously ignored that
+            // override entirely and re-derived a height from the spacer's own default, unrelated
+            // size instead - which is why a requested 19 could never actually render as 19. Safe
+            // from feedback: Height is explicit on the button (not Stretch-derived), so
+            // button.ActualHeight never depends on how much room this container itself ends up
+            // giving it.
+            const double clipBottomSlack = 4;
+            var clipContainer = new Grid { ClipToBounds = true };
+            var clipHeightBinding = new MultiBinding { Converter = new SumWidthsConverter(), ConverterParameter = clipBottomSlack.ToString(System.Globalization.CultureInfo.InvariantCulture) };
+            clipHeightBinding.Bindings.Add(new Binding(nameof(ActualHeight)) { Source = button });
+            clipContainer.SetBinding(FrameworkElement.HeightProperty, clipHeightBinding);
+            clipContainer.Children.Add(wrapper);
+
+            adorner = new UIElementAdorner(spacer, clipContainer, isHitTestVisible: true);
             layer.Add(adorner);
+            return slide;
         }
 
         private void RemoveTransportButtonAdorners()
@@ -477,6 +710,9 @@ namespace RetroBar.Controls
             _playPauseButton = null;
             _nextButton = null;
             _playPauseGlyph = null;
+            _previousButtonSlide = null;
+            _playPauseButtonSlide = null;
+            _nextButtonSlide = null;
         }
 
         private static void RemoveTransportButtonAdorner(FrameworkElement spacer, ref UIElementAdorner adorner)
@@ -595,10 +831,9 @@ namespace RetroBar.Controls
         #endregion
 
         /// <summary>
-        /// Toggles the current media session's app window - the same thing clicking its taskbar
-        /// button would do: brings it to the foreground if it isn't already active, or minimizes
-        /// it if it is (so clicking the album art a second time puts the app back out of the way
-        /// instead of doing nothing).
+        /// Finds the taskbar's own ApplicationWindow for the current media session's source app -
+        /// shared by ActivateSourceApp (click-to-activate) and UpdateAlbumArt (icon fallback when
+        /// there's no album art).
         ///
         /// SMTC's SourceAppUserModelId is a real AppUserModelID for UWP apps, matching
         /// ApplicationWindow.AppUserModelID directly - but for a classic desktop app that never
@@ -607,12 +842,12 @@ namespace RetroBar.Controls
         /// never populates (it stays "") - so that case is matched against the executable
         /// filename portion of WinFileName instead, which is populated for every window.
         /// </summary>
-        private void ActivateSourceApp(object sender, MouseButtonEventArgs e)
+        private ApplicationWindow FindSourceAppWindow()
         {
             string aumid = _sessionManager?.SourceAppUserModelId;
             if (string.IsNullOrEmpty(aumid) || ShellManager?.Tasks?.GroupedWindows == null)
             {
-                return;
+                return null;
             }
 
             foreach (object item in ShellManager.Tasks.GroupedWindows)
@@ -627,23 +862,38 @@ namespace RetroBar.Controls
                     || (!string.IsNullOrEmpty(window.WinFileName)
                         && string.Equals(System.IO.Path.GetFileName(window.WinFileName), aumid, StringComparison.OrdinalIgnoreCase));
 
-                if (!isMatch)
+                if (isMatch)
                 {
-                    continue;
+                    return window;
                 }
+            }
 
-                if (_sourceAppShown && !window.IsMinimized)
-                {
-                    window.Minimize();
-                    _sourceAppShown = false;
-                }
-                else
-                {
-                    window.BringToFront();
-                    _sourceAppShown = true;
-                }
+            return null;
+        }
 
+        /// <summary>
+        /// Toggles the current media session's app window - the same thing clicking its taskbar
+        /// button would do: brings it to the foreground if it isn't already active, or minimizes
+        /// it if it is (so clicking the album art a second time puts the app back out of the way
+        /// instead of doing nothing).
+        /// </summary>
+        private void ActivateSourceApp(object sender, MouseButtonEventArgs e)
+        {
+            ApplicationWindow window = FindSourceAppWindow();
+            if (window == null)
+            {
                 return;
+            }
+
+            if (_sourceAppShown && !window.IsMinimized)
+            {
+                window.Minimize();
+                _sourceAppShown = false;
+            }
+            else
+            {
+                window.BringToFront();
+                _sourceAppShown = true;
             }
         }
 

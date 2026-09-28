@@ -31,6 +31,15 @@ namespace RetroBar.Utilities
 
         protected override Visual GetVisualChild(int index) => _child;
 
+        // A RenderTransform set directly on THIS Adorner is silently inert - Adorner's own
+        // GetDesiredTransform (used to place it over the AdornedElement) doesn't fold it in, and
+        // overriding that to append it turned out to make the whole adorner stop rendering
+        // entirely rather than just mis-position it (some other part of AdornerLayer's own
+        // transform/bounds bookkeeping evidently relies on that override staying untouched).
+        // Any RenderTransform needed for this content - MediaAlbumArt's per-monitor offset, the
+        // transport buttons' own show/hide slide - has to go on the CHILD instead, same as
+        // MediaAlbumArt already does (see UpdateAlbumArtAdorner in MediaPlayer.xaml.cs, which sets
+        // RenderTransform on _albumArtContainer, never on this Adorner).
         protected override Size MeasureOverride(Size constraint)
         {
             _child.Measure(constraint);

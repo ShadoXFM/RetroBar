@@ -39,6 +39,16 @@ namespace RetroBar.Utilities
         private const int PlaybackPollIntervalMs = 500;
         private Timer _playbackPollTimer;
 
+        // GetTimeline()'s own smooth-position estimate, tracked independently of whatever the
+        // source reports as LastUpdatedTime - see GetTimeline's remarks for why (foobar2000's SMTC
+        // bridge, at least, never refreshes LastUpdatedTime or Position while playing, so trusting
+        // either one directly leaves the estimate either wildly wrong or permanently frozen).
+        // Reset (_hasPositionEstimateBase = false) whenever the track/session changes, so a new
+        // track doesn't inherit a stale baseline from whatever the previous one was doing.
+        private bool _hasPositionEstimateBase;
+        private TimeSpan _positionEstimateBase;
+        private DateTimeOffset _positionEstimateBaseTime;
+
         public bool HasSession => _session != null;
         public string Title { get; private set; } = "";
         public string Artist { get; private set; } = "";
@@ -134,6 +144,10 @@ namespace RetroBar.Utilities
                 return;
             }
 
+            // A new track's own position starts fresh - don't let GetTimeline's smooth-position
+            // estimate keep extrapolating forward from whatever the previous track was doing.
+            _hasPositionEstimateBase = false;
+
             try
             {
                 GlobalSystemMediaTransportControlsSessionMediaProperties props = await _session.TryGetMediaPropertiesAsync();
@@ -167,15 +181,20 @@ namespace RetroBar.Utilities
         // would, making video thumbnails look inconsistently larger than regular album art.
         private const int ThumbnailMaxDimension = 64;
 
-        // The seek popup displays its own copy much bigger than the taskbar's icon-sized one, at
-        // a fixed 160 DIP (see SeekAlbumArtImage in MediaPlayer.xaml) - this is that size's
-        // physical-pixel ceiling at up to 200% DPI scaling (160*2=320), so it stays sharp on a
-        // scaled monitor instead of decoding at exactly 160px and then getting upscaled back out
-        // by DPI on top of that. Most SMTC sources (Spotify included) publish art comfortably
-        // above this already, so it's a "don't bother keeping a needlessly huge bitmap in
-        // memory" ceiling, not a meaningful quality cap the way ThumbnailMaxDimension is for the
-        // tiny taskbar icon.
-        private const int LargeThumbnailMaxDimension = 320;
+        // The seek popup displays its own copy much bigger than the taskbar's icon-sized one, and
+        // its own Height (see SeekAlbumArtImage in MediaPlayer.xaml) tracks the seek popup's
+        // controls row width rather than a fixed number, up to a 280 DIP safety ceiling - a wide
+        // (16:9) source can end up needing significantly more decoded width than a square one at
+        // that same displayed height, so this is sized well past that ceiling (rather than the
+        // flat "displayed size x2" ThumbnailMaxDimension uses for the tiny taskbar icon) to cover
+        // higher DPI scaling and to avoid needlessly downsampling away detail a source (e.g. a
+        // browser's YouTube SMTC thumbnail) actually has - the Image's own BitmapScalingMode is
+        // HighQuality, so decoding bigger than the displayed size and letting that downscale for
+        // display looks sharper than decoding too small and upscaling. Most SMTC sources
+        // (Spotify included) publish art comfortably within this already, so it's mainly a "don't
+        // bother keeping an unbounded bitmap in memory" ceiling, not a meaningful quality cap in
+        // the common case.
+        private const int LargeThumbnailMaxDimension = 900;
 
         /// <summary>Reads an SMTC thumbnail reference's raw bytes, or null if it's missing,
         /// empty, or too large to hold as a single byte[].</summary>
@@ -314,15 +333,42 @@ namespace RetroBar.Utilities
                 }
 
                 TimeSpan duration = timeline.EndTime - timeline.StartTime;
-                TimeSpan position = timeline.Position;
+                TimeSpan rawPosition = timeline.Position;
 
                 // Most SMTC sources only update Position at track/seek/pause boundaries, not
                 // continuously - while playing, estimate how far it's advanced since the last
                 // update so the bar moves smoothly instead of jumping every poll.
-                if (PlaybackState == MediaPlaybackState.Playing)
+                //
+                // This used to estimate off the source's own LastUpdatedTime (Now -
+                // timeline.LastUpdatedTime), but some sources' SMTC integrations (foobar2000's
+                // included, which usually relies on a minimal community plugin rather than full
+                // first-party support) don't reliably refresh either Position OR LastUpdatedTime
+                // while playing - LastUpdatedTime can be left stale from whenever the app's SMTC
+                // session was first created, hours earlier, which either produced an absurd
+                // position estimate (trusting a multi-hour-old timestamp - that also visibly
+                // widened the seek popup, since SeekTimeText's suddenly much longer string feeds
+                // into both the album art's Height and the slider's Width, see MediaPlayer.xaml)
+                // or, once that was guarded against, froze at 0 forever (since the guard rejected
+                // every poll's implausible elapsed gap, and the raw Position never itself moved).
+                //
+                // Tracking our own baseline instead - reset it only when the source's raw Position
+                // itself actually changes - sidesteps trusting either of the source's own
+                // timestamps at all. Most sources update Position frequently/accurately, so this
+                // resyncs to the source's own real value almost every poll; a source like
+                // foobar2000 that leaves Position frozen instead falls through to extrapolating
+                // from our own wall-clock time since we first saw that frozen value, which still
+                // advances smoothly. Reset on track/session change happens in
+                // RefreshPropertiesAsync, so a new track never inherits a stale baseline.
+                if (!_hasPositionEstimateBase || rawPosition != _positionEstimateBase)
                 {
-                    position += DateTimeOffset.Now - timeline.LastUpdatedTime;
+                    _positionEstimateBase = rawPosition;
+                    _positionEstimateBaseTime = DateTimeOffset.Now;
+                    _hasPositionEstimateBase = true;
                 }
+
+                TimeSpan position = PlaybackState == MediaPlaybackState.Playing
+                    ? _positionEstimateBase + (DateTimeOffset.Now - _positionEstimateBaseTime)
+                    : _positionEstimateBase;
 
                 if (position < TimeSpan.Zero)
                 {

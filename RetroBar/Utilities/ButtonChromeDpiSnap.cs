@@ -1,0 +1,89 @@
+using System;
+using System.Windows;
+using System.Windows.Controls;
+using System.Windows.Media;
+
+namespace RetroBar.Utilities
+{
+    /// <summary>
+    /// DPI-snaps MediaPlayerButtonStyle's own template chrome (the nested Border Padding/
+    /// BorderThickness values that build up its bevel - see that Style's ControlTemplate in
+    /// System.xaml) to the button's actual monitor DPI, instead of leaving them as the fixed
+    /// whole-DIP literals written in the template. Those literals are only pixel-grid-aligned at
+    /// 100% scale; at any other scale (this app already has to deal with 125%), each nested
+    /// Border's own Padding/BorderThickness rounds independently against the device-pixel grid,
+    /// and the leftover remainder that produces doesn't divide evenly into an explicit per-monitor
+    /// Height override - which was the actual cause behind a requested Height sometimes skipping
+    /// straight past its target by 2px instead of landing on it exactly. Snapping every chrome
+    /// value to an exact multiple of the monitor's own PixelStep up front means there's nothing
+    /// left to round unevenly, on any monitor.
+    ///
+    /// Opt in via the Style itself (affects every Button using it, current and future, without
+    /// touching each usage site):
+    /// <Setter Property="utilities:ButtonChromeDpiSnap.Enabled" Value="True" />
+    /// </summary>
+    public static class ButtonChromeDpiSnap
+    {
+        public static readonly DependencyProperty EnabledProperty = DependencyProperty.RegisterAttached(
+            "Enabled", typeof(bool), typeof(ButtonChromeDpiSnap), new PropertyMetadata(false, OnEnabledChanged));
+
+        public static bool GetEnabled(DependencyObject obj) => (bool)obj.GetValue(EnabledProperty);
+        public static void SetEnabled(DependencyObject obj, bool value) => obj.SetValue(EnabledProperty, value);
+
+        private static void OnEnabledChanged(DependencyObject d, DependencyPropertyChangedEventArgs e)
+        {
+            if (d is not Button button || e.NewValue is not true)
+            {
+                return;
+            }
+
+            if (button.IsLoaded)
+            {
+                Apply(button);
+            }
+
+            // Deliberately never unsubscribes - a Button using this style either loads once (the
+            // three real transport buttons, the hidden spacers) or Loads/Unloads each time a
+            // Popup reopens (the seek popup's own buttons), and re-applying on every reload is
+            // harmless (same pattern MonitorOffset's own Element_Loaded already relies on).
+            button.Loaded += Button_Loaded;
+        }
+
+        private static void Button_Loaded(object sender, RoutedEventArgs e)
+        {
+            Apply((Button)sender);
+        }
+
+        private static void Apply(Button button)
+        {
+            button.ApplyTemplate();
+
+            double dpiScale = VisualTreeHelper.GetDpi(button).DpiScaleY;
+            double pixelStep = dpiScale > 0 ? 1.0 / dpiScale : 1.0;
+            double Snap(double dip) => Math.Round(dip / pixelStep) * pixelStep;
+            Thickness SnapThickness(Thickness t) => new(Snap(t.Left), Snap(t.Top), Snap(t.Right), Snap(t.Bottom));
+
+            // Read each border's own template-authored Padding/BorderThickness as the nominal,
+            // 100%-scale-correct value to snap, rather than a value hardcoded to one specific
+            // style's own template - this element is a fresh template instance every time this
+            // runs (a Button either loads once, or - for a Popup's own buttons - unloads/reloads
+            // with a fresh template each time the popup reopens), so what's already on it here is
+            // always the un-snapped XAML original, never a previous call's already-snapped result.
+            if (button.Template?.FindName("ButtonBorder", button) is Border outerBorder)
+            {
+                outerBorder.Padding = SnapThickness(outerBorder.Padding);
+            }
+
+            if (button.Template?.FindName("ButtonRightBottomBorder", button) is Border rightBottomBorder)
+            {
+                rightBottomBorder.BorderThickness = SnapThickness(rightBottomBorder.BorderThickness);
+            }
+
+            if (button.Template?.FindName("ButtonLeftTopBorder", button) is Border leftTopBorder)
+            {
+                leftTopBorder.BorderThickness = SnapThickness(leftTopBorder.BorderThickness);
+                leftTopBorder.Padding = SnapThickness(leftTopBorder.Padding);
+            }
+        }
+    }
+}

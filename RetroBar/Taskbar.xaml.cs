@@ -40,6 +40,21 @@ namespace RetroBar
             set => SetValue(IsMediaPlayingProperty, value);
         }
 
+        public static readonly DependencyProperty IsCpuTempShownProperty = DependencyProperty.Register(
+            nameof(IsCpuTempShown), typeof(bool), typeof(Taskbar), new PropertyMetadata(false));
+
+        /// <summary>
+        /// Set by CpuTempDisplay whenever it shows/hides itself (Settings.ShowCpuTemp off, or the
+        /// CpuTempHelper process isn't currently writing fresh readings) - lets WeatherDisplay
+        /// use a different per-monitor position when there's no CPU temp reading next to it to
+        /// leave room for, via a MonitorOffset.Tag switch - same pattern as IsMediaPlaying above.
+        /// </summary>
+        public bool IsCpuTempShown
+        {
+            get => (bool)GetValue(IsCpuTempShownProperty);
+            set => SetValue(IsCpuTempShownProperty, value);
+        }
+
         private double _unlockedMargin;
         public double DesiredRowHeight { get; private set; }
 

@@ -1,0 +1,24 @@
+<UserControl x:Class="RetroBar.Controls.CpuTempDisplay"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:utilities="clr-namespace:RetroBar.Utilities"
+             Loaded="CpuTempDisplay_OnLoaded"
+             Unloaded="CpuTempDisplay_OnUnloaded"
+             Visibility="Collapsed">
+    <StackPanel Orientation="Horizontal" VerticalAlignment="Center" HorizontalAlignment="Center" Margin="4,0">
+        <!-- Sits inside this same UserControl (rather than as a separate element in
+             Taskbar.xaml) so it only ever appears alongside CpuTempText - collapsing this
+             whole control (no admin, no sensor) hides the separator with it instead of
+             leaving it stranded next to WeatherDisplay with nothing to separate. -->
+        <TextBlock Text="/"
+                   Style="{DynamicResource WeatherTempStyle}"
+                   Foreground="{DynamicResource ClockForeground}"
+                   FontSize="8"
+                   Margin="-4,-2,2,0"
+                   utilities:MonitorOffset.Tag="CpuTempSeparator" />
+        <TextBlock x:Name="CpuTempText"
+                   Style="{DynamicResource CpuTempStyle}"
+                   Foreground="{DynamicResource ClockForeground}"
+                   utilities:MonitorOffset.Tag="CpuTemp" />
+    </StackPanel>
+</UserControl>
