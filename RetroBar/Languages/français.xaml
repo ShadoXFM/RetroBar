@@ -10,6 +10,9 @@
     <s:String x:Key="general_heading">Généralités</s:String>
     <s:String x:Key="media_player_heading">Media Player</s:String>
     <s:String x:Key="show_media_player">Montrer les contrôles du lecteur media</s:String>
+    <s:String x:Key="show_media_player_album_art">Afficher la p_ochette de l'album</s:String>
+    <s:String x:Key="cpu_temp_heading">Température du CPU</s:String>
+    <s:String x:Key="show_cpu_temp">Afficher la température du _CPU</s:String>
     <s:String x:Key="media_previous">Précédent</s:String>
     <s:String x:Key="media_play_pause">Lecture/Pause</s:String>
     <s:String x:Key="media_next">Suivant</s:String>
@@ -54,6 +57,7 @@
         <s:String>La même barre des tâches que la fenêtre</s:String>
         <s:String>La même barre des tâches que la fenêtre et la barre des tâches primaire</s:String>
     </x:Array>
+    <s:String x:Key="invert_grayscale_colors">_Inverser les couleurs en niveaux de gris:</s:String>
     <x:Array x:Key="invert_grayscale_colors_values" Type="s:String">
         <s:String>Si nécessaire par le thème</s:String>
         <s:String>Toujours</s:String>
@@ -71,6 +75,11 @@
         <s:String>Ouvrir le calendrier "Aero"</s:String>
         <s:String>Ouvrir le calendrier "Modern"</s:String>
         <s:String>Ouvrir le Centre de notifications</s:String>
+    </x:Array>
+    <s:String x:Key="task_wheel_action">Action de la _molette de la souris:</s:String>
+    <x:Array x:Key="task_wheel_action_values" Type="s:String">
+        <s:String>Ne rien faire</s:String>
+        <s:String>Afficher/masquer la fenêtre</s:String>
     </x:Array>
     <s:String x:Key="auto_hide_transparent">_Masquer la ligne de la barre des tâches lorsque la barre des tâches est auto-masquée</s:String>
     <s:String x:Key="version">Version {0}</s:String>
@@ -96,6 +105,13 @@
     <s:String x:Key="hotkey_warning_text">RetroBar va remplacer les raccourcis clavier de la barre des tâches Windows. Même si RetroBar est fermé, ils ne seront pas restaurés dans Windows jusqu'à ce que vous vous déconnectiez et reconnectiez.</s:String>
     <s:String x:Key="allow_blur_behind">Autoriser le _flou derrière la barre des tâches transparente</s:String>
     <s:String x:Key="ok_dialog">OK</s:String>
+
+    <s:String x:Key="clock_format_help">Voir les options de formatage disponibles</s:String>
+    <s:String x:Key="clock_format_warning">Remarque : le format d'horloge personnalisé peut ne pas fonctionner comme prévu si le thème sélectionné spécifie son propre format.</s:String>
+    <s:String x:Key="override_clock_format">_Format d'horloge personnalisé:</s:String>
+    <s:String x:Key="override_ampm_designators">_Indicateurs personnalisés:</s:String>
+    <s:String x:Key="am_designator">AM:</s:String>
+    <s:String x:Key="pm_designator">PM:</s:String>
 
     <s:String x:Key="customize_notifications">Personnaliser les notifications</s:String>
     <s:String x:Key="customize_notifications_info">RetroBar affiche des icônes pour les notifications actives et urgentes et cache des icônes inactives. Vous pouvez modifier le comportement des éléments de la liste ci-dessous.</s:String>
@@ -132,6 +148,7 @@
     <s:String x:Key="tray_properties">P_ropriétés</s:String>
     <s:String x:Key="update_available">_Mise à jour disponible...</s:String>
     <s:String x:Key="exit_retrobar">_Quitter RetroBar</s:String>
+    <s:String x:Key="restart_retrobar">_Redémarrer RetroBar</s:String>
     <s:String x:Key="customize_notifications_menu">_Personnaliser les notifications...</s:String>
     <s:String x:Key="lock_taskbar_menu">_Verrouiller la barre des tâches</s:String>
 

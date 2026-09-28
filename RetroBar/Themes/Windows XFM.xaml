@@ -6,7 +6,7 @@
     <system:Boolean x:Key="InvertSystemNotifyIcons">False</system:Boolean>
     <system:Double x:Key="TaskButtonWidth">120</system:Double>
     <system:Double x:Key="GlobalFontSize">10</system:Double>
-    
+
  <!-- Dark Mode Colors -->
     <SolidColorBrush x:Key="ButtonHighlight" Color="#333333" />
     <SolidColorBrush x:Key="ButtonInnerHighlight" Color="#00000000" />
@@ -74,6 +74,92 @@
                 Value="2,-1,2,0" />
     </Style>
 
+    <Style x:Key="CpuTempStyle" TargetType="TextBlock" BasedOn="{StaticResource GlobalFonts}">
+        <Setter Property="VerticalAlignment"
+                Value="Center" />
+        <Setter Property="FontFamily"
+                Value="Tahoma" />
+        <Setter Property="FontWeight"
+                Value="Bold" />
+        <Setter Property="Margin"
+                Value="2,-1,2,0" />
+    </Style>
+
+    <!-- Tray box bevel replacement - same reasoning as TrayToggleButton just below: System.xaml's
+         own GroupBox template draws this box's sunken bevel via two NESTED Borders (one
+         BorderThickness="0,0,1,1" Highlight for the right+bottom edges, one BorderThickness=
+         "1,1,0,0" DarkShadow for the left+top edges), each independently pixel-snapping its own
+         bounds - at DISPLAY1's fractional DPI scale, that can round each border's edges to a
+         different physical pixel, showing up as a misaligned/offset gap (most noticeable on the
+         left edge, since that's where the DarkShadow border's own inset rounds separately from
+         the Highlight border's). Replaced with a single Border (still tagged TrayBoxBevel /
+         TrayBoxBevelPlaying, same Padding-driven sizing as before - growing that Padding still
+         genuinely grows the whole box, since this Border is still the dominant, content-driving
+         size within its Grid) plus four 1px Rectangle overlays for the bevel lines, positioned at
+         that same Grid's edges - which, because Grid sizes itself from its children's own desired
+         sizes during Measure, still exactly matches the tagged Border's own bounds even though
+         that Border is Stretch-arranged within it.
+         The OUTER Border (TrayBoxOuter/TrayBoxOuterPlaying, was a fixed untagged Padding="2" in
+         System.xaml's own version) is tagged too, separately from the inner TrayBoxBevel one - on
+         purpose. MediaPlayer collapses to zero width while nothing's playing, which shifts this
+         whole box's own left edge right by roughly its width unless something compensates; that
+         compensation used to live in TrayBoxBevel's own Padding, but that Border is what the four
+         bevel Rectangles above measure their Stretch-arranged size from (see the same remarks a
+         few lines up) - so any extra padding put there to hold the left edge in place also
+         inflates the box the bevel lines are drawn across, and once the icon row is ALSO sparse
+         (few/no visible notification icons) there's nothing left to visually fill that reserved
+         space, showing up as a gap the bevel lines stretch across with nothing behind them. This
+         outer Border sits OUTSIDE that Grid entirely, so padding placed here shifts the whole
+         box's position without changing what the inner Grid (and so the bevel Rectangles) measure
+         themselves against - the fix compensates for MediaPlayer's collapse without ever
+         inflating the bevel-line box itself. -->
+    <Style TargetType="GroupBox"
+           x:Key="Tray">
+        <Setter Property="OverridesDefaultStyle"
+                Value="True" />
+        <Setter Property="Background"
+                Value="{DynamicResource ButtonFace}" />
+        <Setter Property="Template">
+            <Setter.Value>
+                <ControlTemplate TargetType="GroupBox">
+                    <Border BorderThickness="0"
+                            Padding="2"
+                            UseLayoutRounding="True"
+                            SnapsToDevicePixels="True"
+                            utilities:MonitorOffset.Tag="{Binding Path=IsMediaPlaying, RelativeSource={RelativeSource Mode=FindAncestor, AncestorType={x:Type Window}}, Converter={StaticResource mediaPlayingToMonitorTagConverter}, ConverterParameter=TrayBoxOuter}">
+                        <Grid UseLayoutRounding="True"
+                              SnapsToDevicePixels="True">
+                            <Border BorderThickness="0"
+                                    Background="{TemplateBinding Background}"
+                                    Padding="1"
+                                    UseLayoutRounding="True"
+                                    SnapsToDevicePixels="True"
+                                    utilities:MonitorOffset.Tag="{Binding Path=IsMediaPlaying, RelativeSource={RelativeSource Mode=FindAncestor, AncestorType={x:Type Window}}, Converter={StaticResource mediaPlayingToMonitorTagConverter}, ConverterParameter=TrayBoxBevel}">
+                                <ContentPresenter />
+                            </Border>
+                            <Rectangle Height="1"
+                                       VerticalAlignment="Top"
+                                       Fill="{DynamicResource ButtonDarkShadow}"
+                                       SnapsToDevicePixels="True" />
+                            <Rectangle Width="1"
+                                       HorizontalAlignment="Left"
+                                       Fill="{DynamicResource ButtonDarkShadow}"
+                                       SnapsToDevicePixels="True" />
+                            <Rectangle Height="1"
+                                       VerticalAlignment="Bottom"
+                                       Fill="{DynamicResource ButtonHighlight}"
+                                       SnapsToDevicePixels="True" />
+                            <Rectangle Width="1"
+                                       HorizontalAlignment="Right"
+                                       Fill="{DynamicResource ButtonHighlight}"
+                                       SnapsToDevicePixels="True" />
+                        </Grid>
+                    </Border>
+                </ControlTemplate>
+            </Setter.Value>
+        </Setter>
+    </Style>
+
     <!-- Tray arrow replacement -->
     <Style TargetType="ToggleButton"
             x:Key="TrayToggleButton">
@@ -102,7 +188,7 @@
                     <Border x:Name="ButtonBorder"
                             Background="Transparent"
                             Padding="0,2"
-                            utilities:MonitorOffset.Tag="TrayToggleButton"
+                            utilities:MonitorOffset.Tag="{Binding Path=IsMediaPlaying, RelativeSource={RelativeSource Mode=FindAncestor, AncestorType={x:Type Window}}, Converter={StaticResource mediaPlayingToMonitorTagConverter}, ConverterParameter=TrayToggleButton}"
                             SnapsToDevicePixels="True"
                             UseLayoutRounding="True">
                         <Grid Background="{TemplateBinding Background}">

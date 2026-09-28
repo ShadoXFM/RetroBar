@@ -39,6 +39,17 @@ namespace RetroBar.Utilities
         /// to target a TextBlock directly, tagging an ancestor (e.g. a hosting Canvas) works too.</summary>
         public bool? Bold { get; set; }
 
+        /// <summary>Font size in DIPs, or null to leave the element's own Style/XAML FontSize
+        /// alone. Applied via TextElement.FontSizeProperty, same as Bold above - an inherited
+        /// property, so tagging an ancestor works as well as tagging a TextBlock directly.</summary>
+        public double? FontSize { get; set; }
+
+        /// <summary>A font family name (e.g. "Tahoma", "Consolas") or null to leave the
+        /// element's own Style/XAML FontFamily alone. Applied via TextElement.FontFamilyProperty,
+        /// same as Bold/FontSize above - an inherited property, so tagging an ancestor works as
+        /// well as tagging a TextBlock directly.</summary>
+        public string FontFamily { get; set; }
+
         /// <summary>A WPF Thickness string ("5", "5,0", or "5,0,0,0" - same syntax as a plain
         /// XAML Margin="..." attribute), or null to leave the element's own Style/XAML Margin
         /// alone. Unlike X/Y, this is real layout space - it pushes neighboring elements over
@@ -78,7 +89,8 @@ namespace RetroBar.Utilities
         public bool IsEmpty =>
             X == 0 && Y == 0 &&
             Width == null && Height == null && Scale == null &&
-            TextRendering == null && BitmapScaling == null && Bold == null && Margin == null &&
-            Padding == null && Background == null && Geometry == null;
+            TextRendering == null && BitmapScaling == null && Bold == null && FontSize == null &&
+            FontFamily == null && Margin == null && Padding == null && Background == null &&
+            Geometry == null;
     }
 }

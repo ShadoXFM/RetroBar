@@ -208,6 +208,25 @@ namespace RetroBar.Utilities
             {
                 element.ClearValue(System.Windows.Documents.TextElement.FontWeightProperty);
             }
+
+            if (offset.FontSize.HasValue)
+            {
+                element.SetValue(System.Windows.Documents.TextElement.FontSizeProperty, offset.FontSize.Value);
+            }
+            else
+            {
+                element.ClearValue(System.Windows.Documents.TextElement.FontSizeProperty);
+            }
+
+            if (!string.IsNullOrWhiteSpace(offset.FontFamily))
+            {
+                element.SetValue(System.Windows.Documents.TextElement.FontFamilyProperty,
+                    new FontFamily(offset.FontFamily));
+            }
+            else
+            {
+                element.ClearValue(System.Windows.Documents.TextElement.FontFamilyProperty);
+            }
         }
 
         private static void ApplySize(FrameworkElement element, double? value, DependencyProperty sizeProperty, DependencyProperty appliedFlagProperty)

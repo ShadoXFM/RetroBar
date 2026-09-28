@@ -56,7 +56,17 @@ namespace RetroBar.Utilities
     /// the same element would permanently override it, since a code-set RenderTransform is a
     /// local value and always beats a ControlTemplate trigger's Setter in WPF's precedence
     /// order), Clock,
-    /// WeatherIcon, WeatherTemp, StartIcon, StartLabel, TrayIcon,
+    /// WeatherPanel (the StackPanel wrapping the icon+text pair as a whole),
+    /// WeatherTaskGap (WeatherTaskGapNoCpuTemp instead, while Taskbar.IsCpuTempShown is false -
+    /// an invisible, zero-margin-by-default spacer between weather and the task buttons, in
+    /// Taskbar.xaml - set its Margin to grow/shrink that specific gap without shifting
+    /// WeatherPanel's own content the way changing WeatherPanel's own Margin would),
+    /// WeatherIcon, WeatherTemp (WeatherIconNoCpuTemp/WeatherTempNoCpuTemp instead, while
+    /// Taskbar.IsCpuTempShown is false - lets weather's own position differ when there's no CPU
+    /// temp display next to it, same pattern TrayBoxBevel/TrayBoxBevelPlaying use below), CpuTemp
+    /// (the "NN°C" text and its separator - only present at all while RetroBar.CpuTempHelper.exe
+    /// is running and writing fresh readings, see CpuTempDisplay.xaml.cs), CpuTempSeparator,
+    /// StartIcon, StartLabel, TrayIcon,
     /// TrayBox (the whole tray GroupBox as one rigid unit - media player, tray icons and clock
     /// move together), TrayBoxBevel (the inner Border that actually draws TrayBox's own visible
     /// bevel line - grow its Padding to grow the visible box itself without reflowing neighbors
@@ -67,9 +77,9 @@ namespace RetroBar.Utilities
     /// actively playing - see System.xaml's TrayBoxBevel tag Binding and Taskbar.IsMediaPlaying),
     /// or a new one you tag yourself), and every field on
     /// MonitorOffsetValue is optional - X, Y, Width, Height, Scale, TextRendering, BitmapScaling,
-    /// Bold, Margin, Padding, Background, Geometry (Path mini-language Figures, only meaningful
-    /// on a Path - e.g. one of the MediaGlyph* tags - to replace its vector shape entirely per
-    /// monitor) - omit whatever you don't want to change.
+    /// Bold, FontSize, FontFamily, Margin, Padding, Background, Geometry (Path mini-language
+    /// Figures, only meaningful on a Path - e.g. one of the MediaGlyph* tags - to replace its
+    /// vector shape entirely per monitor) - omit whatever you don't want to change.
     ///
     /// The file is re-read automatically whenever it changes on disk (save it in any editor
     /// while RetroBar is running and the change applies immediately - no restart needed).

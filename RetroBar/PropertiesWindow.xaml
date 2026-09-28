@@ -429,6 +429,14 @@
                             </CheckBox>
                         </StackPanel>
                     </GroupBox>
+                    <GroupBox Header="{DynamicResource cpu_temp_heading}">
+                        <StackPanel Orientation="Vertical">
+                            <CheckBox x:Name="cbShowCpuTemp"
+                                      IsChecked="{Binding Source={x:Static Settings:Settings.Instance}, Path=ShowCpuTemp, UpdateSourceTrigger=PropertyChanged}">
+                                <Label Content="{DynamicResource show_cpu_temp}" />
+                            </CheckBox>
+                        </StackPanel>
+                    </GroupBox>
                     <GroupBox Header="{DynamicResource clock_heading}">
                         <StackPanel Orientation="Vertical">
                             <CheckBox x:Name="cbShowClock"

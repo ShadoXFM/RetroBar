@@ -875,6 +875,13 @@
                 Value="16" />
         <Setter Property="Margin"
                 Value="-1,1,3,-1" /><!-- Left -1 (was 0): 1px further left, in both the resting and IsPressed states, since IsPressed's Content shift is additive on top of this. -->
+        <!-- Never set before - fell back to WPF's own default scaling heuristic, which reads as
+             soft/inconsistent once a window icon needs upscaling for the monitor's DPI (most
+             visible on lower-resolution displays, where each source pixel covers more screen
+             space). Same fix already applied to TaskOverlayIcon/StartIcon/NotifyIcon below, for
+             the same reason. -->
+        <Setter Property="RenderOptions.BitmapScalingMode"
+                Value="HighQuality" />
     </Style>
 
     <Style TargetType="Image"
@@ -1008,6 +1015,11 @@
                 Value="{DynamicResource ButtonFace}" />
         <Setter Property="VerticalAlignment"
                 Value="Center" />
+        <!-- See ButtonChromeDpiSnap's own remarks - DPI-snaps this template's own nested Border
+             Padding/BorderThickness values (below) so they round predictably on every monitor,
+             not just at 100% scale. -->
+        <Setter Property="utilities:ButtonChromeDpiSnap.Enabled"
+                Value="True" />
         <!-- Previously "1,-3,1,-2": negative top/bottom margins were used to stretch
              the button beyond its own content size to reach the row's height. That's
              fragile - the StackPanel sizes itself from the button's (margin-shrunk)
@@ -1037,12 +1049,15 @@
                                 UseLayoutRounding="True"
                                 SnapsToDevicePixels="True"
                                 x:Name="ButtonRightBottomBorder">
-                            <!-- Padding "2,2,2,3" (extra 1 at the bottom) instead of a uniform
-                                 "2": makes the visible box 1px taller. -->
+                            <!-- Padding "1,2,1,3": less left/right padding than top/bottom (1 vs
+                                 2) - the transport buttons sit edge to edge with each other, so
+                                 tight horizontal padding keeps the glyph-to-glyph gap between
+                                 adjacent buttons small, while vertical padding (extra 1 at the
+                                 bottom) is unrelated and keeps the visible box 1px taller. -->
                             <Border BorderThickness="1,1,0,0"
                                     BorderBrush="{TemplateBinding Background}"
                                     Background="{TemplateBinding Background}"
-                                    Padding="2,2,2,3"
+                                    Padding="1,2,1,3"
                                     UseLayoutRounding="True"
                                     SnapsToDevicePixels="True"
                                     x:Name="ButtonLeftTopBorder">
@@ -1113,10 +1128,17 @@
          line; a half-integer X (this file's first attempt used 4.5/5.5, to fill the 10-wide box
          exactly) breaks that. The diagonal edges to each apex still alias into a "staircase" the
          same as any aliased diagonal, which is the intended pixel-art look, not a bug. -->
-    <PathGeometry x:Key="MediaPlayerPreviousGeometry"
+    <!-- TEMPORARY: skip-track "triangle + bar" glyphs (|<< -> |<, >>| -> >|) instead of the usual
+         double-triangle ones, per a one-off request to try the look - revert to the two Figures
+         above (both commented out) to go back. -->
+    <!--<PathGeometry x:Key="MediaPlayerPreviousGeometry"
                   Figures="M 4,0 L 4,7 L 0,3.5 Z M 9,0 L 9,7 L 5,3.5 Z" />
     <PathGeometry x:Key="MediaPlayerNextGeometry"
-                  Figures="M 0,0 L 4,3.5 L 0,7 Z M 5,0 L 9,3.5 L 5,7 Z" />
+                  Figures="M 0,0 L 4,3.5 L 0,7 Z M 5,0 L 9,3.5 L 5,7 Z" />-->
+    <PathGeometry x:Key="MediaPlayerPreviousGeometry"
+                  Figures="M 0,0 L 2.5,0 L 2.5,7 L 0,7 Z M 7,0 L 3,3.5 L 7,7 Z" />
+    <PathGeometry x:Key="MediaPlayerNextGeometry"
+                  Figures="M 0,0 L 4,3.5 L 0,7 Z M 5.5,0 L 7,0 L 7,7 L 5.5,7 Z" />
     <PathGeometry x:Key="MediaPlayerPlayGeometry"
                   Figures="M 0,0 L 6,3.5 L 0,7 Z" />
     <PathGeometry x:Key="MediaPlayerPauseGeometry"
@@ -1276,8 +1298,16 @@
            x:Key="MediaPlayerTrackTextHostStyle">
         <Setter Property="VerticalAlignment"
                 Value="Center" />
+        <!-- Right margin used to be 10 back when this was the LAST element in the row (right
+             before the tray icons/clock that follow the whole MediaPlayer control) - now that
+             the transport buttons/visualizer sit after this instead (see the album-art/text vs.
+             buttons reorder in MediaPlayer.xaml), that same 10px became an oversized gap between
+             the track text and the buttons, needlessly pushing them further right. Matching the
+             left margin (4) here and moving the old trailing gap onto TransportButtonsArea's own
+             right Margin instead (see MediaPlayer.xaml) keeps the same amount of breathing room
+             before the tray icons without also widening the text-to-buttons gap. -->
         <Setter Property="Margin"
-                Value="4,-1,10,1" />
+                Value="4,-1,4,1" />
         <Setter Property="MaxWidth"
                 Value="150" />
         <Setter Property="ClipToBounds"
@@ -1393,19 +1423,30 @@
                 Value="{DynamicResource ButtonFace}" />
         <Setter Property="Margin"
                 Value="0,0,0,-1" />
+        <!-- See ButtonChromeDpiSnap's own remarks - DPI-snaps this template's own nested Border
+             Padding/BorderThickness values (below) so they round predictably on every monitor,
+             not just at 100% scale. -->
+        <Setter Property="utilities:ButtonChromeDpiSnap.Enabled"
+                Value="True" />
         <Setter Property="Template">
             <Setter.Value>
                 <ControlTemplate TargetType="Button">
                     <Border Background="Transparent"
                             Padding="0,2"
+                            UseLayoutRounding="True"
+                            SnapsToDevicePixels="True"
                             Name="ButtonBorder">
                         <Border BorderThickness="0,0,1,1"
                                 BorderBrush="{TemplateBinding Background}"
+                                UseLayoutRounding="True"
+                                SnapsToDevicePixels="True"
                                 x:Name="ButtonRightBottomBorder">
                             <Border BorderThickness="1,1,0,0"
                                     BorderBrush="{TemplateBinding Background}"
                                     Background="{TemplateBinding Background}"
                                     Padding="2"
+                                    UseLayoutRounding="True"
+                                    SnapsToDevicePixels="True"
                                     x:Name="ButtonLeftTopBorder">
                                 <ContentPresenter />
                             </Border>

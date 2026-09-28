@@ -278,9 +278,17 @@ namespace RetroBar.Controls
 
             if (maxWidth > defaultWidth)
             {
-                // Room to spare: keep the default width and leave the trailing gap.
+                // Room to spare: keep the default width (snapped to a multiple of PixelStep, same
+                // reasoning as the shrink-to-fit branch below) and leave the trailing gap. Without
+                // this snap, defaultWidth's own fractional-PixelStep remainder (e.g. 123 DIPs at
+                // 125% scale, where 123/0.8 = 153.75 isn't a whole number of physical pixels)
+                // accumulates identically across every button's slot, drifting a little further
+                // off the physical pixel grid each time until it crosses a whole device pixel -
+                // at which point WPF's per-element layout rounding snaps that one button's edge
+                // the other way, showing up as an inconsistent (sometimes 1px narrower) gap on a
+                // non-100%-scale monitor.
                 ExtraWidthCount = 0;
-                ButtonWidth = defaultWidth;
+                ButtonWidth = Math.Round(defaultWidth / PixelStep) * PixelStep;
                 SetScrollable(false);
             }
             else

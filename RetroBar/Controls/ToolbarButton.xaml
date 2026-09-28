@@ -1,9 +1,12 @@
 ﻿<UserControl x:Class="RetroBar.Controls.ToolbarButton"
              xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
-             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:utilities="clr-namespace:RetroBar.Utilities">
     <Button ToolTip="{Binding Path=DisplayName}"
-            Style="{DynamicResource ToolbarButton}">
+            Style="{DynamicResource ToolbarButton}"
+            utilities:MonitorOffset.Tag="ToolbarButtonBox">
         <Image Style="{DynamicResource ToolbarIcon}"
-               Name="ToolbarIcon" />
+               Name="ToolbarIcon"
+               utilities:MonitorOffset.Tag="ToolbarIcon" />
     </Button>
 </UserControl>
