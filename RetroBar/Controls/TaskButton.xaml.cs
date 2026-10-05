@@ -32,6 +32,10 @@ namespace RetroBar.Controls
         private TaskButtonStyleConverter StyleConverter = new TaskButtonStyleConverter();
         private ApplicationWindow.WindowState PressedWindowState = ApplicationWindow.WindowState.Inactive;
 
+        /// <summary>Buttons loaded before this moment don't play their slide-in animation (set by a
+        /// tab drag-and-drop, which recreates the dragged tab's button).</summary>
+        public static DateTime SuppressSlideInUntilUtc = DateTime.MinValue;
+
         private DelayedActivationHandler dragHandler;
         private bool _isLoaded;
 
@@ -39,6 +43,47 @@ namespace RetroBar.Controls
         {
             InitializeComponent();
             SetStyle();
+            SetMonitorTags();
+            InitHoverablePreview();
+        }
+
+        private static readonly TaskStateToMonitorTagConverter TagConverter = new TaskStateToMonitorTagConverter();
+
+        // Whether the tab is currently shown with the Active style because its context menu is open.
+        // Updated by ContextMenu_OpenedOrClosed in the same step that re-evaluates the Style, rather
+        // than bound straight to ContextMenu.IsOpen: IsOpen flips a moment before the Opened/Closed
+        // events fire, so a direct binding changed the tags while the old template was still on
+        // screen, leaving the icon and label misaligned for a few frames on open and on close.
+        public static readonly DependencyProperty IsContextMenuActiveProperty = DependencyProperty.Register(
+            nameof(IsContextMenuActive), typeof(bool), typeof(TaskButton), new PropertyMetadata(false));
+
+        public bool IsContextMenuActive
+        {
+            get { return (bool)GetValue(IsContextMenuActiveProperty); }
+            private set { SetValue(IsContextMenuActiveProperty, value); }
+        }
+
+        // The tab shows as Active while its context menu is open (see TaskButtonStyleConverter), so
+        // its per-monitor tags have to follow the menu as well as the window's State - otherwise the
+        // icon and label keep their inactive offsets inside the active template and jump up/left a
+        // pixel whenever the menu opens.
+        private void SetMonitorTags()
+        {
+            var tags = new (FrameworkElement Element, string Tag)[]
+            {
+                (AppButton, "TaskButton"),
+                (TaskIconImage, "TaskIcon"),
+                (TaskOverlayIconImage, "TaskOverlayIcon"),
+                (TaskLabelText, "TaskLabel"),
+            };
+
+            foreach ((FrameworkElement element, string tag) in tags)
+            {
+                var multiBinding = new MultiBinding { Converter = TagConverter, ConverterParameter = tag };
+                multiBinding.Bindings.Add(new Binding("State"));
+                multiBinding.Bindings.Add(new Binding(nameof(IsContextMenuActive)) { Source = this });
+                element.SetBinding(MonitorOffset.TagProperty, multiBinding);
+            }
         }
 
         private void SetStyle()
@@ -101,7 +146,11 @@ namespace RetroBar.Controls
                 Window.PropertyChanged += Window_PropertyChanged;
             }
 
-            if (Settings.Instance.SlideTaskbarButtons && Host?.Host?.Orientation == Orientation.Horizontal)
+            // A button recreated because the user just dragged it somewhere else isn't a new window
+            // appearing - growing it in from zero width would push every tab to its right along with it
+            // (see TaskListDropHandler, which slides the tabs into place instead).
+            if (Settings.Instance.SlideTaskbarButtons && Host?.Host?.Orientation == Orientation.Horizontal
+                && DateTime.UtcNow > SuppressSlideInUntilUtc)
             {
                 Animate();
             }
@@ -328,6 +377,9 @@ namespace RetroBar.Controls
 
         private void ContextMenu_OpenedOrClosed(object sender, RoutedEventArgs e)
         {
+            // Tags and Style together, in one dispatcher turn, so no frame is rendered with the
+            // active template and the inactive offsets (or the reverse).
+            IsContextMenuActive = AppButton.ContextMenu?.IsOpen == true;
             BindingOperations.GetMultiBindingExpression(AppButton, StyleProperty).UpdateTarget();
         }
     }

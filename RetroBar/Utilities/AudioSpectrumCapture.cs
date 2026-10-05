@@ -43,7 +43,9 @@ namespace RetroBar.Utilities
         private double _levelSumSquaresRight;
         private int _levelSampleCount;
 
-        private WasapiLoopbackCapture _capture;
+        // A WasapiLoopbackCapture (a playback device's own output) or a plain WasapiCapture (a
+        // recording device, e.g. a virtual cable/bus), depending on Settings.VuMeterCaptureDevice.
+        private IWaveIn _capture;
         private readonly object _lifecycleLock = new();
 
         public void Start()
@@ -57,7 +59,7 @@ namespace RetroBar.Utilities
 
                 try
                 {
-                    _capture = new WasapiLoopbackCapture(GetDefaultRenderDevice());
+                    _capture = CreateCapture(Settings.Instance.VuMeterCaptureDevice);
                     _capture.DataAvailable += OnDataAvailable;
                     _capture.RecordingStopped += OnRecordingStopped;
                     _capture.StartRecording();
@@ -101,13 +103,39 @@ namespace RetroBar.Utilities
             }
         }
 
-        // WasapiLoopbackCapture's own parameterless constructor already picks the default render
-        // device, but doing it explicitly lets a device-enumeration failure surface here (and be
-        // caught by Start's own try/catch) instead of inside NAudio's constructor.
-        private static MMDevice GetDefaultRenderDevice()
+        private static IWaveIn CreateCapture(string deviceName)
         {
             using var enumerator = new MMDeviceEnumerator();
-            return enumerator.GetDefaultAudioEndpoint(DataFlow.Render, Role.Multimedia);
+
+            if (!string.IsNullOrWhiteSpace(deviceName))
+            {
+                string wanted = deviceName.Trim();
+
+                // Recording devices first (a virtual bus like "Voicemeeter Out B1" is one), then
+                // playback devices via loopback.
+                foreach (MMDevice device in enumerator.EnumerateAudioEndPoints(DataFlow.Capture, DeviceState.Active))
+                {
+                    if (device.FriendlyName.Contains(wanted, StringComparison.OrdinalIgnoreCase))
+                    {
+                        return new WasapiCapture(device);
+                    }
+                }
+
+                foreach (MMDevice device in enumerator.EnumerateAudioEndPoints(DataFlow.Render, DeviceState.Active))
+                {
+                    if (device.FriendlyName.Contains(wanted, StringComparison.OrdinalIgnoreCase))
+                    {
+                        return new WasapiLoopbackCapture(device);
+                    }
+                }
+
+                ShellLogger.Debug($"AudioSpectrumCapture: No active audio device matching '{wanted}', using the default playback device instead.");
+            }
+
+            // WasapiLoopbackCapture's own parameterless constructor already picks the default
+            // render device, but doing it explicitly lets a device-enumeration failure surface
+            // here (and be caught by Start's own try/catch) instead of inside NAudio's constructor.
+            return new WasapiLoopbackCapture(enumerator.GetDefaultAudioEndpoint(DataFlow.Render, Role.Multimedia));
         }
 
         private void OnRecordingStopped(object sender, StoppedEventArgs e)
@@ -121,23 +149,27 @@ namespace RetroBar.Utilities
         private void OnDataAvailable(object sender, WaveInEventArgs e)
         {
             WaveFormat format = _capture?.WaveFormat;
-            if (format == null || format.BitsPerSample != 32 || format.Encoding != WaveFormatEncoding.IeeeFloat)
+            bool isFloat32 = format != null && format.BitsPerSample == 32 && format.Encoding == WaveFormatEncoding.IeeeFloat;
+            bool isPcm16 = format != null && format.BitsPerSample == 16 && format.Encoding == WaveFormatEncoding.Pcm;
+            if (!isFloat32 && !isPcm16)
             {
-                // WasapiLoopbackCapture always uses the render endpoint's own mix format, which is
-                // IEEE float on every system this has been seen on - bail rather than misread
-                // some other encoding's bytes as float samples if that's ever not true.
+                // A loopback capture uses the playback endpoint's own mix format, which is IEEE
+                // float on every system this has been seen on; a recording device (see
+                // Settings.VuMeterCaptureDevice) can be 16-bit PCM. Bail rather than misread any
+                // other encoding's bytes as samples.
                 return;
             }
 
             int channels = format.Channels;
-            int frameSize = 4 * channels; // 4 bytes/sample (32-bit float) per channel
+            int bytesPerSample = isFloat32 ? 4 : 2;
+            int frameSize = bytesPerSample * channels;
             int frameCount = e.BytesRecorded / frameSize;
 
             for (int frame = 0; frame < frameCount; frame++)
             {
                 int frameOffset = frame * frameSize;
-                float left = BitConverter.ToSingle(e.Buffer, frameOffset);
-                float right = channels >= 2 ? BitConverter.ToSingle(e.Buffer, frameOffset + 4) : left;
+                float left = ReadSample(e.Buffer, frameOffset, isFloat32);
+                float right = channels >= 2 ? ReadSample(e.Buffer, frameOffset + bytesPerSample, isFloat32) : left;
 
                 _levelSumSquaresLeft += (double)left * left;
                 _levelSumSquaresRight += (double)right * right;
@@ -145,6 +177,11 @@ namespace RetroBar.Utilities
             }
 
             ProcessLevels();
+        }
+
+        private static float ReadSample(byte[] buffer, int offset, bool isFloat32)
+        {
+            return isFloat32 ? BitConverter.ToSingle(buffer, offset) : BitConverter.ToInt16(buffer, offset) / 32768f;
         }
 
         private void ProcessLevels()

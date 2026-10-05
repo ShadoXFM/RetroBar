@@ -105,6 +105,21 @@ namespace RetroBar.Utilities
 
             element.SetValue(IsAttachedProperty, true);
 
+            if (element is System.Windows.Controls.Image)
+            {
+                // An Image's pixel-snapped transform depends on its laid-out size and position,
+                // which don't exist yet when Apply first runs (an icon's source usually arrives
+                // later), so re-run Apply once its size is known / changes. Deliberately not
+                // LayoutUpdated: re-checking on every layout pass of a tagged Image kept the quick
+                // launch icons from ever loading.
+                SizeChangedEventHandler sizeHandler = (sender, args) => Apply(element);
+                element.SizeChanged += sizeHandler;
+                element.Unloaded += (sender, args) =>
+                {
+                    element.SizeChanged -= sizeHandler;
+                };
+            }
+
             // Re-apply whenever the monitor-adjustments.json file changes on disk. Changed
             // fires on a background (file-watcher) thread, so this always has to hop back to
             // the element's own dispatcher before touching it.
@@ -140,26 +155,9 @@ namespace RetroBar.Utilities
             string deviceName = FindDeviceName(element);
             MonitorOffsetValue offset = MonitorAdjustments.Get(deviceName, tag);
 
-            bool hasScale = offset.Scale.HasValue && offset.Scale.Value != 1;
-
-            if (offset.X != 0 || offset.Y != 0 || hasScale)
+            if (element is not System.Windows.Controls.Image || !TryApplySnappedImageTransform(element, offset))
             {
-                var group = new TransformGroup();
-
-                if (hasScale)
-                {
-                    // Scale from the element's own center rather than its top-left corner, so a
-                    // size nudge doesn't also shove the element sideways.
-                    element.RenderTransformOrigin = new Point(0.5, 0.5);
-                    group.Children.Add(new ScaleTransform(offset.Scale.Value, offset.Scale.Value));
-                }
-
-                group.Children.Add(new TranslateTransform(offset.X, offset.Y));
-                element.RenderTransform = group;
-            }
-            else
-            {
-                element.RenderTransform = null;
+                ApplyPlainTransform(element, offset);
             }
 
             // Width/Height: an explicit override behaves exactly like setting them in XAML. Only
@@ -229,11 +227,147 @@ namespace RetroBar.Utilities
             }
         }
 
+        private static void ApplyPlainTransform(FrameworkElement element, MonitorOffsetValue offset)
+        {
+            bool hasScale = offset.Scale.HasValue && offset.Scale.Value != 1;
+
+            if (offset.X != 0 || offset.Y != 0 || hasScale)
+            {
+                var group = new TransformGroup();
+
+                if (hasScale)
+                {
+                    // Scale from the element's own center rather than its top-left corner, so a
+                    // size nudge doesn't also shove the element sideways.
+                    element.RenderTransformOrigin = new Point(0.5, 0.5);
+                    group.Children.Add(new ScaleTransform(offset.Scale.Value, offset.Scale.Value));
+                }
+
+                group.Children.Add(new TranslateTransform(offset.X, offset.Y));
+                element.RenderTransform = group;
+            }
+            else
+            {
+                element.RenderTransform = null;
+            }
+        }
+
+        private static readonly DependencyProperty SnapKeyProperty = DependencyProperty.RegisterAttached(
+            "SnapKey", typeof(string), typeof(MonitorOffset), new PropertyMetadata(null));
+
+        private static string ComputeSnapKey(FrameworkElement element, out Point layoutPositionPx, out Size layoutSizePx)
+        {
+            layoutPositionPx = default;
+            layoutSizePx = default;
+
+            Window root = Window.GetWindow(element);
+            if (root == null || element.ActualWidth <= 0 || element.ActualHeight <= 0 ||
+                VisualTreeHelper.GetParent(element) is not Visual parent)
+            {
+                return null;
+            }
+
+            try
+            {
+                // GetOffset is the element's layout position inside its parent, i.e. without its own
+                // RenderTransform (which is what this class is about to set), so reading it never feeds
+                // back into the value being computed. The parent's transform to the window does include
+                // any transform an ancestor carries (e.g. TrayBox's own Y nudge), which does move pixels.
+                Vector offsetInParent = VisualTreeHelper.GetOffset(element);
+                Point layoutPosition = parent.TransformToAncestor(root).Transform(new Point(offsetInParent.X, offsetInParent.Y));
+                DpiScale dpi = VisualTreeHelper.GetDpi(element);
+                layoutPositionPx = new Point(layoutPosition.X * dpi.DpiScaleX, layoutPosition.Y * dpi.DpiScaleY);
+                layoutSizePx = new Size(element.ActualWidth * dpi.DpiScaleX, element.ActualHeight * dpi.DpiScaleY);
+            }
+            catch (InvalidOperationException)
+            {
+                return null;
+            }
+
+            if (!double.IsFinite(layoutPositionPx.X) || !double.IsFinite(layoutPositionPx.Y) ||
+                !double.IsFinite(layoutSizePx.Width) || !double.IsFinite(layoutSizePx.Height))
+            {
+                return null;
+            }
+
+            return string.Create(CultureInfo.InvariantCulture,
+                $"{layoutPositionPx.X:F3},{layoutPositionPx.Y:F3},{layoutSizePx.Width:F3},{layoutSizePx.Height:F3}");
+        }
+
+        /// <summary>
+        /// Position/scale for an Image, with its drawn edges rounded onto whole device pixels.
+        ///
+        /// Giving an element any RenderTransform switches off WPF's own pixel snapping for it, so a
+        /// bitmap drawn through a plain scale/translate lands wherever the math puts it - e.g. a 20px
+        /// icon at Scale 0.85 is 17px wide and centered, so its left edge sits half a pixel off the
+        /// grid, and merely nudging X/Y leaves it wherever its (fractional) layout slot was. Every edge
+        /// pixel then blends with its neighbor ("blurry") and it comes out differently on each
+        /// monitor DPI. Here the scaled size is rounded to a whole number of device pixels and the
+        /// translation is adjusted by the sub-pixel amount that puts the image's top-left corner
+        /// exactly on a pixel boundary, so the bitmap is resampled once, cleanly, into an aligned box.
+        /// Layout is untouched, exactly as before - only how the image is painted.
+        /// </summary>
+        private static bool TryApplySnappedImageTransform(FrameworkElement element, MonitorOffsetValue offset)
+        {
+            bool hasAnyAdjustment = offset.X != 0 || offset.Y != 0 || offset.Scale.HasValue || offset.Width.HasValue || offset.Height.HasValue;
+            if (!hasAnyAdjustment)
+            {
+                element.RenderTransform = null;
+                element.SetValue(SnapKeyProperty, null);
+                return true;
+            }
+
+            string key = ComputeSnapKey(element, out Point position, out Size size);
+            if (key == null)
+            {
+                // Not laid out / not in a window yet: the SizeChanged hook in Attach
+                // re-run Apply once it is, so just use the plain transform for now.
+                return false;
+            }
+
+            DpiScale dpi = VisualTreeHelper.GetDpi(element);
+            double scale = offset.Scale ?? 1;
+
+            double scaledWidth = scale == 1 ? size.Width : Math.Max(1, Math.Round(size.Width * scale));
+            double scaledHeight = scale == 1 ? size.Height : Math.Max(1, Math.Round(size.Height * scale));
+
+            // Left/top edge of the scaled image before snapping (scaling is about the element's center).
+            double baseLeft = position.X + (size.Width - scaledWidth) / 2;
+            double baseTop = position.Y + (size.Height - scaledHeight) / 2;
+            double translateX = (Math.Round(baseLeft + offset.X * dpi.DpiScaleX) - baseLeft) / dpi.DpiScaleX;
+            double translateY = (Math.Round(baseTop + offset.Y * dpi.DpiScaleY) - baseTop) / dpi.DpiScaleY;
+
+            var group = new TransformGroup();
+            if (scaledWidth != size.Width || scaledHeight != size.Height)
+            {
+                element.RenderTransformOrigin = new Point(0.5, 0.5);
+                group.Children.Add(new ScaleTransform(scaledWidth / size.Width, scaledHeight / size.Height));
+            }
+
+            group.Children.Add(new TranslateTransform(translateX, translateY));
+            element.RenderTransform = group;
+            element.SetValue(SnapKeyProperty, key);
+            return true;
+        }
+
         private static void ApplySize(FrameworkElement element, double? value, DependencyProperty sizeProperty, DependencyProperty appliedFlagProperty)
         {
             if (value.HasValue)
             {
-                element.SetValue(sizeProperty, value.Value);
+                // Whole device pixels, for buttons and icons: a size that isn't (e.g. Width 22 on a
+                // 125% monitor = 27.5px) leaves each one a fractional width, so a row of them
+                // alternates between two whole-pixel widths and everything drawn to their bounds
+                // (bevel lines, the hover tint) comes out 1px different from one to the next.
+                // Other elements (a hand-tuned Grid height, say) keep exactly the value written.
+                double size = value.Value;
+                DpiScale dpi = VisualTreeHelper.GetDpi(element);
+                double pixelsPerDip = sizeProperty == FrameworkElement.WidthProperty ? dpi.DpiScaleX : dpi.DpiScaleY;
+                if (pixelsPerDip > 0 && size > 0 && element is System.Windows.Controls.Primitives.ButtonBase or System.Windows.Controls.Image)
+                {
+                    size = Math.Max(1, Math.Round(size * pixelsPerDip, MidpointRounding.AwayFromZero)) / pixelsPerDip;
+                }
+
+                element.SetValue(sizeProperty, size);
                 element.SetValue(appliedFlagProperty, true);
             }
             else if ((bool)element.GetValue(appliedFlagProperty))
@@ -381,7 +515,22 @@ namespace RetroBar.Utilities
                 return null;
             }
 
-            return (Window.GetWindow(visual) as Taskbar)?.Screen.DeviceName;
+            if (Window.GetWindow(visual) is Taskbar taskbar)
+            {
+                return taskbar.Screen.DeviceName;
+            }
+
+            // Inside a tooltip (e.g. a tab's thumbnail preview), which lives in its own popup window
+            // rather than the taskbar's: use the taskbar its tooltip belongs to.
+            for (DependencyObject current = visual; current != null; current = VisualTreeHelper.GetParent(current))
+            {
+                if (current is System.Windows.Controls.ToolTip { PlacementTarget: Visual target })
+                {
+                    return (Window.GetWindow(target) as Taskbar)?.Screen.DeviceName;
+                }
+            }
+
+            return null;
         }
     }
 }

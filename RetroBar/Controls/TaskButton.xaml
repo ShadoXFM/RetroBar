@@ -14,6 +14,12 @@
         <converters:TaskLabelConverter x:Key="taskLabelConverter" />
         <converters:TaskStateToMonitorTagConverter x:Key="taskStateToMonitorTagConverter" />
     </UserControl.Resources>
+    <!-- MonitorOffset.Tag is TaskButton normally, TaskButtonActive while State==Active (or the
+         context menu is open) - same conditional-tag pattern as TaskIcon/TaskLabel below, so the
+         whole tab's own X/Y/Width/Height/Margin/etc. become per-monitor tunable too, not just
+         its icon/label content. This tag and the icon/label ones depend on two inputs (State and
+         the context menu), which takes a MultiBinding: set in TaskButton.xaml.cs (SetMonitorTags),
+         since an element with child content can't take a property-element tag in XAML. -->
     <Button Name="AppButton"
             Click="AppButton_OnClick"
             MouseUp="AppButton_OnMouseUp"
@@ -30,23 +36,23 @@
             </Grid.ColumnDefinitions>
             <!-- MonitorOffset.Tag is TaskIcon normally, TaskIconActive while State==Active - see
                  TaskStateToMonitorTagConverter for why the active state needs its own tag. -->
-            <Image Source="{Binding Path=Icon, Mode=OneWay}"
+            <Image x:Name="TaskIconImage"
+                   Source="{Binding Path=Icon, Mode=OneWay}"
                    Grid.Column="0"
-                   Style="{DynamicResource TaskIcon}"
-                   utilities:MonitorOffset.Tag="{Binding Path=State, Converter={StaticResource taskStateToMonitorTagConverter}, ConverterParameter=TaskIcon}" />
+                   Style="{DynamicResource TaskIcon}" />
             <!-- MonitorOffset.Tag is TaskOverlayIcon normally, TaskOverlayIconActive while
                  State==Active - see TaskStateToMonitorTagConverter for why the active state
                  needs its own tag. -->
-            <Image Source="{Binding Path=OverlayIcon, Mode=OneWay}"
+            <Image x:Name="TaskOverlayIconImage"
+                   Source="{Binding Path=OverlayIcon, Mode=OneWay}"
                    Grid.Column="0"
                    Style="{DynamicResource TaskOverlayIcon}"
-                   Visibility="{Binding Source={x:Static utilities:Settings.Instance}, Path=ShowTaskBadges, UpdateSourceTrigger=PropertyChanged, Converter={StaticResource boolToVisibilityConverter}}"
-                   utilities:MonitorOffset.Tag="{Binding Path=State, Converter={StaticResource taskStateToMonitorTagConverter}, ConverterParameter=TaskOverlayIcon}" />
+                   Visibility="{Binding Source={x:Static utilities:Settings.Instance}, Path=ShowTaskBadges, UpdateSourceTrigger=PropertyChanged, Converter={StaticResource boolToVisibilityConverter}}" />
             <!-- MonitorOffset.Tag is TaskLabel normally, TaskLabelActive while State==Active -
                  see TaskStateToMonitorTagConverter for why the active state needs its own tag. -->
-            <TextBlock Grid.Column="1"
-                       Style="{DynamicResource TaskLabel}"
-                       utilities:MonitorOffset.Tag="{Binding Path=State, Converter={StaticResource taskStateToMonitorTagConverter}, ConverterParameter=TaskLabel}">
+            <TextBlock x:Name="TaskLabelText"
+                       Grid.Column="1"
+                       Style="{DynamicResource TaskLabel}">
                 <TextBlock.Text>
                     <MultiBinding Converter="{StaticResource taskLabelConverter}">
                         <Binding Path="Title" />
@@ -155,10 +161,42 @@
                                     <Setter Property="Template">
                                         <Setter.Value>
                                             <ControlTemplate TargetType="ToolTip">
-                                                <ContentControl Style="{DynamicResource TaskButtonThumbnail}">
-                                                    <controls:TaskThumbnail SourceWindowHandle="{Binding Path=Handle}"
-                                                                            Title="{Binding Path=Title}"/>
-                                                </ContentControl>
+                                                <!-- The close button's visibility/hover and the preview's
+                                                     click-to-activate are driven from TaskButton.Preview.cs
+                                                     (WPF never routes mouse input to this window). The title row exists
+                                                     for the close button: the thumbnail itself is drawn by
+                                                     DWM on top of the window, so anything WPF put over it
+                                                     would be hidden. -->
+                                                <Grid x:Name="PreviewRoot"
+                                                      Background="Transparent">
+                                                    <ContentControl Style="{DynamicResource TaskButtonThumbnail}">
+                                                        <StackPanel>
+                                                            <!-- Exactly as wide as the thumbnail below, so a long title is trimmed
+                                                                 instead of widening the whole preview. -->
+                                                            <!-- MonitorOffset.Tag: PreviewTitleRow - its Margin (the gap between the title/close
+                                                                 button row and the thumbnail) is tunable per monitor in monitor-adjustments.json. -->
+                                                            <Grid Margin="0,0,0,3"
+                                                                  utilities:MonitorOffset.Tag="PreviewTitleRow"
+                                                                  Width="{Binding ElementName=PreviewThumbnail, Path=Width}">
+                                                                <TextBlock Text="{Binding Path=Title}"
+                                                                           Foreground="{DynamicResource ButtonForeground}"
+                                                                           TextTrimming="CharacterEllipsis"
+                                                                           VerticalAlignment="Center"
+                                                                           Margin="1,0,22,0" />
+                                                                <Button x:Name="PreviewCloseButton"
+                                                                        Style="{DynamicResource TaskPreviewCloseButton}"
+                                                                        HorizontalAlignment="Right"
+                                                                        VerticalAlignment="Center" />
+                                                            </Grid>
+                                                            <!-- BoxWidth: the thumbnail area is as wide as the tab itself, so every
+                                                                 preview is the same size rather than shaped like its window. -->
+                                                            <controls:TaskThumbnail x:Name="PreviewThumbnail"
+                                                                                    SourceWindowHandle="{Binding Path=Handle}"
+                                                                                    Title="{Binding Path=Title}"
+                                                                                    BoxWidth="{Binding Path=PlacementTarget.ActualWidth, RelativeSource={RelativeSource AncestorType=ToolTip}}"/>
+                                                        </StackPanel>
+                                                    </ContentControl>
+                                                </Grid>
                                             </ControlTemplate>
                                         </Setter.Value>
                                     </Setter>

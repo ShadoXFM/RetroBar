@@ -50,6 +50,13 @@ namespace RetroBar.Utilities
                 }
             }
 
+            // Rearranging the icons: work out and store the new order directly (see Toolbar.MoveItem).
+            if (dropInfo.Data is ManagedShell.ShellFolders.ShellFile draggedFile)
+            {
+                _toolbar.MoveItem(draggedFile, dropInfo.InsertIndex);
+                return;
+            }
+
             // Save before the drop in order to catch any items not yet saved
             _toolbar.SaveItemOrder();
             DropInFlight = dropInfo;

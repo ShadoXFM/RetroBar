@@ -156,7 +156,7 @@
     <s:String x:Key="show_desktop_tip">Afficher le bureau</s:String>
     <s:String x:Key="show_desktop_95">_Bureau</s:String>
     <s:String x:Key="show_desktop">_Afficher le bureau</s:String>
-    <s:String x:Key="peek_at_desktop">_Coup d'oeil a la bureau</s:String>
+    <s:String x:Key="peek_at_desktop">_Coup d'oeil au bureau</s:String>
 
     <s:String x:Key="restore">_Restaurer</s:String>
     <s:String x:Key="move">Dép_lacer</s:String>

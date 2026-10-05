@@ -3,9 +3,10 @@ using ManagedShell.Interop;
 using ManagedShell.WindowsTasks;
 using RetroBar.Utilities;
 using System;
-using System.Diagnostics;
 using System.Windows;
 using System.Windows.Controls;
+using System.Windows.Interop;
+using System.Windows.Threading;
 
 namespace RetroBar.Controls
 {
@@ -15,10 +16,26 @@ namespace RetroBar.Controls
     public partial class ShowDesktopButton : UserControl
     {
         private const int TOGGLE_DESKTOP = 407;
-        private IntPtr taskbarHandle = Process.GetCurrentProcess().MainWindowHandle;
+        // Process.GetCurrentProcess().MainWindowHandle (the original source of this value) is a
+        // legacy WinForms-era concept that doesn't reliably track a specific WPF Window,
+        // especially here where RetroBar can have several Taskbar windows (one per monitor) and
+        // none of them is the OS's own notion of "the" main window - it was observed to resolve
+        // to IntPtr.Zero here. Set from SetupButton instead, once this control's own Window is
+        // guaranteed to exist and be interop-realized (have a real HWND).
+        private IntPtr taskbarHandle;
         private bool isWindows81OrBetter = EnvironmentHelper.IsWindows81OrBetter;
         private bool isLoaded;
         private DelayedActivationHandler dragHandler;
+
+        // Real Windows doesn't peek the instant the cursor touches the corner - a short hover
+        // delay (SystemParameters.MouseHoverTime, the same value Windows already uses for its own
+        // hover-triggered UI like tooltips) avoids it firing on a mouse just passing through.
+        // DwmActivateLivePreview's own fade transition is rendered by DWM itself once called -
+        // there's no parameter to control it from here, but a still cursor (rather than an
+        // instant trigger-and-often-immediately-cancel on a passing mouse) gives it room to
+        // actually play instead of being interrupted by a MouseLeave a moment later.
+        private DispatcherTimer peekHoverTimer;
+        private bool isPeeking;
 
         public static DependencyProperty TasksServiceProperty = DependencyProperty.Register(nameof(TasksService), typeof(TasksService), typeof(ShowDesktopButton), new PropertyMetadata(TasksChangedCallback));
 
@@ -69,10 +86,6 @@ namespace RetroBar.Controls
         private void ContextMenu_Opened(object sender, RoutedEventArgs e)
         {
             PeekAtDesktopItem.IsEnabled = true;
-            if (!NativeMethods.DwmIsCompositionEnabled())
-            {
-                PeekAtDesktopItem.IsEnabled = false;
-            }
         }
 
         private void ToggleDesktop()
@@ -81,31 +94,55 @@ namespace RetroBar.Controls
                 (int)NativeMethods.WM.COMMAND, (IntPtr)TOGGLE_DESKTOP, IntPtr.Zero);
         }
 
+        // DwmIsCompositionEnabled() used to gate this - historically meaningful for detecting a
+        // Remote Desktop session (where live preview genuinely can't render), but composition has
+        // been permanently on for every other case since Windows 8, and it was observed to
+        // (incorrectly) report false on a plain local Windows 11 session too. Since
+        // DwmActivateLivePreview itself is declared PreserveSig=true (it returns its raw HRESULT
+        // as a plain uint that this code already ignores, rather than throwing on failure), there
+        // was nothing that check was actually protecting against - safe to just always attempt
+        // it.
         private void PeekAtDesktop(uint shouldPeek)
         {
-            if (Settings.Instance.PeekAtDesktop && NativeMethods.DwmIsCompositionEnabled())
+            if (!Settings.Instance.PeekAtDesktop)
             {
-                if (isWindows81OrBetter)
-                {
-                    NativeMethods.DwmActivateLivePreview(shouldPeek, taskbarHandle,
-                        IntPtr.Zero, NativeMethods.AeroPeekType.Desktop, IntPtr.Zero);
-                }
-                else
-                {
-                    NativeMethods.DwmActivateLivePreview(shouldPeek, taskbarHandle,
-                        IntPtr.Zero, NativeMethods.AeroPeekType.Desktop);
-                }
+                return;
+            }
+
+            isPeeking = shouldPeek != 0;
+
+            if (isWindows81OrBetter)
+            {
+                NativeMethods.DwmActivateLivePreview(shouldPeek, taskbarHandle,
+                    IntPtr.Zero, NativeMethods.AeroPeekType.Desktop, IntPtr.Zero);
+            }
+            else
+            {
+                NativeMethods.DwmActivateLivePreview(shouldPeek, taskbarHandle,
+                    IntPtr.Zero, NativeMethods.AeroPeekType.Desktop);
             }
         }
 
         private void ShowDesktop_OnMouseEnter(object sender, RoutedEventArgs e)
         {
-            PeekAtDesktop(1);
+            peekHoverTimer.Stop();
+            peekHoverTimer.Start();
         }
 
         private void ShowDesktop_OnMouseLeave(object sender, RoutedEventArgs e)
         {
-            PeekAtDesktop(0);
+            peekHoverTimer.Stop();
+
+            if (isPeeking)
+            {
+                PeekAtDesktop(0);
+            }
+        }
+
+        private void PeekHoverTimer_Tick(object sender, EventArgs e)
+        {
+            peekHoverTimer.Stop();
+            PeekAtDesktop(1);
         }
 
         private void ShowDesktop_OnClick(object sender, RoutedEventArgs e)
@@ -132,11 +169,41 @@ namespace RetroBar.Controls
             }
         }
 
+        // The taskbar's own corner-hotspot width when only PeekAtDesktop (not ShowDesktopButton)
+        // is on. An Adorner-hosted hit-test overlay was tried here to get a true zero-width
+        // footprint, but MouseEnter/MouseLeave on RenderTransform'd Adorner content proved
+        // unreliable - a missed MouseLeave left DWM's live preview (DwmActivateLivePreview(1,
+        // ...)) stuck active, hiding every window behind the desktop. Plain, untransformed
+        // hit-testing directly on ShowDesktop itself doesn't have that failure mode.
+        private const double CompactHotspotWidth = 1;
+
+        // Whether the full visible button (theme chrome, icon, tooltip, context menu - all still
+        // themeable per-Style, untouched here) is wanted, or just a corner hotspot to peek from.
+        // Opacity, not Visibility - Visibility="Collapsed"/"Hidden" would also drop it out of hit
+        // testing, which is the one thing the hotspot mode still needs MouseEnter/MouseLeave for.
+        private void UpdateCompactMode()
+        {
+            if (Settings.Instance.ShowDesktopButton)
+            {
+                ShowDesktop.ClearValue(WidthProperty);
+                ShowDesktop.ClearValue(OpacityProperty);
+            }
+            else
+            {
+                ShowDesktop.Width = CompactHotspotWidth;
+                ShowDesktop.Opacity = 0;
+            }
+        }
+
         private void Settings_PropertyChanged(object sender, System.ComponentModel.PropertyChangedEventArgs e)
         {
             if (e.PropertyName == nameof(Settings.TaskbarScale))
             {
                 SetIconSize();
+            }
+            else if (e.PropertyName == nameof(Settings.ShowDesktopButton))
+            {
+                UpdateCompactMode();
             }
         }
 
@@ -144,8 +211,13 @@ namespace RetroBar.Controls
         {
             if (!isLoaded && TasksService != null)
             {
+                taskbarHandle = new WindowInteropHelper(Window.GetWindow(this)).Handle;
                 SetIconSize();
+                UpdateCompactMode();
                 TasksService.WindowActivated += HandleWindowActivated;
+
+                peekHoverTimer = new DispatcherTimer { Interval = SystemParameters.MouseHoverTime };
+                peekHoverTimer.Tick += PeekHoverTimer_Tick;
 
                 Settings.Instance.PropertyChanged += Settings_PropertyChanged;
 
@@ -174,6 +246,11 @@ namespace RetroBar.Controls
                 TasksService.WindowActivated -= HandleWindowActivated;
                 Settings.Instance.PropertyChanged -= Settings_PropertyChanged;
                 dragHandler?.Dispose();
+                peekHoverTimer?.Stop();
+                if (peekHoverTimer != null)
+                {
+                    peekHoverTimer.Tick -= PeekHoverTimer_Tick;
+                }
                 isLoaded = false;
             }
         }

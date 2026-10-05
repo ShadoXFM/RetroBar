@@ -40,6 +40,8 @@ namespace RetroBar.Controls
         private Rectangle _albumArtVisual;
         private ImageBrush _albumArtBrush;
 
+        private double _vuMeterMaxWidth;
+
         private UIElementAdorner _previousButtonAdorner;
         private UIElementAdorner _playPauseButtonAdorner;
         private UIElementAdorner _nextButtonAdorner;
@@ -168,15 +170,30 @@ namespace RetroBar.Controls
             if (_sessionManager != null)
             {
                 _sessionManager.MediaChanged -= SessionManager_MediaChanged;
-                _sessionManager.Dispose();
+                MediaSessionManager.Release(_sessionManager);
                 _sessionManager = null;
             }
 
             try
             {
-                _sessionManager = new MediaSessionManager();
+                // The manager is shared with every other monitor's media player (see
+                // MediaSessionManager.AcquireAsync), so they all read the same state.
+                MediaSessionManager manager = await MediaSessionManager.AcquireAsync();
+
+                if (!_isLoaded || !Settings.Instance.ShowMediaPlayer)
+                {
+                    // Unloaded / turned off while the manager was starting.
+                    MediaSessionManager.Release(manager);
+                    return;
+                }
+
+                _sessionManager = manager;
                 _sessionManager.MediaChanged += SessionManager_MediaChanged;
-                await _sessionManager.InitializeAsync();
+
+                // The shared manager may already know the current track and play state (another
+                // monitor's player started it first) and won't raise a change for it - show it now
+                // rather than waiting for the next one.
+                UpdateFromSession();
             }
             catch (Exception ex)
             {
@@ -191,7 +208,7 @@ namespace RetroBar.Controls
             if (_sessionManager != null)
             {
                 _sessionManager.MediaChanged -= SessionManager_MediaChanged;
-                _sessionManager.Dispose();
+                MediaSessionManager.Release(_sessionManager);
                 _sessionManager = null;
             }
 
@@ -236,6 +253,22 @@ namespace RetroBar.Controls
             if (e.PropertyName == nameof(Settings.ShowMediaPlayerAlbumArt))
             {
                 UpdateAlbumArt();
+                return;
+            }
+
+            if (e.PropertyName == nameof(Settings.VuMeterCaptureDevice))
+            {
+                // Settings can change on a non-UI thread; only restart capture if it was running
+                // (i.e. there's an active session) - otherwise the next session start picks the
+                // new device up on its own.
+                Dispatcher.BeginInvoke(new Action(() =>
+                {
+                    if (_visualizerCapture != null)
+                    {
+                        StopVisualizer();
+                        StartVisualizer();
+                    }
+                }));
                 return;
             }
 
@@ -323,6 +356,9 @@ namespace RetroBar.Controls
             // covers becoming visible again with a track we were already showing.
             Dispatcher.BeginInvoke(new Action(UpdateMarquee), System.Windows.Threading.DispatcherPriority.Loaded);
 
+            // Same reasoning - needs post-layout ActualWidth/TransformToVisual reads.
+            Dispatcher.BeginInvoke(new Action(UpdateVuMeterOffset), System.Windows.Threading.DispatcherPriority.Loaded);
+
             ToolTip = trackText;
 
             Geometry playPauseGlyph = GetGlyph(_sessionManager.PlaybackState == MediaPlaybackState.Playing
@@ -383,6 +419,11 @@ namespace RetroBar.Controls
                 // has run at least once after the Visibility change above, so defer.
                 Dispatcher.BeginInvoke(new Action(UpdateAlbumArtAdorner), System.Windows.Threading.DispatcherPriority.Loaded);
             }
+
+            // Album art appearing/disappearing changes how much space TrackTextHost is pushed
+            // over by, which is exactly what the VU meter's own left edge is measured from - see
+            // UpdateVuMeterOffset. Deferred for the same reason as UpdateAlbumArtAdorner above.
+            Dispatcher.BeginInvoke(new Action(UpdateVuMeterOffset), System.Windows.Threading.DispatcherPriority.Loaded);
         }
 
         /// <summary>
@@ -502,6 +543,61 @@ namespace RetroBar.Controls
         }
 
         /// <summary>
+        /// Refreshes VuMeterContainer's own Width and left-shift RenderTransform. It's plain
+        /// (non-Adorner) content, declared before the Border/TrackTextCanvas in MediaPlayer.xaml
+        /// so it paints behind the track text, and behind the album art's own Adorner too
+        /// (Adorners always paint above ordinary content, regardless of tree position - see
+        /// UpdateAlbumArtAdorner above for that technique). It only needs a RenderTransform to
+        /// reach past TrackTextHost's own left edge, now that TrackTextHost itself is no longer
+        /// clipped (see MediaPlayerTrackTextHostStyle) - unlike the album art, it never needs to
+        /// escape the Tray GroupBox's own clip, since it never grows further left than
+        /// MediaPlayerRoot's own edge.
+        /// </summary>
+        private void UpdateVuMeterOffset()
+        {
+            // Reads the same per-monitor "VuMeterContainer" tag this element is itself tagged
+            // with in XAML - not applied automatically via MonitorOffset.Apply because X/Y here
+            // mean an ADDITIONAL nudge on top of the left-shift computed below, and Width/Height
+            // need the "or fall back to the natural layout-derived value" logic MonitorOffset.
+            // Apply doesn't have, the same way UpdateAlbumArtAdorner reads "MediaAlbumArt" for
+            // _albumArtContainer instead of relying on AlbumArtImage's own automatic tag.
+            string deviceName = (Window.GetWindow(this) as Taskbar)?.Screen.DeviceName;
+            MonitorOffsetValue offset = MonitorAdjustments.Get(deviceName, "VuMeterContainer");
+
+            // TrackTextHost's own top-left relative to MediaPlayerRoot - already accounts for
+            // the album art's reserved width (zero when collapsed, its full box+margin when
+            // shown) and any per-monitor MonitorAdjustments margin/offset on either element,
+            // without duplicating that math here. VuMeterContainer's own untransformed position
+            // already starts here too (it's TrackTextHost's own first child) - shifting it left
+            // by exactly this amount moves its start back to the tray box's own left edge.
+            Point trackTextHostOrigin = TrackTextHost.TransformToVisual(MediaPlayerRoot).Transform(new Point(0, 0));
+            double leftOffset = Math.Max(0, trackTextHostOrigin.X);
+
+            // TrackText's own ActualWidth capped by TrackTextHost's own MaxWidth (its Style's
+            // fixed 150, not its dynamic ActualWidth) - the actual glyph width for short text,
+            // or the marquee's own visible-width ceiling for a long/scrolling title. Deliberately
+            // NOT TrackTextHost.ActualWidth: VuMeterContainer is now a plain sibling INSIDE
+            // TrackTextHost's own Grid (see MediaPlayer.xaml), so before UpdateMarquee has
+            // explicitly pinned TrackTextHost's own Width for the current track, Grid falls back
+            // to auto-sizing itself from the MAX of its children's own DesiredSize - which would
+            // include VuMeterContainer's own (possibly still-stale, from the previous track)
+            // large Width, inflating TrackTextHost.ActualWidth right back into whatever the bar
+            // last reached, in a feedback loop that never actually shrinks down to the real text.
+            // MaxWidth is a fixed Style constant, immune to that. Measured from the tray box's
+            // own left edge instead of from TrackTextHost's, so a bar can grow past
+            // TrackTextHost's own left edge and behind the album art before it starts covering
+            // any of the actual text. offset.Width, when set, overrides this outright, same as
+            // every other MonitorOffset-tagged Width.
+            double textWidth = Math.Min(TrackText.ActualWidth, TrackTextHost.MaxWidth);
+            double naturalWidth = leftOffset + Math.Max(0, textWidth);
+            _vuMeterMaxWidth = offset.Width ?? naturalWidth;
+
+            VuMeterContainer.Width = _vuMeterMaxWidth;
+            VuMeterContainer.Height = offset.Height ?? double.NaN;
+            VuMeterContainer.RenderTransform = new TranslateTransform(offset.X - leftOffset, offset.Y);
+        }
+
+        /// <summary>
         /// Builds the three transport buttons in code (rather than XAML) and hosts each in its
         /// own Adorner anchored to a same-styled, always-Hidden spacer left behind in the
         /// StackPanel (see MediaPlayer.xaml) to reserve their layout slot. Needed for the same
@@ -598,15 +694,11 @@ namespace RetroBar.Controls
                     return;
                 }
 
-                // TrackText's own ActualWidth (its natural, un-clipped text length), not
-                // TrackTextHost's - the host can reserve more width than a short title/artist
-                // string actually needs, which was letting the bars reach past the end of the text
-                // at full volume. Still capped by the host's own width too, for a long marquee-
-                // scrolling title, where TrackText's natural width can run well past what's
-                // actually visible.
-                double textWidth = Math.Min(TrackText.ActualWidth, TrackTextHost.ActualWidth);
-                VuMeterFillLeft.Width = Math.Clamp(left, 0, 1) * textWidth;
-                VuMeterFillRight.Width = Math.Clamp(right, 0, 1) * textWidth;
+                // _vuMeterMaxWidth (kept up to date by UpdateVuMeterOffset) already reproduces
+                // the old TrackText/TrackTextHost cap, just measured from the tray box's own left
+                // edge instead of from TrackTextHost's - see that method's own remarks.
+                VuMeterFillLeft.Width = Math.Clamp(left, 0, 1) * _vuMeterMaxWidth;
+                VuMeterFillRight.Width = Math.Clamp(right, 0, 1) * _vuMeterMaxWidth;
             }));
         }
 
@@ -733,6 +825,7 @@ namespace RetroBar.Controls
             if (e.WidthChanged)
             {
                 Dispatcher.BeginInvoke(new Action(UpdateMarquee), System.Windows.Threading.DispatcherPriority.Loaded);
+                Dispatcher.BeginInvoke(new Action(UpdateVuMeterOffset), System.Windows.Threading.DispatcherPriority.Loaded);
             }
         }
 
@@ -1079,6 +1172,7 @@ namespace RetroBar.Controls
         {
             // Fires on a background (file-watcher) thread.
             Dispatcher.BeginInvoke(new Action(UpdateAlbumArtAdorner));
+            Dispatcher.BeginInvoke(new Action(UpdateVuMeterOffset));
         }
     }
 }

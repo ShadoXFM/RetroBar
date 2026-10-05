@@ -1,6 +1,7 @@
 using System;
 using System.Windows;
 using System.Windows.Controls;
+using System.Windows.Controls.Primitives;
 using System.Windows.Media;
 
 namespace RetroBar.Utilities
@@ -32,7 +33,7 @@ namespace RetroBar.Utilities
 
         private static void OnEnabledChanged(DependencyObject d, DependencyPropertyChangedEventArgs e)
         {
-            if (d is not Button button || e.NewValue is not true)
+            if (d is not Control button || e.NewValue is not true)
             {
                 return;
             }
@@ -51,10 +52,10 @@ namespace RetroBar.Utilities
 
         private static void Button_Loaded(object sender, RoutedEventArgs e)
         {
-            Apply((Button)sender);
+            Apply((Control)sender);
         }
 
-        private static void Apply(Button button)
+        private static void Apply(Control button)
         {
             button.ApplyTemplate();
 
@@ -83,6 +84,41 @@ namespace RetroBar.Utilities
             {
                 leftTopBorder.BorderThickness = SnapThickness(leftTopBorder.BorderThickness);
                 leftTopBorder.Padding = SnapThickness(leftTopBorder.Padding);
+            }
+
+            // The thumbnail preview's frame (TaskButtonThumbnail): four nested bevel borders, each with
+            // whichever of Margin / Padding / BorderThickness it uses.
+            foreach (string name in new[] { "SnapBorder1", "SnapBorder2", "SnapBorder3", "SnapBorder4" })
+            {
+                if (button.Template?.FindName(name, button) is Border frameBorder)
+                {
+                    frameBorder.Margin = SnapThickness(frameBorder.Margin);
+                    frameBorder.Padding = SnapThickness(frameBorder.Padding);
+                    frameBorder.BorderThickness = SnapThickness(frameBorder.BorderThickness);
+                }
+            }
+
+            // ToolbarThumb (the separator bar next to the quick launch / task list): its
+            // template's vertical-orientation trigger overrides these same properties, and a
+            // value set here in code would beat that trigger - so it's left alone when vertical.
+            if (button is Thumb && !(Window.GetWindow(button) is ManagedShell.AppBar.AppBarWindow { Orientation: Orientation.Vertical }))
+            {
+                button.Margin = SnapThickness(button.Margin);
+
+                foreach (string name in new[] { "OuterBorder1", "OuterBorder2", "OuterNubInner" })
+                {
+                    if (button.Template?.FindName(name, button) is Border border)
+                    {
+                        border.BorderThickness = SnapThickness(border.BorderThickness);
+                    }
+                }
+
+                if (button.Template?.FindName("OuterNub", button) is Border nub)
+                {
+                    nub.BorderThickness = SnapThickness(nub.BorderThickness);
+                    nub.Margin = SnapThickness(nub.Margin);
+                    nub.Width = Snap(nub.Width);
+                }
             }
         }
     }

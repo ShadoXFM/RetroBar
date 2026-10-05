@@ -3,10 +3,13 @@ using ManagedShell.WindowsTasks;
 using ManagedShell.Common.Helpers;
 using RetroBar.Utilities;
 using System;
+using System.Collections.ObjectModel;
 using System.ComponentModel;
 using System.Windows;
 using System.Windows.Controls;
+using System.Windows.Data;
 using System.Windows.Input;
+using System.Windows.Threading;
 
 namespace RetroBar.Controls
 {
@@ -116,11 +119,23 @@ namespace RetroBar.Controls
                 taskbarItems = Tasks.CreateGroupedWindowsCollection();
                 if (taskbarItems != null)
                 {
+                    // Tabs start out in the order their windows were opened (see TaskOpenOrderComparer).
+                    // Applied to the underlying list during startup only, so later drag-rearranging
+                    // isn't sorted back.
+                    if (taskbarItems is ListCollectionView listView && listView.SourceCollection is ObservableCollection<ApplicationWindow> source)
+                    {
+                        startupSortSource = source;
+                        ScheduleStartupSort();
+                    }
+
                     taskbarItems.CollectionChanged += GroupedWindows_CollectionChanged;
                     taskbarItems.Filter = Tasks_Filter;
                 }
 
                 TasksList.ItemsSource = taskbarItems;
+
+                // Drag-to-rearrange: see TaskListDropHandler.
+                GongSolutions.Wpf.DragDrop.DragDrop.SetDropHandler(TasksList, new TaskListDropHandler(TasksList));
 
                 Settings.Instance.PropertyChanged += Settings_PropertyChanged;
                 Host.hotkeyManager.TaskbarHotkeyPressed += TaskList_TaskbarHotkeyPressed;
@@ -242,6 +257,38 @@ namespace RetroBar.Controls
         private void GroupedWindows_CollectionChanged(object sender, System.Collections.Specialized.NotifyCollectionChangedEventArgs e)
         {
             SetTaskButtonWidth();
+
+            // Windows trickle in while RetroBar is starting, and new ones appear later: put each where the
+            // user's saved arrangement says (or on the right, if its app isn't in it) once they stop arriving.
+            if (e.Action == System.Collections.Specialized.NotifyCollectionChangedAction.Add)
+            {
+                ScheduleStartupSort();
+            }
+        }
+
+        private ObservableCollection<ApplicationWindow> startupSortSource;
+        private DispatcherTimer startupSortTimer;
+
+        // Debounced: sorts 600ms after the last window was added.
+        private void ScheduleStartupSort()
+        {
+            if (startupSortSource == null)
+            {
+                return;
+            }
+
+            if (startupSortTimer == null)
+            {
+                startupSortTimer = new DispatcherTimer { Interval = TimeSpan.FromMilliseconds(600) };
+                startupSortTimer.Tick += (s, args) =>
+                {
+                    startupSortTimer.Stop();
+                    TaskOpenOrderComparer.SortSource(startupSortSource);
+                };
+            }
+
+            startupSortTimer.Stop();
+            startupSortTimer.Start();
         }
 
         private void TaskList_OnSizeChanged(object sender, SizeChangedEventArgs e)
