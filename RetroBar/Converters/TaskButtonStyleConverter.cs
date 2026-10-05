@@ -24,6 +24,12 @@ namespace RetroBar.Converters
             // Default style is Inactive...
             var fxStyle = fxElement.FindResource("TaskButton");
 
+            // A tab that stands for several windows shows as Active while any of them is.
+            if (values.Length > 2 && values[2] is true)
+            {
+                return fxElement.FindResource("TaskButtonActive");
+            }
+
             if (values[1] is ApplicationWindow.WindowState state)
             {
                 switch (state)

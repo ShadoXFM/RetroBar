@@ -86,7 +86,8 @@
                         utilities:MonitorOffset.Tag="MediaTrackText"
                         Background="Transparent"
                         Cursor="Hand"
-                        MouseLeftButtonUp="TrackTextCanvas_OnMouseLeftButtonUp">
+                        MouseLeftButtonUp="TrackTextCanvas_OnMouseLeftButtonUp"
+                        MouseRightButtonUp="TrackTextCanvas_OnMouseRightButtonUp">
                     <TextBlock x:Name="TrackText"
                                Canvas.Left="0"
                                Canvas.Top="0"

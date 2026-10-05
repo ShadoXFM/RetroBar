@@ -1,6 +1,9 @@
 ﻿using System;
 using System.ComponentModel;
+using System.Collections.Generic;
+using System.Collections.ObjectModel;
 using System.Diagnostics;
+using System.Linq;
 using System.Runtime.InteropServices;
 using System.Windows;
 using System.Windows.Controls;
@@ -45,9 +48,111 @@ namespace RetroBar.Controls
             SetStyle();
             SetMonitorTags();
             InitHoverablePreview();
+            AppButton.Tag = GroupWindows;
         }
 
         private static readonly TaskStateToMonitorTagConverter TagConverter = new TaskStateToMonitorTagConverter();
+
+        /// <summary>
+        /// The windows this tab stands for, in tab order: just its own window, or - with
+        /// Settings.GroupTaskWindows on - every window of the same app (see TaskList.GetGroupWindows).
+        /// Kept in AppButton.Tag so the preview, which is a separate popup, can show one thumbnail each.
+        /// </summary>
+        public ObservableCollection<ApplicationWindow> GroupWindows { get; } = new();
+
+        public static readonly DependencyProperty IsGroupActiveProperty = DependencyProperty.Register(
+            nameof(IsGroupActive), typeof(bool), typeof(TaskButton), new PropertyMetadata(false));
+
+        /// <summary>Whether this tab stands for several windows and one of them is the active one.</summary>
+        public bool IsGroupActive
+        {
+            get { return (bool)GetValue(IsGroupActiveProperty); }
+            private set { SetValue(IsGroupActiveProperty, value); }
+        }
+
+        private TaskList _groupHost;
+
+        private void RefreshGroup()
+        {
+            if (Window == null)
+            {
+                return;
+            }
+
+            List<ApplicationWindow> members = Host?.GetGroupWindows(Window) ?? new List<ApplicationWindow> { Window };
+
+            foreach (ApplicationWindow gone in GroupWindows.Where(w => !members.Contains(w)).ToList())
+            {
+                gone.PropertyChanged -= GroupWindow_PropertyChanged;
+                GroupWindows.Remove(gone);
+            }
+
+            for (int i = 0; i < members.Count; i++)
+            {
+                if (i < GroupWindows.Count && ReferenceEquals(GroupWindows[i], members[i]))
+                {
+                    continue;
+                }
+
+                int existing = GroupWindows.IndexOf(members[i]);
+                if (existing >= 0)
+                {
+                    GroupWindows.Move(existing, i);
+                }
+                else
+                {
+                    members[i].PropertyChanged += GroupWindow_PropertyChanged;
+                    GroupWindows.Insert(i, members[i]);
+                }
+            }
+
+            UpdateGroupActive();
+        }
+
+        private void ReleaseGroup()
+        {
+            foreach (ApplicationWindow member in GroupWindows)
+            {
+                member.PropertyChanged -= GroupWindow_PropertyChanged;
+            }
+
+            GroupWindows.Clear();
+
+            if (_groupHost != null)
+            {
+                _groupHost.GroupsChanged -= Host_GroupsChanged;
+                _groupHost = null;
+            }
+        }
+
+        private void Host_GroupsChanged(object sender, EventArgs e)
+        {
+            RefreshGroup();
+        }
+
+        private void GroupWindow_PropertyChanged(object sender, PropertyChangedEventArgs e)
+        {
+            if (e.PropertyName == "State")
+            {
+                UpdateGroupActive();
+            }
+        }
+
+        private void UpdateGroupActive()
+        {
+            IsGroupActive = GroupWindows.Count > 1 && GroupWindows.Any(w => w.State == ApplicationWindow.WindowState.Active);
+        }
+
+        // With window previews off, a click on a tab that stands for several windows goes to the next one
+        // (wrapping round), rather than minimizing the window it is showing; with them on, the click shows
+        // the previews instead (see ShowGroupPreview).
+        private void CycleGroup()
+        {
+            List<ApplicationWindow> members = GroupWindows.ToList();
+            int active = members.FindIndex(w => w.State == ApplicationWindow.WindowState.Active);
+            ApplicationWindow target = active < 0 ? Window : members[(active + 1) % members.Count];
+            target?.BringToFront();
+        }
 
         // Whether the tab is currently shown with the Active style because its context menu is open.
         // Updated by ContextMenu_OpenedOrClosed in the same step that re-evaluates the Style, rather
@@ -82,6 +187,7 @@ namespace RetroBar.Controls
                 var multiBinding = new MultiBinding { Converter = TagConverter, ConverterParameter = tag };
                 multiBinding.Bindings.Add(new Binding("State"));
                 multiBinding.Bindings.Add(new Binding(nameof(IsContextMenuActive)) { Source = this });
+                multiBinding.Bindings.Add(new Binding(nameof(IsGroupActive)) { Source = this });
                 element.SetBinding(MonitorOffset.TagProperty, multiBinding);
             }
         }
@@ -93,6 +199,7 @@ namespace RetroBar.Controls
 
             multiBinding.Bindings.Add(new Binding { RelativeSource = RelativeSource.Self });
             multiBinding.Bindings.Add(new Binding("State"));
+            multiBinding.Bindings.Add(new Binding(nameof(IsGroupActive)) { Source = this });
 
             AppButton.SetBinding(StyleProperty, multiBinding);
         }
@@ -146,6 +253,14 @@ namespace RetroBar.Controls
                 Window.PropertyChanged += Window_PropertyChanged;
             }
 
+            _groupHost = Host;
+            if (_groupHost != null)
+            {
+                _groupHost.GroupsChanged += Host_GroupsChanged;
+            }
+
+            RefreshGroup();
+
             // A button recreated because the user just dragged it somewhere else isn't a new window
             // appearing - growing it in from zero width would push every tab to its right along with it
             // (see TaskListDropHandler, which slides the tabs into place instead).
@@ -191,6 +306,7 @@ namespace RetroBar.Controls
 
             Settings.Instance.PropertyChanged -= Settings_PropertyChanged;
             dragHandler?.Dispose();
+            ReleaseGroup();
 
             if (Window != null)
             {
@@ -292,6 +408,20 @@ namespace RetroBar.Controls
 
         private void AppButton_OnClick(object sender, RoutedEventArgs e)
         {
+            if (GroupWindows.Count > 1)
+            {
+                if (ShowsGroupPreviewOnClick)
+                {
+                    ShowGroupPreview();
+                }
+                else
+                {
+                    CycleGroup();
+                }
+
+                return;
+            }
+
             if (PressedWindowState == ApplicationWindow.WindowState.Active && Window?.CanMinimize == true)
             {
                 Window?.Minimize();

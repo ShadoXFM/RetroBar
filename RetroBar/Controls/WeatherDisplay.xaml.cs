@@ -3,11 +3,19 @@ using System;
 using System.ComponentModel;
 using System.Globalization;
 using System.IO;
+using System.Collections.Generic;
+using System.Collections.ObjectModel;
 using System.Net.Http;
+using System.Net.NetworkInformation;
 using System.Runtime.CompilerServices;
 using System.Text.Json;
 using System.Threading.Tasks;
+using System.Windows;
 using System.Windows.Controls;
+using System.Windows.Controls.Primitives;
+using System.Windows.Media;
+using System.Windows.Media.Animation;
+using System.Windows.Media.Imaging;
 using System.Windows.Threading;
 
 namespace RetroBar.Controls
@@ -48,8 +56,199 @@ namespace RetroBar.Controls
             _timer.Start();
         }
 
+        // Hover behavior: the forecast opens once the pointer has rested on the widget for a moment (so
+        // sweeping across the taskbar doesn't flash it), and closes shortly after the pointer leaves both
+        // the widget and the popup - the delay lets it cross the gap between them.
+        private static readonly TimeSpan ForecastOpenDelay = TimeSpan.FromMilliseconds(250);
+        private static readonly TimeSpan ForecastCloseDelay = TimeSpan.FromMilliseconds(350);
+
+        private DispatcherTimer _forecastOpenTimer;
+        private DispatcherTimer _forecastCloseTimer;
+
+        private static DispatcherTimer MakeTimer(TimeSpan interval, Action tick)
+        {
+            var timer = new DispatcherTimer { Interval = interval };
+            timer.Tick += (s, e) =>
+            {
+                timer.Stop();
+                tick();
+            };
+            return timer;
+        }
+
+        private void WeatherPanel_OnMouseEnter(object sender, System.Windows.Input.MouseEventArgs e)
+        {
+            _forecastCloseTimer?.Stop();
+
+            if (ForecastPopup.IsOpen && !_forecastClosing)
+            {
+                return;
+            }
+
+            _forecastOpenTimer ??= MakeTimer(ForecastOpenDelay, () => OpenForecast());
+            _forecastOpenTimer.Stop();
+            _forecastOpenTimer.Start();
+        }
+
+        private void WeatherPanel_OnMouseLeave(object sender, System.Windows.Input.MouseEventArgs e)
+        {
+            ScheduleForecastClose();
+        }
+
+        private void ForecastPopup_OnMouseEnter(object sender, System.Windows.Input.MouseEventArgs e)
+        {
+            _forecastCloseTimer?.Stop();
+
+            // Back on the popup while it was sliding away: bring it back.
+            if (_forecastClosing)
+            {
+                ShowForecast();
+            }
+        }
+
+        private void ForecastPopup_OnMouseLeave(object sender, System.Windows.Input.MouseEventArgs e)
+        {
+            ScheduleForecastClose();
+        }
+
+        private void ScheduleForecastClose()
+        {
+            _forecastOpenTimer?.Stop();
+
+            _forecastCloseTimer ??= MakeTimer(ForecastCloseDelay, HideForecast);
+            _forecastCloseTimer.Stop();
+            _forecastCloseTimer.Start();
+        }
+
+        private void OpenForecast()
+        {
+            if ((ForecastPopup.IsOpen && !_forecastClosing) || WeatherPanel == null || !WeatherPanel.IsMouseOver)
+            {
+                return;
+            }
+
+            // Open on the side of the widget facing into the screen, whichever edge the taskbar is on, and
+            // centered on the widget along the taskbar (see PlaceForecast).
+            ForecastPopup.PlacementTarget = WeatherPanel;
+            ForecastPopup.Placement = PlacementMode.Custom;
+            ForecastPopup.CustomPopupPlacementCallback = PlaceForecast;
+
+            // Show the latest reading, and refresh it in the background if it has gone stale.
+            _ = _viewModel?.UpdateWeatherAsync();
+            ShowForecast();
+        }
+
+        // The popup slides in from the taskbar's edge while fading in, and back out the same way. The
+        // slide is the popup's own offset along the axis facing away from the taskbar (added to the
+        // placement in PlaceForecast); the fade is the opacity of its frame.
+        private const double ForecastSlideDistance = 12;
+        private static readonly Duration ForecastShowDuration = new(TimeSpan.FromMilliseconds(180));
+        private static readonly Duration ForecastHideDuration = new(TimeSpan.FromMilliseconds(130));
+
+        private bool _forecastClosing;
+
+        // The offset property to slide, and where it starts (the resting offset is 0).
+        private static (DependencyProperty Property, double Start) ForecastSlideAxis()
+        {
+            return Settings.Instance.Edge switch
+            {
+                ManagedShell.AppBar.AppBarEdge.Left => (Popup.HorizontalOffsetProperty, -ForecastSlideDistance),
+                ManagedShell.AppBar.AppBarEdge.Right => (Popup.HorizontalOffsetProperty, ForecastSlideDistance),
+                ManagedShell.AppBar.AppBarEdge.Top => (Popup.VerticalOffsetProperty, -ForecastSlideDistance),
+                _ => (Popup.VerticalOffsetProperty, ForecastSlideDistance),
+            };
+        }
+
+        private void ClearForecastAnimations()
+        {
+            ForecastPopup.BeginAnimation(Popup.HorizontalOffsetProperty, null);
+            ForecastPopup.BeginAnimation(Popup.VerticalOffsetProperty, null);
+            ForecastFrame.BeginAnimation(UIElement.OpacityProperty, null);
+        }
+
+        private void ShowForecast()
+        {
+            (DependencyProperty axis, double start) = ForecastSlideAxis();
+
+            // Still on screen (sliding away): carry on from where it is.
+            bool resuming = ForecastPopup.IsOpen;
+            double fromOffset = resuming ? (double)ForecastPopup.GetValue(axis) : start;
+            double fromOpacity = resuming ? ForecastFrame.Opacity : 0;
+
+            _forecastClosing = false;
+            ClearForecastAnimations();
+            ForecastFrame.Opacity = fromOpacity;
+            ForecastPopup.IsOpen = true;
+
+            ForecastPopup.BeginAnimation(axis, new DoubleAnimation
+            {
+                From = fromOffset,
+                Duration = ForecastShowDuration,
+                EasingFunction = new CubicEase { EasingMode = EasingMode.EaseOut },
+            });
+            ForecastFrame.BeginAnimation(UIElement.OpacityProperty, new DoubleAnimation(fromOpacity, 1, ForecastShowDuration)
+            {
+                EasingFunction = new QuadraticEase { EasingMode = EasingMode.EaseOut },
+            });
+        }
+
+        private void HideForecast()
+        {
+            if (!ForecastPopup.IsOpen || _forecastClosing)
+            {
+                return;
+            }
+
+            _forecastClosing = true;
+            (DependencyProperty axis, double start) = ForecastSlideAxis();
+
+            ForecastPopup.BeginAnimation(axis, new DoubleAnimation
+            {
+                From = (double)ForecastPopup.GetValue(axis),
+                To = start,
+                Duration = ForecastHideDuration,
+                EasingFunction = new CubicEase { EasingMode = EasingMode.EaseIn },
+            });
+
+            var fade = new DoubleAnimation(ForecastFrame.Opacity, 0, ForecastHideDuration)
+            {
+                EasingFunction = new QuadraticEase { EasingMode = EasingMode.EaseIn },
+            };
+            fade.Completed += (s, e) =>
+            {
+                // Only if it wasn't brought back (or closed some other way) while sliding away.
+                if (_forecastClosing)
+                {
+                    _forecastClosing = false;
+                    ClearForecastAnimations();
+                    ForecastPopup.IsOpen = false;
+                }
+            };
+            ForecastFrame.BeginAnimation(UIElement.OpacityProperty, fade);
+        }
+
+        private static CustomPopupPlacement[] PlaceForecast(Size popupSize, Size targetSize, Point offset)
+        {
+            double centeredX = (targetSize.Width - popupSize.Width) / 2;
+            double centeredY = (targetSize.Height - popupSize.Height) / 2;
+
+            // offset is the popup's slide animation (see ShowForecast); zero while at rest.
+            return Settings.Instance.Edge switch
+            {
+                ManagedShell.AppBar.AppBarEdge.Left => new[] { new CustomPopupPlacement(new Point(targetSize.Width + offset.X, centeredY), PopupPrimaryAxis.Vertical) },
+                ManagedShell.AppBar.AppBarEdge.Right => new[] { new CustomPopupPlacement(new Point(-popupSize.Width + offset.X, centeredY), PopupPrimaryAxis.Vertical) },
+                ManagedShell.AppBar.AppBarEdge.Top => new[] { new CustomPopupPlacement(new Point(centeredX, targetSize.Height + offset.Y), PopupPrimaryAxis.Horizontal) },
+                _ => new[] { new CustomPopupPlacement(new Point(centeredX, -popupSize.Height + offset.Y), PopupPrimaryAxis.Horizontal) },
+            };
+        }
+
         private void WeatherDisplay_Unloaded(object sender, System.Windows.RoutedEventArgs e)
         {
+            _forecastOpenTimer?.Stop();
+            _forecastCloseTimer?.Stop();
+            _forecastClosing = false;
+            ClearForecastAnimations();
+            ForecastPopup.IsOpen = false;
             _timer?.Stop();
             _timer = null;
             _viewModel?.Dispose();
@@ -85,12 +284,19 @@ namespace RetroBar.Controls
         private static readonly TimeSpan FailureRetryMax = TimeSpan.FromMinutes(5);
 
         private static string _geocodedLocation;
+        private static string _geocodedDisplayName;
+        private static string _geocodedCountryCode;
         private static double _latitude;
         private static double _longitude;
 
         private static string _cachedLocation;
-        private static string _cachedTemp;
+        private static double? _cachedCelsius;
         private static string _cachedIconPath;
+        private static List<DailyForecast> _cachedForecast = new();
+
+        // Set when the network comes back (see OnNetworkAvailabilityChanged): the next update refetches
+        // even though the cached reading isn't old yet, since the last attempt may have failed offline.
+        private static bool _forceRefresh;
         private static DateTime _lastSuccessUtc = DateTime.MinValue;
         private static DateTime _lastAttemptUtc = DateTime.MinValue;
         private static int _consecutiveFailures;
@@ -104,15 +310,22 @@ namespace RetroBar.Controls
         /// for its own next poll.</summary>
         private static event Action SharedStateChanged;
 
+        static WeatherViewModel()
+        {
+            NetworkChange.NetworkAvailabilityChanged += OnNetworkAvailabilityChanged;
+        }
+
         public WeatherViewModel()
         {
             SharedStateChanged += OnSharedStateChanged;
+            NetworkReconnected += OnNetworkReconnected;
             Settings.Instance.PropertyChanged += Settings_PropertyChanged;
         }
 
         public void Dispose()
         {
             SharedStateChanged -= OnSharedStateChanged;
+            NetworkReconnected -= OnNetworkReconnected;
             Settings.Instance.PropertyChanged -= Settings_PropertyChanged;
         }
 
@@ -121,12 +334,118 @@ namespace RetroBar.Controls
             ApplyShared();
         }
 
+        private static event Action NetworkReconnected;
+
+        // The connection came (back) up: refetch soon instead of waiting out the retry backoff or the
+        // 15 minute refresh - a failed attempt while offline would otherwise leave N/A (or an old
+        // reading) for minutes after the network is back.
+        private static async void OnNetworkAvailabilityChanged(object sender, NetworkAvailabilityEventArgs e)
+        {
+            if (!e.IsAvailable)
+            {
+                return;
+            }
+
+            // DNS and routes usually aren't usable the instant the adapter reports available.
+            await Task.Delay(TimeSpan.FromSeconds(3));
+
+            System.Windows.Application.Current?.Dispatcher.BeginInvoke(new Action(() =>
+            {
+                bool stale = _consecutiveFailures > 0 || DateTime.UtcNow - _lastSuccessUtc > TimeSpan.FromMinutes(5);
+                if (!stale)
+                {
+                    return;
+                }
+
+                _forceRefresh = true;
+                _consecutiveFailures = 0;
+                _lastAttemptUtc = DateTime.MinValue;
+                NetworkReconnected?.Invoke();
+            }));
+        }
+
+        private void OnNetworkReconnected()
+        {
+            _ = UpdateWeatherAsync();
+        }
+
         private void Settings_PropertyChanged(object sender, PropertyChangedEventArgs e)
         {
-            if (e.PropertyName == nameof(Settings.WeatherLocation))
+            if (e.PropertyName == nameof(Settings.WeatherUseFahrenheit))
+            {
+                // °C <-> °F is just a display choice: reformat the reading we already have.
+                System.Windows.Application.Current?.Dispatcher.BeginInvoke(new Action(ApplyShared));
+            }
+            else if (e.PropertyName == nameof(Settings.WeatherLocation))
             {
                 // A new location is shown as soon as it's fetched, not on the next minute tick.
                 System.Windows.Application.Current?.Dispatcher.BeginInvoke(new Action(() => _ = UpdateWeatherAsync()));
+            }
+        }
+
+        /// <summary>The next few days, for the forecast popup.</summary>
+        public ObservableCollection<ForecastDay> Forecast { get; } = new();
+
+        private ImageSource _flagSource;
+        public ImageSource FlagSource
+        {
+            get => _flagSource;
+            set
+            {
+                if (!ReferenceEquals(_flagSource, value))
+                {
+                    _flagSource = value;
+                    OnPropertyChanged();
+                }
+            }
+        }
+
+        // Windows has no flag emoji, so the country's flag is a small image (flagcdn.com, free and keyless)
+        // - fetched once per country and kept; null (no flag shown) if it can't be loaded.
+        private static readonly Dictionary<string, BitmapImage> FlagCache = new();
+
+        private static ImageSource GetFlag(string countryCode)
+        {
+            if (string.IsNullOrWhiteSpace(countryCode))
+            {
+                return null;
+            }
+
+            string code = countryCode.Trim().ToLowerInvariant();
+
+            if (!FlagCache.TryGetValue(code, out BitmapImage flag))
+            {
+                try
+                {
+                    flag = new BitmapImage();
+                    flag.BeginInit();
+                    flag.UriSource = new Uri($"https://flagcdn.com/w40/{code}.png");
+                    flag.CacheOption = BitmapCacheOption.OnLoad;
+                    flag.EndInit();
+                    flag.DownloadFailed += (s, e) => FlagCache.Remove(code);
+                }
+                catch
+                {
+                    return null;
+                }
+
+                FlagCache[code] = flag;
+            }
+
+            return flag;
+        }
+
+        private string _locationTitle;
+        public string LocationTitle
+        {
+            get => _locationTitle;
+            set
+            {
+                if (_locationTitle != value)
+                {
+                    _locationTitle = value;
+                    OnPropertyChanged();
+                }
             }
         }
 
@@ -180,7 +499,7 @@ namespace RetroBar.Controls
             // one, rather than N/A while a fetch is pending.
             ApplyShared();
 
-            if (cacheMatches && DateTime.UtcNow - _lastSuccessUtc < SuccessRefresh)
+            if (cacheMatches && !_forceRefresh && DateTime.UtcNow - _lastSuccessUtc < SuccessRefresh)
             {
                 return;
             }
@@ -194,7 +513,7 @@ namespace RetroBar.Controls
 
         private static bool HasCacheFor(string location)
         {
-            return _cachedTemp != null && string.Equals(location, _cachedLocation, StringComparison.OrdinalIgnoreCase);
+            return _cachedCelsius.HasValue && string.Equals(location, _cachedLocation, StringComparison.OrdinalIgnoreCase);
         }
 
         // Starts the shared fetch, or joins the one already running; null if one was attempted too
@@ -222,6 +541,8 @@ namespace RetroBar.Controls
 
         private static async Task FetchAsync(string location)
         {
+            _forceRefresh = false;
+
             try
             {
                 if (!string.Equals(location, _geocodedLocation, StringComparison.OrdinalIgnoreCase)
@@ -231,7 +552,7 @@ namespace RetroBar.Controls
                 }
 
                 string url = string.Format(CultureInfo.InvariantCulture,
-                    "https://api.open-meteo.com/v1/forecast?latitude={0}&longitude={1}&current=temperature_2m,weather_code,is_day&daily=moon_phase&timezone=auto&temperature_unit=celsius",
+                    "https://api.open-meteo.com/v1/forecast?latitude={0}&longitude={1}&current=temperature_2m,weather_code,is_day&daily=weather_code,temperature_2m_max,temperature_2m_min,moon_phase&forecast_days=7&timezone=auto&temperature_unit=celsius",
                     _latitude, _longitude);
 
                 string json = await _httpClient.GetStringAsync(url);
@@ -244,8 +565,23 @@ namespace RetroBar.Controls
                 bool isDay = current.GetProperty("is_day").GetInt32() != 0;
                 double moonPhase = daily.GetProperty("moon_phase")[0].GetDouble();
 
+                var forecast = new List<DailyForecast>();
+                JsonElement days = daily.GetProperty("time");
+                JsonElement codes = daily.GetProperty("weather_code");
+                JsonElement highs = daily.GetProperty("temperature_2m_max");
+                JsonElement lows = daily.GetProperty("temperature_2m_min");
+                for (int i = 0; i < days.GetArrayLength(); i++)
+                {
+                    forecast.Add(new DailyForecast(
+                        DateTime.ParseExact(days[i].GetString(), "yyyy-MM-dd", CultureInfo.InvariantCulture),
+                        codes[i].GetInt32(),
+                        highs[i].GetDouble(),
+                        lows[i].GetDouble()));
+                }
+
                 _cachedLocation = location;
-                _cachedTemp = FormatTemperature(temperature);
+                _cachedCelsius = temperature;
+                _cachedForecast = forecast;
                 _cachedIconPath = GetImagePath(GetIconFileName(weatherCode, isDay, moonPhase));
                 _lastSuccessUtc = DateTime.UtcNow;
                 _consecutiveFailures = 0;
@@ -266,15 +602,33 @@ namespace RetroBar.Controls
         private void ApplyShared()
         {
             string location = Settings.Instance.WeatherLocation;
+            LocationTitle = location;
+            FlagSource = null;
 
             if (!string.IsNullOrWhiteSpace(location) && HasCacheFor(location))
             {
-                WeatherTemp = _cachedTemp;
+                if (string.Equals(location, _geocodedLocation, StringComparison.OrdinalIgnoreCase))
+                {
+                    LocationTitle = _geocodedDisplayName ?? location;
+                    FlagSource = GetFlag(_geocodedCountryCode);
+                }
+
+                WeatherTemp = FormatTemperature(_cachedCelsius.Value);
                 WeatherIconPath = _cachedIconPath;
+
+                Forecast.Clear();
+                foreach (DailyForecast day in _cachedForecast)
+                {
+                    Forecast.Add(new ForecastDay(
+                        day.Date.ToString("ddd d", CultureInfo.CurrentUICulture),
+                        GetImagePath(GetIconFileName(day.WeatherCode, true, 0)),
+                        $"{FormatShortTemperature(day.HighCelsius)} / {FormatShortTemperature(day.LowCelsius)}"));
+                }
             }
             else
             {
                 WeatherTemp = "N/A";
+                Forecast.Clear();
             }
         }
 
@@ -294,15 +648,30 @@ namespace RetroBar.Controls
             JsonElement first = results[0];
             _latitude = first.GetProperty("latitude").GetDouble();
             _longitude = first.GetProperty("longitude").GetDouble();
+
+            // "Perpignan, France" - the place's own name and country, rather than whatever was typed.
+            string name = first.TryGetProperty("name", out JsonElement nameElement) ? nameElement.GetString() : location;
+            string country = first.TryGetProperty("country", out JsonElement countryElement) ? countryElement.GetString() : null;
+            _geocodedDisplayName = string.IsNullOrWhiteSpace(country) ? name : $"{name}, {country}";
+            _geocodedCountryCode = first.TryGetProperty("country_code", out JsonElement codeElement) ? codeElement.GetString() : null;
+
             _geocodedLocation = location;
             return true;
         }
 
         private static string FormatTemperature(double celsius)
         {
-            int rounded = (int)Math.Round(celsius, MidpointRounding.AwayFromZero);
+            bool fahrenheit = Settings.Instance.WeatherUseFahrenheit;
+            int rounded = (int)Math.Round(fahrenheit ? celsius * 9 / 5 + 32 : celsius, MidpointRounding.AwayFromZero);
             string sign = rounded > 0 ? "+" : rounded < 0 ? "-" : "";
-            return $"{sign}{Math.Abs(rounded)}°C";
+            return $"{sign}{Math.Abs(rounded)}\u00B0{(fahrenheit ? 'F' : 'C')}";
+        }
+
+        // Without the sign or unit letter, for the forecast's "high / low" column.
+        private static string FormatShortTemperature(double celsius)
+        {
+            double value = Settings.Instance.WeatherUseFahrenheit ? celsius * 9 / 5 + 32 : celsius;
+            return $"{(int)Math.Round(value, MidpointRounding.AwayFromZero)}\u00B0";
         }
 
         // WMO weather codes (https://open-meteo.com/en/docs, "WMO Weather interpretation codes").
@@ -357,4 +726,10 @@ namespace RetroBar.Controls
             PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(propertyName));
         }
     }
+
+    /// <summary>One day of the forecast as fetched (raw Celsius, so °C/°F can be switched without refetching).</summary>
+    public record DailyForecast(DateTime Date, int WeatherCode, double HighCelsius, double LowCelsius);
+
+    /// <summary>One row of the forecast popup.</summary>
+    public record ForecastDay(string DayName, string IconPath, string Range);
 }

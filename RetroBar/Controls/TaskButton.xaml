@@ -58,6 +58,7 @@
                         <Binding Path="Title" />
                         <Binding Path="ProgressValue" />
                         <Binding Path="ProgressState" />
+                        <Binding Path="Tag.Count" ElementName="AppButton" FallbackValue="1" />
                     </MultiBinding>
                 </TextBlock.Text>
             </TextBlock>
@@ -170,31 +171,140 @@
                                                 <Grid x:Name="PreviewRoot"
                                                       Background="Transparent">
                                                     <ContentControl Style="{DynamicResource TaskButtonThumbnail}">
-                                                        <StackPanel>
-                                                            <!-- Exactly as wide as the thumbnail below, so a long title is trimmed
-                                                                 instead of widening the whole preview. -->
-                                                            <!-- MonitorOffset.Tag: PreviewTitleRow - its Margin (the gap between the title/close
-                                                                 button row and the thumbnail) is tunable per monitor in monitor-adjustments.json. -->
-                                                            <Grid Margin="0,0,0,3"
-                                                                  utilities:MonitorOffset.Tag="PreviewTitleRow"
-                                                                  Width="{Binding ElementName=PreviewThumbnail, Path=Width}">
-                                                                <TextBlock Text="{Binding Path=Title}"
-                                                                           Foreground="{DynamicResource ButtonForeground}"
-                                                                           TextTrimming="CharacterEllipsis"
-                                                                           VerticalAlignment="Center"
-                                                                           Margin="1,0,22,0" />
-                                                                <Button x:Name="PreviewCloseButton"
-                                                                        Style="{DynamicResource TaskPreviewCloseButton}"
-                                                                        HorizontalAlignment="Right"
-                                                                        VerticalAlignment="Center" />
-                                                            </Grid>
-                                                            <!-- BoxWidth: the thumbnail area is as wide as the tab itself, so every
-                                                                 preview is the same size rather than shaped like its window. -->
-                                                            <controls:TaskThumbnail x:Name="PreviewThumbnail"
-                                                                                    SourceWindowHandle="{Binding Path=Handle}"
-                                                                                    Title="{Binding Path=Title}"
-                                                                                    BoxWidth="{Binding Path=PlacementTarget.ActualWidth, RelativeSource={RelativeSource AncestorType=ToolTip}}"/>
-                                                        </StackPanel>
+                                                        <!-- One block per window of the tab (just the one, unless windows of an app are
+                                                             combined - see TaskButton.GroupWindows, kept in the button's Tag). Side by side
+                                                             on a top/bottom taskbar, stacked on a left/right one. -->
+                                                        <ItemsControl x:Name="PreviewItems"
+                                                                      ItemsSource="{Binding Path=PlacementTarget.Tag, RelativeSource={RelativeSource TemplatedParent}}">
+                                                            <ItemsControl.Style>
+                                                                <Style TargetType="ItemsControl">
+                                                                    <!-- The gap between previews goes between them only (the container after the first
+                                                                         gets it), so no negative margin is needed to cancel a trailing one - which
+                                                                         left the frame a pixel wider than the previews at some scales. -->
+                                                                    <Setter Property="AlternationCount" Value="1000" />
+                                                                    <Setter Property="ItemsPanel">
+                                                                        <Setter.Value>
+                                                                            <ItemsPanelTemplate>
+                                                                                <StackPanel Orientation="Horizontal" />
+                                                                            </ItemsPanelTemplate>
+                                                                        </Setter.Value>
+                                                                    </Setter>
+                                                                    <Setter Property="ItemContainerStyle">
+                                                                        <Setter.Value>
+                                                                            <Style TargetType="ContentPresenter">
+                                                                                <Setter Property="Margin" Value="6.4,0,0,0" />
+                                                                                <Style.Triggers>
+                                                                                    <Trigger Property="ItemsControl.AlternationIndex" Value="0">
+                                                                                        <Setter Property="Margin" Value="0" />
+                                                                                    </Trigger>
+                                                                                </Style.Triggers>
+                                                                            </Style>
+                                                                        </Setter.Value>
+                                                                    </Setter>
+                                                                    <Style.Triggers>
+                                                                        <DataTrigger Binding="{Binding Source={x:Static utilities:Settings.Instance}, Path=Edge}" Value="Left">
+                                                                            <Setter Property="ItemsPanel">
+                                                                                <Setter.Value>
+                                                                                    <ItemsPanelTemplate>
+                                                                                        <StackPanel Orientation="Vertical" />
+                                                                                    </ItemsPanelTemplate>
+                                                                                </Setter.Value>
+                                                                            </Setter>
+                                                                            <Setter Property="ItemContainerStyle">
+                                                                                <Setter.Value>
+                                                                                    <Style TargetType="ContentPresenter">
+                                                                                <Setter Property="Margin" Value="0,6.4,0,0" />
+                                                                                <Style.Triggers>
+                                                                                    <Trigger Property="ItemsControl.AlternationIndex" Value="0">
+                                                                                        <Setter Property="Margin" Value="0" />
+                                                                                    </Trigger>
+                                                                                </Style.Triggers>
+                                                                            </Style>
+                                                                                </Setter.Value>
+                                                                            </Setter>
+                                                                        </DataTrigger>
+                                                                        <DataTrigger Binding="{Binding Source={x:Static utilities:Settings.Instance}, Path=Edge}" Value="Right">
+                                                                            <Setter Property="ItemsPanel">
+                                                                                <Setter.Value>
+                                                                                    <ItemsPanelTemplate>
+                                                                                        <StackPanel Orientation="Vertical" />
+                                                                                    </ItemsPanelTemplate>
+                                                                                </Setter.Value>
+                                                                            </Setter>
+                                                                            <Setter Property="ItemContainerStyle">
+                                                                                <Setter.Value>
+                                                                                    <Style TargetType="ContentPresenter">
+                                                                                <Setter Property="Margin" Value="0,6.4,0,0" />
+                                                                                <Style.Triggers>
+                                                                                    <Trigger Property="ItemsControl.AlternationIndex" Value="0">
+                                                                                        <Setter Property="Margin" Value="0" />
+                                                                                    </Trigger>
+                                                                                </Style.Triggers>
+                                                                            </Style>
+                                                                                </Setter.Value>
+                                                                            </Setter>
+                                                                        </DataTrigger>
+                                                                    </Style.Triggers>
+                                                                </Style>
+                                                            </ItemsControl.Style>
+                                                            <ItemsControl.ItemTemplate>
+                                                                <DataTemplate>
+                                                                    <Grid x:Name="PreviewItem">
+                                                                        <!-- The translucent fill behind whichever preview the pointer is on (same look as a
+                                                                             tab's hover fill); driven from TaskButton.Preview.cs. It reaches out to the frame's
+                                                                             inner edge, over the padding around the preview. -->
+                                                                        <Border x:Name="PreviewHover"
+                                                                                Margin="-3"
+                                                                                Background="{DynamicResource ClockForeground}"
+                                                                                Opacity="0"
+                                                                                IsHitTestVisible="False" />
+                                                                        <StackPanel>
+                                                                        <!-- Exactly as wide as the thumbnail below, so a long title is trimmed
+                                                                             instead of widening the whole preview. -->
+                                                                        <!-- MonitorOffset.Tag: PreviewTitleRow - its Margin (the gap between the title/close
+                                                                             button row and the thumbnail) is tunable per monitor in monitor-adjustments.json. -->
+                                                                        <Grid Margin="0,0,0,3"
+                                                                              utilities:MonitorOffset.Tag="PreviewTitleRow"
+                                                                              Width="{Binding ElementName=PreviewThumbnail, Path=Width}">
+                                                                            <Grid.ColumnDefinitions>
+                                                                                <ColumnDefinition Width="Auto" />
+                                                                                <ColumnDefinition Width="*" />
+                                                                            </Grid.ColumnDefinitions>
+                                                                            <!-- The app's icon, before the window's title -->
+                                                                            <Image x:Name="PreviewTitleIcon"
+                                                                                   Source="{Binding Path=Icon}"
+                                                                                   Width="16"
+                                                                                   Height="16"
+                                                                                   Margin="1,0,5,0"
+                                                                                   VerticalAlignment="Center"
+                                                                                   UseLayoutRounding="True"
+                                                                                   SnapsToDevicePixels="True"
+                                                                                   RenderOptions.BitmapScalingMode="HighQuality" />
+                                                                            <TextBlock Grid.Column="1"
+                                                                                       utilities:MonitorOffset.Tag="PreviewTitleText"
+                                                                                       Text="{Binding Path=Title}"
+                                                                                       Foreground="{DynamicResource ButtonForeground}"
+                                                                                       TextTrimming="CharacterEllipsis"
+                                                                                       VerticalAlignment="Center"
+                                                                                       Margin="0,0,22,0" />
+                                                                            <Button x:Name="PreviewCloseButton"
+                                                                                    Grid.Column="1"
+                                                                                    Style="{DynamicResource TaskPreviewCloseButton}"
+                                                                                    HorizontalAlignment="Right"
+                                                                                    VerticalAlignment="Center" />
+                                                                        </Grid>
+                                                                        <!-- BoxWidth: the thumbnail area is as wide as the tab itself, so every
+                                                                             preview is the same size rather than shaped like its window. -->
+                                                                        <controls:TaskThumbnail x:Name="PreviewThumbnail"
+                                                                                                SourceWindowHandle="{Binding Path=Handle}"
+                                                                                                Title="{Binding Path=Title}"
+                                                                                                Icon="{Binding Path=Icon}"
+                                                                                                BoxWidth="{Binding Path=PlacementTarget.ActualWidth, RelativeSource={RelativeSource AncestorType=ToolTip}}"/>
+                                                                        </StackPanel>
+                                                                    </Grid>
+                                                                </DataTemplate>
+                                                            </ItemsControl.ItemTemplate>
+                                                        </ItemsControl>
                                                     </ContentControl>
                                                 </Grid>
                                             </ControlTemplate>

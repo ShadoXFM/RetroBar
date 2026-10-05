@@ -47,7 +47,8 @@ namespace RetroBar.Converters
             }
 
             bool contextMenuOpen = values.Length > 1 && values[1] is true;
-            bool active = values.Length > 0 && values[0] is ApplicationWindow.WindowState state && state == ApplicationWindow.WindowState.Active;
+            bool active = (values.Length > 0 && values[0] is ApplicationWindow.WindowState state && state == ApplicationWindow.WindowState.Active)
+                || (values.Length > 2 && values[2] is true);
 
             return contextMenuOpen || active ? baseTag + "Active" : baseTag;
         }

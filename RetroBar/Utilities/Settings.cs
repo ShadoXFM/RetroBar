@@ -386,11 +386,35 @@ namespace RetroBar.Utilities
         // Per-monitor visual adjustments (MonitorOffset.Tag targets) are no longer stored here -
         // they live in a hand-edited JSON file instead. See Utilities/MonitorAdjustments.cs.
 
+        private bool _weatherUseFahrenheit;
+        public bool WeatherUseFahrenheit
+        {
+            get => _weatherUseFahrenheit;
+            set => Set(ref _weatherUseFahrenheit, value);
+        }
+
+        // The AppUserModelID of the app whose media should be shown in the media player when several are
+        // playing, or "" to follow whatever Windows considers the current media session.
+        private string _mediaPreferredApp = "";
+        public string MediaPreferredApp
+        {
+            get => _mediaPreferredApp;
+            set => Set(ref _mediaPreferredApp, value ?? "");
+        }
+
         private string _weatherLocation = "Perpignan";
         public string WeatherLocation
         {
             get => _weatherLocation;
             set => Set(ref _weatherLocation, value);
+        }
+
+        // One tab per application, however many windows it has open (see TaskList).
+        private bool _groupTaskWindows = false;
+        public bool GroupTaskWindows
+        {
+            get => _groupTaskWindows;
+            set => Set(ref _groupTaskWindows, value);
         }
 
         private bool _showTaskThumbnails = false;

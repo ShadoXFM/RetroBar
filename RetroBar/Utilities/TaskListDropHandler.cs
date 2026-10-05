@@ -54,6 +54,11 @@ namespace RetroBar.Utilities
             if (_list.ItemsSource is System.Windows.Data.ListCollectionView view &&
                 view.SourceCollection is System.Collections.ObjectModel.ObservableCollection<ManagedShell.WindowsTasks.ApplicationWindow> source)
             {
+                if (Settings.Instance.GroupTaskWindows)
+                {
+                    TaskOpenOrderComparer.KeepAppWindowsTogether(source, dropInfo.Data as ManagedShell.WindowsTasks.ApplicationWindow);
+                }
+
                 TaskOpenOrderComparer.SaveOrder(source);
             }
 

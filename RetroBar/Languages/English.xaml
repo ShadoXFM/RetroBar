@@ -11,6 +11,11 @@
     <s:String x:Key="media_player_heading">Media Player</s:String>
     <s:String x:Key="show_media_player">Show media player _controls</s:String>
     <s:String x:Key="show_media_player_album_art">Show album _art</s:String>
+    <s:String x:Key="weather_heading">Weather</s:String>
+    <s:String x:Key="weather_use_fahrenheit">Use _Fahrenheit (°F)</s:String>
+    <s:String x:Key="media_source_automatic">Automatic (follow Windows)</s:String>
+    <s:String x:Key="media_source_browser">Browser</s:String>
+    <s:String x:Key="media_source_none">No media playing</s:String>
     <s:String x:Key="cpu_temp_heading">CPU Temperature</s:String>
     <s:String x:Key="show_cpu_temp">Show _CPU temperature</s:String>
     <s:String x:Key="media_previous">Previous</s:String>
@@ -45,6 +50,7 @@
     <s:String x:Key="select_location">_Select location...</s:String>
     <s:String x:Key="quick_launch_folder">Quick Launch - Choose a folder</s:String>
     <s:String x:Key="show_badges">Show _badges</s:String>
+    <s:String x:Key="group_task_windows">_Combine windows of the same app into one tab</s:String>
     <s:String x:Key="show_window_previews">Show _window previews (thumbnails)</s:String>
     <s:String x:Key="use_software_rendering">_Use software rendering</s:String>
     <s:String x:Key="add_show_desktop_button">Add the Show _Desktop button</s:String>
