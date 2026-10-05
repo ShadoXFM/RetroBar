@@ -120,6 +120,19 @@ namespace RetroBar.Utilities
             set => Set(ref _showCpuTemp, value);
         }
 
+        // Which audio device the media player's VU meter listens to, matched against device names
+        // (case-insensitive substring), searching recording devices first and then playback devices
+        // (loopback). Empty = the Windows default playback device. Needed when the default output
+        // is a virtual device that doesn't provide loopback audio (e.g. Voicemeeter's "Voicemeeter
+        // Input"): capturing from it returns silence, so point this at the bus that actually
+        // carries the sound instead (e.g. "Voicemeeter Out B1").
+        private string _vuMeterCaptureDevice = "";
+        public string VuMeterCaptureDevice
+        {
+            get => _vuMeterCaptureDevice;
+            set => Set(ref _vuMeterCaptureDevice, value);
+        }
+
         private bool _showClock = true;
         public bool ShowClock
         {
@@ -351,6 +364,16 @@ namespace RetroBar.Utilities
         {
             get => _taskbarWidthLimit;
             set => Set(ref _taskbarWidthLimit, value);
+        }
+
+        // The user's own arrangement of the taskbar tabs, as application keys (see TaskOpenOrderComparer)
+        // from leftmost to rightmost. Saved whenever they drag a tab, and applied whenever the tab list
+        // loads or a window appears - so a restart or theme change keeps their order.
+        private List<string> _taskOrder = [];
+        public List<string> TaskOrder
+        {
+            get => _taskOrder;
+            set => Set(ref _taskOrder, value);
         }
 
         private List<string> _quickLaunchOrder = [];

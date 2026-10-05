@@ -38,9 +38,19 @@ namespace RetroBar.Utilities
     /// TaskList.SetTaskButtonWidth) depends on that monitor's own available width in DIPs, which
     /// a higher-DPI monitor has less of even at the same physical resolution.
     ///
+    /// "HeightAdjustment" is optional and adds this many DIPs (can be negative) to the taskbar's
+    /// own overall AppBar height on just this one monitor (see Taskbar.xaml.cs's own
+    /// SetPosition), on top of whatever Settings.TaskbarScale and the active theme's own
+    /// TaskbarHeight resource already compute - useful for nudging the taskbar a physical pixel
+    /// or two taller/shorter on one specific monitor without a full per-monitor Height override
+    /// mechanism (unlike RowCount, an unrelated per-monitor concern above, there wasn't already
+    /// one for this).
+    ///
     /// Every other key is whatever string an element's utilities:MonitorOffset.Tag="..."
-    /// attribute uses in the app's XAML (TaskIcon, TaskIconActive, TaskLabel, TaskLabelActive,
-    /// TaskOverlayIcon, TaskOverlayIconActive, MediaButtonPrevious, MediaButtonPlayPause,
+    /// attribute uses in the app's XAML (TaskButton, TaskButtonActive - the whole tab itself,
+    /// not just its content, e.g. "TaskButton": { "Width": 150 } - TaskIcon, TaskIconActive,
+    /// TaskLabel, TaskLabelActive, TaskOverlayIcon, TaskOverlayIconActive, MediaButtonPrevious,
+    /// MediaButtonPlayPause,
     /// MediaButtonNext (the whole button, not just its glyph), MediaGlyphPrevious,
     /// MediaGlyphPlayPause, MediaGlyphNext (the seek popup's own back/play-pause/forward glyphs
     /// share these same three tags, not separate ones, so any per-monitor Geometry override
@@ -112,11 +122,13 @@ namespace RetroBar.Utilities
             "  // }\n" +
             "}\n";
 
-        /// <summary>One monitor's entry: an optional RowCount, plus every other (tag-keyed) field
-        /// captured by JsonExtensionData rather than a fixed set of named properties.</summary>
+        /// <summary>One monitor's entry: an optional RowCount and HeightAdjustment, plus every
+        /// other (tag-keyed) field captured by JsonExtensionData rather than a fixed set of named
+        /// properties.</summary>
         private class MonitorEntry
         {
             public int? RowCount { get; set; }
+            public double? HeightAdjustment { get; set; }
 
             [JsonExtensionData]
             public Dictionary<string, JsonElement> Tags { get; set; }
@@ -161,6 +173,18 @@ namespace RetroBar.Utilities
             }
 
             return null;
+        }
+
+        /// <summary>DIPs (can be negative) to add to this monitor's own computed taskbar AppBar
+        /// height, or 0 if it has none.</summary>
+        public static double GetHeightAdjustment(string deviceName)
+        {
+            if (!string.IsNullOrEmpty(deviceName) && _monitors.TryGetValue(deviceName, out MonitorEntry entry))
+            {
+                return entry.HeightAdjustment ?? 0;
+            }
+
+            return 0;
         }
 
         private static void EnsureFileExists()

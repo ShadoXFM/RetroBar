@@ -11,7 +11,8 @@
                   PreviewMouseLeftButtonDown="Start_OnPreviewMouseLeftButtonDown"
                   MouseRightButtonUp="Start_OnMouseRightButtonUp"
                   Name="Start"
-                  Style="{DynamicResource StartButton}">
+                  Style="{DynamicResource StartButton}"
+                  utilities:MonitorOffset.Tag="StartButtonBox">
         <Grid>
             <Grid.ColumnDefinitions>
                 <ColumnDefinition Width="Auto" />

@@ -18,7 +18,12 @@ namespace RetroBar.Utilities
         {
             if (x is ShellItem a && y is ShellItem b)
             {
-                List<string> desiredSort = Settings.Instance.QuickLaunchOrder;
+                // A private copy: Settings.QuickLaunchOrder returns the live list, and the in-flight
+                // drop adjustment below used to edit it in place - in the middle of the sort, so the
+                // comparisons made before and after the first one involving the dragged icon saw
+                // different orders, and the sort could end up wrong (the "sometimes works, sometimes
+                // doesn't" reordering). With a copy, every comparison in a sort sees the same order.
+                List<string> desiredSort = new List<string>(Settings.Instance.QuickLaunchOrder);
 
                 // If reordering, modify the desired sort to reflect the in-flight drop.
                 if (_toolbar.DropHandler.DropInFlight != null && 

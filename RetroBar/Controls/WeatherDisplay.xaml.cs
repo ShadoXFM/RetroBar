@@ -15,6 +15,7 @@ namespace RetroBar.Controls
     public partial class WeatherDisplay : UserControl
     {
         private DispatcherTimer _timer;
+        private WeatherViewModel _viewModel;
 
         public WeatherDisplay()
         {
@@ -22,22 +23,37 @@ namespace RetroBar.Controls
 
             // Wait until the control is fully loaded before starting the timer
             this.Loaded += WeatherDisplay_Loaded;
+            this.Unloaded += WeatherDisplay_Unloaded;
         }
 
         private void WeatherDisplay_Loaded(object sender, System.Windows.RoutedEventArgs e)
         {
-            var vm = new WeatherViewModel();
-            DataContext = vm;
+            if (_viewModel != null)
+            {
+                return;
+            }
 
-            // Fetch immediately on load
-            _ = vm.UpdateWeatherAsync();
+            _viewModel = new WeatherViewModel();
+            DataContext = _viewModel;
+
+            // Fetch immediately on load (or, if another monitor's display already has the reading,
+            // show it right away - see WeatherViewModel)
+            _ = _viewModel.UpdateWeatherAsync();
 
             // Set up the timer
             _timer = new DispatcherTimer();
             _timer.Interval = TimeSpan.FromMinutes(1);
 
-            _timer.Tick += async (sender, args) => await vm.UpdateWeatherAsync();
+            _timer.Tick += async (sender, args) => await _viewModel.UpdateWeatherAsync();
             _timer.Start();
+        }
+
+        private void WeatherDisplay_Unloaded(object sender, System.Windows.RoutedEventArgs e)
+        {
+            _timer?.Stop();
+            _timer = null;
+            _viewModel?.Dispose();
+            _viewModel = null;
         }
     }
 
@@ -52,13 +68,67 @@ namespace RetroBar.Controls
     /// phase, which a clear sky (WMO 0/1) uses to show the correct one of the 8 moon phase icons
     /// at night instead of the sun icon - see GetIconFileName/GetMoonPhaseIconFileName.
     /// </summary>
-    public class WeatherViewModel : INotifyPropertyChanged
+    public class WeatherViewModel : INotifyPropertyChanged, IDisposable
     {
         private static readonly HttpClient _httpClient = new HttpClient();
 
-        private string _geocodedLocation;
-        private double _latitude;
-        private double _longitude;
+        // Open-Meteo's free tier has a per-IP daily request cap (HTTP 429 once exceeded), and every
+        // monitor's WeatherDisplay used to poll it every minute plus once per restart - enough to
+        // burn through it. Weather barely changes minute to minute, so the result is shared
+        // (static) across all instances and only refetched after SuccessRefresh.
+        private static readonly TimeSpan SuccessRefresh = TimeSpan.FromMinutes(15);
+
+        // How soon to retry after a failed fetch: short at first (so a not-yet-up network at boot, or a
+        // blip, recovers within seconds instead of leaving a display on "N/A" for minutes) and backing
+        // off while it keeps failing (e.g. a 429), up to FailureRetryMax.
+        private static readonly TimeSpan FailureRetryMin = TimeSpan.FromSeconds(15);
+        private static readonly TimeSpan FailureRetryMax = TimeSpan.FromMinutes(5);
+
+        private static string _geocodedLocation;
+        private static double _latitude;
+        private static double _longitude;
+
+        private static string _cachedLocation;
+        private static string _cachedTemp;
+        private static string _cachedIconPath;
+        private static DateTime _lastSuccessUtc = DateTime.MinValue;
+        private static DateTime _lastAttemptUtc = DateTime.MinValue;
+        private static int _consecutiveFailures;
+
+        // The one in-flight fetch, shared by every monitor's display: a display that asks while another
+        // is already fetching joins it instead of seeing "no data yet" and showing N/A.
+        private static Task _fetchTask;
+
+        /// <summary>Raised (on the UI thread) whenever the shared reading changes or a fetch
+        /// finishes, so every monitor's display updates in the same moment instead of each waiting
+        /// for its own next poll.</summary>
+        private static event Action SharedStateChanged;
+
+        public WeatherViewModel()
+        {
+            SharedStateChanged += OnSharedStateChanged;
+            Settings.Instance.PropertyChanged += Settings_PropertyChanged;
+        }
+
+        public void Dispose()
+        {
+            SharedStateChanged -= OnSharedStateChanged;
+            Settings.Instance.PropertyChanged -= Settings_PropertyChanged;
+        }
+
+        private void OnSharedStateChanged()
+        {
+            ApplyShared();
+        }
+
+        private void Settings_PropertyChanged(object sender, PropertyChangedEventArgs e)
+        {
+            if (e.PropertyName == nameof(Settings.WeatherLocation))
+            {
+                // A new location is shown as soon as it's fetched, not on the next minute tick.
+                System.Windows.Application.Current?.Dispatcher.BeginInvoke(new Action(() => _ = UpdateWeatherAsync()));
+            }
+        }
 
         private string _weatherIconPath;
         public string WeatherIconPath
@@ -88,7 +158,7 @@ namespace RetroBar.Controls
             }
         }
 
-        private string GetImagePath(string fileName)
+        private static string GetImagePath(string fileName)
         {
             string fullPath = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "Resources", fileName);
             return new Uri(fullPath).AbsoluteUri;
@@ -104,13 +174,60 @@ namespace RetroBar.Controls
                 return;
             }
 
+            bool cacheMatches = HasCacheFor(location);
+
+            // Whatever is known is shown immediately - the shared reading if there is one, even a stale
+            // one, rather than N/A while a fetch is pending.
+            ApplyShared();
+
+            if (cacheMatches && DateTime.UtcNow - _lastSuccessUtc < SuccessRefresh)
+            {
+                return;
+            }
+
+            Task fetch = StartOrJoinFetch(location, cacheMatches);
+            if (fetch != null)
+            {
+                await fetch;
+            }
+        }
+
+        private static bool HasCacheFor(string location)
+        {
+            return _cachedTemp != null && string.Equals(location, _cachedLocation, StringComparison.OrdinalIgnoreCase);
+        }
+
+        // Starts the shared fetch, or joins the one already running; null if one was attempted too
+        // recently (the retry backoff) and there is nothing to wait for.
+        private static Task StartOrJoinFetch(string location, bool cacheMatches)
+        {
+            if (_fetchTask != null && !_fetchTask.IsCompleted)
+            {
+                return _fetchTask;
+            }
+
+            TimeSpan retryDelay = _consecutiveFailures == 0
+                ? TimeSpan.Zero
+                : TimeSpan.FromSeconds(Math.Min(FailureRetryMax.TotalSeconds, FailureRetryMin.TotalSeconds * Math.Pow(2, _consecutiveFailures - 1)));
+
+            if (DateTime.UtcNow - _lastAttemptUtc < retryDelay)
+            {
+                return null;
+            }
+
+            _lastAttemptUtc = DateTime.UtcNow;
+            _fetchTask = FetchAsync(location);
+            return _fetchTask;
+        }
+
+        private static async Task FetchAsync(string location)
+        {
             try
             {
                 if (!string.Equals(location, _geocodedLocation, StringComparison.OrdinalIgnoreCase)
                     && !await GeocodeAsync(location))
                 {
-                    WeatherTemp = "N/A";
-                    return;
+                    throw new InvalidOperationException("Location not found");
                 }
 
                 string url = string.Format(CultureInfo.InvariantCulture,
@@ -127,16 +244,41 @@ namespace RetroBar.Controls
                 bool isDay = current.GetProperty("is_day").GetInt32() != 0;
                 double moonPhase = daily.GetProperty("moon_phase")[0].GetDouble();
 
-                WeatherTemp = FormatTemperature(temperature);
-                WeatherIconPath = GetImagePath(GetIconFileName(weatherCode, isDay, moonPhase));
+                _cachedLocation = location;
+                _cachedTemp = FormatTemperature(temperature);
+                _cachedIconPath = GetImagePath(GetIconFileName(weatherCode, isDay, moonPhase));
+                _lastSuccessUtc = DateTime.UtcNow;
+                _consecutiveFailures = 0;
             }
             catch
+            {
+                // Keep showing the last good reading through a transient failure (e.g. a 429 or a
+                // dropped connection) rather than flipping to N/A; the retry backoff decides when to
+                // try again.
+                _consecutiveFailures++;
+            }
+
+            // Every monitor's display picks up the result (or the failure) at the same moment.
+            SharedStateChanged?.Invoke();
+        }
+
+        // Shows the shared reading if it's for the location currently set; otherwise N/A.
+        private void ApplyShared()
+        {
+            string location = Settings.Instance.WeatherLocation;
+
+            if (!string.IsNullOrWhiteSpace(location) && HasCacheFor(location))
+            {
+                WeatherTemp = _cachedTemp;
+                WeatherIconPath = _cachedIconPath;
+            }
+            else
             {
                 WeatherTemp = "N/A";
             }
         }
 
-        private async Task<bool> GeocodeAsync(string location)
+        private static async Task<bool> GeocodeAsync(string location)
         {
             string encodedLocation = Uri.EscapeDataString(location);
             string url = $"https://geocoding-api.open-meteo.com/v1/search?name={encodedLocation}&count=1&language=en&format=json";

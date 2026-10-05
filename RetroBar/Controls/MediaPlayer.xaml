@@ -18,9 +18,10 @@
              Opacity here is the brush's own alpha (separate from the Rectangle's own Opacity),
              kept as a distinct dial for how translucent the (now muted) color itself is. -->
         <SolidColorBrush x:Key="VuMeterAccentBrush"
-                         Opacity="0.3" />
+                         Opacity="0.2" />
     </UserControl.Resources>
-    <StackPanel Orientation="Horizontal"
+    <StackPanel x:Name="MediaPlayerRoot"
+                Orientation="Horizontal"
                 Style="{DynamicResource MediaPlayerPanelStyle}">
         <!-- A layout/position anchor only - always Hidden (never actually painted) when
              there's art. The visible copy lives in an Adorner (see UpdateAlbumArtAdorner
@@ -34,17 +35,27 @@
         <Grid x:Name="TrackTextHost"
               Style="{DynamicResource MediaPlayerTrackTextHostStyle}">
             <!-- The VU-meter visualizer - two stacked translucent bars (one per stereo channel)
-                 behind the track text, each growing left (quiet) to right (loud).
-                 Declared before TrackTextCanvas so they paint behind it. A dedicated inner Grid
-                 (rather than adding RowDefinitions to TrackTextHost itself, which would also slice
-                 up TrackTextCanvas - it doesn't set Grid.Row, so it'd default to just the top row)
-                 splits the available height in two; HorizontalAlignment="Left" + Width set in code
-                 (see VisualizerCapture_OnLevelUpdated) is what makes each bar grow from the left
-                 edge rather than stretch/center. TrackTextHost's own ClipToBounds (from its Style)
-                 keeps them from ever drawing past the host's own bounds regardless of how wide
-                 Width gets. -->
+                 behind the track text, each growing left (quiet) to right (loud). Declared
+                 before the Border below so it paints behind both the text AND the album art
+                 (Adorners - which is how the album art itself renders, see AlbumArtImage's own
+                 remarks above - always paint above ordinary content like this, regardless of
+                 either one's own position in the tree). HorizontalAlignment="Left" + Width set
+                 in code (see UpdateVuMeterOffset) is what makes each bar grow from the left
+                 edge rather than stretch/center; the code-set RenderTransform on this Grid
+                 shifts the whole thing left by exactly the album art's own reserved width, so
+                 it can start at the tray box's own left edge and grow out from behind the
+                 album art - this only works because TrackTextHost itself is no longer clipped
+                 (see its own Style) - the Border below gives the marquee text its own dedicated
+                 clip instead, so it still crops normally. Deliberately NOT given
+                 utilities:MonitorOffset.Tag itself - UpdateVuMeterOffset reads the
+                 "VuMeterContainer" per-monitor entry directly instead (same tag string, just via
+                 MonitorAdjustments.Get, same as UpdateAlbumArtAdorner already does for its own
+                 Adorner-hosted copy), since the automatic MonitorOffset.Apply this attached
+                 property would otherwise trigger writes the exact same Width/RenderTransform
+                 properties this method computes, racing with (and liable to overwrite) the
+                 left-shift math below. -->
             <Grid x:Name="VuMeterContainer"
-                  VerticalAlignment="Stretch"
+                  HorizontalAlignment="Left"
                   Visibility="Collapsed"
                   IsHitTestVisible="False">
                 <Grid.RowDefinitions>
@@ -64,26 +75,30 @@
                            Opacity="1"
                            Fill="{DynamicResource VuMeterAccentBrush}" />
             </Grid>
-            <!-- A Canvas measures and arranges its children at their full natural
-                 size, so the track text is never squeezed down to the visible
-                 width. The host Grid clips it and the marquee slides it. -->
-            <Canvas x:Name="TrackTextCanvas"
-                    Height="{Binding ActualHeight, ElementName=TrackText}"
-                    utilities:MonitorOffset.Tag="MediaTrackText"
-                    Background="Transparent"
-                    Cursor="Hand"
-                    MouseLeftButtonUp="TrackTextCanvas_OnMouseLeftButtonUp">
-                <TextBlock x:Name="TrackText"
-                           Canvas.Left="0"
-                           Canvas.Top="0"
-                           Style="{DynamicResource MediaPlayerTrackTextStyle}"
-                           SizeChanged="TrackText_SizeChanged"
-                           Text="">
-                    <TextBlock.RenderTransform>
-                        <TranslateTransform x:Name="TrackTextTransform" />
-                    </TextBlock.RenderTransform>
-                </TextBlock>
-            </Canvas>
+            <!-- Own dedicated clip for the marquee text, now that TrackTextHost itself is no
+                 longer clipped (see VuMeterContainer's own remarks above). -->
+            <Border ClipToBounds="True">
+                <!-- A Canvas measures and arranges its children at their full natural
+                     size, so the track text is never squeezed down to the visible
+                     width. The Border above clips it and the marquee slides it. -->
+                <Canvas x:Name="TrackTextCanvas"
+                        Height="{Binding ActualHeight, ElementName=TrackText}"
+                        utilities:MonitorOffset.Tag="MediaTrackText"
+                        Background="Transparent"
+                        Cursor="Hand"
+                        MouseLeftButtonUp="TrackTextCanvas_OnMouseLeftButtonUp">
+                    <TextBlock x:Name="TrackText"
+                               Canvas.Left="0"
+                               Canvas.Top="0"
+                               Style="{DynamicResource MediaPlayerTrackTextStyle}"
+                               SizeChanged="TrackText_SizeChanged"
+                               Text="">
+                        <TextBlock.RenderTransform>
+                            <TranslateTransform x:Name="TrackTextTransform" />
+                        </TextBlock.RenderTransform>
+                    </TextBlock>
+                </Canvas>
+            </Border>
         </Grid>
         <!-- Real, interactive buttons live in code (see InitializeTransportButtonAdorners in
              MediaPlayer.xaml.cs), each hosted in its own Adorner anchored to one of these

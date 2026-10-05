@@ -13,8 +13,39 @@ namespace RetroBar.Controls
     /// </summary>
     public partial class TaskThumbnail : UserControl
     {
-        const double MAX_WIDTH = 180;
-        const double MAX_HEIGHT = 120;
+        const double DEFAULT_WIDTH = 180;
+
+        // The thumbnail area is a bit wider than the tab it belongs to.
+        const double SIZE_FACTOR = 1.2;
+
+        // Width of the preview's thumbnail area, in DIPs - bound to the tab's own width by the
+        // preview template (TaskButton.xaml), so every preview is as wide as its tab. The height
+        // follows the window's own shape (within limits, below), so the thumbnail fills the area with
+        // the same padding around it on every preview rather than being letterboxed.
+        public static DependencyProperty BoxWidthProperty = DependencyProperty.Register(nameof(BoxWidth), typeof(double), typeof(TaskThumbnail),
+            new PropertyMetadata(DEFAULT_WIDTH, (d, e) => ((TaskThumbnail)d).Refresh()));
+
+        public double BoxWidth
+        {
+            get { return (double)GetValue(BoxWidthProperty); }
+            set { SetValue(BoxWidthProperty, value); }
+        }
+
+        // Like the Windows taskbar, previews live in a box of limited size: the height follows the
+        // window's shape only up to MAX_HEIGHT_RATIO of the width (about 4:3), and a taller window gets
+        // that same box with its picture fitted inside and centered (bars at the sides) instead of a
+        // preview that keeps growing taller. Very wide windows are floored at MIN_HEIGHT_RATIO so they
+        // don't become a sliver.
+        private const double MIN_HEIGHT_RATIO = 0.35;
+        private const double MAX_HEIGHT_RATIO = 0.75;
+
+        // Height of the thumbnail area for the window currently being shown (set by Refresh).
+        private double _boxHeight = Math.Round(DEFAULT_WIDTH * 2.0 / 3.0);
+        private double BoxHeight => _boxHeight;
+
+        // The area's width in DIPs, rounded to a whole number of device pixels so its edges (and the
+        // frame around it) land cleanly on the pixel grid at any monitor scale.
+        private double AreaWidth => Math.Round(BoxWidth * SIZE_FACTOR * DpiScale) / DpiScale;
 
         public double DpiScale = 1.0;
 
@@ -24,6 +55,9 @@ namespace RetroBar.Controls
         public TaskThumbnail()
         {
             InitializeComponent();
+
+            // Never show the title tooltip declared in the XAML - see UserControl_Loaded.
+            ToolTip = null;
 
             _toolTipTimer = new DispatcherTimer();
             _toolTipTimer.Tick += ToolTipTimer_Tick;
@@ -85,13 +119,23 @@ namespace RetroBar.Controls
                     if (this == null)
                         return new NativeMethods.Rect(0, 0, 0, 0);
 
-                    var generalTransform = TransformToAncestor((System.Windows.Media.Visual)Parent);
+                    // Relative to the popup window's root (DWM wants window-client coordinates), not to
+                    // this control's parent: the preview can have other content (a title row) above the
+                    // thumbnail, so the parent isn't at the window's origin.
+                    var generalTransform = TransformToAncestor(
+                        (PresentationSource.FromVisual(this)?.RootVisual as System.Windows.Media.Visual) ?? (System.Windows.Media.Visual)Parent);
                     var leftTopPoint = generalTransform.Transform(new Point(0, 0));
+                    // Rounded, not truncated: the position is a whole number of pixels in exact arithmetic
+                    // (borders, margins and padding are snapped to the pixel grid), so a tiny floating
+                    // point shortfall like 10.9999 must land on 11, not 10 - which shifted the picture
+                    // a pixel off-center within its frame.
+                    int left = (int)Math.Round(leftTopPoint.X * DpiScale);
+                    int top = (int)Math.Round(leftTopPoint.Y * DpiScale);
                     return new NativeMethods.Rect(
-                          (int)(leftTopPoint.X * DpiScale),
-                          (int)(leftTopPoint.Y * DpiScale),
-                          (int)(leftTopPoint.X * DpiScale) + (int)(MAX_WIDTH * DpiScale),
-                          (int)(leftTopPoint.Y * DpiScale) + (int)(MAX_HEIGHT * DpiScale)
+                          left,
+                          top,
+                          left + (int)Math.Round(AreaWidth * DpiScale),
+                          top + (int)Math.Round(BoxHeight * DpiScale)
                          );
                 }
                 catch
@@ -99,6 +143,27 @@ namespace RetroBar.Controls
                     return new NativeMethods.Rect(0, 0, 0, 0);
                 }
             }
+        }
+
+        // The thumbnail is drawn by DWM, not WPF, so fading the preview popup (its ToolTip's Opacity -
+        // see TaskButton.Preview.cs) doesn't fade it by itself; Refresh runs every frame and passes the
+        // popup's current opacity on to DWM so the thumbnail fades together with the frame around it.
+        private byte GetPopupOpacity()
+        {
+            DependencyObject current = this;
+            while (current != null)
+            {
+                if (current is ToolTip tip)
+                {
+                    return (byte)Math.Round(255 * Math.Max(0, Math.Min(1, tip.Opacity)));
+                }
+
+                current = current is Visual or System.Windows.Media.Media3D.Visual3D
+                    ? VisualTreeHelper.GetParent(current)
+                    : LogicalTreeHelper.GetParent(current);
+            }
+
+            return 255;
         }
 
         public void Refresh()
@@ -119,49 +184,55 @@ namespace RetroBar.Controls
                 NativeMethods.DwmUpdateThumbnailProperties(_thumbHandle, ref clientAreaProps);
 
                 NativeMethods.DwmQueryThumbnailSourceSize(_thumbHandle, out NativeMethods.PSIZE size);
-                double aspectRatio = (double)size.x / size.y;
 
                 var props = new NativeMethods.DWM_THUMBNAIL_PROPERTIES
                 {
                     fVisible = true,
-                    dwFlags = NativeMethods.DWM_TNP_VISIBLE | NativeMethods.DWM_TNP_RECTDESTINATION,
-                    rcDestination = Rect
+                    dwFlags = NativeMethods.DWM_TNP_VISIBLE | NativeMethods.DWM_TNP_RECTDESTINATION | NativeMethods.DWM_TNP_OPACITY,
+                    rcDestination = Rect,
+                    opacity = GetPopupOpacity()
                 };
 
-                if (this != null)
+                // Width is the tab's (scaled up a little); height follows the window's shape (clamped)...
+                double areaWidth = AreaWidth;
+                if (size.x > 0 && size.y > 0)
                 {
-                    if (size.x <= (MAX_WIDTH * DpiScale) && size.y <= (MAX_HEIGHT * DpiScale))
+                    double ratio = Math.Min(MAX_HEIGHT_RATIO, Math.Max(MIN_HEIGHT_RATIO, (double)size.y / size.x));
+                    _boxHeight = Math.Round(areaWidth * ratio * DpiScale) / DpiScale;
+                }
+
+                Width = areaWidth;
+                Height = BoxHeight;
+
+                if (size.x > 0 && size.y > 0)
+                {
+                    // ...and the picture is scaled to fill it - to the full width for a normal window,
+                    // or fitted inside if the height was clamped - centered either way.
+                    double boxWidthPx = areaWidth * DpiScale;
+                    double boxHeightPx = BoxHeight * DpiScale;
+                    double scale = Math.Min(boxWidthPx / size.x, boxHeightPx / size.y);
+                    int boxWidth = (int)Math.Round(boxWidthPx);
+                    int boxHeight = (int)Math.Round(boxHeightPx);
+                    int width = Math.Max(1, (int)Math.Round(size.x * scale));
+                    int height = Math.Max(1, (int)Math.Round(size.y * scale));
+
+                    // The picture fills the area on whichever axis limited its size: truncating the scaled
+                    // size left it a pixel short, which made the padding uneven (one pixel more on the
+                    // right or bottom than the left or top).
+                    if (Math.Abs(width - boxWidth) <= 1)
                     {
-                        // small, do not scale
-                        Width = size.x / DpiScale;
-                        Height = size.y / DpiScale;
-                        props.rcDestination.Right = props.rcDestination.Left + size.x;
-                        props.rcDestination.Bottom = props.rcDestination.Top + size.y;
+                        width = boxWidth;
                     }
-                    else
+
+                    if (Math.Abs(height - boxHeight) <= 1)
                     {
-                        // large, scale preserving aspect ratio
-                        double controlAspectRatio = MAX_WIDTH / MAX_HEIGHT;
-
-                        if (aspectRatio > controlAspectRatio)
-                        {
-                            // wide
-                            int height = (int)(MAX_WIDTH / aspectRatio);
-
-                            Width = MAX_WIDTH;
-                            Height = height;
-                            props.rcDestination.Bottom = props.rcDestination.Top + (int)(height * DpiScale);
-                        }
-                        else if (aspectRatio < controlAspectRatio)
-                        {
-                            // tall
-                            int width = (int)(MAX_HEIGHT * aspectRatio);
-
-                            Width = width;
-                            Height = MAX_HEIGHT;
-                            props.rcDestination.Right = props.rcDestination.Left + (int)(width * DpiScale);
-                        }
+                        height = boxHeight;
                     }
+
+                    int left = props.rcDestination.Left + (int)Math.Round((boxWidth - width) / 2.0);
+                    int top = props.rcDestination.Top + (int)Math.Round((boxHeight - height) / 2.0);
+
+                    props.rcDestination = new NativeMethods.Rect(left, top, left + width, top + height);
                 }
 
                 if (this != null)
@@ -194,7 +265,11 @@ namespace RetroBar.Controls
         {
             DpiScale = PresentationSource.FromVisual(this).CompositionTarget.TransformToDevice.M11;
 
-            if (NativeMethods.DwmIsCompositionEnabled() && SourceWindowHandle != IntPtr.Zero && Handle != IntPtr.Zero && NativeMethods.DwmRegisterThumbnail(Handle, SourceWindowHandle, out _thumbHandle) == 0)
+            // No NativeMethods.DwmIsCompositionEnabled() pre-check: composition has been permanently on
+            // since Windows 8, and that call was observed to (incorrectly) report false on a plain
+            // local Windows 11 session, which silently disabled every thumbnail. DwmRegisterThumbnail
+            // itself fails (non-zero) if composition genuinely isn't available, and that is checked.
+            if (SourceWindowHandle != IntPtr.Zero && Handle != IntPtr.Zero && NativeMethods.DwmRegisterThumbnail(Handle, SourceWindowHandle, out _thumbHandle) == 0)
             {
                 Refresh();
                 // once loaded, we need to refresh the thumbnail...
@@ -202,7 +277,8 @@ namespace RetroBar.Controls
                 CompositionTarget.Rendering += _renderingHandler;
             }
 
-            _toolTipTimer.Start();
+            // (No title tooltip any more: the preview has its own title row, and the extra tooltip faded
+            // in a second after the preview itself, on top of it.)
         }
 
         private void ToolTipTimer_Tick(object sender, EventArgs e)

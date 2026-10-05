@@ -74,7 +74,8 @@
             <controls:Toolbar x:Name="QuickLaunchToolbar"
                               Visibility="Collapsed"
                               Path="{Binding Source={x:Static utilities:Settings.Instance}, Path=QuickLaunchPath}"
-                              Host="{Binding RelativeSource={RelativeSource Mode=FindAncestor, AncestorType=Window}}">
+                              Host="{Binding RelativeSource={RelativeSource Mode=FindAncestor, AncestorType=Window}}"
+                              utilities:MonitorOffset.Tag="QuickLaunchToolbar">
                 <DockPanel.Dock>
                     <Binding Converter="{StaticResource dockOrientationConverter}"
                              ConverterParameter="leading"

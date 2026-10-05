@@ -119,6 +119,48 @@ namespace RetroBar.Controls
             }
         }
 
+        /// <summary>
+        /// Moves one icon to a new place (insertIndex is a position in the icons as currently shown,
+        /// counting the dragged icon itself) and saves the resulting order. The new order is worked out
+        /// and stored here, rather than left to the drag-drop library's own move of the underlying list
+        /// followed by the view's re-sort: when it moved an item within the list the sorted view
+        /// sometimes never repositioned it, so the drop silently did nothing - the "sometimes works,
+        /// sometimes doesn't" reordering.
+        /// </summary>
+        public void MoveItem(ShellFile dragged, int insertIndex)
+        {
+            if (Folder == null)
+            {
+                return;
+            }
+
+            ListCollectionView view = (ListCollectionView)CollectionViewSource.GetDefaultView(Folder.Files);
+            List<ShellFile> ordered = view.OfType<ShellFile>().ToList();
+
+            int sourceIndex = ordered.IndexOf(dragged);
+            if (sourceIndex < 0)
+            {
+                return;
+            }
+
+            ordered.RemoveAt(sourceIndex);
+            if (sourceIndex < insertIndex)
+            {
+                insertIndex--;
+            }
+
+            insertIndex = Math.Max(0, Math.Min(insertIndex, ordered.Count));
+            ordered.Insert(insertIndex, dragged);
+
+            // This toolbar re-sorts itself below; other monitors' toolbars refresh from the setting.
+            _ignoreNextUpdate = true;
+            Settings.Instance.QuickLaunchOrder = ordered.Select(file => file.Path).ToList();
+
+            Dictionary<object, Point> before = ItemSlideAnimation.Capture(ToolbarItems);
+            view.Refresh();
+            ItemSlideAnimation.Play(ToolbarItems, before);
+        }
+
         public void SaveItemOrder()
         {
             List<string> itemPaths = new List<string>();

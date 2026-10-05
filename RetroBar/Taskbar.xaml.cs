@@ -112,10 +112,7 @@ namespace RetroBar
                 QuickLaunchToolbar.Visibility = Visibility.Visible;
             }
 
-            if (Settings.Instance.ShowDesktopButton)
-            {
-                ShowDesktopButtonTray.Visibility = Visibility.Visible;
-            }
+            UpdateShowDesktopButtonVisibility();
 
             UpdateStartButton();
 
@@ -166,10 +163,10 @@ namespace RetroBar
 
         private void MonitorAdjustments_Changed(object sender, EventArgs e)
         {
-            // Fires on a background (file-watcher) thread; a RowCount override is the only field
-            // here that affects window size/Rows, but there's no cheap way to tell from this
-            // event alone whether that's what changed, so this just always re-checks - redundant
-            // but harmless when it wasn't.
+            // Fires on a background (file-watcher) thread; RowCount and HeightAdjustment are the
+            // only fields here that affect window size/Rows, but there's no cheap way to tell from
+            // this event alone whether either of those is what changed, so this just always
+            // re-checks - redundant but harmless when it wasn't.
             Dispatcher.BeginInvoke(new Action(() =>
             {
                 PeekDuringAutoHide();
@@ -223,16 +220,9 @@ namespace RetroBar
                     return;
                 }
             }
-            else if (e.PropertyName == nameof(Settings.ShowDesktopButton))
+            else if (e.PropertyName == nameof(Settings.ShowDesktopButton) || e.PropertyName == nameof(Settings.PeekAtDesktop))
             {
-                if (Settings.Instance.ShowDesktopButton)
-                {
-                    ShowDesktopButtonTray.Visibility = Visibility.Visible;
-                }
-                else
-                {
-                    ShowDesktopButtonTray.Visibility = Visibility.Collapsed;
-                }
+                UpdateShowDesktopButtonVisibility();
             }
             else if (e.PropertyName == nameof(Settings.TaskbarScale))
             {
@@ -494,6 +484,7 @@ namespace RetroBar
             DesiredRowHeight = Settings.Instance.TaskbarScale * (Application.Current.FindResource("TaskbarRowHeight") as double? ?? 0);
             double newWidth = (Settings.Instance.TaskbarScale * (Application.Current.FindResource("TaskbarWidth") as double? ?? 0)) + DesiredRowHeight * (Settings.Instance.TaskbarWidth - 1);
             double newHeight = (Settings.Instance.TaskbarScale * (Application.Current.FindResource("TaskbarHeight") as double? ?? 0)) + DesiredRowHeight * (Rows - 1);
+            newHeight += MonitorAdjustments.GetHeightAdjustment(Screen?.DeviceName);
 
             if (AppBarMode == AppBarMode.AutoHide || !Settings.Instance.LockTaskbar)
             {
@@ -590,6 +581,18 @@ namespace RetroBar
             {
                 SetTrayHost();
             }
+        }
+
+        // Keeps ShowDesktopButtonTray in the tree whenever ITS OWN visible button is wanted
+        // (ShowDesktopButton) OR the corner hover-to-peek behavior is wanted on its own
+        // (PeekAtDesktop) - the same control hosts both (see ShowDesktopButton.xaml.cs's
+        // UpdateCompactMode, which shrinks it to an invisible hotspot instead of the full button
+        // when only PeekAtDesktop is on). Fully Collapsed only when neither is wanted.
+        private void UpdateShowDesktopButtonVisibility()
+        {
+            ShowDesktopButtonTray.Visibility = Settings.Instance.ShowDesktopButton || Settings.Instance.PeekAtDesktop
+                ? Visibility.Visible
+                : Visibility.Collapsed;
         }
 
         private void UpdateStartButton()

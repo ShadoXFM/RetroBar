@@ -452,6 +452,16 @@
                                       IsChecked="{Binding Source={x:Static Settings:Settings.Instance}, Path=ShowDesktopButton, UpdateSourceTrigger=PropertyChanged}">
                                 <Label Content="{DynamicResource add_show_desktop_button}" />
                             </CheckBox>
+                            <!-- Independent of cbShowDesktopButton above - with that one
+                                 unchecked, the corner hover-to-peek hotspot still needs this on
+                                 to do anything (see Taskbar.xaml.cs's UpdateShowDesktopButtonVisibility
+                                 and ShowDesktopButton.xaml.cs's UpdateCompactMode), and previously
+                                 the only way to reach it was the (now invisible/tiny) button's own
+                                 right-click menu. -->
+                            <CheckBox x:Name="cbPeekAtDesktop"
+                                      IsChecked="{Binding Source={x:Static Settings:Settings.Instance}, Path=PeekAtDesktop, UpdateSourceTrigger=PropertyChanged}">
+                                <Label Content="{DynamicResource peek_at_desktop}" />
+                            </CheckBox>
                             <DockPanel>
                                 <Label VerticalAlignment="Center"
                                        Target="{Binding ElementName=cboClockAction}">

@@ -29,6 +29,78 @@ namespace RetroBar.Utilities
     {
         public event EventHandler MediaChanged;
 
+        // One manager shared by every monitor's media player. Each used to create its own, with its own
+        // SMTC session subscription and 500ms poll timer, so the displays could disagree - one attached to
+        // a different/stale session, or missing a PlaybackInfoChanged, and showing paused while another
+        // showed playing. Sharing one (reference counted) means there is a single source of truth, and
+        // every display is told about each change in the same moment.
+        private static readonly object SharedGate = new();
+        private static MediaSessionManager _shared;
+        private static Task _sharedInitialization;
+        private static int _sharedReferences;
+
+        /// <summary>Gets the shared manager (creating and initializing it if this is the first user).
+        /// Pair every call with <see cref="Release"/>.</summary>
+        public static async Task<MediaSessionManager> AcquireAsync()
+        {
+            MediaSessionManager manager;
+            Task initialization;
+
+            lock (SharedGate)
+            {
+                if (_shared == null)
+                {
+                    _shared = new MediaSessionManager();
+                    _sharedInitialization = _shared.InitializeAsync();
+                }
+
+                _sharedReferences++;
+                manager = _shared;
+                initialization = _sharedInitialization;
+            }
+
+            try
+            {
+                await initialization;
+            }
+            catch
+            {
+                Release(manager);
+                throw;
+            }
+
+            return manager;
+        }
+
+        /// <summary>Gives back a manager from <see cref="AcquireAsync"/>; the last one to do so
+        /// disposes it.</summary>
+        public static void Release(MediaSessionManager manager)
+        {
+            if (manager == null)
+            {
+                return;
+            }
+
+            lock (SharedGate)
+            {
+                if (!ReferenceEquals(manager, _shared))
+                {
+                    return;
+                }
+
+                if (--_sharedReferences > 0)
+                {
+                    return;
+                }
+
+                _shared = null;
+                _sharedInitialization = null;
+                _sharedReferences = 0;
+            }
+
+            manager.Dispose();
+        }
+
         private GlobalSystemMediaTransportControlsSessionManager _manager;
         private GlobalSystemMediaTransportControlsSession _session;
         private bool _disposed;

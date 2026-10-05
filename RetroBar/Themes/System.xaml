@@ -283,7 +283,7 @@
                                 SnapsToDevicePixels="True"
                                 x:Name="ButtonOuterBottomBorder">
                             <Border BorderThickness="1,1,0,0"
-                                    BorderBrush="{DynamicResource ButtonHighlight}"
+                                    BorderBrush="{DynamicResource ButtonLight}"
                                     UseLayoutRounding="True"
                                     SnapsToDevicePixels="True"
                                     x:Name="ButtonOuterTopBorder">
@@ -292,20 +292,33 @@
                                         UseLayoutRounding="True"
                                         SnapsToDevicePixels="True"
                                         x:Name="ButtonInnerBottomBorder">
-                                    <Border BorderThickness="1,1,0,0"
-                                            BorderBrush="{DynamicResource ButtonLight}"
-                                            Background="{TemplateBinding Background}"
-                                            Padding="2,1"
-                                            UseLayoutRounding="True"
-                                            SnapsToDevicePixels="True"
-                                            x:Name="ButtonInnerTopBorder">
-                                        <ContentPresenter Name="Content" />
-                                    </Border>
+                                    <Grid>
+                                        <Border BorderThickness="1,1,0,0"
+                                                BorderBrush="{DynamicResource ButtonHighlight}"
+                                                Background="{TemplateBinding Background}"
+                                                Padding="2,1"
+                                                UseLayoutRounding="True"
+                                                SnapsToDevicePixels="True"
+                                                x:Name="ButtonInnerTopBorder">
+                                            <ContentPresenter Name="Content" />
+                                        </Border>
+                                        <Border x:Name="HoverHost" IsHitTestVisible="False">
+                                            <Border x:Name="HoverFill" utilities:MonitorOffset.Tag="HoverFill"
+                                                    Background="{DynamicResource ClockForeground}"
+                                                    Opacity="0"
+                                                    IsHitTestVisible="False"
+                                                    UseLayoutRounding="True"
+                                                    SnapsToDevicePixels="True" />
+                                        </Border>
+                                    </Grid>
                                 </Border>
                             </Border>
                         </Border>
                     </Border>
                     <ControlTemplate.Triggers>
+                        <Trigger Property="IsMouseOver" Value="True">
+                            <Setter TargetName="HoverFill" Property="Opacity" Value="0.08" />
+                        </Trigger>
                         <DataTrigger Binding="{Binding Path=Orientation, RelativeSource={RelativeSource Mode=FindAncestor, AncestorType={x:Type Window}}}"
                                      Value="Vertical">
                             <DataTrigger.Setters>
@@ -318,19 +331,21 @@
                                  Value="True">
                             <Setter TargetName="ButtonOuterBottomBorder"
                                     Property="BorderBrush"
-                                    Value="{DynamicResource ButtonHighlight}" />
+                                    Value="{DynamicResource ButtonLight}" />
                             <Setter TargetName="ButtonOuterTopBorder"
                                     Property="BorderBrush"
                                     Value="{DynamicResource ButtonDarkShadow}" />
                             <Setter TargetName="ButtonInnerBottomBorder"
                                     Property="BorderBrush"
-                                    Value="{DynamicResource ButtonLight}" />
+                                    Value="{DynamicResource ButtonHighlight}" />
                             <Setter TargetName="ButtonInnerTopBorder"
                                     Property="BorderBrush"
                                     Value="{DynamicResource ButtonShadow}" />
                             <Setter TargetName="Content"
                                     Property="Margin"
                                     Value="1,1,-1,-1" />
+                            <Setter TargetName="HoverFill" Property="Opacity" Value="0.14" />
+                            <Setter TargetName="HoverHost" Property="Margin" Value="1,1,0,0" />
                         </Trigger>
                     </ControlTemplate.Triggers>
                 </ControlTemplate>
@@ -372,12 +387,13 @@
                             UseLayoutRounding="True"
                             SnapsToDevicePixels="True"
                             Name="ButtonBorder">
-                        <!-- Outer bottom-right is Highlight, inner bottom-right is Light - two
-                             distinct shades, matching TaskButton's IsPressed trigger and the Tray
-                             box's own sunken bevel. Previously both used Light, so they rendered
-                             as one indistinguishable line instead of two. -->
+                        <!-- Outer bottom-right is Light, inner bottom-right is Highlight - two
+                             distinct shades, matching TaskButton's own (swapped) IsPressed
+                             trigger and the Tray box's own sunken bevel. Previously both used
+                             Light, so they rendered as one indistinguishable line instead of
+                             two. -->
                         <Border BorderThickness="0,0,1,1"
-                                BorderBrush="{DynamicResource ButtonHighlight}"
+                                BorderBrush="{DynamicResource ButtonLight}"
                                 UseLayoutRounding="True"
                                 SnapsToDevicePixels="True">
                             <Border BorderThickness="1,1,0,0"
@@ -385,40 +401,58 @@
                                     UseLayoutRounding="True"
                                     SnapsToDevicePixels="True">
                                 <Border BorderThickness="0,0,1,1"
-                                        BorderBrush="{DynamicResource ButtonLight}"
+                                        BorderBrush="{DynamicResource ButtonHighlight}"
                                         UseLayoutRounding="True"
                                         SnapsToDevicePixels="True">
                                     <Border BorderThickness="1,1,0,0"
                                             BorderBrush="{DynamicResource ButtonShadow}"
                                             UseLayoutRounding="True"
                                             SnapsToDevicePixels="True">
-                                        <Border Background="{DynamicResource CheckeredBackground}">
-                                            <!-- The sunken bevel border stays, but content keeps the
-                                                 same padding as a normal, unpressed tab - matching
-                                                 IsPressed's content shift here too made an
-                                                 always-pressed-looking active tab's text/icon sit
-                                                 visibly offset from every other tab at rest. -->
-                                            <Border BorderThickness="0,1,0,0"
-                                                    Padding="2,1"
-                                                    BorderBrush="{DynamicResource ButtonInnerHighlight}"
-                                                    UseLayoutRounding="True"
-                                                    SnapsToDevicePixels="True">
-                                                <!-- -1 top: this border's own 1px top BorderThickness is an
-                                                     extra nested layer TaskButton's resting chain doesn't
-                                                     have (its equivalent innermost border's thickness IS
-                                                     one of the 4 standard bevel layers, not a 5th on top of
-                                                     them), so without this the content would sit 1px lower
-                                                     than a normal tab's. -->
-                                                <ContentPresenter Name="Content"
-                                                                  Margin="0,-1,0,0" />
+                                        <Grid>
+                                            <Border Background="{DynamicResource CheckeredBackgroundLight}"
+                                                    utilities:PixelPatternBrush.Enabled="True">
+                                                <!-- The sunken bevel border stays, but content keeps the
+                                                     same padding as a normal, unpressed tab - matching
+                                                     IsPressed's content shift here too made an
+                                                     always-pressed-looking active tab's text/icon sit
+                                                     visibly offset from every other tab at rest. -->
+                                                <Border BorderThickness="0,1,0,0"
+                                                        Padding="2,1"
+                                                        BorderBrush="{DynamicResource ButtonInnerHighlight}"
+                                                        UseLayoutRounding="True"
+                                                        SnapsToDevicePixels="True">
+                                                    <!-- -1 top: this border's own 1px top BorderThickness is an
+                                                         extra nested layer TaskButton's resting chain doesn't
+                                                         have (its equivalent innermost border's thickness IS
+                                                         one of the 4 standard bevel layers, not a 5th on top of
+                                                         them), so without this the content would sit 1px lower
+                                                         than a normal tab's. -->
+                                                    <ContentPresenter Name="Content"
+                                                                      Margin="0,-1,0,0" />
+                                                </Border>
                                             </Border>
-                                        </Border>
+                                            <Border x:Name="HoverHost" IsHitTestVisible="False">
+                                                <Border x:Name="HoverFill" utilities:MonitorOffset.Tag="HoverFill"
+                                                        Background="{DynamicResource ClockForeground}"
+                                                        Opacity="0"
+                                                        IsHitTestVisible="False"
+                                                        UseLayoutRounding="True"
+                                                        SnapsToDevicePixels="True" />
+                                            </Border>
+                                        </Grid>
                                     </Border>
                                 </Border>
                             </Border>
                         </Border>
                     </Border>
                     <ControlTemplate.Triggers>
+                        <Trigger Property="IsMouseOver" Value="True">
+                            <Setter TargetName="HoverFill" Property="Opacity" Value="0.08" />
+                        </Trigger>
+                        <Trigger Property="IsPressed" Value="True">
+                            <Setter TargetName="HoverFill" Property="Opacity" Value="0.14" />
+                            <Setter TargetName="HoverHost" Property="Margin" Value="1,1,0,0" />
+                        </Trigger>
                         <DataTrigger Binding="{Binding Path=Orientation, RelativeSource={RelativeSource Mode=FindAncestor, AncestorType={x:Type Window}}}"
                                      Value="Vertical">
                             <DataTrigger.Setters>
@@ -439,6 +473,15 @@
         </DrawingBrush.Drawing>
     </DrawingBrush>
 
+    <!-- Same pattern as CheckeredBackground, just in ButtonLight instead of ButtonHighlight - used
+         by TaskButtonActive's own pressed-tab background specifically, so it doesn't also recolor
+         the other (StartButton IsChecked) usage of the plain CheckeredBackground resource. -->
+    <DrawingBrush x:Key="CheckeredBackgroundLight" TileMode="Tile" Viewport="0,0,2,2" ViewportUnits="Absolute">
+        <DrawingBrush.Drawing>
+            <GeometryDrawing Geometry="M2,0 H1 V1 H0 V2 H1 V1 H2Z" Brush="{DynamicResource ButtonLight}" />
+        </DrawingBrush.Drawing>
+    </DrawingBrush>
+
     <DrawingBrush x:Key="CheckeredBackgroundAlt" TileMode="Tile" Viewport="0,0,2,2" ViewportUnits="Absolute">
         <DrawingBrush.Drawing>
             <GeometryDrawing Geometry="M0,0 H1 V1 H2 V2 H1 V1 H0Z" Brush="{DynamicResource ButtonHighlight}" />
@@ -456,25 +499,137 @@
 
     <Style TargetType="ContentControl"
            x:Key="TaskButtonThumbnail">
+        <!-- See ButtonChromeDpiSnap's own remarks - snaps the frame's Margin/Padding/BorderThickness
+             values (the SnapBorder* elements below) to whole device pixels, so the bevel outline is
+             the same 1px line on every side at any monitor scale. -->
+        <Setter Property="utilities:ButtonChromeDpiSnap.Enabled"
+                Value="True" />
         <Setter Property="Template">
             <Setter.Value>
                 <ControlTemplate TargetType="ContentControl">
                     <Border BorderThickness="0,0,1,1"
                             BorderBrush="{DynamicResource ButtonDarkShadow}"
-                            Margin="4">
+                            Margin="4"
+                            UseLayoutRounding="True"
+                            SnapsToDevicePixels="True"
+                            x:Name="SnapBorder1">
                         <Border BorderThickness="1,1,0,0"
-                                BorderBrush="{DynamicResource ButtonHighlight}">
+                                BorderBrush="{DynamicResource ButtonHighlight}"
+                                UseLayoutRounding="True"
+                                SnapsToDevicePixels="True"
+                                x:Name="SnapBorder2">
                             <Border BorderThickness="0,0,1,1"
-                                    BorderBrush="{DynamicResource ButtonShadow}">
+                                    BorderBrush="{DynamicResource ButtonShadow}"
+                                    UseLayoutRounding="True"
+                                    SnapsToDevicePixels="True"
+                                    x:Name="SnapBorder3">
                                 <Border BorderThickness="1,1,0,0"
                                         BorderBrush="{DynamicResource ButtonLight}"
                                         Background="{DynamicResource ButtonFace}"
-                                        Padding="3">
+                                        Padding="3"
+                                        UseLayoutRounding="True"
+                                        SnapsToDevicePixels="True"
+                                        x:Name="SnapBorder4">
                                     <ContentPresenter />
                                 </Border>
                             </Border>
                         </Border>
                     </Border>
+                </ControlTemplate>
+            </Setter.Value>
+        </Setter>
+    </Style>
+
+    <!-- The small close button on a thumbnail preview (see TaskButton.xaml): a square raised button in
+         the theme's own bevel colors (sunken while pressed), turning red under the pointer like the
+         Windows taskbar's. Driven by Tag ("hot" / "pressed"), set from TaskButton.Preview.cs: WPF
+         never routes mouse input to the preview's window, so IsMouseOver/IsPressed don't work here. -->
+    <Style TargetType="Button"
+           x:Key="TaskPreviewCloseButton">
+        <Setter Property="OverridesDefaultStyle"
+                Value="True" />
+        <Setter Property="Focusable"
+                Value="False" />
+        <Setter Property="Width"
+                Value="16" />
+        <Setter Property="Height"
+                Value="16" />
+        <Setter Property="Template">
+            <Setter.Value>
+                <ControlTemplate TargetType="Button">
+                    <Border BorderThickness="0,0,1,1"
+                            BorderBrush="{DynamicResource ButtonDarkShadow}"
+                            UseLayoutRounding="True"
+                            SnapsToDevicePixels="True"
+                            x:Name="BevelOuterBottom">
+                        <Border BorderThickness="1,1,0,0"
+                                BorderBrush="{DynamicResource ButtonLight}"
+                                UseLayoutRounding="True"
+                                SnapsToDevicePixels="True"
+                                x:Name="BevelOuterTop">
+                            <Border BorderThickness="0,0,1,1"
+                                    BorderBrush="{DynamicResource ButtonShadow}"
+                                    UseLayoutRounding="True"
+                                    SnapsToDevicePixels="True"
+                                    x:Name="BevelInnerBottom">
+                                <Border BorderThickness="1,1,0,0"
+                                        BorderBrush="{DynamicResource ButtonHighlight}"
+                                        Background="{DynamicResource ButtonFace}"
+                                        UseLayoutRounding="True"
+                                        SnapsToDevicePixels="True"
+                                        x:Name="Face">
+                                    <!-- The classic 8x7 close glyph drawn as filled 1x1 cells (1 unit = 1 pixel
+                                         at 100%); TaskButton.Preview.cs rescales the geometry so a cell is
+                                         exactly one device pixel on every monitor. A stroked line instead
+                                         anti-aliases into a lopsided X at anything but 100%. -->
+                                    <Path x:Name="Glyph"
+                                          Data="M0,0 h2 v1 h-2 z M6,0 h2 v1 h-2 z M1,1 h2 v1 h-2 z M5,1 h2 v1 h-2 z M2,2 h4 v1 h-4 z M3,3 h2 v1 h-2 z M2,4 h4 v1 h-4 z M1,5 h2 v1 h-2 z M5,5 h2 v1 h-2 z M0,6 h2 v1 h-2 z M6,6 h2 v1 h-2 z"
+                                          Fill="{DynamicResource ButtonForeground}"
+                                          RenderOptions.EdgeMode="Aliased"
+                                          HorizontalAlignment="Center"
+                                          VerticalAlignment="Center"
+                                          Stretch="None"
+                                          UseLayoutRounding="True"
+                                          SnapsToDevicePixels="True" />
+                                </Border>
+                            </Border>
+                        </Border>
+                    </Border>
+                    <ControlTemplate.Triggers>
+                        <Trigger Property="Tag"
+                                 Value="hot">
+                            <Setter TargetName="Face"
+                                    Property="Background"
+                                    Value="#C42B1C" />
+                            <Setter TargetName="Glyph"
+                                    Property="Fill"
+                                    Value="White" />
+                        </Trigger>
+                        <Trigger Property="Tag"
+                                 Value="pressed">
+                            <Setter TargetName="BevelOuterBottom"
+                                    Property="BorderBrush"
+                                    Value="{DynamicResource ButtonLight}" />
+                            <Setter TargetName="BevelOuterTop"
+                                    Property="BorderBrush"
+                                    Value="{DynamicResource ButtonDarkShadow}" />
+                            <Setter TargetName="BevelInnerBottom"
+                                    Property="BorderBrush"
+                                    Value="{DynamicResource ButtonHighlight}" />
+                            <Setter TargetName="Face"
+                                    Property="BorderBrush"
+                                    Value="{DynamicResource ButtonShadow}" />
+                            <Setter TargetName="Face"
+                                    Property="Background"
+                                    Value="#8E1F14" />
+                            <Setter TargetName="Glyph"
+                                    Property="Fill"
+                                    Value="White" />
+                            <Setter TargetName="Glyph"
+                                    Property="Margin"
+                                    Value="1,1,0,0" />
+                        </Trigger>
+                    </ControlTemplate.Triggers>
                 </ControlTemplate>
             </Setter.Value>
         </Setter>
@@ -504,19 +659,32 @@
                             <Border BorderThickness="0,0,1,1"
                                     BorderBrush="{DynamicResource ButtonShadow}"
                                     x:Name="ButtonInnerBottomBorder">
-                                <Border BorderThickness="1,1,0,0"
-                                        BorderBrush="{DynamicResource ButtonLight}"
-                                        Background="{TemplateBinding Background}"
-                                        Padding="4,0"
-                                        x:Name="ButtonInnerTopBorder">
-                                    <ContentPresenter HorizontalAlignment="Center"
-                                                      VerticalAlignment="Center"
-                                                      Margin="0,-5,0,-3" />
-                                </Border>
+                                <Grid>
+                                    <Border BorderThickness="1,1,0,0"
+                                            BorderBrush="{DynamicResource ButtonLight}"
+                                            Background="{TemplateBinding Background}"
+                                            Padding="4,0"
+                                            x:Name="ButtonInnerTopBorder">
+                                        <ContentPresenter HorizontalAlignment="Center"
+                                                          VerticalAlignment="Center"
+                                                          Margin="0,-5,0,-3" />
+                                    </Border>
+                                    <Border x:Name="HoverHost" IsHitTestVisible="False">
+                                        <Border x:Name="HoverFill" utilities:MonitorOffset.Tag="HoverFill"
+                                                Background="{DynamicResource ClockForeground}"
+                                                Opacity="0"
+                                                IsHitTestVisible="False"
+                                                UseLayoutRounding="True"
+                                                SnapsToDevicePixels="True" />
+                                    </Border>
+                                </Grid>
                             </Border>
                         </Border>
                     </Border>
                     <ControlTemplate.Triggers>
+                        <Trigger Property="IsMouseOver" Value="True">
+                            <Setter TargetName="HoverFill" Property="Opacity" Value="0.08" />
+                        </Trigger>
                         <Trigger Property="IsPressed"
                                  Value="True">
                             <Setter TargetName="ButtonOuterBottomBorder"
@@ -531,6 +699,8 @@
                             <Setter TargetName="ButtonInnerTopBorder"
                                     Property="BorderBrush"
                                     Value="{DynamicResource ButtonShadow}" />
+                            <Setter TargetName="HoverFill" Property="Opacity" Value="0.14" />
+                            <Setter TargetName="HoverHost" Property="Margin" Value="1,1,0,0" />
                         </Trigger>
                     </ControlTemplate.Triggers>
                 </ControlTemplate>
@@ -697,7 +867,7 @@
                                 SnapsToDevicePixels="True"
                                 x:Name="ButtonOuterBottomBorder">
                             <Border BorderThickness="1,1,0,0"
-                                    BorderBrush="{DynamicResource ButtonHighlight}"
+                                    BorderBrush="{DynamicResource ButtonLight}"
                                     UseLayoutRounding="True"
                                     SnapsToDevicePixels="True"
                                     x:Name="ButtonOuterTopBorder">
@@ -706,55 +876,71 @@
                                         UseLayoutRounding="True"
                                         SnapsToDevicePixels="True"
                                         x:Name="ButtonInnerBottomBorder">
-                                    <Border BorderThickness="1,1,0,0"
-                                            BorderBrush="{DynamicResource ButtonLight}"
-                                            Background="{TemplateBinding Background}"
-                                            Padding="2,1"
-                                            UseLayoutRounding="True"
-                                            SnapsToDevicePixels="True"
-                                            x:Name="ButtonInnerTopBorder">
-                                        <ContentPresenter Name="Content" />
-                                    </Border>
+                                    <Grid>
+                                        <Border BorderThickness="1,1,0,0"
+                                                BorderBrush="{DynamicResource ButtonHighlight}"
+                                                Background="{TemplateBinding Background}"
+                                                Padding="2,1"
+                                                UseLayoutRounding="True"
+                                                SnapsToDevicePixels="True"
+                                                x:Name="ButtonInnerTopBorder">
+                                            <ContentPresenter Name="Content" />
+                                        </Border>
+                                        <Border x:Name="HoverHost" IsHitTestVisible="False">
+                                            <Border x:Name="HoverFill" utilities:MonitorOffset.Tag="HoverFill"
+                                                    Background="{DynamicResource ClockForeground}"
+                                                    Opacity="0"
+                                                    IsHitTestVisible="False"
+                                                    UseLayoutRounding="True"
+                                                    SnapsToDevicePixels="True" />
+                                        </Border>
+                                    </Grid>
                                 </Border>
                             </Border>
                         </Border>
                     </Border>
                     <ControlTemplate.Triggers>
+                        <Trigger Property="IsMouseOver" Value="True">
+                            <Setter TargetName="HoverFill" Property="Opacity" Value="0.08" />
+                        </Trigger>
                         <Trigger Property="IsChecked"
                                  Value="True">
                             <Setter TargetName="ButtonOuterBottomBorder"
                                     Property="BorderBrush"
-                                    Value="{DynamicResource ButtonHighlight}" />
+                                    Value="{DynamicResource ButtonLight}" />
                             <Setter TargetName="ButtonOuterTopBorder"
                                     Property="BorderBrush"
                                     Value="{DynamicResource ButtonDarkShadow}" />
                             <Setter TargetName="ButtonInnerBottomBorder"
                                     Property="BorderBrush"
-                                    Value="{DynamicResource ButtonLight}" />
+                                    Value="{DynamicResource ButtonHighlight}" />
                             <Setter TargetName="ButtonInnerTopBorder"
                                     Property="BorderBrush"
                                     Value="{DynamicResource ButtonShadow}" />
                             <Setter TargetName="Content"
                                     Property="Margin"
                                     Value="1,1,-1,-1" />
+                            <Setter TargetName="HoverHost" Property="Margin" Value="1,1,0,0" />
                         </Trigger>
                         <Trigger Property="IsPressed"
                                  Value="True">
                             <Setter TargetName="ButtonOuterBottomBorder"
                                     Property="BorderBrush"
-                                    Value="{DynamicResource ButtonHighlight}" />
+                                    Value="{DynamicResource ButtonLight}" />
                             <Setter TargetName="ButtonOuterTopBorder"
                                     Property="BorderBrush"
                                     Value="{DynamicResource ButtonDarkShadow}" />
                             <Setter TargetName="ButtonInnerBottomBorder"
                                     Property="BorderBrush"
-                                    Value="{DynamicResource ButtonLight}" />
+                                    Value="{DynamicResource ButtonHighlight}" />
                             <Setter TargetName="ButtonInnerTopBorder"
                                     Property="BorderBrush"
                                     Value="{DynamicResource ButtonShadow}" />
                             <Setter TargetName="Content"
                                     Property="Margin"
                                     Value="1,1,-1,-1" />
+                            <Setter TargetName="HoverFill" Property="Opacity" Value="0.14" />
+                            <Setter TargetName="HoverHost" Property="Margin" Value="1,1,0,0" />
                         </Trigger>
                         <DataTrigger Binding="{Binding Path=Orientation, RelativeSource={RelativeSource Mode=FindAncestor, AncestorType={x:Type Window}}}"
                                      Value="Vertical">
@@ -791,12 +977,22 @@
                             <Border BorderThickness="1,1,0,0"
                                     BorderBrush="{TemplateBinding Background}"
                                     x:Name="ButtonLeftTopBorder">
-                                <Border BorderThickness="1"
-                                        BorderBrush="Transparent"
-                                        Background="{TemplateBinding Background}"
-                                        Padding="2,1">
-                                    <ContentPresenter Name="Content" />
-                                </Border>
+                                <Grid>
+                                    <Border BorderThickness="1"
+                                            BorderBrush="Transparent"
+                                            Background="{TemplateBinding Background}"
+                                            Padding="2,1">
+                                        <ContentPresenter Name="Content" />
+                                    </Border>
+                                    <Border x:Name="HoverHost" IsHitTestVisible="False">
+                                        <Border x:Name="HoverFill" utilities:MonitorOffset.Tag="HoverFill"
+                                                Background="{DynamicResource ClockForeground}"
+                                                Opacity="0"
+                                                IsHitTestVisible="False"
+                                                UseLayoutRounding="True"
+                                                SnapsToDevicePixels="True" />
+                                    </Border>
+                                </Grid>
                             </Border>
                         </Border>
                     </Border>
@@ -817,6 +1013,7 @@
                             <Setter TargetName="ButtonRightBottomBorder"
                                     Property="BorderBrush"
                                     Value="{DynamicResource ButtonShadow}" />
+                            <Setter TargetName="HoverFill" Property="Opacity" Value="0.08" />
                         </Trigger>
                         <Trigger Property="IsChecked"
                                  Value="True">
@@ -831,6 +1028,7 @@
                             <Setter TargetName="Content"
                                     Property="Margin"
                                     Value="1,1,-1,-1" />
+                            <Setter TargetName="HoverHost" Property="Margin" Value="1,1,0,0" />
                         </Trigger>
                         <Trigger Property="IsPressed"
                                  Value="True">
@@ -843,6 +1041,8 @@
                             <Setter TargetName="Content"
                                     Property="Margin"
                                     Value="1,1,-1,-1" />
+                            <Setter TargetName="HoverFill" Property="Opacity" Value="0.14" />
+                            <Setter TargetName="HoverHost" Property="Margin" Value="1,1,0,0" />
                         </Trigger>
                         <MultiTrigger>
                             <MultiTrigger.Conditions>
@@ -1012,7 +1212,7 @@
         <Setter Property="FocusVisualStyle"
                 Value="{x:Null}" />
         <Setter Property="Background"
-                Value="{DynamicResource ButtonFace}" />
+                Value="Transparent" />
         <Setter Property="VerticalAlignment"
                 Value="Center" />
         <!-- See ButtonChromeDpiSnap's own remarks - DPI-snaps this template's own nested Border
@@ -1044,26 +1244,37 @@
                             UseLayoutRounding="True"
                             SnapsToDevicePixels="True"
                             Name="ButtonBorder">
-                        <Border BorderThickness="0,0,1,1"
-                                BorderBrush="{TemplateBinding Background}"
-                                UseLayoutRounding="True"
-                                SnapsToDevicePixels="True"
-                                x:Name="ButtonRightBottomBorder">
-                            <!-- Padding "1,2,1,3": less left/right padding than top/bottom (1 vs
-                                 2) - the transport buttons sit edge to edge with each other, so
-                                 tight horizontal padding keeps the glyph-to-glyph gap between
-                                 adjacent buttons small, while vertical padding (extra 1 at the
-                                 bottom) is unrelated and keeps the visible box 1px taller. -->
-                            <Border BorderThickness="1,1,0,0"
-                                    BorderBrush="{TemplateBinding Background}"
-                                    Background="{TemplateBinding Background}"
-                                    Padding="1,2,1,3"
+                        <Grid>
+                            <!-- Flat hover/press highlight instead of a 3D bevel: a translucent
+                                 fill in the theme's own foreground color, invisible at rest. -->
+                            <Border Background="{DynamicResource ClockForeground}"
+                                    Opacity="0"
+                                    IsHitTestVisible="False"
                                     UseLayoutRounding="True"
                                     SnapsToDevicePixels="True"
-                                    x:Name="ButtonLeftTopBorder">
-                                <ContentPresenter Name="Content" />
+                                    x:Name="HoverFill" />
+                            <!-- The original nested border + padding structure, kept (now with
+                                 transparent borders) rather than collapsed into one summed
+                                 Padding - ButtonChromeDpiSnap rounds each border/padding value
+                                 separately, so a single "2,3,2,4" padding snapped differently at
+                                 fractional scales (125%) than the sum of the original parts and
+                                 shifted the glyph. -->
+                            <Border BorderThickness="0,0,1,1"
+                                    BorderBrush="Transparent"
+                                    UseLayoutRounding="True"
+                                    SnapsToDevicePixels="True"
+                                    x:Name="ButtonRightBottomBorder">
+                                <Border BorderThickness="1,1,0,0"
+                                        BorderBrush="Transparent"
+                                        Background="{TemplateBinding Background}"
+                                        Padding="1,2,1,3"
+                                        UseLayoutRounding="True"
+                                        SnapsToDevicePixels="True"
+                                        x:Name="ButtonLeftTopBorder">
+                                    <ContentPresenter Name="Content" />
+                                </Border>
                             </Border>
-                        </Border>
+                        </Grid>
                     </Border>
                     <ControlTemplate.Triggers>
                         <DataTrigger Binding="{Binding Path=Orientation, RelativeSource={RelativeSource Mode=FindAncestor, AncestorType={x:Type Window}}}"
@@ -1076,26 +1287,15 @@
                         </DataTrigger>
                         <Trigger Property="IsMouseOver"
                                  Value="True">
-                            <Setter TargetName="ButtonLeftTopBorder"
-                                    Property="BorderBrush"
-                                    Value="{DynamicResource ButtonHighlight}" />
-                            <Setter TargetName="ButtonRightBottomBorder"
-                                    Property="BorderBrush"
-                                    Value="{DynamicResource ButtonShadow}" />
+                            <Setter TargetName="HoverFill"
+                                    Property="Opacity"
+                                    Value="0.08" />
                         </Trigger>
                         <Trigger Property="IsPressed"
                                  Value="True">
-                            <Setter TargetName="ButtonRightBottomBorder"
-                                    Property="BorderBrush"
-                                    Value="{DynamicResource ButtonHighlight}" />
-                            <Setter TargetName="ButtonLeftTopBorder"
-                                    Property="BorderBrush"
-                                    Value="{DynamicResource ButtonShadow}" />
-                            <!-- Same content shift as TaskButton's IsPressed trigger, for the
-                                 same "pushed in" 3D look. -->
-                            <Setter TargetName="Content"
-                                    Property="Margin"
-                                    Value="1,1,-1,-1" />
+                            <Setter TargetName="HoverFill"
+                                    Property="Opacity"
+                                    Value="0.15" />
                         </Trigger>
                     </ControlTemplate.Triggers>
                 </ControlTemplate>
@@ -1310,8 +1510,11 @@
                 Value="4,-1,4,1" />
         <Setter Property="MaxWidth"
                 Value="150" />
-        <Setter Property="ClipToBounds"
-                Value="True" />
+        <!-- No longer ClipToBounds here - the VU-meter bars (see MediaPlayer.xaml's own
+             VuMeterContainer, a plain child of this Grid) need to grow leftward past this
+             Grid's own bounds, behind the album art, without being cut off. The marquee text
+             still needs its own crop, now via a dedicated Border around TrackTextCanvas
+             instead. -->
     </Style>
 
     <Style TargetType="TextBlock"
@@ -1441,15 +1644,25 @@
                                 UseLayoutRounding="True"
                                 SnapsToDevicePixels="True"
                                 x:Name="ButtonRightBottomBorder">
-                            <Border BorderThickness="1,1,0,0"
-                                    BorderBrush="{TemplateBinding Background}"
-                                    Background="{TemplateBinding Background}"
-                                    Padding="2"
-                                    UseLayoutRounding="True"
-                                    SnapsToDevicePixels="True"
-                                    x:Name="ButtonLeftTopBorder">
-                                <ContentPresenter />
-                            </Border>
+                            <Grid>
+                                <Border BorderThickness="1,1,0,0"
+                                        BorderBrush="{TemplateBinding Background}"
+                                        Background="{TemplateBinding Background}"
+                                        Padding="2"
+                                        UseLayoutRounding="True"
+                                        SnapsToDevicePixels="True"
+                                        x:Name="ButtonLeftTopBorder">
+                                    <ContentPresenter Name="Content" />
+                                </Border>
+                                <Border x:Name="HoverHost" IsHitTestVisible="False">
+                                    <Border x:Name="HoverFill" utilities:MonitorOffset.Tag="HoverFill"
+                                            Background="{DynamicResource ClockForeground}"
+                                            Opacity="0"
+                                            IsHitTestVisible="False"
+                                            UseLayoutRounding="True"
+                                            SnapsToDevicePixels="True" />
+                                </Border>
+                            </Grid>
                         </Border>
                     </Border>
                     <ControlTemplate.Triggers>
@@ -1465,19 +1678,29 @@
                                  Value="True">
                             <Setter TargetName="ButtonLeftTopBorder"
                                     Property="BorderBrush"
-                                    Value="{DynamicResource ButtonHighlight}" />
+                                    Value="{DynamicResource ButtonLight}" />
                             <Setter TargetName="ButtonRightBottomBorder"
                                     Property="BorderBrush"
                                     Value="{DynamicResource ButtonShadow}" />
+                            <Setter TargetName="HoverFill" Property="Opacity" Value="0.08" />
                         </Trigger>
                         <Trigger Property="IsPressed"
                                  Value="True">
                             <Setter TargetName="ButtonRightBottomBorder"
                                     Property="BorderBrush"
-                                    Value="{DynamicResource ButtonHighlight}" />
+                                    Value="{DynamicResource ButtonLight}" />
                             <Setter TargetName="ButtonLeftTopBorder"
                                     Property="BorderBrush"
                                     Value="{DynamicResource ButtonShadow}" />
+                            <!-- Same sunken-content nudge as TaskButton's own IsPressed trigger -
+                                 the icon shifts down-right by 1 DIP to match the bevel visually
+                                 inverting around it, instead of just the border colors swapping
+                                 with the icon sitting still. -->
+                            <Setter TargetName="Content"
+                                    Property="Margin"
+                                    Value="1,1,-1,-1" />
+                            <Setter TargetName="HoverFill" Property="Opacity" Value="0.14" />
+                            <Setter TargetName="HoverHost" Property="Margin" Value="1,1,0,0" />
                         </Trigger>
                     </ControlTemplate.Triggers>
                 </ControlTemplate>
@@ -1541,6 +1764,11 @@
                 Value="true" />
         <Setter Property="Margin"
                 Value="2,2,0,2" />
+        <!-- See ButtonChromeDpiSnap's own remarks - this template's 1px borders, nub margin and
+             width otherwise round independently at fractional DPI scales (125%) and draw the
+             separator bar with uneven line weights. -->
+        <Setter Property="utilities:ButtonChromeDpiSnap.Enabled"
+                Value="True" />
         <Setter Property="Template">
             <Setter.Value>
                 <ControlTemplate TargetType="{x:Type Thumb}">
@@ -1560,8 +1788,9 @@
                                     x:Name="OuterNub"
                                     Width="3">
                                 <Border BorderThickness="1,1,0,0"
-                                        BorderBrush="{DynamicResource ButtonHighlight}">
-                                    
+                                        BorderBrush="{DynamicResource ButtonHighlight}"
+                                        x:Name="OuterNubInner">
+
                                 </Border>
                             </Border>
                         </Border>
@@ -1652,28 +1881,38 @@
                                 SnapsToDevicePixels="True"
                                 x:Name="ButtonRightBottomBorder"
                                 utilities:MonitorOffset.Tag="TrayToggleButtonOuter">
-                            <Border BorderThickness="1,1,0,0"
-                                    BorderBrush="{TemplateBinding Background}"
-                                    Background="{TemplateBinding Background}"
-                                    UseLayoutRounding="True"
-                                    SnapsToDevicePixels="True"
-                                    x:Name="ButtonLeftTopBorder"
-                                    utilities:MonitorOffset.Tag="TrayToggleButtonInner">
-                                <StackPanel Orientation="Horizontal"
-                                            Height="6"
-                                            VerticalAlignment="Center"
-                                            Margin="3,2,3,0"
+                            <Grid>
+                                <Border BorderThickness="1,1,0,0"
+                                        BorderBrush="{TemplateBinding Background}"
+                                        Background="{TemplateBinding Background}"
+                                        UseLayoutRounding="True"
+                                        SnapsToDevicePixels="True"
+                                        x:Name="ButtonLeftTopBorder"
+                                        utilities:MonitorOffset.Tag="TrayToggleButtonInner">
+                                    <StackPanel Orientation="Horizontal"
+                                                Height="6"
+                                                VerticalAlignment="Center"
+                                                Margin="3,2,3,0"
+                                                UseLayoutRounding="True"
+                                                SnapsToDevicePixels="True"
+                                                Name="ArrowPanel">
+                                        <Path Fill="{DynamicResource ButtonForeground}"
+                                              Data="{DynamicResource TrayToggleChevronGeometry}"
+                                              Style="{DynamicResource CrispGlyphPathStyle}" />
+                                        <Path Fill="{DynamicResource ButtonForeground}"
+                                              Data="{DynamicResource TrayToggleChevronGeometry}"
+                                              Style="{DynamicResource CrispGlyphPathStyle}" />
+                                    </StackPanel>
+                                </Border>
+                                <Border x:Name="HoverHost" IsHitTestVisible="False">
+                                    <Border x:Name="HoverFill" utilities:MonitorOffset.Tag="TrayToggleHoverFill"
+                                            Background="{DynamicResource ClockForeground}"
+                                            Opacity="0"
+                                            IsHitTestVisible="False"
                                             UseLayoutRounding="True"
-                                            SnapsToDevicePixels="True"
-                                            Name="ArrowPanel">
-                                    <Path Fill="{DynamicResource ButtonForeground}"
-                                          Data="{DynamicResource TrayToggleChevronGeometry}"
-                                          Style="{DynamicResource CrispGlyphPathStyle}" />
-                                    <Path Fill="{DynamicResource ButtonForeground}"
-                                          Data="{DynamicResource TrayToggleChevronGeometry}"
-                                          Style="{DynamicResource CrispGlyphPathStyle}" />
-                                </StackPanel>
-                            </Border>
+                                            SnapsToDevicePixels="True" />
+                                </Border>
+                            </Grid>
                         </Border>
                     </Border>
                     <ControlTemplate.Triggers>
@@ -1733,19 +1972,22 @@
                                  Value="True">
                             <Setter TargetName="ButtonLeftTopBorder"
                                     Property="BorderBrush"
-                                    Value="{DynamicResource ButtonHighlight}" />
+                                    Value="{DynamicResource ButtonLight}" />
                             <Setter TargetName="ButtonRightBottomBorder"
                                     Property="BorderBrush"
                                     Value="{DynamicResource ButtonShadow}" />
+                            <Setter TargetName="HoverFill" Property="Opacity" Value="0.08" />
                         </Trigger>
                         <Trigger Property="IsPressed"
                                  Value="True">
                             <Setter TargetName="ButtonRightBottomBorder"
                                     Property="BorderBrush"
-                                    Value="{DynamicResource ButtonHighlight}" />
+                                    Value="{DynamicResource ButtonLight}" />
                             <Setter TargetName="ButtonLeftTopBorder"
                                     Property="BorderBrush"
                                     Value="{DynamicResource ButtonShadow}" />
+                            <Setter TargetName="HoverFill" Property="Opacity" Value="0.14" />
+                            <Setter TargetName="HoverHost" Property="Margin" Value="1,1,0,0" />
                         </Trigger>
                         <MultiDataTrigger>
                             <MultiDataTrigger.Conditions>

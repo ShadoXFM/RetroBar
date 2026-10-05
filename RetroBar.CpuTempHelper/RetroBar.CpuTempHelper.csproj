@@ -1,0 +1,25 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <OutputType>WinExe</OutputType>
+    <!-- net10.0 first on purpose: Visual Studio launches/debugs the FIRST listed framework of a
+         multi-targeted project, and the net6.0 build of this helper crashes on startup. -->
+    <TargetFrameworks>net10.0-windows10.0.19041.0;net6.0-windows10.0.19041.0</TargetFrameworks>
+    <TargetPlatformMinVersion>7.0</TargetPlatformMinVersion>
+    <ApplicationManifest>app.manifest</ApplicationManifest>
+    <LangVersion>12</LangVersion>
+    <!-- Built into RetroBar's own bin tree (not its own sibling bin\ folder) so a plain xcopy of
+         RetroBar's output directory carries this helper along with it, at a path relative to
+         RetroBar.exe that's easy for an installer/Task Scheduler entry to point at. -->
+    <OutputPath>..\RetroBar\bin\$(Configuration)\$(TargetFramework)\CpuTempHelper\</OutputPath>
+    <AppendTargetFrameworkToOutputPath>false</AppendTargetFrameworkToOutputPath>
+    <!-- The line above also drops the framework folder from obj\, which would make both target
+         frameworks compile into the same obj\Debug\ - keep them separate. -->
+    <IntermediateOutputPath>obj\$(Configuration)\$(TargetFramework)\</IntermediateOutputPath>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="OpenHardwareMonitorLib" Version="1.0.9395" />
+  </ItemGroup>
+
+</Project>
