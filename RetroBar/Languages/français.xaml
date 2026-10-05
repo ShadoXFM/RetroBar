@@ -11,6 +11,11 @@
     <s:String x:Key="media_player_heading">Media Player</s:String>
     <s:String x:Key="show_media_player">Montrer les contrôles du lecteur media</s:String>
     <s:String x:Key="show_media_player_album_art">Afficher la p_ochette de l'album</s:String>
+    <s:String x:Key="weather_heading">Météo</s:String>
+    <s:String x:Key="weather_use_fahrenheit">Utiliser les degrés _Fahrenheit (°F)</s:String>
+    <s:String x:Key="media_source_automatic">Automatique (suivre Windows)</s:String>
+    <s:String x:Key="media_source_browser">Navigateur</s:String>
+    <s:String x:Key="media_source_none">Aucun média en cours</s:String>
     <s:String x:Key="cpu_temp_heading">Température du CPU</s:String>
     <s:String x:Key="show_cpu_temp">Afficher la température du _CPU</s:String>
     <s:String x:Key="media_previous">Précédent</s:String>
@@ -45,6 +50,7 @@
     <s:String x:Key="select_location">_Changer de dossier...</s:String>
     <s:String x:Key="quick_launch_folder">Lancement rapide - Choisir un dossier</s:String>
     <s:String x:Key="show_badges">Afficher des _badges d'informations</s:String>
+    <s:String x:Key="group_task_windows">_Regrouper les fenêtres d’une même application en un onglet</s:String>
     <s:String x:Key="show_window_previews">Afficher l'aperçu des _fenêtres (vignettes/thumbnails)</s:String>
     <s:String x:Key="use_software_rendering">_Utiliser le rendu logiciel</s:String>
     <s:String x:Key="add_show_desktop_button">Ajouter le bouton "Afficher le _bureau"</s:String>

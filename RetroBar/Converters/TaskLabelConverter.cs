@@ -17,6 +17,12 @@ namespace RetroBar.Converters
                 return Binding.DoNothing;
             }
 
+            // A tab standing for several windows leads with how many: "(3) Title".
+            if (values.Length > 3 && values[3] is int windowCount && windowCount > 1)
+            {
+                title = $"({windowCount}) {title}";
+            }
+
             if (progressState == NativeMethods.TBPFLAG.TBPF_NOPROGRESS ||
                 progressState == NativeMethods.TBPFLAG.TBPF_INDETERMINATE ||
                 progressValue < 0)

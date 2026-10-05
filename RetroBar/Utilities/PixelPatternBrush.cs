@@ -1,4 +1,6 @@
 using System;
+using System.ComponentModel;
+using System.Runtime.CompilerServices;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Media;
@@ -37,6 +39,15 @@ namespace RetroBar.Utilities
         private static readonly DependencyProperty AppliedBrushProperty = DependencyProperty.RegisterAttached(
             "AppliedBrush", typeof(Brush), typeof(PixelPatternBrush), new PropertyMetadata(null));
 
+        // The Background of some of these borders is set later and changes over time - a button's face is
+        // template-bound to its Background, which a trigger switches to the checkerboard while it is
+        // checked - so the pattern has to be (re)built whenever a checkerboard brush shows up, not just
+        // once at load.
+        private static readonly DependencyPropertyDescriptor BackgroundDescriptor =
+            DependencyPropertyDescriptor.FromProperty(Border.BackgroundProperty, typeof(Border));
+
+        private static readonly ConditionalWeakTable<Border, EventHandler> BackgroundWatchers = new();
+
         private static void OnEnabledChanged(DependencyObject d, DependencyPropertyChangedEventArgs e)
         {
             if (d is not Border border || e.NewValue is not true)
@@ -47,11 +58,47 @@ namespace RetroBar.Utilities
             // Re-applying on every Loaded is harmless, and needed: a template instance (the active
             // tab's) is rebuilt - and its Border reloaded - whenever the tab's style or theme changes.
             // (A taskbar stays on its own monitor, so the DPI doesn't change under a loaded Border.)
-            border.Loaded += (s, args) => Apply(border);
+            border.Loaded += (s, args) =>
+            {
+                Apply(border);
+                Watch(border);
+            };
+            border.Unloaded += (s, args) => Unwatch(border);
 
             if (border.IsLoaded)
             {
                 Apply(border);
+                Watch(border);
+            }
+        }
+
+        private static void Watch(Border border)
+        {
+            if (BackgroundWatchers.TryGetValue(border, out _))
+            {
+                return;
+            }
+
+            EventHandler handler = (s, args) =>
+            {
+                // Our own ImageBrush (and any non-checkerboard background) is ignored, so applying the
+                // pattern doesn't trigger itself.
+                if (border.IsLoaded && border.Background is DrawingBrush)
+                {
+                    Apply(border);
+                }
+            };
+
+            BackgroundWatchers.Add(border, handler);
+            BackgroundDescriptor.AddValueChanged(border, handler);
+        }
+
+        private static void Unwatch(Border border)
+        {
+            if (BackgroundWatchers.TryGetValue(border, out EventHandler handler))
+            {
+                BackgroundDescriptor.RemoveValueChanged(border, handler);
+                BackgroundWatchers.Remove(border);
             }
         }
 
@@ -117,7 +164,9 @@ namespace RetroBar.Utilities
             RenderOptions.SetBitmapScalingMode(border, BitmapScalingMode.NearestNeighbor);
             border.SnapsToDevicePixels = true;
             border.UseLayoutRounding = true;
-            border.Background = brush;
+            // SetCurrentValue, not assignment: assigning would replace a TemplateBinding / DynamicResource
+            // on Background for good, so the button face could never go back to its normal color.
+            border.SetCurrentValue(Border.BackgroundProperty, brush);
             border.SetValue(AppliedBrushProperty, brush);
         }
 

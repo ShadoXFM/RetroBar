@@ -47,4 +47,17 @@
             <TextBlock Text="{Binding Title}" />
         </ToolTip>
     </UserControl.ToolTip>
+    <!-- Shown instead of the live picture when the window has none to give (minimized, or blank): the
+         app's icon, centered in the thumbnail area. DWM draws the live thumbnail itself, over this. -->
+    <Grid x:Name="BlankPlaceholder"
+          Visibility="Collapsed">
+        <Image x:Name="BlankIcon"
+               Width="32"
+               Height="32"
+               HorizontalAlignment="Center"
+               VerticalAlignment="Center"
+               UseLayoutRounding="True"
+               SnapsToDevicePixels="True"
+               RenderOptions.BitmapScalingMode="HighQuality" />
+    </Grid>
 </UserControl>

@@ -1,5 +1,6 @@
 ﻿using ManagedShell.Common.Logging;
 using System;
+using System.Collections.Generic;
 using System.IO;
 using System.Runtime.Versioning;
 using System.Threading;
@@ -17,6 +18,9 @@ namespace RetroBar.Utilities
         Paused,
         Playing
     }
+
+    /// <summary>One media session as offered in the player's source menu.</summary>
+    public record MediaSessionInfo(string AppUserModelId, string DisplayName, string Title, MediaPlaybackState State, bool IsShown);
 
     /// <summary>
     /// Wraps the Windows System Media Transport Controls (SMTC) session APIs.
@@ -154,17 +158,173 @@ namespace RetroBar.Utilities
         {
             _manager = await GlobalSystemMediaTransportControlsSessionManager.RequestAsync();
             _manager.CurrentSessionChanged += Manager_CurrentSessionChanged;
+            _manager.SessionsChanged += Manager_SessionsChanged;
 
-            AttachSession(_manager.GetCurrentSession());
+            AttachSession(ChooseSession());
         }
 
         private void Manager_CurrentSessionChanged(GlobalSystemMediaTransportControlsSessionManager sender, CurrentSessionChangedEventArgs args)
         {
-            AttachSession(sender.GetCurrentSession());
+            AttachSession(ChooseSession());
+        }
+
+        private void Manager_SessionsChanged(GlobalSystemMediaTransportControlsSessionManager sender, SessionsChangedEventArgs args)
+        {
+            // An app starting or stopping media can change which session is the one to show - in
+            // particular the preferred app's session appearing or disappearing.
+            AttachSession(ChooseSession());
+        }
+
+        // The session to show: the app the user picked (Settings.MediaPreferredApp) while it has one,
+        // otherwise whatever Windows considers the current media session.
+        private GlobalSystemMediaTransportControlsSession ChooseSession()
+        {
+            try
+            {
+                string preferred = Settings.Instance.MediaPreferredApp;
+
+                if (!string.IsNullOrEmpty(preferred))
+                {
+                    foreach (GlobalSystemMediaTransportControlsSession candidate in _manager.GetSessions())
+                    {
+                        if (string.Equals(candidate.SourceAppUserModelId, preferred, StringComparison.OrdinalIgnoreCase))
+                        {
+                            return candidate;
+                        }
+                    }
+                }
+
+                return _manager.GetCurrentSession();
+            }
+            catch (Exception e)
+            {
+                ShellLogger.Debug($"MediaSessionManager: Unable to choose a session: {e.Message}");
+                return null;
+            }
+        }
+
+        /// <summary>
+        /// Every media session Windows currently knows about, for the player's source menu - the one
+        /// being shown is marked.
+        /// </summary>
+        public async Task<List<MediaSessionInfo>> GetSessionsAsync()
+        {
+            var infos = new List<MediaSessionInfo>();
+
+            if (_manager == null)
+            {
+                return infos;
+            }
+
+            foreach (GlobalSystemMediaTransportControlsSession session in _manager.GetSessions())
+            {
+                string aumid = session.SourceAppUserModelId ?? "";
+                string title = "";
+
+                try
+                {
+                    GlobalSystemMediaTransportControlsSessionMediaProperties props = await session.TryGetMediaPropertiesAsync();
+                    title = props?.Title ?? "";
+                }
+                catch (Exception e)
+                {
+                    ShellLogger.Debug($"MediaSessionManager: Unable to read a session's title: {e.Message}");
+                }
+
+                MediaPlaybackState state = session.GetPlaybackInfo()?.PlaybackStatus switch
+                {
+                    GlobalSystemMediaTransportControlsSessionPlaybackStatus.Playing => MediaPlaybackState.Playing,
+                    GlobalSystemMediaTransportControlsSessionPlaybackStatus.Paused => MediaPlaybackState.Paused,
+                    _ => MediaPlaybackState.None
+                };
+
+                infos.Add(new MediaSessionInfo(aumid, FriendlyAppName(aumid), title, state,
+                    string.Equals(aumid, SourceAppUserModelId, StringComparison.OrdinalIgnoreCase)));
+            }
+
+            return infos;
+        }
+
+        /// <summary>Shows this app's media (an AppUserModelID), or "" to go back to following Windows.</summary>
+        public void SelectApp(string appUserModelId)
+        {
+            Settings.Instance.MediaPreferredApp = appUserModelId ?? "";
+            AttachSession(ChooseSession());
+        }
+
+        private static bool IsHashLike(string text)
+        {
+            if (text.Length < 16)
+            {
+                return false;
+            }
+
+            foreach (char c in text)
+            {
+                if (!((c >= 'A' && c <= 'Z') || (c >= '0' && c <= '9')))
+                {
+                    return false;
+                }
+            }
+
+            return true;
+        }
+
+        // "Spotify.exe" -> "Spotify"; "5319275A.WhatsAppDesktop_cv1g1gvanyjgm!App" -> "WhatsAppDesktop".
+        private static string FriendlyAppName(string aumid)
+        {
+            if (string.IsNullOrEmpty(aumid))
+            {
+                return "?";
+            }
+
+            string name = aumid;
+
+            int bang = name.IndexOf('!');
+            if (bang > 0)
+            {
+                name = name.Substring(0, bang);
+            }
+
+            int underscore = name.IndexOf('_');
+            if (underscore > 0)
+            {
+                name = name.Substring(0, underscore);
+            }
+
+            if (name.EndsWith(".exe", StringComparison.OrdinalIgnoreCase))
+            {
+                name = name.Substring(0, name.Length - 4);
+            }
+
+            string[] parts = name.Split('.', StringSplitOptions.RemoveEmptyEntries);
+            if (parts.Length == 0)
+            {
+                return name;
+            }
+
+            // The last part is the app's name - unless it's a machine-generated hash, as a Chromium
+            // browser's is ("Helium.BRVOONR7XJLVKDHZURXJZLAJOM"), in which case the part before it is.
+            if (parts.Length > 1 && IsHashLike(parts[parts.Length - 1]))
+            {
+                return parts[parts.Length - 2];
+            }
+
+            return parts[parts.Length - 1];
         }
 
         private void AttachSession(GlobalSystemMediaTransportControlsSession session)
         {
+            // Already showing this session (the session list changes whenever any app's media does):
+            // re-attaching would only reset the track state and flash the player.
+            if (session != null && _session != null &&
+                (ReferenceEquals(session, _session) ||
+                 (!string.IsNullOrEmpty(session.SourceAppUserModelId) &&
+                  string.Equals(session.SourceAppUserModelId, SourceAppUserModelId, StringComparison.OrdinalIgnoreCase))))
+            {
+                return;
+            }
+
             if (_session != null)
             {
                 _session.MediaPropertiesChanged -= Session_MediaPropertiesChanged;
@@ -573,6 +733,7 @@ namespace RetroBar.Utilities
             if (_manager != null)
             {
                 _manager.CurrentSessionChanged -= Manager_CurrentSessionChanged;
+                _manager.SessionsChanged -= Manager_SessionsChanged;
             }
 
             if (_session != null)

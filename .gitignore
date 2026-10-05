@@ -276,3 +276,6 @@ __pycache__/
 
 ### VisualStudio Patch ###
 build/
+# Windows folder metadata and git bundle backups - not part of the source
+desktop.ini
+*.bundle

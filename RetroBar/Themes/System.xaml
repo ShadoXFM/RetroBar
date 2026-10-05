@@ -883,6 +883,7 @@
                                                 Padding="2,1"
                                                 UseLayoutRounding="True"
                                                 SnapsToDevicePixels="True"
+                                                utilities:PixelPatternBrush.Enabled="True"
                                                 x:Name="ButtonInnerTopBorder">
                                             <ContentPresenter Name="Content" />
                                         </Border>
@@ -976,6 +977,7 @@
                                 x:Name="ButtonRightBottomBorder">
                             <Border BorderThickness="1,1,0,0"
                                     BorderBrush="{TemplateBinding Background}"
+                                    utilities:PixelPatternBrush.Enabled="True"
                                     x:Name="ButtonLeftTopBorder">
                                 <Grid>
                                     <Border BorderThickness="1"

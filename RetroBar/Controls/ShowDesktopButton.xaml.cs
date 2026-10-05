@@ -5,6 +5,7 @@ using RetroBar.Utilities;
 using System;
 using System.Windows;
 using System.Windows.Controls;
+using System.Windows.Controls.Primitives;
 using System.Windows.Interop;
 using System.Windows.Threading;
 
@@ -88,8 +89,30 @@ namespace RetroBar.Controls
             PeekAtDesktopItem.IsEnabled = true;
         }
 
-        private void ToggleDesktop()
+        // show: hide every window (Show desktop), or bring them back.
+        private void ToggleDesktop(bool show)
         {
+            // Shell.Application's MinimizeAll / UndoMinimizeALL. The old way - sending the tray window
+            // WM_COMMAND 407 - is silently ignored by current Windows 11 builds, which left the button
+            // peeking on hover but unable to actually show the desktop on click; and the shell's own
+            // ToggleDesktop hides the windows but then won't bring them back, so the two directions are
+            // driven separately from the button's checked state.
+            try
+            {
+                Type shellType = Type.GetTypeFromProgID("Shell.Application");
+                object shell = shellType == null ? null : Activator.CreateInstance(shellType);
+
+                if (shell != null)
+                {
+                    shellType.InvokeMember(show ? "MinimizeAll" : "UndoMinimizeALL", System.Reflection.BindingFlags.InvokeMethod, null, shell, null);
+                    return;
+                }
+            }
+            catch (Exception e)
+            {
+                ManagedShell.Common.Logging.ShellLogger.Debug($"ShowDesktopButton: Shell.Application desktop toggle failed: {e.Message}");
+            }
+
             NativeMethods.SendMessage(WindowHelper.FindWindowsTray(IntPtr.Zero),
                 (int)NativeMethods.WM.COMMAND, (IntPtr)TOGGLE_DESKTOP, IntPtr.Zero);
         }
@@ -148,7 +171,14 @@ namespace RetroBar.Controls
         private void ShowDesktop_OnClick(object sender, RoutedEventArgs e)
         {
             // If the user activates a window other than the desktop, HandleWindowActivated will deselect the button.
-            ToggleDesktop();
+            // From the button itself, IsChecked has already flipped to the new state; from its context menu
+            // it hasn't, so flip it here.
+            if (sender is not ToggleButton)
+            {
+                ShowDesktop.IsChecked = ShowDesktop.IsChecked != true;
+            }
+
+            ToggleDesktop(ShowDesktop.IsChecked == true);
         }
 
         private void OpenDisplayPropertiesCpl()
@@ -225,7 +255,7 @@ namespace RetroBar.Controls
                 {
                     if (ShowDesktop.IsChecked == false)
                     {
-                        ToggleDesktop();
+                        ToggleDesktop(true);
                         ShowDesktop.IsChecked = true;
                     }
                 });

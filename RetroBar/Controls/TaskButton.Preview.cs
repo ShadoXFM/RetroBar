@@ -1,5 +1,7 @@
 using System;
+using System.Collections.Generic;
 using System.ComponentModel;
+using System.Linq;
 using System.Runtime.InteropServices;
 using System.Windows;
 using System.Windows.Controls;
@@ -51,7 +53,31 @@ namespace RetroBar.Controls
         private static readonly TimeSpan PreviewFadeIn = TimeSpan.FromMilliseconds(150);
         private static readonly TimeSpan PreviewFadeOut = TimeSpan.FromMilliseconds(120);
 
+        // The preview also slides in from the taskbar's edge (and back out), by this much.
+        private const double PreviewSlideDistance = 12;
+        private static readonly TimeSpan PreviewSlideIn = TimeSpan.FromMilliseconds(180);
+
         private bool _previewFadingOut;
+
+        // The ToolTip offset property that slides the preview (along the axis facing away from the
+        // taskbar - its resting offset there is 0, see the tooltip offset converters), and where the slide
+        // starts from.
+        private static (DependencyProperty Property, double Start) PreviewSlideAxis()
+        {
+            return Settings.Instance.Edge switch
+            {
+                ManagedShell.AppBar.AppBarEdge.Left => (System.Windows.Controls.ToolTip.HorizontalOffsetProperty, -PreviewSlideDistance),
+                ManagedShell.AppBar.AppBarEdge.Right => (System.Windows.Controls.ToolTip.HorizontalOffsetProperty, PreviewSlideDistance),
+                ManagedShell.AppBar.AppBarEdge.Top => (System.Windows.Controls.ToolTip.VerticalOffsetProperty, -PreviewSlideDistance),
+                _ => (System.Windows.Controls.ToolTip.VerticalOffsetProperty, PreviewSlideDistance),
+            };
+        }
+
+        private static void ClearPreviewSlide(ToolTip tip)
+        {
+            tip.BeginAnimation(System.Windows.Controls.ToolTip.HorizontalOffsetProperty, null);
+            tip.BeginAnimation(System.Windows.Controls.ToolTip.VerticalOffsetProperty, null);
+        }
 
         private DispatcherTimer _previewShowTimer;
         private DispatcherTimer _previewPollTimer;
@@ -59,7 +85,14 @@ namespace RetroBar.Controls
         private DateTime? _previewHoverSince;
         private bool _isPeekingAtWindow;
         private HwndSource _previewSource;
-        private bool _previewCloseButtonPressed;
+
+        // The window whose preview the mouse button is held down on (for the hover fill's pressed look).
+        private ApplicationWindow _previewPressedWindow;
+        private PreviewHit _previewPressedHit;
+
+        // The window being peeked at, and the one the pointer has been resting on for the peek delay.
+        private ApplicationWindow _peekedWindow;
+        private ApplicationWindow _previewHoverTarget;
 
         private void InitHoverablePreview()
         {
@@ -80,8 +113,29 @@ namespace RetroBar.Controls
 
             // Clicking the tab, or opening its context menu, dismisses the preview (the tooltip
             // service used to do this itself).
-            AppButton.PreviewMouseDown += (s, e) => ClosePreview();
+            AppButton.PreviewMouseDown += (s, e) =>
+            {
+                // A tab standing for several windows keeps its preview up when clicked (see ShowGroupPreview).
+                if (!ShowsGroupPreviewOnClick)
+                {
+                    ClosePreview();
+                }
+            };
             AppButton.ContextMenuOpening += (s, e) => ClosePreview();
+        }
+
+        private bool ShowsGroupPreviewOnClick => Settings.Instance.ShowTaskThumbnails && GroupWindows.Count > 1;
+
+        // Clicking a tab that stands for several windows shows their previews straight away (instead of
+        // jumping to one of them) - pick the one wanted from there.
+        private void ShowGroupPreview()
+        {
+            _previewShowTimer?.Stop();
+
+            if (AppButton.ToolTip is ToolTip tip && (!tip.IsOpen || _previewFadingOut))
+            {
+                OpenPreview();
+            }
         }
 
         private void PreviewSettings_PropertyChanged(object sender, PropertyChangedEventArgs e)
@@ -133,6 +187,7 @@ namespace RetroBar.Controls
                 return;
             }
 
+            RefreshGroup();
             tip.PlacementTarget = AppButton;
 
             // The popup's own built-in fade is off: it only animates the WPF part of the preview (frame,
@@ -145,9 +200,12 @@ namespace RetroBar.Controls
             }
 
             // Start (or resume, if it was still fading out) from the current opacity.
+            (DependencyProperty slideAxis, double slideStart) = PreviewSlideAxis();
             double startOpacity = tip.IsOpen ? tip.Opacity : 0;
+            double startOffset = tip.IsOpen ? (double)tip.GetValue(slideAxis) : slideStart;
             _previewFadingOut = false;
             tip.BeginAnimation(UIElement.OpacityProperty, null);
+            ClearPreviewSlide(tip);
             tip.Opacity = startOpacity;
             tip.IsOpen = true;
 
@@ -159,6 +217,12 @@ namespace RetroBar.Controls
             tip.BeginAnimation(UIElement.OpacityProperty, new DoubleAnimation(startOpacity, 1, PreviewFadeIn)
             {
                 EasingFunction = new QuadraticEase { EasingMode = EasingMode.EaseOut },
+            });
+            tip.BeginAnimation(slideAxis, new DoubleAnimation
+            {
+                From = startOffset,
+                Duration = new Duration(PreviewSlideIn),
+                EasingFunction = new CubicEase { EasingMode = EasingMode.EaseOut },
             });
             _previewOutsideSince = null;
             _previewHoverSince = null;
@@ -193,26 +257,36 @@ namespace RetroBar.Controls
             }
 
             bool overPreview = IsPointerOverPopup(tip);
+            List<PreviewItem> items = GetPreviewItems(tip);
+            (PreviewItem hovered, PreviewHit hit) = overPreview ? HitTestPointer(tip, items) : (null, PreviewHit.Body);
 
-            // Hot/pressed follow the pointer over the close button; it's always visible while the
-            // preview is open.
-            SetPreviewCloseButtonState(tip, overPreview ? (_previewCloseButtonPressed ? CloseButtonState.Pressed : GetCloseButtonHover(tip)) : CloseButtonState.Normal);
+            // The preview under the pointer is highlighted, and the close button shows hot/pressed when the
+            // pointer is on it; the close buttons are always visible while the preview is open.
+            UpdatePreviewItemStates(items, overPreview ? hovered : null, hit);
 
-            // Peek at the window once the pointer has rested on the preview (not just the tab), and
-            // stop as soon as it leaves the preview again.
+            // Peek at the window once the pointer has rested on its preview (not just the tab), and
+            // stop as soon as it leaves the preview again or moves on to another window's.
             if (overPreview)
             {
-                _previewHoverSince ??= DateTime.UtcNow;
+                ApplicationWindow target = hovered?.Window ?? Window;
 
-                if (!_isPeekingAtWindow && DateTime.UtcNow - _previewHoverSince.Value >= PeekDelay)
+                if (!ReferenceEquals(_previewHoverTarget, target))
                 {
-                    StartPeek(tip);
+                    StopPeek();
+                    _previewHoverTarget = target;
+                    _previewHoverSince = DateTime.UtcNow;
+                }
+                else if (!_isPeekingAtWindow && _previewHoverSince.HasValue && DateTime.UtcNow - _previewHoverSince.Value >= PeekDelay)
+                {
+                    StartPeek(target);
                 }
             }
             else
             {
                 _previewHoverSince = null;
-                _previewCloseButtonPressed = false;
+                _previewHoverTarget = null;
+                _previewPressedWindow = null;
+                _previewPressedHit = PreviewHit.Body;
                 StopPeek();
             }
 
@@ -237,7 +311,9 @@ namespace RetroBar.Controls
             _previewPollTimer?.Stop();
             _previewOutsideSince = null;
             _previewHoverSince = null;
-            _previewCloseButtonPressed = false;
+            _previewHoverTarget = null;
+            _previewPressedWindow = null;
+            _previewPressedHit = PreviewHit.Body;
             StopPeek();
             UnhookPreviewWindow();
 
@@ -253,6 +329,7 @@ namespace RetroBar.Controls
             {
                 _previewFadingOut = false;
                 tip.BeginAnimation(UIElement.OpacityProperty, null);
+                ClearPreviewSlide(tip);
                 tip.IsOpen = false;
                 return;
             }
@@ -263,6 +340,15 @@ namespace RetroBar.Controls
             }
 
             _previewFadingOut = true;
+
+            (DependencyProperty slideAxis, double slideEnd) = PreviewSlideAxis();
+            tip.BeginAnimation(slideAxis, new DoubleAnimation
+            {
+                From = (double)tip.GetValue(slideAxis),
+                To = slideEnd,
+                Duration = new Duration(PreviewFadeOut),
+                EasingFunction = new CubicEase { EasingMode = EasingMode.EaseIn },
+            });
 
             var fade = new DoubleAnimation(tip.Opacity, 0, PreviewFadeOut)
             {
@@ -275,6 +361,7 @@ namespace RetroBar.Controls
                 {
                     _previewFadingOut = false;
                     tip.BeginAnimation(UIElement.OpacityProperty, null);
+                    ClearPreviewSlide(tip);
                     tip.IsOpen = false;
                 }
             };
@@ -333,6 +420,123 @@ namespace RetroBar.Controls
             _previewSource = null;
         }
 
+        // What the pointer is on within a window's preview.
+        private enum PreviewHit
+        {
+            Body,
+            Close,
+        }
+
+        // One window in the preview: its block of title row + thumbnail (see the DataTemplate in TaskButton.xaml).
+        private sealed class PreviewItem
+        {
+            public FrameworkElement Root;
+            public ApplicationWindow Window;
+            public Button CloseButton;
+            public Border Hover;
+        }
+
+        private static IEnumerable<T> Descendants<T>(DependencyObject root) where T : DependencyObject
+        {
+            int count = VisualTreeHelper.GetChildrenCount(root);
+
+            for (int i = 0; i < count; i++)
+            {
+                DependencyObject child = VisualTreeHelper.GetChild(root, i);
+
+                if (child is T match)
+                {
+                    yield return match;
+                }
+
+                foreach (T nested in Descendants<T>(child))
+                {
+                    yield return nested;
+                }
+            }
+        }
+
+        private static List<PreviewItem> GetPreviewItems(ToolTip tip)
+        {
+            var items = new List<PreviewItem>();
+
+            foreach (FrameworkElement root in Descendants<FrameworkElement>(tip))
+            {
+                if (root.Name != "PreviewItem" || root.DataContext is not ApplicationWindow window)
+                {
+                    continue;
+                }
+
+                items.Add(new PreviewItem
+                {
+                    Root = root,
+                    Window = window,
+                    CloseButton = Descendants<Button>(root).FirstOrDefault(b => b.Name == "PreviewCloseButton"),
+                    Hover = Descendants<Border>(root).FirstOrDefault(b => b.Name == "PreviewHover"),
+                });
+            }
+
+            return items;
+        }
+
+        // Which window's preview the pointer is on, and which part of it. x/y are the client pixels of the
+        // preview's window; a pointer in the frame around the previews (or the gap between them) counts as
+        // the nearest one.
+        private static (PreviewItem Item, PreviewHit Hit) HitTestAt(ToolTip tip, List<PreviewItem> items, int x, int y)
+        {
+            if (items.Count == 0 ||
+                PresentationSource.FromVisual(tip) is not HwndSource source || source.RootVisual is not Visual root)
+            {
+                return (null, PreviewHit.Body);
+            }
+
+            try
+            {
+                Matrix fromDevice = source.CompositionTarget.TransformFromDevice;
+                Point pointer = fromDevice.Transform(new Point(x, y));
+
+                PreviewItem best = null;
+                double bestDistance = double.MaxValue;
+
+                foreach (PreviewItem item in items)
+                {
+                    Rect bounds = item.Root.TransformToAncestor(root).TransformBounds(new Rect(0, 0, item.Root.ActualWidth, item.Root.ActualHeight));
+                    double dx = Math.Max(0, Math.Max(bounds.Left - pointer.X, pointer.X - bounds.Right));
+                    double dy = Math.Max(0, Math.Max(bounds.Top - pointer.Y, pointer.Y - bounds.Bottom));
+                    double distance = Math.Sqrt(dx * dx + dy * dy);
+
+                    if (distance < bestDistance)
+                    {
+                        bestDistance = distance;
+                        best = item;
+                    }
+                }
+
+                if (best?.CloseButton != null && best.CloseButton.IsVisible && best.CloseButton.ActualWidth > 0 &&
+                    best.CloseButton.TransformToAncestor(root).TransformBounds(new Rect(0, 0, best.CloseButton.ActualWidth, best.CloseButton.ActualHeight)).Contains(pointer))
+                {
+                    return (best, PreviewHit.Close);
+                }
+
+                return (best, PreviewHit.Body);
+            }
+            catch (InvalidOperationException)
+            {
+                return (null, PreviewHit.Body);
+            }
+        }
+
+        private static (PreviewItem Item, PreviewHit Hit) HitTestPointer(ToolTip tip, List<PreviewItem> items)
+        {
+            if (PresentationSource.FromVisual(tip) is HwndSource source && GetCursorPos(out POINT cursor) &&
+                GetWindowRect(source.Handle, out RECT rect))
+            {
+                return HitTestAt(tip, items, cursor.X - rect.Left, cursor.Y - rect.Top);
+            }
+
+            return (null, PreviewHit.Body);
+        }
+
         private IntPtr PreviewWndProc(IntPtr hwnd, int msg, IntPtr wParam, IntPtr lParam, ref bool handled)
         {
             if (msg is not (WM_MOUSEMOVE or WM_LBUTTONDOWN or WM_LBUTTONUP) || AppButton.ToolTip is not ToolTip tip)
@@ -343,44 +547,52 @@ namespace RetroBar.Controls
             // lParam is the pointer position in the window's client pixels.
             int x = (short)((long)lParam & 0xFFFF);
             int y = (short)(((long)lParam >> 16) & 0xFFFF);
-            bool onCloseButton = IsOnCloseButton(tip, x, y);
+            List<PreviewItem> items = GetPreviewItems(tip);
+            (PreviewItem item, PreviewHit hit) = HitTestAt(tip, items, x, y);
 
             switch (msg)
             {
                 case WM_MOUSEMOVE:
-                    SetPreviewCloseButtonState(tip, _previewCloseButtonPressed ? CloseButtonState.Pressed : (onCloseButton ? CloseButtonState.Hot : CloseButtonState.Normal));
+                    UpdatePreviewItemStates(items, item, hit);
                     break;
 
                 case WM_LBUTTONDOWN:
-                    _previewCloseButtonPressed = onCloseButton;
-                    SetPreviewCloseButtonState(tip, onCloseButton ? CloseButtonState.Pressed : CloseButtonState.Normal);
+                    _previewPressedWindow = item?.Window;
+                    _previewPressedHit = hit;
+                    UpdatePreviewItemStates(items, item, hit);
                     break;
 
                 case WM_LBUTTONUP:
-                    bool wasPressedOnClose = _previewCloseButtonPressed;
-                    _previewCloseButtonPressed = false;
-                    ApplicationWindow window = Window;
+                    ApplicationWindow pressedWindow = _previewPressedWindow;
+                    PreviewHit pressedHit = _previewPressedHit;
+                    _previewPressedWindow = null;
+                    _previewPressedHit = PreviewHit.Body;
+                    ApplicationWindow target = item?.Window ?? Window;
 
-                    if (wasPressedOnClose && !onCloseButton)
+                    bool pressedOnButton = pressedHit != PreviewHit.Body;
+                    bool releasedOnSame = hit == pressedHit && ReferenceEquals(pressedWindow, item?.Window);
+
+                    if (pressedOnButton && !releasedOnSame)
                     {
-                        // Pressed on the close button, released elsewhere: cancelled, like any button.
-                        SetPreviewCloseButtonState(tip, CloseButtonState.Normal);
+                        // Pressed on a button, released elsewhere: cancelled, like any button.
+                        UpdatePreviewItemStates(items, item, hit);
                         break;
                     }
 
-                    // Clicking the preview anywhere but the close button activates the window; the
-                    // close button closes it. Either way the preview is done.
+                    // Clicking a preview anywhere but its close button activates that window; the close
+                    // button closes it. Either way the preview is done.
+                    bool close = pressedHit == PreviewHit.Close;
                     Dispatcher.BeginInvoke(new Action(() =>
                     {
                         ClosePreview();
 
-                        if (wasPressedOnClose)
+                        if (close)
                         {
-                            window?.Close();
+                            target?.Close();
                         }
                         else
                         {
-                            window?.BringToFront();
+                            target?.BringToFront();
                         }
                     }));
                     break;
@@ -395,74 +607,69 @@ namespace RetroBar.Controls
         // 125%, and so on.
         private static void ScaleCloseGlyphToPixels(ToolTip tip, HwndSource source)
         {
-            if (GetCloseButton(tip) is not Button button ||
-                button.Template?.FindName("Glyph", button) is not System.Windows.Shapes.Path glyph ||
-                glyph.Data == null || glyph.Data.Transform is ScaleTransform)
+            foreach (PreviewItem item in GetPreviewItems(tip))
             {
-                return;
-            }
+                if (item.CloseButton is not Button button ||
+                    button.Template?.FindName("Glyph", button) is not System.Windows.Shapes.Path glyph ||
+                    glyph.Data == null || glyph.Data.Transform is ScaleTransform)
+                {
+                    continue;
+                }
 
-            Matrix fromDevice = source.CompositionTarget.TransformFromDevice;
-            Geometry data = glyph.Data.CloneCurrentValue();
-            data.Transform = new ScaleTransform(fromDevice.M11, fromDevice.M22);
-            glyph.Data = data;
-        }
-
-        private static Button GetCloseButton(ToolTip tip)
-        {
-            return tip.Template?.FindName("PreviewCloseButton", tip) as Button;
-        }
-
-        // x/y are client pixels of the preview's window.
-        private static bool IsOnCloseButton(ToolTip tip, int x, int y)
-        {
-            Button button = GetCloseButton(tip);
-            if (button == null || button.ActualWidth <= 0 ||
-                PresentationSource.FromVisual(tip) is not HwndSource source || source.RootVisual is not Visual root)
-            {
-                return false;
-            }
-
-            try
-            {
                 Matrix fromDevice = source.CompositionTarget.TransformFromDevice;
-                Point pointer = fromDevice.Transform(new Point(x, y));
-                Rect bounds = button.TransformToAncestor(root).TransformBounds(new Rect(0, 0, button.ActualWidth, button.ActualHeight));
-                return bounds.Contains(pointer);
-            }
-            catch (InvalidOperationException)
-            {
-                return false;
+                Geometry data = glyph.Data.CloneCurrentValue();
+                data.Transform = new ScaleTransform(fromDevice.M11, fromDevice.M22);
+                glyph.Data = data;
             }
         }
 
-        private CloseButtonState GetCloseButtonHover(ToolTip tip)
+        // The hover fill reaches out over the padding between the previews and the frame's inner edge. That
+        // padding is snapped to whole device pixels (see ButtonChromeDpiSnap), so at a scale like 125% it is a
+        // little more than the 3 DIPs written in the XAML - and the fill, left at 3, fell a pixel short.
+        private static void FitHoverToFrame(PreviewItem item)
         {
-            if (PresentationSource.FromVisual(tip) is HwndSource source && GetCursorPos(out POINT cursor) &&
-                GetWindowRect(source.Handle, out RECT rect))
-            {
-                return IsOnCloseButton(tip, cursor.X - rect.Left, cursor.Y - rect.Top) ? CloseButtonState.Hot : CloseButtonState.Normal;
-            }
-
-            return CloseButtonState.Normal;
-        }
-
-        // The button's look follows its Tag ("hot" / "pressed", see TaskPreviewCloseButton in
-        // System.xaml).
-        private static void SetPreviewCloseButtonState(ToolTip tip, CloseButtonState state)
-        {
-            Button button = GetCloseButton(tip);
-            if (button == null)
+            if (item.Hover.Tag != null)
             {
                 return;
             }
 
-            button.Tag = state switch
+            DependencyObject parent = VisualTreeHelper.GetParent(item.Root);
+            while (parent != null && !(parent is Border { Name: "SnapBorder4" }))
             {
-                CloseButtonState.Hot => "hot",
-                CloseButtonState.Pressed => "pressed",
-                _ => null,
-            };
+                parent = VisualTreeHelper.GetParent(parent);
+            }
+
+            if (parent is Border frame)
+            {
+                Thickness padding = frame.Padding;
+                item.Hover.Margin = new Thickness(-padding.Left, -padding.Top, -padding.Right, -padding.Bottom);
+                item.Hover.Tag = "fitted";
+            }
+        }
+
+        // Which preview is highlighted (hovered or pressed), and how its close button looks: it follows its
+        // Tag ("hot" / "pressed", see TaskPreviewCloseButton in System.xaml).
+        private void UpdatePreviewItemStates(List<PreviewItem> items, PreviewItem hovered, PreviewHit hit)
+        {
+            foreach (PreviewItem item in items)
+            {
+                bool isHovered = ReferenceEquals(item, hovered);
+                bool isPressed = isHovered && ReferenceEquals(_previewPressedWindow, item.Window);
+
+                if (item.Hover != null)
+                {
+                    FitHoverToFrame(item);
+                    item.Hover.Opacity = !isHovered ? 0 : (isPressed && _previewPressedHit == PreviewHit.Body ? 0.16 : 0.1);
+                }
+
+                if (item.CloseButton != null)
+                {
+                    bool onClose = isHovered && hit == PreviewHit.Close;
+                    bool closePressed = isPressed && _previewPressedHit == PreviewHit.Close;
+                    item.CloseButton.Tag = closePressed ? "pressed" : (onClose ? "hot" : null);
+                }
+
+            }
         }
 
         #endregion
@@ -474,16 +681,16 @@ namespace RetroBar.Controls
         // popup itself so it stays on screen. (Argument order is DwmActivateLivePreview's own:
         // the keep-on-top window comes before the peek target - the desktop peek in
         // ShowDesktopButton passes the taskbar in that same slot.)
-        private void StartPeek(ToolTip tip)
+        private void StartPeek(ApplicationWindow target)
         {
-            if (Window == null || Window.Handle == IntPtr.Zero ||
-                PresentationSource.FromVisual(tip) is not HwndSource popup)
+            if (target == null || target.Handle == IntPtr.Zero)
             {
                 return;
             }
 
             _isPeekingAtWindow = true;
-            ActivateLivePreview(1, Window.Handle);
+            _peekedWindow = target;
+            ActivateLivePreview(1, target.Handle);
         }
 
         private void StopPeek()
@@ -495,10 +702,12 @@ namespace RetroBar.Controls
 
             _isPeekingAtWindow = false;
 
-            if (Window != null)
+            if (_peekedWindow != null)
             {
-                ActivateLivePreview(0, Window.Handle);
+                ActivateLivePreview(0, _peekedWindow.Handle);
             }
+
+            _peekedWindow = null;
         }
 
         // Argument order, found empirically: the window to peek at comes first (DWM keeps that one

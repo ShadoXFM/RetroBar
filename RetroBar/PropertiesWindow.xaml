@@ -297,6 +297,10 @@
                                       IsChecked="{Binding Source={x:Static Settings:Settings.Instance}, Path=ShowTaskThumbnails, UpdateSourceTrigger=PropertyChanged}">
                                 <Label Content="{DynamicResource show_window_previews}" />
                             </CheckBox>
+                            <CheckBox x:Name="cbGroupTaskWindows"
+                                      IsChecked="{Binding Source={x:Static Settings:Settings.Instance}, Path=GroupTaskWindows, UpdateSourceTrigger=PropertyChanged}">
+                                <Label Content="{DynamicResource group_task_windows}" />
+                            </CheckBox>
                             <CheckBox x:Name="cbSlideTaskbarButtons"
                                       IsChecked="{Binding Source={x:Static Settings:Settings.Instance}, Path=SlideTaskbarButtons, UpdateSourceTrigger=PropertyChanged}"
                                       Visibility="{Binding Source={x:Static Settings:Settings.Instance}, Path=Edge, Converter={StaticResource edgeOrientationVisibilityConverter}, ConverterParameter='horizontal'}">
@@ -426,6 +430,14 @@
                                       IsChecked="{Binding Source={x:Static Settings:Settings.Instance}, Path=ShowMediaPlayerAlbumArt, UpdateSourceTrigger=PropertyChanged}"
                                       IsEnabled="{Binding Source={x:Static Settings:Settings.Instance}, Path=ShowMediaPlayer, UpdateSourceTrigger=PropertyChanged}">
                                 <Label Content="{DynamicResource show_media_player_album_art}" />
+                            </CheckBox>
+                        </StackPanel>
+                    </GroupBox>
+                    <GroupBox Header="{DynamicResource weather_heading}">
+                        <StackPanel Orientation="Vertical">
+                            <CheckBox x:Name="cbWeatherUseFahrenheit"
+                                      IsChecked="{Binding Source={x:Static Settings:Settings.Instance}, Path=WeatherUseFahrenheit, UpdateSourceTrigger=PropertyChanged}">
+                                <Label Content="{DynamicResource weather_use_fahrenheit}" />
                             </CheckBox>
                         </StackPanel>
                     </GroupBox>

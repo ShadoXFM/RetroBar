@@ -144,6 +144,39 @@ namespace RetroBar.Utilities
             return keys;
         }
 
+        /// <summary>Identifies a window's application (exe path, or AppUserModelID for packaged apps): windows with
+        /// the same key are the same app, and are combined into one tab when Settings.GroupTaskWindows is on.</summary>
+        public static string AppKey(ApplicationWindow window) => GetAppKey(window);
+
+        /// <summary>
+        /// After a tab was dragged: moves the other windows of its app (hidden behind it while windows are
+        /// combined) to follow it, so it stays the first - and so the shown - window of its app instead of
+        /// handing the tab over to a sibling that is still where the dragged one used to be.
+        /// </summary>
+        public static void KeepAppWindowsTogether(ObservableCollection<ApplicationWindow> source, ApplicationWindow dragged)
+        {
+            if (source == null || dragged == null)
+            {
+                return;
+            }
+
+            string app = GetAppKey(dragged);
+            int position = source.IndexOf(dragged);
+
+            foreach (ApplicationWindow sibling in source.Where(w => !ReferenceEquals(w, dragged) && GetAppKey(w) == app).ToList())
+            {
+                int current = source.IndexOf(sibling);
+                int target = current < position ? position : position + 1;
+
+                if (current != target)
+                {
+                    source.Move(current, target);
+                }
+
+                position = source.IndexOf(dragged);
+            }
+        }
+
         private static string GetAppKey(ApplicationWindow window)
         {
             string app = window.IsUWP && !string.IsNullOrEmpty(window.AppUserModelID)

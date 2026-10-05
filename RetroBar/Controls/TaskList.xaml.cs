@@ -3,8 +3,10 @@ using ManagedShell.WindowsTasks;
 using ManagedShell.Common.Helpers;
 using RetroBar.Utilities;
 using System;
+using System.Collections.Generic;
 using System.Collections.ObjectModel;
 using System.ComponentModel;
+using System.Linq;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Data;
@@ -130,6 +132,11 @@ namespace RetroBar.Controls
 
                     taskbarItems.CollectionChanged += GroupedWindows_CollectionChanged;
                     taskbarItems.Filter = Tasks_Filter;
+
+                    if (startupSortSource != null)
+                    {
+                        startupSortSource.CollectionChanged += SourceWindows_CollectionChanged;
+                    }
                 }
 
                 TasksList.ItemsSource = taskbarItems;
@@ -154,7 +161,11 @@ namespace RetroBar.Controls
 
         private void Settings_PropertyChanged(object sender, PropertyChangedEventArgs e)
         {
-            if (e.PropertyName == nameof(Settings.MultiMonMode))
+            if (e.PropertyName == nameof(Settings.GroupTaskWindows))
+            {
+                ScheduleGroupSync();
+            }
+            else if (e.PropertyName == nameof(Settings.MultiMonMode))
             {
                 taskbarItems?.Refresh();
             }
@@ -202,9 +213,133 @@ namespace RetroBar.Controls
             }
         }
 
+        /// <summary>
+        /// Raised when the set of windows combined under each tab may have changed (a window opened or
+        /// closed, or the setting was switched), so the tabs can refresh their counts and previews.
+        /// </summary>
+        public event EventHandler GroupsChanged;
+
+        /// <summary>
+        /// The windows that share this window's tab, in tab order (the window itself first). Just the
+        /// window, unless Settings.GroupTaskWindows is on.
+        /// </summary>
+        public List<ApplicationWindow> GetGroupWindows(ApplicationWindow window)
+        {
+            var group = new List<ApplicationWindow>();
+
+            if (window != null && Settings.Instance.GroupTaskWindows && startupSortSource != null)
+            {
+                string app = TaskOpenOrderComparer.AppKey(window);
+
+                foreach (ApplicationWindow other in startupSortSource)
+                {
+                    if (TaskOpenOrderComparer.AppKey(other) == app && PassesBaseFilter(other))
+                    {
+                        group.Add(other);
+                    }
+                }
+            }
+
+            if (window != null && !group.Contains(window))
+            {
+                group.Insert(0, window);
+            }
+
+            return group;
+        }
+
+        // The tab is shown for the first window of each app, in list order, and the rest are hidden behind it.
+        private bool IsShownWindow(ApplicationWindow window)
+        {
+            if (!PassesBaseFilter(window))
+            {
+                return false;
+            }
+
+            if (!Settings.Instance.GroupTaskWindows || startupSortSource == null)
+            {
+                return true;
+            }
+
+            string app = TaskOpenOrderComparer.AppKey(window);
+
+            foreach (ApplicationWindow other in startupSortSource)
+            {
+                if (ReferenceEquals(other, window))
+                {
+                    return true;
+                }
+
+                if (TaskOpenOrderComparer.AppKey(other) == app && PassesBaseFilter(other))
+                {
+                    return false;
+                }
+            }
+
+            return true;
+        }
+
+        private bool groupSyncPending;
+
+        private void SourceWindows_CollectionChanged(object sender, System.Collections.Specialized.NotifyCollectionChangedEventArgs e)
+        {
+            ScheduleGroupSync();
+        }
+
+        // The view only filters an item as it is added, so when a window closes (or the setting changes)
+        // the window that should now be shown for its app has to be re-checked by hand. Re-checking just
+        // those items keeps the other tabs as they are; refreshing the whole view would recreate them all.
+        private void ScheduleGroupSync()
+        {
+            if (groupSyncPending)
+            {
+                return;
+            }
+
+            groupSyncPending = true;
+            Dispatcher.BeginInvoke(new Action(() =>
+            {
+                groupSyncPending = false;
+                SyncGroupMembership();
+                GroupsChanged?.Invoke(this, EventArgs.Empty);
+            }), DispatcherPriority.Background);
+        }
+
+        private void SyncGroupMembership()
+        {
+            if (taskbarItems == null || startupSortSource == null || taskbarItems is not IEditableCollectionView editable)
+            {
+                return;
+            }
+
+            foreach (ApplicationWindow window in startupSortSource.ToArray())
+            {
+                if (Tasks_Filter(window) == taskbarItems.Contains(window))
+                {
+                    continue;
+                }
+
+                try
+                {
+                    editable.EditItem(window);
+                    editable.CommitEdit();
+                }
+                catch (Exception)
+                {
+                    taskbarItems.Refresh();
+                    return;
+                }
+            }
+        }
+
         private bool Tasks_Filter(object obj)
         {
-            if (obj is ApplicationWindow window)
+            return obj is not ApplicationWindow window || IsShownWindow(window);
+        }
+
+        private bool PassesBaseFilter(ApplicationWindow window)
+        {
+            if (window != null)
             {
                 if (!window.ShowInTaskbar)
                 {
@@ -242,6 +377,11 @@ namespace RetroBar.Controls
             {
                 taskbarItems.CollectionChanged -= GroupedWindows_CollectionChanged;
                 taskbarItems.Filter = null;
+
+                if (startupSortSource != null)
+                {
+                    startupSortSource.CollectionChanged -= SourceWindows_CollectionChanged;
+                }
             }
 
             if (Host != null)

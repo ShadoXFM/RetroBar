@@ -937,7 +937,107 @@ namespace RetroBar.Controls
         /// </summary>
         private ApplicationWindow FindSourceAppWindow()
         {
-            string aumid = _sessionManager?.SourceAppUserModelId;
+            return FindAppWindow(_sessionManager?.SourceAppUserModelId);
+        }
+
+        // A browser's media session has an opaque AppUserModelID that no window carries, but the browser
+        // puts the playing page's title in its window title - good enough to tell which app it is.
+        private ApplicationWindow FindWindowByTitle(string mediaTitle)
+        {
+            if (string.IsNullOrWhiteSpace(mediaTitle) || mediaTitle.Length < 6 || ShellManager?.Tasks?.GroupedWindows == null)
+            {
+                return null;
+            }
+
+            foreach (object item in ShellManager.Tasks.GroupedWindows)
+            {
+                if (item is ApplicationWindow window && window.Title != null &&
+                    window.Title.Contains(mediaTitle, StringComparison.OrdinalIgnoreCase))
+                {
+                    return window;
+                }
+            }
+
+            return null;
+        }
+
+        // "Helium" (from "Helium.BRVOO...") -> a window of the app with that name, for its icon.
+        private ApplicationWindow FindWindowByAppName(string appName)
+        {
+            if (string.IsNullOrWhiteSpace(appName) || ShellManager?.Tasks?.GroupedWindows == null)
+            {
+                return null;
+            }
+
+            foreach (object item in ShellManager.Tasks.GroupedWindows)
+            {
+                if (item is ApplicationWindow window &&
+                    (string.Equals(window.WinFileDescription, appName, StringComparison.OrdinalIgnoreCase) ||
+                     string.Equals(System.IO.Path.GetFileNameWithoutExtension(window.WinFileName), appName, StringComparison.OrdinalIgnoreCase) ||
+                     // a browser window's title ends with the browser's name: "New tab - Helium"
+                     (window.Title != null && window.Title.EndsWith(" " + appName, StringComparison.OrdinalIgnoreCase))))
+                {
+                    return window;
+                }
+            }
+
+            return null;
+        }
+
+        // A browser's AppUserModelID is a machine-generated hash ("BRVOONR7XJLVKDHZURXJZLAJOM"), not a name.
+        private static bool IsOpaqueAppId(string aumid)
+        {
+            if (string.IsNullOrEmpty(aumid) || aumid.Length < 16)
+            {
+                return false;
+            }
+
+            foreach (char c in aumid)
+            {
+                if (!((c >= 'A' && c <= 'Z') || (c >= '0' && c <= '9')))
+                {
+                    return false;
+                }
+            }
+
+            return true;
+        }
+
+        // For such an opaque ID, when the playing tab isn't the one its window's title shows: the browser
+        // window itself still gives the name and icon. A Chromium window's title ends with the browser's
+        // name ("New tab - Helium"), which tells browsers from other Chromium-based apps; only trusted
+        // when exactly one browser is running, since nothing links the ID to a particular one.
+        private ApplicationWindow FindBrowserWindow(string aumid)
+        {
+            if (!IsOpaqueAppId(aumid) || ShellManager?.Tasks?.GroupedWindows == null)
+            {
+                return null;
+            }
+
+            ApplicationWindow found = null;
+
+            foreach (object item in ShellManager.Tasks.GroupedWindows)
+            {
+                if (item is not ApplicationWindow window || window.ClassName != "Chrome_WidgetWin_1" ||
+                    string.IsNullOrWhiteSpace(window.WinFileDescription) || string.IsNullOrEmpty(window.Title) ||
+                    !window.Title.EndsWith(window.WinFileDescription, StringComparison.OrdinalIgnoreCase))
+                {
+                    continue;
+                }
+
+                if (found != null && !string.Equals(found.WinFileName, window.WinFileName, StringComparison.OrdinalIgnoreCase))
+                {
+                    return null;
+                }
+
+                found ??= window;
+            }
+
+            return found;
+        }
+
+        private ApplicationWindow FindAppWindow(string aumid)
+        {
             if (string.IsNullOrEmpty(aumid) || ShellManager?.Tasks?.GroupedWindows == null)
             {
                 return null;
@@ -999,6 +1099,95 @@ namespace RetroBar.Controls
         // dismisses it on that click before our handler even runs, so by the time our handler
         // checks IsOpen it already reads false and toggles it back open.
         private bool _ignoreNextTrackTextClick;
+
+        // Right-click on the track text: choose which app's media to show when several have a session
+        // (a browser tab and a music player, say) - or "Automatic" to follow whichever Windows says is
+        // current. The choice is shared by every monitor's player (they share one session manager).
+        private async void TrackTextCanvas_OnMouseRightButtonUp(object sender, MouseButtonEventArgs e)
+        {
+            e.Handled = true;
+
+            if (_sessionManager == null)
+            {
+                return;
+            }
+
+            MediaSessionManager manager = _sessionManager;
+            System.Collections.Generic.List<MediaSessionInfo> sessions = await manager.GetSessionsAsync();
+
+            string automaticLabel = TryFindResource("media_source_automatic") as string ?? "Automatic";
+            string noneLabel = TryFindResource("media_source_none") as string ?? "No media playing";
+
+            var menu = new ContextMenu
+            {
+                PlacementTarget = TrackTextCanvas,
+                Placement = Settings.Instance.Edge switch
+                {
+                    ManagedShell.AppBar.AppBarEdge.Left => System.Windows.Controls.Primitives.PlacementMode.Right,
+                    ManagedShell.AppBar.AppBarEdge.Right => System.Windows.Controls.Primitives.PlacementMode.Left,
+                    ManagedShell.AppBar.AppBarEdge.Top => System.Windows.Controls.Primitives.PlacementMode.Bottom,
+                    _ => System.Windows.Controls.Primitives.PlacementMode.Top,
+                },
+            };
+
+            var automatic = new MenuItem
+            {
+                Header = automaticLabel,
+                IsChecked = string.IsNullOrEmpty(Settings.Instance.MediaPreferredApp),
+            };
+            automatic.Click += (s, args) => manager.SelectApp("");
+            menu.Items.Add(automatic);
+
+            menu.Items.Add(MakeMenuSeparator());
+
+            if (sessions.Count == 0)
+            {
+                menu.Items.Add(new MenuItem { Header = noneLabel, IsEnabled = false });
+            }
+
+            foreach (MediaSessionInfo info in sessions)
+            {
+                string title = string.IsNullOrEmpty(info.Title) ? "" : $" \u2014 {info.Title}";
+                string state = info.State == MediaPlaybackState.Playing ? "  \u25B6" : "";
+
+                // Some apps (browsers especially) use an opaque AppUserModelID; their window's own file
+                // description ("Opera GX Internet Browser") is a better name than the ID.
+                ApplicationWindow appWindow = FindAppWindow(info.AppUserModelId) ?? FindWindowByTitle(info.Title) ?? FindWindowByAppName(info.DisplayName) ?? FindBrowserWindow(info.AppUserModelId);
+                string description = appWindow?.WinFileDescription;
+                string appName = !string.IsNullOrWhiteSpace(description) ? description
+                    : IsOpaqueAppId(info.AppUserModelId) ? (TryFindResource("media_source_browser") as string ?? "Browser")
+                    : info.DisplayName;
+
+                var item = new MenuItem
+                {
+                    Header = $"{appName}{title}{state}",
+                    IsChecked = info.IsShown,
+                };
+
+                string aumid = info.AppUserModelId;
+                item.Click += (s, args) => manager.SelectApp(aumid);
+                menu.Items.Add(item);
+            }
+
+            menu.IsOpen = true;
+        }
+
+        // The theme's menus draw a plain Separator as empty space; this one is a visible bevelled line.
+        private static Separator MakeMenuSeparator()
+        {
+            var line = new FrameworkElementFactory(typeof(StackPanel));
+            line.SetValue(FrameworkElement.MarginProperty, new Thickness(4, 1, 2.5, 1));
+
+            foreach (string brush in new[] { "ButtonShadow", "ButtonHighlight" })
+            {
+                var rect = new FrameworkElementFactory(typeof(System.Windows.Shapes.Rectangle));
+                rect.SetValue(FrameworkElement.HeightProperty, 1.0);
+                rect.SetResourceReference(System.Windows.Shapes.Shape.FillProperty, brush);
+                line.AppendChild(rect);
+            }
+
+            return new Separator { Template = new ControlTemplate(typeof(Separator)) { VisualTree = line } };
+        }
 
         private void TrackTextCanvas_OnMouseLeftButtonUp(object sender, MouseButtonEventArgs e)
         {
