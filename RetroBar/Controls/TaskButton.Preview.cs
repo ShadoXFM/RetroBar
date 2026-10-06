@@ -39,9 +39,13 @@ namespace RetroBar.Controls
         // pointer along the taskbar doesn't flash a preview on every tab it crosses.
         private static readonly TimeSpan PreviewShowDelay = TimeSpan.FromMilliseconds(400);
 
-        // How long the pointer may be off both the tab and the preview before the preview closes -
-        // enough to cross the gap between them.
-        private static readonly TimeSpan PreviewCloseGrace = TimeSpan.FromMilliseconds(250);
+        // How long the pointer may be off both the tab and the preview before the preview closes (it
+        // also has to be long enough to cross the gap between them).
+        private static readonly TimeSpan PreviewCloseGrace = TimeSpan.FromMilliseconds(1000);
+
+        // The tab whose preview is open. With the grace period this long, a preview can still be on its
+        // way out when the pointer reaches the next tab, so opening one closes the other.
+        private static TaskButton _previewOwner;
 
         // How long the pointer has to rest on the preview before the window is peeked at, so just
         // passing over it on the way somewhere else doesn't flash every other window to glass.
@@ -159,6 +163,11 @@ namespace RetroBar.Controls
             }
         }
 
+        private void StopPreviewShowTimer()
+        {
+            _previewShowTimer?.Stop();
+        }
+
         private void StartPreviewShowTimer()
         {
             if (!Settings.Instance.ShowTaskThumbnails || AppButton.ToolTip is not ToolTip tip || (tip.IsOpen && !_previewFadingOut))
@@ -182,12 +191,19 @@ namespace RetroBar.Controls
 
         private void OpenPreview()
         {
-            if (!AppButton.IsMouseOver || AppButton.ToolTip is not ToolTip tip || AppButton.ContextMenu?.IsOpen == true)
+            if (!IsTabHovered || AppButton.ToolTip is not ToolTip tip || AppButton.ContextMenu?.IsOpen == true)
             {
                 return;
             }
 
             RefreshGroup();
+
+            if (_previewOwner != null && !ReferenceEquals(_previewOwner, this))
+            {
+                _previewOwner.ClosePreview();
+            }
+
+            _previewOwner = this;
             tip.PlacementTarget = AppButton;
 
             // The popup's own built-in fade is off: it only animates the WPF part of the preview (frame,
@@ -290,7 +306,7 @@ namespace RetroBar.Controls
                 StopPeek();
             }
 
-            if (AppButton.IsMouseOver || overPreview)
+            if (IsTabHovered || overPreview)
             {
                 _previewOutsideSince = null;
                 return;
@@ -316,6 +332,11 @@ namespace RetroBar.Controls
             _previewPressedHit = PreviewHit.Body;
             StopPeek();
             UnhookPreviewWindow();
+
+            if (ReferenceEquals(_previewOwner, this))
+            {
+                _previewOwner = null;
+            }
 
             if (AppButton.ToolTip is ToolTip tip && tip.IsOpen)
             {
