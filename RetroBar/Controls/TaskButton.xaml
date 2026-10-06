@@ -258,7 +258,14 @@
                                                                                 Background="{DynamicResource ClockForeground}"
                                                                                 Opacity="0"
                                                                                 IsHitTestVisible="False" />
-                                                                        <StackPanel>
+                                                                        <!-- Title row on top, then the picture centered in the space left under it: when
+                                                                             windows of different shapes sit side by side, the shorter picture is centered
+                                                                             rather than hanging from the top. -->
+                                                                        <Grid>
+                                                                            <Grid.RowDefinitions>
+                                                                                <RowDefinition Height="Auto" />
+                                                                                <RowDefinition Height="*" />
+                                                                            </Grid.RowDefinitions>
                                                                         <!-- Exactly as wide as the thumbnail below, so a long title is trimmed
                                                                              instead of widening the whole preview. -->
                                                                         <!-- MonitorOffset.Tag: PreviewTitleRow - its Margin (the gap between the title/close
@@ -296,11 +303,13 @@
                                                                         <!-- BoxWidth: the thumbnail area is as wide as the tab itself, so every
                                                                              preview is the same size rather than shaped like its window. -->
                                                                         <controls:TaskThumbnail x:Name="PreviewThumbnail"
+                                                                                                Grid.Row="1"
+                                                                                                VerticalAlignment="Center"
                                                                                                 SourceWindowHandle="{Binding Path=Handle}"
                                                                                                 Title="{Binding Path=Title}"
                                                                                                 Icon="{Binding Path=Icon}"
                                                                                                 BoxWidth="{Binding Path=PlacementTarget.ActualWidth, RelativeSource={RelativeSource AncestorType=ToolTip}}"/>
-                                                                        </StackPanel>
+                                                                        </Grid>
                                                                     </Grid>
                                                                 </DataTemplate>
                                                             </ItemsControl.ItemTemplate>

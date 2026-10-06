@@ -20,7 +20,7 @@
         <SolidColorBrush x:Key="VuMeterAccentBrush"
                          Opacity="0.2" />
     </UserControl.Resources>
-    <StackPanel x:Name="MediaPlayerRoot"
+    <utilities:UnclippedStackPanel x:Name="MediaPlayerRoot"
                 Orientation="Horizontal"
                 Style="{DynamicResource MediaPlayerPanelStyle}">
         <!-- A layout/position anchor only - always Hidden (never actually painted) when
@@ -54,27 +54,35 @@
                  property would otherwise trigger writes the exact same Width/RenderTransform
                  properties this method computes, racing with (and liable to overwrite) the
                  left-shift math below. -->
-            <Grid x:Name="VuMeterContainer"
-                  HorizontalAlignment="Left"
-                  Visibility="Collapsed"
-                  IsHitTestVisible="False">
-                <Grid.RowDefinitions>
-                    <RowDefinition Height="*" />
-                    <RowDefinition Height="*" />
-                </Grid.RowDefinitions>
-                <Rectangle x:Name="VuMeterFillLeft"
-                           Grid.Row="0"
-                           HorizontalAlignment="Left"
-                           Width="0"
-                           Opacity="1"
-                           Fill="{DynamicResource VuMeterAccentBrush}" />
-                <Rectangle x:Name="VuMeterFillRight"
-                           Grid.Row="1"
-                           HorizontalAlignment="Left"
-                           Width="0"
-                           Opacity="1"
-                           Fill="{DynamicResource VuMeterAccentBrush}" />
-            </Grid>
+            <!-- A Canvas hosts the meter: WPF clips an element to its layout slot when it is larger than
+                 that slot (which a per-monitor Height override taller than the track text's own row
+                 makes it), and the clip moves along with the meter's offset - so a meter nudged
+                 down, or made taller, was cut off at the same line however far it was moved. A
+                 Canvas gives its child its full size, so nothing is cut (see UpdateVuMeterOffset,
+                 which centers it vertically itself). -->
+            <Canvas IsHitTestVisible="False">
+                <Grid x:Name="VuMeterContainer"
+                      HorizontalAlignment="Left"
+                      Visibility="Collapsed"
+                      IsHitTestVisible="False">
+                    <Grid.RowDefinitions>
+                        <RowDefinition Height="*" />
+                        <RowDefinition Height="*" />
+                    </Grid.RowDefinitions>
+                    <Rectangle x:Name="VuMeterFillLeft"
+                               Grid.Row="0"
+                               HorizontalAlignment="Left"
+                               Width="0"
+                               Opacity="1"
+                               Fill="{DynamicResource VuMeterAccentBrush}" />
+                    <Rectangle x:Name="VuMeterFillRight"
+                               Grid.Row="1"
+                               HorizontalAlignment="Left"
+                               Width="0"
+                               Opacity="1"
+                               Fill="{DynamicResource VuMeterAccentBrush}" />
+                </Grid>
+            </Canvas>
             <!-- Own dedicated clip for the marquee text, now that TrackTextHost itself is no
                  longer clipped (see VuMeterContainer's own remarks above). -->
             <Border ClipToBounds="True">
@@ -374,5 +382,5 @@
                 </Border>
             </Border>
         </Popup>
-    </StackPanel>
+    </utilities:UnclippedStackPanel>
 </UserControl>

@@ -593,7 +593,14 @@ namespace RetroBar.Controls
             _vuMeterMaxWidth = offset.Width ?? naturalWidth;
 
             VuMeterContainer.Width = _vuMeterMaxWidth;
-            VuMeterContainer.Height = offset.Height ?? double.NaN;
+
+            // Centered vertically in the row (what a Grid cell did before the meter moved into a Canvas -
+            // see its remarks in MediaPlayer.xaml), at whatever height was asked for.
+            double rowHeight = TrackTextHost.ActualHeight;
+            double meterHeight = offset.Height ?? rowHeight;
+            VuMeterContainer.Height = meterHeight;
+            Canvas.SetLeft(VuMeterContainer, 0);
+            Canvas.SetTop(VuMeterContainer, (rowHeight - meterHeight) / 2);
             VuMeterContainer.RenderTransform = new TranslateTransform(offset.X - leftOffset, offset.Y);
         }
 
@@ -1356,6 +1363,10 @@ namespace RetroBar.Controls
             Stop();
             _isLoaded = false;
         }
+
+        // The control itself is a few pixels taller than the tray box's inner area on some taskbar heights;
+        // WPF would clip it (and so the VU meter) to that area - see UnclippedStackPanel.
+        protected override Geometry GetLayoutClip(Size layoutSlotSize) => null;
 
         private void MonitorAdjustments_Changed(object sender, EventArgs e)
         {
