@@ -187,6 +187,19 @@
                 Value="Transparent" />
     </Style>
 
+    <!-- The two ends of an optional gradient across the taskbar, left to right. A theme (or a theme of your own in
+         %LocalAppData%\RetroBar\Themes) sets both to opaque colors to get one, e.g.
+             <Color x:Key="TaskbarBackgroundStart">#121014</Color>
+             <Color x:Key="TaskbarBackgroundEnd">#3C159E</Color>
+         and leaves them out, or transparent, for the plain taskbar. -->
+    <Color x:Key="TaskbarBackgroundStart">#00000000</Color>
+    <Color x:Key="TaskbarBackgroundEnd">#00000000</Color>
+
+    <!-- The face of the things on the taskbar (the buttons, the tray box, the toolbar): the theme's ButtonFace, or nothing at all
+         while the theme has a gradient across the taskbar, so that the gradient shows through them as it does between them.
+         It is set in code each time a theme is loaded (DictionaryManager.UpdateTaskbarFace); this is only what it is until then. -->
+    <SolidColorBrush x:Key="TaskbarFace" Color="{x:Static SystemColors.ControlColor}" />
+
     <Style TargetType="ContentControl"
            x:Key="Taskbar">
         <Setter Property="FocusVisualStyle"
@@ -207,7 +220,23 @@
                                 BorderBrush="{DynamicResource ButtonHighlight}"
                                 Background="{DynamicResource ButtonFace}"
                                 Name="InnerBorder">
-                            <ContentPresenter />
+                            <Grid>
+                                <!-- An optional gradient over the taskbar's face, from the left edge to the right: a theme sets
+                                     TaskbarBackgroundStart and TaskbarBackgroundEnd (see below). Both are transparent here, which
+                                     leaves the face (ButtonFace) as it is. -->
+                                <Border IsHitTestVisible="False">
+                                    <Border.Background>
+                                        <LinearGradientBrush StartPoint="0,0"
+                                                             EndPoint="1,0">
+                                            <GradientStop Color="{DynamicResource TaskbarBackgroundStart}"
+                                                          Offset="0" />
+                                            <GradientStop Color="{DynamicResource TaskbarBackgroundEnd}"
+                                                          Offset="1" />
+                                        </LinearGradientBrush>
+                                    </Border.Background>
+                                </Border>
+                                <ContentPresenter />
+                            </Grid>
                         </Border>
                     </Border>
                     <ControlTemplate.Triggers>
@@ -267,7 +296,7 @@
         <Setter Property="OverridesDefaultStyle"
                 Value="True" />
         <Setter Property="Background"
-                Value="{DynamicResource ButtonFace}" />
+                Value="{DynamicResource TaskbarFace}" />
         <Setter Property="Template">
             <Setter.Value>
                 <!-- Sunken bevel: a single Highlight/DarkShadow pair. This used to also have an
@@ -314,7 +343,7 @@
         <Setter Property="OverridesDefaultStyle"
                 Value="True" />
         <Setter Property="Background"
-                Value="{DynamicResource ButtonFace}" />
+                Value="{DynamicResource TaskbarFace}" />
         <Setter Property="Foreground"
                 Value="{DynamicResource ButtonForeground}" />
         <Setter Property="Margin"
@@ -690,7 +719,7 @@
         <Setter Property="OverridesDefaultStyle"
                 Value="True" />
         <Setter Property="Background"
-                Value="{DynamicResource ButtonFace}" />
+                Value="{DynamicResource TaskbarFace}" />
         <Setter Property="Foreground"
                 Value="{DynamicResource ButtonForeground}" />
         <Setter Property="TextOptions.TextRenderingMode"
@@ -890,7 +919,7 @@
         <Setter Property="OverridesDefaultStyle"
                 Value="True" />
         <Setter Property="Background"
-                Value="{DynamicResource ButtonFace}" />
+                Value="{DynamicResource TaskbarFace}" />
         <Setter Property="Foreground"
                 Value="{DynamicResource ButtonForeground}" />
         <Setter Property="HorizontalAlignment"
@@ -1675,7 +1704,7 @@
         <Setter Property="OverridesDefaultStyle"
                 Value="True" />
         <Setter Property="Background"
-                Value="{DynamicResource ButtonFace}" />
+                Value="{DynamicResource TaskbarFace}" />
         <Setter Property="Margin"
                 Value="0,0,0,-1" />
         <!-- See ButtonChromeDpiSnap's own remarks - DPI-snaps this template's own nested Border
@@ -1907,7 +1936,7 @@
         <Setter Property="OverridesDefaultStyle"
                 Value="True" />
         <Setter Property="Background"
-                Value="{DynamicResource ButtonFace}" />
+                Value="{DynamicResource TaskbarFace}" />
         <Setter Property="Margin"
                 Value="-2,-3,1,-3" />
         <Setter Property="Template">

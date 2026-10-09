@@ -118,7 +118,7 @@
         <Setter Property="OverridesDefaultStyle"
                 Value="True" />
         <Setter Property="Background"
-                Value="{DynamicResource ButtonFace}" />
+                Value="{DynamicResource TaskbarFace}" />
         <Setter Property="Template">
             <Setter.Value>
                 <ControlTemplate TargetType="GroupBox">
@@ -166,7 +166,7 @@
         <Setter Property="OverridesDefaultStyle"
                 Value="True" />
         <Setter Property="Background"
-                Value="{DynamicResource ButtonFace}" />
+                Value="{DynamicResource TaskbarFace}" />
         <Setter Property="Margin"
                 Value="-2,-3,7,-3" />
         <Setter Property="Template">

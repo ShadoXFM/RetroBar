@@ -44,6 +44,26 @@ namespace RetroBar.Utilities
             {
                 SetTheme(Settings.Instance.Theme);
             }
+
+            UpdateTaskbarFace();
+        }
+
+        /// <summary>
+        /// Sets the face of the things on the taskbar (the TaskbarFace resource): the theme's own ButtonFace, or nothing at all
+        /// when the theme gives the taskbar a gradient (an opaque TaskbarBackgroundStart or TaskbarBackgroundEnd), so that the
+        /// gradient shows through the buttons and the tray box and not just between them.
+        /// </summary>
+        private static void UpdateTaskbarFace()
+        {
+            ResourceDictionary resources = Application.Current.Resources;
+
+            bool gradient = resources["TaskbarBackgroundStart"] is System.Windows.Media.Color start &&
+                            resources["TaskbarBackgroundEnd"] is System.Windows.Media.Color end &&
+                            (start.A > 0 || end.A > 0);
+
+            resources["TaskbarFace"] = gradient
+                ? System.Windows.Media.Brushes.Transparent
+                : resources["ButtonFace"];
         }
 
         private void SetSystemThemeParams()
