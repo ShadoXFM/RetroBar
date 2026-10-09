@@ -57,7 +57,6 @@ namespace RetroBar.Utilities
 
             // Re-applying on every Loaded is harmless, and needed: a template instance (the active
             // tab's) is rebuilt - and its Border reloaded - whenever the tab's style or theme changes.
-            // (A taskbar stays on its own monitor, so the DPI doesn't change under a loaded Border.)
             border.Loaded += (s, args) =>
             {
                 Apply(border);
@@ -65,10 +64,60 @@ namespace RetroBar.Utilities
             };
             border.Unloaded += (s, args) => Unwatch(border);
 
+            // The DPI the pattern is built for is the one the Border has when it loads, which is not always the
+            // monitor's own: a taskbar window starts out with the DPI of the primary monitor and is only moved
+            // to its monitor afterwards, so one on a monitor with another scale built its pattern for the wrong
+            // one (the tile then got resampled, and showed as coarse diagonal stripes). Build it again when
+            // the DPI changes, and when a layout pass finds it differs from what the pattern was built for.
+            border.SizeChanged += (s, args) => ApplyIfDpiChanged(border);
+            border.Loaded += (s, args) =>
+            {
+                if (Window.GetWindow(border) is Window window)
+                {
+                    window.DpiChanged -= OnWindowDpiChanged;
+                    window.DpiChanged += OnWindowDpiChanged;
+                }
+            };
+
             if (border.IsLoaded)
             {
                 Apply(border);
                 Watch(border);
+            }
+        }
+
+        private static readonly DependencyProperty BuiltForDpiProperty = DependencyProperty.RegisterAttached(
+            "BuiltForDpi", typeof(double), typeof(PixelPatternBrush), new PropertyMetadata(0.0));
+
+        private static void ApplyIfDpiChanged(Border border)
+        {
+            if (border.IsLoaded && border.Background is ImageBrush &&
+                (double)border.GetValue(BuiltForDpiProperty) != VisualTreeHelper.GetDpi(border).DpiScaleX)
+            {
+                Apply(border);
+            }
+        }
+
+        private static void OnWindowDpiChanged(object sender, DpiChangedEventArgs e)
+        {
+            if (sender is DependencyObject window)
+            {
+                ReapplyBelow(window);
+            }
+        }
+
+        private static void ReapplyBelow(DependencyObject parent)
+        {
+            int count = VisualTreeHelper.GetChildrenCount(parent);
+            for (int i = 0; i < count; i++)
+            {
+                DependencyObject child = VisualTreeHelper.GetChild(parent, i);
+                if (child is Border border && border.IsLoaded && border.GetValue(SourceBrushProperty) != null)
+                {
+                    Apply(border);
+                }
+
+                ReapplyBelow(child);
             }
         }
 
@@ -168,6 +217,7 @@ namespace RetroBar.Utilities
             // on Background for good, so the button face could never go back to its normal color.
             border.SetCurrentValue(Border.BackgroundProperty, brush);
             border.SetValue(AppliedBrushProperty, brush);
+            border.SetValue(BuiltForDpiProperty, dpi.DpiScaleX);
         }
 
         /// <summary>
