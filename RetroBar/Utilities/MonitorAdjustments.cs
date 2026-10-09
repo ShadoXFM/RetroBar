@@ -46,6 +46,9 @@ namespace RetroBar.Utilities
     /// mechanism (unlike RowCount, an unrelated per-monitor concern above, there wasn't already
     /// one for this).
     ///
+    /// "WidthAdjustment" is the same for a vertical taskbar's width (on top of what the width setting and the
+    /// theme's width already compute), for making it narrower than the width setting's steps allow.
+    ///
     /// Every other key is whatever string an element's utilities:MonitorOffset.Tag="..."
     /// attribute uses in the app's XAML (TaskButton, TaskButtonActive - the whole tab itself,
     /// not just its content, e.g. "TaskButton": { "Width": 150 } - TaskIcon, TaskIconActive,
@@ -129,6 +132,7 @@ namespace RetroBar.Utilities
         {
             public int? RowCount { get; set; }
             public double? HeightAdjustment { get; set; }
+            public double? WidthAdjustment { get; set; }
 
             [JsonExtensionData]
             public Dictionary<string, JsonElement> Tags { get; set; }
@@ -182,6 +186,18 @@ namespace RetroBar.Utilities
             if (!string.IsNullOrEmpty(deviceName) && _monitors.TryGetValue(deviceName, out MonitorEntry entry))
             {
                 return entry.HeightAdjustment ?? 0;
+            }
+
+            return 0;
+        }
+
+        /// <summary>DIPs (can be negative) to add to this monitor's own computed vertical taskbar width,
+        /// or 0 if it has none.</summary>
+        public static double GetWidthAdjustment(string deviceName)
+        {
+            if (!string.IsNullOrEmpty(deviceName) && _monitors.TryGetValue(deviceName, out MonitorEntry entry))
+            {
+                return entry.WidthAdjustment ?? 0;
             }
 
             return 0;

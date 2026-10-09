@@ -568,13 +568,14 @@ namespace RetroBar
         #endregion
 
         // However many steps narrower than the theme's width it is set to, a vertical taskbar stays at least this wide (DIPs).
-        private const double MinimumVerticalWidth = 40;
+        private const double MinimumVerticalWidth = 20;
 
         private void RecalculateSize(bool performResize = true)
         {
             _unlockedMargin = Settings.Instance.TaskbarScale * (Application.Current.FindResource("TaskbarUnlockedSize") as double? ?? 0);
             DesiredRowHeight = Settings.Instance.TaskbarScale * (Application.Current.FindResource("TaskbarRowHeight") as double? ?? 0);
             double newWidth = (Settings.Instance.TaskbarScale * (Application.Current.FindResource("TaskbarWidth") as double? ?? 0)) + DesiredRowHeight * (Settings.Instance.TaskbarWidth - 1);
+            newWidth += MonitorAdjustments.GetWidthAdjustment(Screen?.DeviceName);
             newWidth = Math.Max(newWidth, MinimumVerticalWidth * Settings.Instance.TaskbarScale);
             double newHeight = (Settings.Instance.TaskbarScale * (Application.Current.FindResource("TaskbarHeight") as double? ?? 0)) + DesiredRowHeight * (Rows - 1);
             newHeight += MonitorAdjustments.GetHeightAdjustment(Screen?.DeviceName);
