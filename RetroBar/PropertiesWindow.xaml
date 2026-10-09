@@ -273,7 +273,7 @@
                                         Orientation="Horizontal"
                                         IsSnapToTickEnabled="True"
                                         Value="{Binding Source={x:Static Settings:Settings.Instance}, Path=TaskbarWidth, UpdateSourceTrigger=PropertyChanged}"
-                                        Minimum="-1"
+                                        Minimum="1"
                                         TickFrequency="1"
                                         TickPlacement="BottomRight"
                                         HorizontalAlignment="Right"

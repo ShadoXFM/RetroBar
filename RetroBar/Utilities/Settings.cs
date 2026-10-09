@@ -352,10 +352,6 @@ namespace RetroBar.Utilities
             set => Set(ref _rowLimit, value);
         }
 
-        // The width of a vertical taskbar, in steps of a row's height above the theme's width (which is 1). Below 1 it
-        // gets narrower than the theme's width, down to TaskbarWidthMinimum.
-        public const int TaskbarWidthMinimum = -1;
-
         private int _taskbarWidth = 1;
         public int TaskbarWidth
         {
