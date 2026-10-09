@@ -46,6 +46,10 @@ namespace RetroBar.Utilities
             }
 
             UpdateTaskbarFace();
+
+            // The checkered patterns are built from the theme's colors: build them again from the new theme's, once the
+            // windows have picked its resources up.
+            Application.Current.Dispatcher.BeginInvoke(new Action(PixelPatternBrush.RefreshAll), System.Windows.Threading.DispatcherPriority.Loaded);
         }
 
         /// <summary>

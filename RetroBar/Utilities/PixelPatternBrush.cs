@@ -48,11 +48,39 @@ namespace RetroBar.Utilities
 
         private static readonly ConditionalWeakTable<Border, EventHandler> BackgroundWatchers = new();
 
+        // Every border that has the pattern enabled, so it can be built again when a theme is applied.
+        private static readonly System.Collections.Generic.List<WeakReference<Border>> Registered = new();
+
+        /// <summary>
+        /// Builds every pattern again from the colors the current theme has. A theme change doesn't necessarily
+        /// replace a border's Background (the checkerboard resources are the same objects in every theme), so
+        /// nothing else would tell the patterns - built from the old theme's colors - that they are stale.
+        /// </summary>
+        public static void RefreshAll()
+        {
+            lock (Registered)
+            {
+                Registered.RemoveAll(r => !r.TryGetTarget(out _));
+                foreach (WeakReference<Border> reference in Registered)
+                {
+                    if (reference.TryGetTarget(out Border border) && border.IsLoaded && border.GetValue(SourceBrushProperty) != null)
+                    {
+                        Apply(border);
+                    }
+                }
+            }
+        }
+
         private static void OnEnabledChanged(DependencyObject d, DependencyPropertyChangedEventArgs e)
         {
             if (d is not Border border || e.NewValue is not true)
             {
                 return;
+            }
+
+            lock (Registered)
+            {
+                Registered.Add(new WeakReference<Border>(border));
             }
 
             // Re-applying on every Loaded is harmless, and needed: a template instance (the active
@@ -183,7 +211,7 @@ namespace RetroBar.Utilities
                 border.SetValue(SourceBrushProperty, source);
             }
 
-            if (source == null || !TryGetPattern(source, out Color color, out bool[,] cells))
+            if (source == null || !TryGetPattern(source, border, out Color color, out bool[,] cells))
             {
                 return;
             }
@@ -245,13 +273,40 @@ namespace RetroBar.Utilities
         /// own single GeometryDrawing (checked cell by cell, so it works for either phase of the
         /// pattern - CheckeredBackground vs CheckeredBackgroundAlt).
         /// </summary>
-        private static bool TryGetPattern(DrawingBrush source, out Color color, out bool[,] cells)
+        // The color of each of the checkerboard resources: the theme brush its drawing is made with.
+        private static readonly (string Resource, string Color)[] KnownPatterns =
+        {
+            ("CheckeredBackground", "ButtonHighlight"),
+            ("CheckeredBackgroundLight", "ButtonLight"),
+            ("CheckeredBackgroundAlt", "ButtonHighlight"),
+        };
+
+        private static bool TryGetPattern(DrawingBrush source, Border border, out Color color, out bool[,] cells)
         {
             color = default;
             cells = null;
 
-            if (source.Drawing is not GeometryDrawing drawing || drawing.Geometry == null ||
-                drawing.Brush is not SolidColorBrush solid)
+            if (source.Drawing is not GeometryDrawing drawing || drawing.Geometry == null)
+            {
+                return false;
+            }
+
+            // The color comes from the theme's own brush, looked up now. Reading it back from the drawing is unreliable: the
+            // brush there is a DynamicResource that is only resolved once the resource has been used in a window, so right after
+            // a theme was loaded it can be missing (then no pattern was built, and the raw tile - which is resampled at a scale
+            // like 125% and shows as coarse diagonal stripes - stayed) or be the one of the theme before.
+            SolidColorBrush solid = null;
+            foreach ((string resource, string colorResource) in KnownPatterns)
+            {
+                if (ReferenceEquals(border.TryFindResource(resource), source) && border.TryFindResource(colorResource) is SolidColorBrush known)
+                {
+                    solid = known;
+                    break;
+                }
+            }
+
+            solid ??= drawing.Brush as SolidColorBrush;
+            if (solid == null)
             {
                 return false;
             }
