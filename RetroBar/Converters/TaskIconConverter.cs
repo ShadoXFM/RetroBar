@@ -61,7 +61,7 @@ namespace RetroBar.Converters
         [DllImport("user32.dll", EntryPoint = "GetClassLongPtrW")]
         private static extern IntPtr GetClassLongPtr(IntPtr hWnd, int index);
 
-        private static ImageSource GetFallbackIcon(ApplicationWindow window, bool preferLarge = false)
+        private static ImageSource GetFallbackIcon(ApplicationWindow window, bool preferLarge = false, int dpi = 0)
         {
             try
             {
@@ -70,7 +70,7 @@ namespace RetroBar.Converters
                 // (The large icon first when asked: it is what the taskbar's own icons are made from, so it is as sharp.)
                 foreach (int which in preferLarge ? new[] { 1, 2, 0 } : new[] { 2, 0, 1 })
                 {
-                    if (SendMessageTimeout(window.Handle, WM_GETICON, (IntPtr)which, IntPtr.Zero, SMTO_ABORTIFHUNG, 100, out IntPtr result) != IntPtr.Zero && result != IntPtr.Zero)
+                    if (SendMessageTimeout(window.Handle, WM_GETICON, (IntPtr)which, (IntPtr)dpi, SMTO_ABORTIFHUNG, 100, out IntPtr result) != IntPtr.Zero && result != IntPtr.Zero)
                     {
                         handle = result;
                         break;
@@ -124,6 +124,18 @@ namespace RetroBar.Converters
             }
 
             object own = values.Length > 1 ? values[1] : null;
+
+            // A window's preview shows the icon in the window's title bar. A DPI is asked for along with it (a window
+            // that has icons of several sizes then hands back a large one), so it can be scaled down to the size of
+            // the taskbar's icons rather than up from the small one.
+            if (ownIconWanted && values.Length > 0 && values[0] is ApplicationWindow titled && !titled.IsUWP)
+            {
+                ImageSource titleBarIcon = GetFallbackIcon(titled, preferLarge: false, dpi: 192);
+                if (titleBarIcon != null)
+                {
+                    return titleBarIcon;
+                }
+            }
 
             // A dialog of Explorer's own process (Run, ...) is given Explorer's icon when it has no big one of its
             // own, so take the icon the window itself has; the same for any window with no icon found at all.
