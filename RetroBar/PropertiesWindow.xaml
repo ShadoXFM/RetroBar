@@ -301,6 +301,10 @@
                                       IsChecked="{Binding Source={x:Static Settings:Settings.Instance}, Path=GroupTaskWindows, UpdateSourceTrigger=PropertyChanged}">
                                 <Label Content="{DynamicResource group_task_windows}" />
                             </CheckBox>
+                            <CheckBox x:Name="cbShowProgramNameOnTabs"
+                                      IsChecked="{Binding Source={x:Static Settings:Settings.Instance}, Path=ShowProgramNameOnTabs, UpdateSourceTrigger=PropertyChanged}">
+                                <Label Content="{DynamicResource show_program_name_on_tabs}" />
+                            </CheckBox>
                             <CheckBox x:Name="cbSlideTaskbarButtons"
                                       IsChecked="{Binding Source={x:Static Settings:Settings.Instance}, Path=SlideTaskbarButtons, UpdateSourceTrigger=PropertyChanged}"
                                       Visibility="{Binding Source={x:Static Settings:Settings.Instance}, Path=Edge, Converter={StaticResource edgeOrientationVisibilityConverter}, ConverterParameter='horizontal'}">

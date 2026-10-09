@@ -50,6 +50,7 @@
     <s:String x:Key="select_location">_Select location...</s:String>
     <s:String x:Key="quick_launch_folder">Quick Launch - Choose a folder</s:String>
     <s:String x:Key="show_badges">Show _badges</s:String>
+    <s:String x:Key="show_program_name_on_tabs">Label tabs with the _program's name instead of the window's title</s:String>
     <s:String x:Key="group_task_windows">_Combine windows of the same app into one tab</s:String>
     <s:String x:Key="show_window_previews">Show _window previews (thumbnails)</s:String>
     <s:String x:Key="use_software_rendering">_Use software rendering</s:String>

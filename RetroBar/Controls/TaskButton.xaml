@@ -66,6 +66,8 @@
                         <Binding Path="ProgressValue" />
                         <Binding Path="ProgressState" />
                         <Binding Path="Tag.Count" ElementName="AppButton" FallbackValue="1" />
+                        <Binding Source="{x:Static utilities:Settings.Instance}" Path="ShowProgramNameOnTabs" />
+                        <Binding />
                     </MultiBinding>
                 </TextBlock.Text>
             </TextBlock>

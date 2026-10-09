@@ -417,6 +417,14 @@ namespace RetroBar.Utilities
             set => Set(ref _groupTaskWindows, value);
         }
 
+        // A tab is labeled with its program's name ("Google Chrome") instead of the title its window has at the moment.
+        private bool _showProgramNameOnTabs = false;
+        public bool ShowProgramNameOnTabs
+        {
+            get => _showProgramNameOnTabs;
+            set => Set(ref _showProgramNameOnTabs, value);
+        }
+
         private bool _showTaskThumbnails = false;
         public bool ShowTaskThumbnails
         {
