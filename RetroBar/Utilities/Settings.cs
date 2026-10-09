@@ -50,6 +50,12 @@ namespace RetroBar.Utilities
             _settingsManager.Settings = this;
         }
 
+        /// <summary>Tells everything that follows the theme to apply it again (the theme's file was changed on disk).</summary>
+        public void NotifyThemeChanged()
+        {
+            OnPropertyChanged(nameof(Theme));
+        }
+
         protected virtual void OnPropertyChanged([CallerMemberName] string propertyName = "")
         {
             PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(propertyName));

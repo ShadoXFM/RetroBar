@@ -195,7 +195,14 @@ namespace RetroBar
         /// </summary>
         private void UpdateGradient()
         {
-            _gradientOverlay ??= TaskbarContentControl.Template?.FindName("GradientOverlay", TaskbarContentControl) as Border;
+            // The template is built again when a theme is applied (its style is a new object then), with a new overlay in it.
+            Border overlay = TaskbarContentControl.Template?.FindName("GradientOverlay", TaskbarContentControl) as Border;
+            if (!ReferenceEquals(overlay, _gradientOverlay))
+            {
+                _gradientOverlay = overlay;
+                _gradientOffset = -1;
+            }
+
             if (_gradientOverlay == null || _gradientOverlay.ActualWidth <= 0)
             {
                 return;
