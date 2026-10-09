@@ -14,6 +14,10 @@ namespace RetroBar.Utilities
     /// Two things are done. Its windows are made fully transparent (a layered window with an alpha of 0), so that when
     /// Windows does show them there is nothing to see, from the very first frame - a window can't be stopped from being
     /// shown by another process, only made invisible. And it is hidden again the moment it is shown.
+    ///
+    /// The windows are put back as Windows made them when the guard is disposed, and also when the process exits or an
+    /// unhandled exception is about to end it, so that RetroBar crashing doesn't leave Windows' taskbar invisible. (Only
+    /// being killed outright, which nothing can react to, still does - until Explorer restarts, or RetroBar runs again.)
     /// </summary>
     public class ExplorerTaskbarGuard : IDisposable
     {
@@ -77,6 +81,9 @@ namespace RetroBar.Utilities
         public ExplorerTaskbarGuard()
         {
             _callback = OnWinEvent;
+
+            AppDomain.CurrentDomain.ProcessExit += OnProcessEnding;
+            AppDomain.CurrentDomain.UnhandledException += OnUnhandledException;
 
             // Out of context: called back on this thread (which pumps messages), not inside the shown window's process.
             _hook = SetWinEventHook(EVENT_OBJECT_CREATE, EVENT_OBJECT_SHOW, IntPtr.Zero, _callback, 0, 0, WINEVENT_OUTOFCONTEXT);
@@ -151,8 +158,21 @@ namespace RetroBar.Utilities
             }
         }
 
+        private void OnProcessEnding(object sender, EventArgs e)
+        {
+            Dispose();
+        }
+
+        private void OnUnhandledException(object sender, UnhandledExceptionEventArgs e)
+        {
+            Dispose();
+        }
+
         public void Dispose()
         {
+            AppDomain.CurrentDomain.ProcessExit -= OnProcessEnding;
+            AppDomain.CurrentDomain.UnhandledException -= OnUnhandledException;
+
             if (_hook != IntPtr.Zero)
             {
                 UnhookWinEvent(_hook);
