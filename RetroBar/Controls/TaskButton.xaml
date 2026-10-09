@@ -306,7 +306,8 @@
                                                                                 <ColumnDefinition Width="Auto" />
                                                                                 <ColumnDefinition Width="*" />
                                                                             </Grid.ColumnDefinitions>
-                                                                            <!-- The app's icon, before the window's title -->
+                                                                            <!-- The window's own icon (an Explorer window's folder, say), before its title; only the
+                                                                                 tab button always shows the regular File Explorer icon. -->
                                                                             <Image x:Name="PreviewTitleIcon"
                                                                                    Width="16"
                                                                                    Height="16"
@@ -316,7 +317,7 @@
                                                                                    SnapsToDevicePixels="True"
                                                                                    RenderOptions.BitmapScalingMode="HighQuality">
                                                                                 <Image.Source>
-                                                                                    <MultiBinding Converter="{StaticResource taskIconConverter}" Mode="OneWay">
+                                                                                    <MultiBinding Converter="{StaticResource taskIconConverter}" ConverterParameter="window" Mode="OneWay">
                                                                                         <Binding />
                                                                                         <Binding Path="Icon" />
                                                                                     </MultiBinding>

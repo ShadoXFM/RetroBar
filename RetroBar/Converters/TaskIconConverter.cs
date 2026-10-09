@@ -110,7 +110,10 @@ namespace RetroBar.Converters
 
         public object Convert(object[] values, Type targetType, object parameter, System.Globalization.CultureInfo culture)
         {
-            if (values.Length > 0 && values[0] is ApplicationWindow window && IsFileExplorerWindow(window))
+            // The parameter "window" asks for the window's own icon, Explorer windows included.
+            bool ownIconWanted = parameter as string == "window";
+
+            if (!ownIconWanted && values.Length > 0 && values[0] is ApplicationWindow window && IsFileExplorerWindow(window))
             {
                 ImageSource icon = GetFileExplorerIcon();
                 if (icon != null)
@@ -124,7 +127,7 @@ namespace RetroBar.Converters
             // A dialog of Explorer's own process (Run, ...) is given Explorer's icon when it has no big one of its
             // own, so take the icon the window itself has; the same for any window with no icon found at all.
             if (values.Length > 0 && values[0] is ApplicationWindow other &&
-                (own == null || (!other.IsUWP && string.Equals(Path.GetFileName(other.WinFileName), "explorer.exe", StringComparison.OrdinalIgnoreCase))))
+                (own == null || (!other.IsUWP && !IsFileExplorerWindow(other) && string.Equals(Path.GetFileName(other.WinFileName), "explorer.exe", StringComparison.OrdinalIgnoreCase))))
             {
                 return GetFallbackIcon(other) ?? own;
             }
