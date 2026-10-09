@@ -141,12 +141,19 @@
                                             <ImageBrush ImageSource="{Binding IconPath}" Stretch="Uniform" />
                                         </Rectangle.OpacityMask>
                                     </Rectangle>
-                                    <TextBlock Text="{Binding DayName}"
+                                    <TextBlock x:Name="DayNameText"
+                                               Text="{Binding DayName}"
                                                Style="{DynamicResource GlobalFonts}"
                                                Foreground="{DynamicResource ButtonForeground}"
                                                Margin="2,0,8,0"
                                                VerticalAlignment="Center" />
                                 </DockPanel>
+                                <DataTemplate.Triggers>
+                                    <!-- Today's row is the bold one. -->
+                                    <DataTrigger Binding="{Binding IsToday}" Value="True">
+                                        <Setter TargetName="DayNameText" Property="FontWeight" Value="Bold" />
+                                    </DataTrigger>
+                                </DataTemplate.Triggers>
                             </DataTemplate>
                         </ItemsControl.ItemTemplate>
                     </ItemsControl>

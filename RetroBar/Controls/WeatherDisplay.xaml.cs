@@ -624,10 +624,18 @@ namespace RetroBar.Controls
                 Forecast.Clear();
                 foreach (DailyForecast day in _cachedForecast)
                 {
+                    // The day's name as the culture writes it ("ven. 9" in French), with its first letter capitalized.
+                    string dayName = day.Date.ToString("ddd d", CultureInfo.CurrentUICulture);
+                    if (dayName.Length > 0)
+                    {
+                        dayName = char.ToUpper(dayName[0], CultureInfo.CurrentUICulture) + dayName.Substring(1);
+                    }
+
                     Forecast.Add(new ForecastDay(
-                        day.Date.ToString("ddd d", CultureInfo.CurrentUICulture),
+                        dayName,
                         GetImagePath(GetIconFileName(day.WeatherCode, true, 0)),
-                        $"{FormatShortTemperature(day.HighCelsius)} / {FormatShortTemperature(day.LowCelsius)}"));
+                        $"{FormatShortTemperature(day.HighCelsius)} / {FormatShortTemperature(day.LowCelsius)}",
+                        day.Date.Date == DateTime.Today));
                 }
             }
             else
@@ -736,5 +744,5 @@ namespace RetroBar.Controls
     public record DailyForecast(DateTime Date, int WeatherCode, double HighCelsius, double LowCelsius);
 
     /// <summary>One row of the forecast popup.</summary>
-    public record ForecastDay(string DayName, string IconPath, string Range);
+    public record ForecastDay(string DayName, string IconPath, string Range, bool IsToday);
 }
