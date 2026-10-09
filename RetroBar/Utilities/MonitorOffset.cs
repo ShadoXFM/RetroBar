@@ -105,6 +105,17 @@ namespace RetroBar.Utilities
 
             element.SetValue(IsAttachedProperty, true);
 
+            // What is worked out here depends on the DPI (the pixel sizes of a snapped image above all), and a window can
+            // be given another DPI after its contents are loaded - a taskbar starts out with the DPI of the primary monitor
+            // and is only then moved to its own - so apply again whenever its DPI changes.
+            if (Window.GetWindow(element) is Window window)
+            {
+                DpiChangedEventHandler dpiHandler = (sender, args) =>
+                    element.Dispatcher.BeginInvoke(new Action(() => Apply(element)), System.Windows.Threading.DispatcherPriority.Loaded);
+                window.DpiChanged += dpiHandler;
+                element.Unloaded += (sender, args) => window.DpiChanged -= dpiHandler;
+            }
+
             if (element is System.Windows.Controls.Image)
             {
                 // An Image's pixel-snapped transform depends on its laid-out size and position,
