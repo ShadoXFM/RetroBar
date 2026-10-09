@@ -18,6 +18,38 @@ namespace RetroBar.Utilities
     {
         private static readonly Duration SlideDuration = new(TimeSpan.FromMilliseconds(180));
 
+        // A From -> To animation whose value is always a whole number of device pixels.
+        private sealed class PixelSnappedAnimation : DoubleAnimationBase
+        {
+            private double _from;
+            private double _to;
+            private double _dpi = 1;
+            private IEasingFunction _ease;
+
+            public PixelSnappedAnimation()
+            {
+            }
+
+            public PixelSnappedAnimation(double from, double to, double dpi, Duration duration, IEasingFunction ease)
+            {
+                _from = from;
+                _to = to;
+                _dpi = dpi > 0 ? dpi : 1;
+                _ease = ease;
+                Duration = duration;
+            }
+
+            protected override Freezable CreateInstanceCore() => new PixelSnappedAnimation(_from, _to, _dpi, Duration, _ease);
+
+            protected override double GetCurrentValueCore(double defaultOriginValue, double defaultDestinationValue, AnimationClock animationClock)
+            {
+                double progress = animationClock.CurrentProgress ?? 1;
+                double eased = _ease?.Ease(progress) ?? progress;
+                double value = _from + (_to - _from) * eased;
+                return Math.Round(value * _dpi) / _dpi;
+            }
+        }
+
         public static Dictionary<object, Point> Capture(ItemsControl list)
         {
             var positions = new Dictionary<object, Point>();
@@ -62,9 +94,12 @@ namespace RetroBar.Utilities
                 var transform = new TranslateTransform(dx, dy);
                 container.RenderTransform = transform;
 
+                // Whole device pixels at every step: an icon drawn between two pixels is blurred by the
+                // resampling, which made the toolbar's icons smear while they slid into place.
+                double dpi = VisualTreeHelper.GetDpi(container).DpiScaleX;
                 var ease = new QuadraticEase { EasingMode = EasingMode.EaseOut };
-                transform.BeginAnimation(TranslateTransform.XProperty, new DoubleAnimation(dx, 0, SlideDuration) { EasingFunction = ease });
-                transform.BeginAnimation(TranslateTransform.YProperty, new DoubleAnimation(dy, 0, SlideDuration) { EasingFunction = ease });
+                transform.BeginAnimation(TranslateTransform.XProperty, new PixelSnappedAnimation(dx, 0, dpi, SlideDuration, ease));
+                transform.BeginAnimation(TranslateTransform.YProperty, new PixelSnappedAnimation(dy, 0, dpi, SlideDuration, ease));
             }
         }
     }

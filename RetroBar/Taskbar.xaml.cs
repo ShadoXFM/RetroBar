@@ -8,6 +8,8 @@ using RetroBar.Utilities;
 using System;
 using System.ComponentModel;
 using System.Diagnostics;
+using System.Runtime.InteropServices;
+using System.Windows.Threading;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Input;
@@ -115,6 +117,8 @@ namespace RetroBar
             UpdateShowDesktopButtonVisibility();
 
             UpdateStartButton();
+
+            StartWorkAreaWatchdog();
 
             AutoHideElement = TaskbarContentControl;
 
@@ -307,8 +311,93 @@ namespace RetroBar
             return IntPtr.Zero;
         }
 
+        // ---- keeping the space the taskbar takes from the desktop reserved
+        //
+        // A taskbar (an "app bar") reserves its strip of the screen by setting the monitor's work area, which is
+        // what stops maximized windows from covering it. Windows resets the work area on its own when the displays
+        // change (a monitor turned off or on, a resolution change) and then only tells the app bars that are
+        // registered at that moment - a taskbar that misses it keeps showing, but windows are free to maximize
+        // right over it. So the work area is checked every few seconds, and set again if it has lost the strip.
+        private DispatcherTimer _workAreaWatchdog;
+
+        [StructLayout(LayoutKind.Sequential)]
+        private struct WatchRect
+        {
+            public int Left;
+            public int Top;
+            public int Right;
+            public int Bottom;
+        }
+
+        [StructLayout(LayoutKind.Sequential)]
+        private struct WatchMonitorInfo
+        {
+            public int Size;
+            public WatchRect Monitor;
+            public WatchRect Work;
+            public int Flags;
+        }
+
+        [DllImport("user32.dll")]
+        [return: MarshalAs(UnmanagedType.Bool)]
+        private static extern bool GetMonitorInfo(IntPtr hMonitor, ref WatchMonitorInfo info);
+
+        [DllImport("user32.dll")]
+        [return: MarshalAs(UnmanagedType.Bool)]
+        private static extern bool GetWindowRect(IntPtr hWnd, out WatchRect rect);
+
+        private void StartWorkAreaWatchdog()
+        {
+            _workAreaWatchdog = new DispatcherTimer { Interval = TimeSpan.FromSeconds(3) };
+            _workAreaWatchdog.Tick += (s, e) => EnsureWorkAreaReserved();
+            _workAreaWatchdog.Start();
+        }
+
+        private void EnsureWorkAreaReserved()
+        {
+            // Only a normal taskbar reserves space (an auto-hidden one doesn't), and only once it is on its edge.
+            if (AppBarMode != AppBarMode.Normal || IsClosing || Screen == null || Handle == IntPtr.Zero ||
+                !GetWindowRect(Handle, out WatchRect bar))
+            {
+                return;
+            }
+
+            var info = new WatchMonitorInfo { Size = Marshal.SizeOf<WatchMonitorInfo>() };
+            if (!GetMonitorInfo(Screen.HMonitor, ref info))
+            {
+                return;
+            }
+
+            // How far into the bar's strip the work area reaches (more than a pixel or two means the strip is
+            // not reserved).
+            int overlap = AppBarEdge switch
+            {
+                AppBarEdge.Bottom => info.Work.Bottom - bar.Top,
+                AppBarEdge.Top => bar.Bottom - info.Work.Top,
+                AppBarEdge.Left => bar.Right - info.Work.Left,
+                _ => info.Work.Right - bar.Left,
+            };
+
+            // The bar must also be on the monitor's own edge for this to mean anything.
+            bool onEdge = AppBarEdge switch
+            {
+                AppBarEdge.Bottom => Math.Abs(bar.Bottom - info.Monitor.Bottom) <= 2,
+                AppBarEdge.Top => Math.Abs(bar.Top - info.Monitor.Top) <= 2,
+                AppBarEdge.Left => Math.Abs(bar.Left - info.Monitor.Left) <= 2,
+                _ => Math.Abs(bar.Right - info.Monitor.Right) <= 2,
+            };
+
+            if (onEdge && overlap > 2)
+            {
+                ShellLogger.Info($"Taskbar: the work area of {Screen.DeviceName} had lost the taskbar's strip; setting it again");
+                _shellManager.AppBarManager.SetWorkArea(Screen);
+            }
+        }
+
         protected override void CustomClosing()
         {
+            _workAreaWatchdog?.Stop();
+
             if (AllowClose)
             {
                 QuickLaunchToolbar.Visibility = Visibility.Collapsed;

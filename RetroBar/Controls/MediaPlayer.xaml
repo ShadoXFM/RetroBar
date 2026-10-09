@@ -171,8 +171,8 @@
         <Popup x:Name="SeekPopup"
                PlacementTarget="{Binding ElementName=TrackTextCanvas}"
                Placement="Top"
-               HorizontalOffset="-35"
-               VerticalOffset="-8"
+               HorizontalOffset="-45"
+               VerticalOffset="2"
                AllowsTransparency="True"
                StaysOpen="False"
                Opened="SeekPopup_OnOpened"
@@ -180,207 +180,229 @@
             <!-- Same 4-line raised bevel as a resting (non-pressed) tab (see TaskButton's own
                  template, not TaskButtonActive's sunken one): an outer DarkShadow/Highlight pair
                  around an inner Shadow/Light pair. -->
-            <Border BorderThickness="0"
-                    Padding="1">
-                <Border BorderThickness="0,0,1,1"
-                        BorderBrush="{DynamicResource ButtonDarkShadow}">
-                    <Border BorderThickness="1,1,0,0"
-                            BorderBrush="{DynamicResource ButtonHighlight}">
-                        <Border BorderThickness="0,0,1,1"
-                                BorderBrush="{DynamicResource ButtonShadow}">
-                            <Border BorderThickness="1,1,0,0"
-                                    BorderBrush="{DynamicResource ButtonLight}"
-                                    Background="{DynamicResource ButtonFace}"
-                                    Padding="2,3">
-                              <StackPanel Orientation="Vertical">
-                                <!-- Plain Image with Stretch="Uniform" (fit the whole image, no
-                                     cropping) - unlike UniformToFill, Uniform never crops, so it
-                                     doesn't have the off-center-crop problem that made the main
-                                     taskbar row's own album art (and this popup's own art, until
-                                     just now) need the Rectangle+ImageBrush workaround; the whole
-                                     source image is always visible here, just fit within bounds.
-                                     Only Height is constrained (see below) - Width is left Auto,
-                                     so non-square sources (e.g. a widescreen video-frame
-                                     thumbnail) render at their own true aspect ratio instead of
-                                     being forced into a square box. Kept in sync with
-                                     AlbumArtImage (the real source of truth) from UpdateAlbumArt
-                                     in the code-behind rather than bound directly to it, since
-                                     AlbumArtImage's own Visibility means something different
-                                     (Hidden = "has art, but painted via the Adorner instead")
-                                     that doesn't translate 1:1 to this Image's own Visibility
-                                     (Visible = "has art, paint it here"). -->
-                                <!-- Height sized off the row's own FIXED-width elements only -
-                                     the three transport buttons and the time text, deliberately
-                                     EXCLUDING SeekSlider - plus a constant (92) standing in for
-                                     their combined Margins and the slider's own baseline (90px)
-                                     width, reproducing exactly what a plain
-                                     SeekControlsRow.ActualWidth reference used to compute back
-                                     when the slider was a fixed 90px. Excluding the slider here
-                                     is deliberate: SeekSlider's own Width (below) is derived FROM
-                                     this Image's ActualWidth, so if this Height also depended on
-                                     the slider's width, the two would feed each other in a loop
-                                     that only ever grows and never settles - see
-                                     RemainingWidthConverter's own remarks. This keeps Height
-                                     constant regardless of the art's own aspect ratio, so square
-                                     (1:1) art renders exactly as wide as it is tall (filling the
-                                     row minus its margin) while wider art (e.g. a 16:9 thumbnail)
-                                     renders at the same height but wider, growing this whole
-                                     vertical StackPanel (which sizes to its widest child) - and so
-                                     the popup itself - to fit. -->
-                                <Image x:Name="SeekAlbumArtImage"
-                                       MaxHeight="280"
-                                       MaxWidth="500"
-                                       Stretch="Uniform"
-                                       HorizontalAlignment="Center"
-                                       Margin="8,7,8,4"
-                                       Visibility="Collapsed"
-                                       SnapsToDevicePixels="True"
-                                       UseLayoutRounding="True"
-                                       RenderOptions.BitmapScalingMode="HighQuality"
-                                       utilities:MonitorOffset.Tag="MediaSeekAlbumArt">
-                                    <Image.Height>
-                                        <MultiBinding Converter="{StaticResource sumWidthsConverter}" ConverterParameter="92">
-                                            <Binding ElementName="SeekBackButton" Path="ActualWidth" />
-                                            <Binding ElementName="SeekPlayPauseButton" Path="ActualWidth" />
-                                            <Binding ElementName="SeekForwardButton" Path="ActualWidth" />
-                                            <Binding ElementName="SeekTimeText" Path="ActualWidth" />
-                                        </MultiBinding>
-                                    </Image.Height>
-                                </Image>
-                                <TextBlock x:Name="SeekTitleText"
-                                           Style="{DynamicResource MediaPlayerTrackTextStyle}"
-                                           FontWeight="Bold"
+            <!-- The 10 DIP margin is room for the shadow to spread into inside the popup's window (and the
+                 popup's offsets above are 10 further left / 10 lower to make up for it). -->
+            <!-- The shadow is its own element behind the frame, not an Effect on it: an Effect redraws everything
+                 inside it into an offscreen bitmap, which blurred the text and buttons. -->
+            <Grid RenderOptions.ClearTypeHint="Enabled">
+                <!-- The shadow's rectangle is a few DIP inside the frame's top-left, so it fades in there like a real
+                     shadow, and it is clipped at the frame's top-left edge so no tail of it shows above or to the left. -->
+                <Border Margin="11,11,0,0"
+                        ClipToBounds="True">
+                    <Border Margin="3,3,10,10"
+                            Background="Black">
+                        <Border.Effect>
+                            <DropShadowEffect BlurRadius="8"
+                                              ShadowDepth="3"
+                                              Direction="300"
+                                              Opacity="0.75"
+                                              Color="Black" />
+                        </Border.Effect>
+                    </Border>
+                </Border>
+                <Border BorderThickness="0"
+                        Padding="1"
+                        Margin="10">
+                    <Border BorderThickness="0,0,1,1"
+                            BorderBrush="{DynamicResource ButtonDarkShadow}">
+                        <Border BorderThickness="1,1,0,0"
+                                BorderBrush="{DynamicResource ButtonHighlight}">
+                            <Border BorderThickness="0,0,1,1"
+                                    BorderBrush="{DynamicResource ButtonShadow}">
+                                <Border BorderThickness="1,1,0,0"
+                                        BorderBrush="{DynamicResource ButtonLight}"
+                                        Background="{DynamicResource ButtonFace}"
+                                        Padding="2,3">
+                                  <StackPanel Orientation="Vertical">
+                                    <!-- Plain Image with Stretch="Uniform" (fit the whole image, no
+                                         cropping) - unlike UniformToFill, Uniform never crops, so it
+                                         doesn't have the off-center-crop problem that made the main
+                                         taskbar row's own album art (and this popup's own art, until
+                                         just now) need the Rectangle+ImageBrush workaround; the whole
+                                         source image is always visible here, just fit within bounds.
+                                         Only Height is constrained (see below) - Width is left Auto,
+                                         so non-square sources (e.g. a widescreen video-frame
+                                         thumbnail) render at their own true aspect ratio instead of
+                                         being forced into a square box. Kept in sync with
+                                         AlbumArtImage (the real source of truth) from UpdateAlbumArt
+                                         in the code-behind rather than bound directly to it, since
+                                         AlbumArtImage's own Visibility means something different
+                                         (Hidden = "has art, but painted via the Adorner instead")
+                                         that doesn't translate 1:1 to this Image's own Visibility
+                                         (Visible = "has art, paint it here"). -->
+                                    <!-- Height sized off the row's own FIXED-width elements only -
+                                         the three transport buttons and the time text, deliberately
+                                         EXCLUDING SeekSlider - plus a constant (92) standing in for
+                                         their combined Margins and the slider's own baseline (90px)
+                                         width, reproducing exactly what a plain
+                                         SeekControlsRow.ActualWidth reference used to compute back
+                                         when the slider was a fixed 90px. Excluding the slider here
+                                         is deliberate: SeekSlider's own Width (below) is derived FROM
+                                         this Image's ActualWidth, so if this Height also depended on
+                                         the slider's width, the two would feed each other in a loop
+                                         that only ever grows and never settles - see
+                                         RemainingWidthConverter's own remarks. This keeps Height
+                                         constant regardless of the art's own aspect ratio, so square
+                                         (1:1) art renders exactly as wide as it is tall (filling the
+                                         row minus its margin) while wider art (e.g. a 16:9 thumbnail)
+                                         renders at the same height but wider, growing this whole
+                                         vertical StackPanel (which sizes to its widest child) - and so
+                                         the popup itself - to fit. -->
+                                    <Image x:Name="SeekAlbumArtImage"
+                                           MaxHeight="280"
+                                           MaxWidth="500"
+                                           Stretch="Uniform"
                                            HorizontalAlignment="Center"
-                                           TextTrimming="CharacterEllipsis"
-                                           Width="{Binding ActualWidth, ElementName=SeekControlsRow}"
-                                           TextAlignment="Center"
-                                           Margin="0,0,0,1"
-                                           utilities:MonitorOffset.Tag="MediaSeekTitleText" />
-                                <TextBlock x:Name="SeekArtistText"
-                                           Style="{DynamicResource MediaPlayerTrackTextStyle}"
-                                           HorizontalAlignment="Center"
-                                           TextTrimming="CharacterEllipsis"
-                                           Width="{Binding ActualWidth, ElementName=SeekControlsRow}"
-                                           TextAlignment="Center"
-                                           Margin="0,0,0,4"
-                                           utilities:MonitorOffset.Tag="MediaSeekArtistText" />
-                                <!-- HorizontalAlignment="Center" (instead of the StackPanel-child
-                                     default of Stretch) matters for more than just centering: the
-                                     album art's Height above is bound to this row's own
-                                     ActualWidth, so if this row were left to stretch to match a
-                                     wide 16:9 art's width, its ActualWidth would report that wide
-                                     value right back - a circular feedback loop where wide art
-                                     begets a wide row begets wider art, which never settles back
-                                     down on its own (not even across closing and reopening the
-                                     popup, since ActualWidth is a persisted property on this same
-                                     element instance either way). Centering keeps this row's own
-                                     ActualWidth equal to its own intrinsic content width - the
-                                     buttons+slider+time - regardless of how wide its siblings
-                                     get. -->
-                                <StackPanel x:Name="SeekControlsRow"
-                                            Orientation="Horizontal"
-                                            HorizontalAlignment="Center">
-                                    <!-- VerticalAlignment="Top" + Margin-Top=5 on the three
-                                         transport buttons only (not the slider/time text) -
-                                         top-aligning (instead of the style's own Center) means
-                                         the 5px push grows this row's own reserved height by
-                                         exactly 5px, rather than needing a separate Padding
-                                         increase to avoid the buttons overflowing past it. -->
-                                    <Button x:Name="SeekBackButton"
-                                            Style="{DynamicResource MediaPlayerButtonStyle}"
-                                            Click="SeekBackButton_OnClick"
-                                            ToolTip="-10s"
-                                            VerticalAlignment="Top"
-                                            Margin="1,5,1,0"
-                                            utilities:MonitorOffset.Tag="MediaSeekButtonBack">
-                                        <!-- Own dedicated tag, deliberately NOT shared with the
-                                             main taskbar row's own "MediaGlyphPrevious" (see
-                                             SeekForwardButton's comment below for why). Two
-                                             left-pointing triangles ("<<"), same shape as the
-                                             original (pre-skip-icon) MediaPlayerPreviousGeometry
-                                             in System.xaml. -->
-                                        <Path Data="M 4,0 L 4,7 L 0,3.5 Z M 9,0 L 9,7 L 5,3.5 Z"
-                                              Style="{DynamicResource MediaPlayerGlyphStyle}"
-                                              utilities:MonitorOffset.Tag="MediaSeekGlyphPrevious" />
-                                    </Button>
-                                    <Button x:Name="SeekPlayPauseButton"
-                                            Style="{DynamicResource MediaPlayerButtonStyle}"
-                                            Click="PlayPauseButton_OnClick"
-                                            ToolTip="{DynamicResource media_play_pause}"
-                                            VerticalAlignment="Top"
-                                            Margin="1,5,1,0"
-                                            utilities:MonitorOffset.Tag="MediaSeekButtonPlayPause">
-                                        <Path x:Name="SeekPlayPauseGlyph"
-                                              Data="{DynamicResource MediaPlayerPlayGeometry}"
-                                              Style="{DynamicResource MediaPlayerGlyphStyle}"
-                                              utilities:MonitorOffset.Tag="MediaGlyphPlayPause" />
-                                    </Button>
-                                    <Button x:Name="SeekForwardButton"
-                                            Style="{DynamicResource MediaPlayerButtonStyle}"
-                                            Click="SeekForwardButton_OnClick"
-                                            ToolTip="+10s"
-                                            VerticalAlignment="Top"
-                                            Margin="1,5,1,0"
-                                            utilities:MonitorOffset.Tag="MediaSeekButtonForward">
-                                        <!-- Own dedicated tag, not shared with the main row's
-                                             "MediaGlyphNext" - a per-monitor Geometry override
-                                             tuned for that shared tag would otherwise silently
-                                             overwrite this popup's own glyph too (this is what
-                                             DISPLAY1 was doing before). Two right-pointing
-                                             triangles (">>"), same shape as the original
-                                             (pre-skip-icon) MediaPlayerNextGeometry in
-                                             System.xaml. -->
-                                        <Path Data="M 0,0 L 4,3.5 L 0,7 Z M 5,0 L 9,3.5 L 5,7 Z"
-                                              Style="{DynamicResource MediaPlayerGlyphStyle}"
-                                              utilities:MonitorOffset.Tag="MediaSeekGlyphNext" />
-                                    </Button>
-                                    <!-- Width fills whatever space is left over after the other
-                                         (fixed-width) siblings within the album art's own
-                                         rendered width (see RemainingWidthConverter's remarks on
-                                         why that's the safe direction for this dependency to run
-                                         in) - 90px is both the deduction's own baseline (matching
-                                         SeekAlbumArtImage.Height's ConverterParameter above) and
-                                         the floor this never shrinks below. A per-monitor
-                                         MediaSeekSlider Width override would otherwise permanently
-                                         replace this MultiBinding outright the moment
-                                         MonitorOffset applies it (a plain SetValue clears any
-                                         existing Binding) - use X to nudge this slider's position
-                                         instead, same as usual. -->
-                                    <Slider x:Name="SeekSlider"
-                                            Style="{DynamicResource MediaSeekSliderStyle}"
-                                            Height="16"
-                                            VerticalAlignment="Center"
-                                            Margin="2,0"
-                                            Minimum="0"
-                                            Maximum="1"
-                                            IsMoveToPointEnabled="True"
-                                            PreviewMouseDown="SeekSlider_OnPreviewMouseDown"
-                                            PreviewMouseUp="SeekSlider_OnPreviewMouseUp"
-                                            utilities:MonitorOffset.Tag="MediaSeekSlider">
-                                        <Slider.Width>
-                                            <MultiBinding Converter="{StaticResource remainingWidthConverter}" ConverterParameter="18,90">
-                                                <Binding ElementName="SeekAlbumArtImage" Path="ActualWidth" />
+                                           Margin="8,7,8,4"
+                                           Visibility="Collapsed"
+                                           SnapsToDevicePixels="True"
+                                           UseLayoutRounding="True"
+                                           RenderOptions.BitmapScalingMode="HighQuality"
+                                           utilities:MonitorOffset.Tag="MediaSeekAlbumArt">
+                                        <Image.Height>
+                                            <MultiBinding Converter="{StaticResource sumWidthsConverter}" ConverterParameter="92">
                                                 <Binding ElementName="SeekBackButton" Path="ActualWidth" />
                                                 <Binding ElementName="SeekPlayPauseButton" Path="ActualWidth" />
                                                 <Binding ElementName="SeekForwardButton" Path="ActualWidth" />
                                                 <Binding ElementName="SeekTimeText" Path="ActualWidth" />
                                             </MultiBinding>
-                                        </Slider.Width>
-                                    </Slider>
-                                    <TextBlock x:Name="SeekTimeText"
+                                        </Image.Height>
+                                    </Image>
+                                    <TextBlock x:Name="SeekTitleText"
                                                Style="{DynamicResource MediaPlayerTrackTextStyle}"
                                                FontWeight="Bold"
-                                               VerticalAlignment="Center"
-                                               Margin="2,0,6,0"
-                                               Text="0:00 / 0:00"
-                                               utilities:MonitorOffset.Tag="MediaSeekTimeText" />
-                                </StackPanel>
-                              </StackPanel>
+                                               HorizontalAlignment="Center"
+                                               TextTrimming="CharacterEllipsis"
+                                               Width="{Binding ActualWidth, ElementName=SeekControlsRow}"
+                                               TextAlignment="Center"
+                                               Margin="0,0,0,1"
+                                               utilities:MonitorOffset.Tag="MediaSeekTitleText" />
+                                    <TextBlock x:Name="SeekArtistText"
+                                               Style="{DynamicResource MediaPlayerTrackTextStyle}"
+                                               HorizontalAlignment="Center"
+                                               TextTrimming="CharacterEllipsis"
+                                               Width="{Binding ActualWidth, ElementName=SeekControlsRow}"
+                                               TextAlignment="Center"
+                                               Margin="0,0,0,4"
+                                               utilities:MonitorOffset.Tag="MediaSeekArtistText" />
+                                    <!-- HorizontalAlignment="Center" (instead of the StackPanel-child
+                                         default of Stretch) matters for more than just centering: the
+                                         album art's Height above is bound to this row's own
+                                         ActualWidth, so if this row were left to stretch to match a
+                                         wide 16:9 art's width, its ActualWidth would report that wide
+                                         value right back - a circular feedback loop where wide art
+                                         begets a wide row begets wider art, which never settles back
+                                         down on its own (not even across closing and reopening the
+                                         popup, since ActualWidth is a persisted property on this same
+                                         element instance either way). Centering keeps this row's own
+                                         ActualWidth equal to its own intrinsic content width - the
+                                         buttons+slider+time - regardless of how wide its siblings
+                                         get. -->
+                                    <StackPanel x:Name="SeekControlsRow"
+                                                Orientation="Horizontal"
+                                                HorizontalAlignment="Center">
+                                        <!-- VerticalAlignment="Top" + Margin-Top=5 on the three
+                                             transport buttons only (not the slider/time text) -
+                                             top-aligning (instead of the style's own Center) means
+                                             the 5px push grows this row's own reserved height by
+                                             exactly 5px, rather than needing a separate Padding
+                                             increase to avoid the buttons overflowing past it. -->
+                                        <Button x:Name="SeekBackButton"
+                                                Style="{DynamicResource MediaPlayerButtonStyle}"
+                                                Click="SeekBackButton_OnClick"
+                                                ToolTip="-10s"
+                                                VerticalAlignment="Top"
+                                                Margin="1,5,1,0"
+                                                utilities:MonitorOffset.Tag="MediaSeekButtonBack">
+                                            <!-- Own dedicated tag, deliberately NOT shared with the
+                                                 main taskbar row's own "MediaGlyphPrevious" (see
+                                                 SeekForwardButton's comment below for why). Two
+                                                 left-pointing triangles ("<<"), same shape as the
+                                                 original (pre-skip-icon) MediaPlayerPreviousGeometry
+                                                 in System.xaml. -->
+                                            <Path Data="M 4,0 L 4,7 L 0,3.5 Z M 9,0 L 9,7 L 5,3.5 Z"
+                                                  Style="{DynamicResource MediaPlayerGlyphStyle}"
+                                                  utilities:MonitorOffset.Tag="MediaSeekGlyphPrevious" />
+                                        </Button>
+                                        <Button x:Name="SeekPlayPauseButton"
+                                                Style="{DynamicResource MediaPlayerButtonStyle}"
+                                                Click="PlayPauseButton_OnClick"
+                                                ToolTip="{DynamicResource media_play_pause}"
+                                                VerticalAlignment="Top"
+                                                Margin="1,5,1,0"
+                                                utilities:MonitorOffset.Tag="MediaSeekButtonPlayPause">
+                                            <Path x:Name="SeekPlayPauseGlyph"
+                                                  Data="{DynamicResource MediaPlayerPlayGeometry}"
+                                                  Style="{DynamicResource MediaPlayerGlyphStyle}"
+                                                  utilities:MonitorOffset.Tag="MediaGlyphPlayPause" />
+                                        </Button>
+                                        <Button x:Name="SeekForwardButton"
+                                                Style="{DynamicResource MediaPlayerButtonStyle}"
+                                                Click="SeekForwardButton_OnClick"
+                                                ToolTip="+10s"
+                                                VerticalAlignment="Top"
+                                                Margin="1,5,1,0"
+                                                utilities:MonitorOffset.Tag="MediaSeekButtonForward">
+                                            <!-- Own dedicated tag, not shared with the main row's
+                                                 "MediaGlyphNext" - a per-monitor Geometry override
+                                                 tuned for that shared tag would otherwise silently
+                                                 overwrite this popup's own glyph too (this is what
+                                                 DISPLAY1 was doing before). Two right-pointing
+                                                 triangles (">>"), same shape as the original
+                                                 (pre-skip-icon) MediaPlayerNextGeometry in
+                                                 System.xaml. -->
+                                            <Path Data="M 0,0 L 4,3.5 L 0,7 Z M 5,0 L 9,3.5 L 5,7 Z"
+                                                  Style="{DynamicResource MediaPlayerGlyphStyle}"
+                                                  utilities:MonitorOffset.Tag="MediaSeekGlyphNext" />
+                                        </Button>
+                                        <!-- Width fills whatever space is left over after the other
+                                             (fixed-width) siblings within the album art's own
+                                             rendered width (see RemainingWidthConverter's remarks on
+                                             why that's the safe direction for this dependency to run
+                                             in) - 90px is both the deduction's own baseline (matching
+                                             SeekAlbumArtImage.Height's ConverterParameter above) and
+                                             the floor this never shrinks below. A per-monitor
+                                             MediaSeekSlider Width override would otherwise permanently
+                                             replace this MultiBinding outright the moment
+                                             MonitorOffset applies it (a plain SetValue clears any
+                                             existing Binding) - use X to nudge this slider's position
+                                             instead, same as usual. -->
+                                        <Slider x:Name="SeekSlider"
+                                                Style="{DynamicResource MediaSeekSliderStyle}"
+                                                Height="16"
+                                                VerticalAlignment="Center"
+                                                Margin="2,0"
+                                                Minimum="0"
+                                                Maximum="1"
+                                                IsMoveToPointEnabled="True"
+                                                PreviewMouseDown="SeekSlider_OnPreviewMouseDown"
+                                                PreviewMouseUp="SeekSlider_OnPreviewMouseUp"
+                                                utilities:MonitorOffset.Tag="MediaSeekSlider">
+                                            <Slider.Width>
+                                                <MultiBinding Converter="{StaticResource remainingWidthConverter}" ConverterParameter="18,90">
+                                                    <Binding ElementName="SeekAlbumArtImage" Path="ActualWidth" />
+                                                    <Binding ElementName="SeekBackButton" Path="ActualWidth" />
+                                                    <Binding ElementName="SeekPlayPauseButton" Path="ActualWidth" />
+                                                    <Binding ElementName="SeekForwardButton" Path="ActualWidth" />
+                                                    <Binding ElementName="SeekTimeText" Path="ActualWidth" />
+                                                </MultiBinding>
+                                            </Slider.Width>
+                                        </Slider>
+                                        <TextBlock x:Name="SeekTimeText"
+                                                   Style="{DynamicResource MediaPlayerTrackTextStyle}"
+                                                   FontWeight="Bold"
+                                                   VerticalAlignment="Center"
+                                                   Margin="2,0,6,0"
+                                                   Text="0:00 / 0:00"
+                                                   utilities:MonitorOffset.Tag="MediaSeekTimeText" />
+                                    </StackPanel>
+                                  </StackPanel>
+                                </Border>
                             </Border>
                         </Border>
                     </Border>
                 </Border>
-            </Border>
+            </Grid>
         </Popup>
     </utilities:UnclippedStackPanel>
 </UserControl>

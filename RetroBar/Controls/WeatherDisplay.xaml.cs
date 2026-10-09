@@ -227,18 +227,23 @@ namespace RetroBar.Controls
             ForecastFrame.BeginAnimation(UIElement.OpacityProperty, fade);
         }
 
+        // The margin (DIPs) the forecast frame has all round for its shadow - see WeatherDisplay.xaml.
+        private const double ShadowRoom = 6;
+
         private static CustomPopupPlacement[] PlaceForecast(Size popupSize, Size targetSize, Point offset)
         {
             double centeredX = (targetSize.Width - popupSize.Width) / 2;
             double centeredY = (targetSize.Height - popupSize.Height) / 2;
 
-            // offset is the popup's slide animation (see ShowForecast); zero while at rest.
+            // offset is the popup's slide animation (see ShowForecast); zero while at rest. The frame has
+            // ShadowRoom of margin all round for its shadow, which makes the window that much bigger on every side:
+            // the popup is placed that much closer to the widget to leave the frame where it would otherwise be.
             return Settings.Instance.Edge switch
             {
-                ManagedShell.AppBar.AppBarEdge.Left => new[] { new CustomPopupPlacement(new Point(targetSize.Width + offset.X, centeredY), PopupPrimaryAxis.Vertical) },
-                ManagedShell.AppBar.AppBarEdge.Right => new[] { new CustomPopupPlacement(new Point(-popupSize.Width + offset.X, centeredY), PopupPrimaryAxis.Vertical) },
-                ManagedShell.AppBar.AppBarEdge.Top => new[] { new CustomPopupPlacement(new Point(centeredX, targetSize.Height + offset.Y), PopupPrimaryAxis.Horizontal) },
-                _ => new[] { new CustomPopupPlacement(new Point(centeredX, -popupSize.Height + offset.Y), PopupPrimaryAxis.Horizontal) },
+                ManagedShell.AppBar.AppBarEdge.Left => new[] { new CustomPopupPlacement(new Point(targetSize.Width + offset.X - ShadowRoom, centeredY), PopupPrimaryAxis.Vertical) },
+                ManagedShell.AppBar.AppBarEdge.Right => new[] { new CustomPopupPlacement(new Point(-popupSize.Width + offset.X + ShadowRoom, centeredY), PopupPrimaryAxis.Vertical) },
+                ManagedShell.AppBar.AppBarEdge.Top => new[] { new CustomPopupPlacement(new Point(centeredX, targetSize.Height + offset.Y - ShadowRoom), PopupPrimaryAxis.Horizontal) },
+                _ => new[] { new CustomPopupPlacement(new Point(centeredX, -popupSize.Height + offset.Y + ShadowRoom), PopupPrimaryAxis.Horizontal) },
             };
         }
 

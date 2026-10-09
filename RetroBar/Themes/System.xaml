@@ -82,6 +82,67 @@
              which would smooth menu text regardless of the menu's own smoothing setting. -->
         <Setter Property="TextOptions.TextFormattingMode"
                 Value="Display" />
+        <Setter Property="HasDropShadow"
+                Value="True" />
+        <!-- The menu's usual template with a shadow of its own: a soft one on the right and bottom, as an
+             element behind the menu (not an Effect on it, which would blur the items). The 10 DIP of margin
+             right and below the menu is the room it has to spread into inside the popup window (the same
+             shadow as the popups' - see TaskButton.xaml). -->
+        <Setter Property="Template">
+            <Setter.Value>
+                <ControlTemplate TargetType="ContextMenu">
+                    <!-- Layout rounding makes every bevel line exactly one device pixel (at 125% a 1 DIP line came
+                         out 1px on the top/left and 2px on the right/bottom, with a notch at the corners). -->
+                    <Grid Margin="0,0,10,10"
+                          UseLayoutRounding="True"
+                          SnapsToDevicePixels="True">
+                        <!-- The shadow's rectangle is a few DIP inside the frame's top-left, so it fades in there like a real
+                             shadow, and it is clipped at the frame's top-left edge so no tail of it shows above or to the left. -->
+                        <Border Margin="1,1,-10,-10"
+                                ClipToBounds="True">
+                            <Border Margin="3,3,10,10"
+                                    Background="Black">
+                                <Border.Effect>
+                                    <DropShadowEffect BlurRadius="8"
+                                                      ShadowDepth="3"
+                                                      Direction="300"
+                                                      Opacity="0.67"
+                                                      Color="Black" />
+                                </Border.Effect>
+                            </Border>
+                        </Border>
+                        <!-- The same raised 4-line bevel as a tab: an outer DarkShadow/Highlight pair around an
+                             inner Shadow/Light pair. -->
+                        <Border BorderThickness="0,0,1,1"
+                                BorderBrush="{DynamicResource ButtonDarkShadow}"
+                                SnapsToDevicePixels="True">
+                            <Border BorderThickness="1,1,0,0"
+                                    BorderBrush="{DynamicResource ButtonHighlight}">
+                                <Border BorderThickness="0,0,1,1"
+                                        BorderBrush="{DynamicResource ButtonShadow}">
+                                    <Border BorderThickness="1,1,0,0"
+                                            BorderBrush="{DynamicResource ButtonLight}"
+                                            Background="{DynamicResource ButtonFace}">
+                                        <ScrollViewer Margin="1,0"
+                                                      CanContentScroll="True"
+                                                      Style="{DynamicResource {ComponentResourceKey TypeInTargetAssembly={x:Type FrameworkElement}, ResourceId=MenuScrollViewer}}">
+                                            <!-- As in WPF's own menu template: without the hint the text is smoothed in
+                                                 grayscale rather than ClearType, which made menus look blurry. -->
+                                            <Grid RenderOptions.ClearTypeHint="Enabled">
+                                                <ItemsPresenter Margin="{TemplateBinding Padding}"
+                                                                Grid.IsSharedSizeScope="True"
+                                                                KeyboardNavigation.DirectionalNavigation="Cycle"
+                                                                SnapsToDevicePixels="{TemplateBinding SnapsToDevicePixels}" />
+                                            </Grid>
+                                        </ScrollViewer>
+                                    </Border>
+                                </Border>
+                            </Border>
+                        </Border>
+                    </Grid>
+                </ControlTemplate>
+            </Setter.Value>
+        </Setter>
     </Style>
 
     <Style TargetType="ToolTip"

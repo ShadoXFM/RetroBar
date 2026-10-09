@@ -49,6 +49,7 @@ namespace RetroBar.Controls
             SetMonitorTags();
             InitHoverablePreview();
             AppButton.Tag = GroupWindows;
+            HitAreaExtension.SetEnabled(AppButton, true);
         }
 
         private static readonly TaskStateToMonitorTagConverter TagConverter = new TaskStateToMonitorTagConverter();
@@ -404,75 +405,6 @@ namespace RetroBar.Controls
         private void MaximizeMenuItem_OnClick(object sender, RoutedEventArgs e)
         {
             Window?.Maximize();
-        }
-
-        // Whether the pointer is on the strip under the tab (see TaskList's bottom edge handling) - counts
-        // as being on the tab for its preview.
-        private bool _edgeHover;
-
-        public bool IsTabHovered => AppButton.IsMouseOver || _edgeHover;
-
-        // The tab's hover effect is a trigger on IsMouseOver, which only real pointer input can set, so with the
-        // pointer on the strip under the tab the effect is applied to the template's own hover fill directly
-        // (same opacity the template uses for IsMouseOver) and removed again afterwards.
-        private const double EdgeHoverFillOpacity = 0.08;
-
-        private void ApplyEdgeHoverFill()
-        {
-            if (AppButton.Template?.FindName("HoverFill", AppButton) is not UIElement fill)
-            {
-                return;
-            }
-
-            if (_edgeHover && !AppButton.IsMouseOver)
-            {
-                fill.Opacity = EdgeHoverFillOpacity;
-            }
-            else
-            {
-                fill.ClearValue(UIElement.OpacityProperty);
-            }
-        }
-
-        // The tab's template is replaced when it turns active/inactive (a click on it, say), which drops the
-        // fill set above - put it back for as long as the pointer is still on the strip.
-        internal void RefreshEdgeHover()
-        {
-            ApplyEdgeHoverFill();
-        }
-
-        internal void SetEdgeHover(bool hovered)
-        {
-            _edgeHover = hovered;
-            ApplyEdgeHoverFill();
-
-            if (hovered)
-            {
-                StartPreviewShowTimer();
-            }
-            else if (!AppButton.IsMouseOver)
-            {
-                StopPreviewShowTimer();
-            }
-        }
-
-        internal void ClickFromEdge()
-        {
-            PressedWindowState = Window?.State ?? ApplicationWindow.WindowState.Inactive;
-            AppButton_OnClick(AppButton, new RoutedEventArgs());
-        }
-
-        internal void OpenMenuFromEdge()
-        {
-            if (AppButton.ContextMenu == null)
-            {
-                return;
-            }
-
-            AppButton_OnContextMenuOpening(AppButton, null);
-            ClosePreview();
-            AppButton.ContextMenu.PlacementTarget = AppButton;
-            AppButton.ContextMenu.IsOpen = true;
         }
 
         private void AppButton_OnClick(object sender, RoutedEventArgs e)
