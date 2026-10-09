@@ -61,13 +61,14 @@ namespace RetroBar.Converters
         [DllImport("user32.dll", EntryPoint = "GetClassLongPtrW")]
         private static extern IntPtr GetClassLongPtr(IntPtr hWnd, int index);
 
-        private static ImageSource GetFallbackIcon(ApplicationWindow window)
+        private static ImageSource GetFallbackIcon(ApplicationWindow window, bool preferLarge = false)
         {
             try
             {
                 // What the title bar shows: ICON_SMALL2, ICON_SMALL, ICON_BIG, then the window class' icons (GCLP_HICONSM, GCLP_HICON)
                 IntPtr handle = IntPtr.Zero;
-                foreach (int which in new[] { 2, 0, 1 })
+                // (The large icon first when asked: it is what the taskbar's own icons are made from, so it is as sharp.)
+                foreach (int which in preferLarge ? new[] { 1, 2, 0 } : new[] { 2, 0, 1 })
                 {
                     if (SendMessageTimeout(window.Handle, WM_GETICON, (IntPtr)which, IntPtr.Zero, SMTO_ABORTIFHUNG, 100, out IntPtr result) != IntPtr.Zero && result != IntPtr.Zero)
                     {
@@ -127,7 +128,7 @@ namespace RetroBar.Converters
             // The preview of a window shows the icon in the window's title bar.
             if (ownIconWanted && values.Length > 0 && values[0] is ApplicationWindow titled && !titled.IsUWP)
             {
-                return GetFallbackIcon(titled) ?? own;
+                return GetFallbackIcon(titled, preferLarge: true) ?? own;
             }
 
             // A dialog of Explorer's own process (Run, ...) is given Explorer's icon when it has no big one of its

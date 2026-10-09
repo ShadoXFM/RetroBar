@@ -317,7 +317,8 @@
                                                                                    VerticalAlignment="Center"
                                                                                    UseLayoutRounding="True"
                                                                                    SnapsToDevicePixels="True"
-                                                                                   RenderOptions.BitmapScalingMode="HighQuality">
+                                                                                   RenderOptions.BitmapScalingMode="HighQuality"
+                                                                                   utilities:MonitorOffset.Tag="PreviewTitleIcon">
                                                                                 <Image.Source>
                                                                                     <MultiBinding Converter="{StaticResource taskIconConverter}" ConverterParameter="window" Mode="OneWay">
                                                                                         <Binding />
