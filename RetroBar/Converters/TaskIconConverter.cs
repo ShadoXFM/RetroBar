@@ -61,7 +61,42 @@ namespace RetroBar.Converters
         [DllImport("user32.dll", EntryPoint = "GetClassLongPtrW")]
         private static extern IntPtr GetClassLongPtr(IntPtr hWnd, int index);
 
+        // What was found for a window, and when: asking a window for its icon sends it a message, which a window that is
+        // busy or hung answers late (the wait is capped, but it is still a wait, and the converter runs on the UI thread
+        // each time a preview is built). A window that gave nothing is not asked again for a few seconds either.
+        private sealed class CachedIcon
+        {
+            public ImageSource Icon;
+            public DateTime Taken;
+        }
+
+        private static readonly System.Runtime.CompilerServices.ConditionalWeakTable<ApplicationWindow, System.Collections.Generic.Dictionary<(bool, int), CachedIcon>> IconCache = new();
+        private static readonly TimeSpan IconCacheLife = TimeSpan.FromSeconds(10);
+        private static readonly TimeSpan MissCacheLife = TimeSpan.FromSeconds(5);
+
         private static ImageSource GetFallbackIcon(ApplicationWindow window, bool preferLarge = false, int dpi = 0)
+        {
+            var perWindow = IconCache.GetValue(window, _ => new System.Collections.Generic.Dictionary<(bool, int), CachedIcon>());
+            lock (perWindow)
+            {
+                if (perWindow.TryGetValue((preferLarge, dpi), out CachedIcon cached) &&
+                    DateTime.UtcNow - cached.Taken < (cached.Icon == null ? MissCacheLife : IconCacheLife))
+                {
+                    return cached.Icon;
+                }
+            }
+
+            ImageSource found = QueryIcon(window, preferLarge, dpi);
+
+            lock (perWindow)
+            {
+                perWindow[(preferLarge, dpi)] = new CachedIcon { Icon = found, Taken = DateTime.UtcNow };
+            }
+
+            return found;
+        }
+
+        private static ImageSource QueryIcon(ApplicationWindow window, bool preferLarge, int dpi)
         {
             try
             {
@@ -70,7 +105,7 @@ namespace RetroBar.Converters
                 // (The large icon first when asked: it is what the taskbar's own icons are made from, so it is as sharp.)
                 foreach (int which in preferLarge ? new[] { 1, 2, 0 } : new[] { 2, 0, 1 })
                 {
-                    if (SendMessageTimeout(window.Handle, WM_GETICON, (IntPtr)which, (IntPtr)dpi, SMTO_ABORTIFHUNG, 100, out IntPtr result) != IntPtr.Zero && result != IntPtr.Zero)
+                    if (SendMessageTimeout(window.Handle, WM_GETICON, (IntPtr)which, (IntPtr)dpi, SMTO_ABORTIFHUNG, 50, out IntPtr result) != IntPtr.Zero && result != IntPtr.Zero)
                     {
                         handle = result;
                         break;
