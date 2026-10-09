@@ -182,24 +182,10 @@
                                                       RenderOptions.ClearTypeHint="Enabled">
                                                     <!-- The shadow is its own element behind the frame, not an Effect on the frame: an Effect
                                                          redraws everything inside it into an offscreen bitmap, which made the text and icons
-                                                         blurry. It falls on the right and bottom only (see the clip below). The 6 of margin around the
+                                                         blurry. It falls on the right and bottom only (see PopupShadow). The 6 of margin around the
                                                          frame is the room it has to spread into (the converters that place the popup take it
                                                          off again, see PreviewShadowRoom). -->
-                                                    <!-- The shadow's rectangle is a few DIP inside the frame's top-left, so it fades in there like a real
-                                                         shadow, and it is clipped at the frame's top-left edge so no tail of it shows above or to the left. -->
-                                                    <Border Margin="11,11,0,0"
-                                                            ClipToBounds="True">
-                                                        <Border Margin="3,3,10,10"
-                                                                Background="Black">
-                                                            <Border.Effect>
-                                                                <DropShadowEffect BlurRadius="8"
-                                                                                  ShadowDepth="3"
-                                                                                  Direction="300"
-                                                                                  Opacity="0.75"
-                                                                                  Color="Black" />
-                                                            </Border.Effect>
-                                                        </Border>
-                                                    </Border>
+                                                    <controls:PopupShadow />
                                                     <ContentControl Style="{DynamicResource TaskButtonThumbnail}"
                                                                     Margin="6">
                                                         <!-- One block per window of the tab (just the one, unless windows of an app are

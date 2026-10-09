@@ -3,6 +3,7 @@
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
              xmlns:utilities="clr-namespace:RetroBar.Utilities"
              xmlns:converters="clr-namespace:RetroBar.Converters"
+             xmlns:controls="clr-namespace:RetroBar.Controls"
              Loaded="UserControl_Loaded"
              Unloaded="UserControl_Unloaded"
              UseLayoutRounding="True"
@@ -185,21 +186,7 @@
             <!-- The shadow is its own element behind the frame, not an Effect on it: an Effect redraws everything
                  inside it into an offscreen bitmap, which blurred the text and buttons. -->
             <Grid RenderOptions.ClearTypeHint="Enabled">
-                <!-- The shadow's rectangle is a few DIP inside the frame's top-left, so it fades in there like a real
-                     shadow, and it is clipped at the frame's top-left edge so no tail of it shows above or to the left. -->
-                <Border Margin="11,11,0,0"
-                        ClipToBounds="True">
-                    <Border Margin="3,3,10,10"
-                            Background="Black">
-                        <Border.Effect>
-                            <DropShadowEffect BlurRadius="8"
-                                              ShadowDepth="3"
-                                              Direction="300"
-                                              Opacity="0.75"
-                                              Color="Black" />
-                        </Border.Effect>
-                    </Border>
-                </Border>
+                <controls:PopupShadow />
                 <Border BorderThickness="0"
                         Padding="1"
                         Margin="10">

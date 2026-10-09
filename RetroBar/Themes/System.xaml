@@ -2,7 +2,8 @@
                     xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
                     xmlns:system="clr-namespace:System;assembly=mscorlib"
                     xmlns:utilities="clr-namespace:RetroBar.Utilities"
-                    xmlns:converters="clr-namespace:RetroBar.Converters">
+                    xmlns:converters="clr-namespace:RetroBar.Converters"
+                    xmlns:controls="clr-namespace:RetroBar.Controls">
 
     <system:Double x:Key="TaskbarHeight">28</system:Double>
     <system:Double x:Key="TaskbarRowHeight">25</system:Double>
@@ -96,21 +97,9 @@
                     <Grid Margin="0,0,10,10"
                           UseLayoutRounding="True"
                           SnapsToDevicePixels="True">
-                        <!-- The shadow's rectangle is a few DIP inside the frame's top-left, so it fades in there like a real
-                             shadow, and it is clipped at the frame's top-left edge so no tail of it shows above or to the left. -->
-                        <Border Margin="1,1,-10,-10"
-                                ClipToBounds="True">
-                            <Border Margin="3,3,10,10"
-                                    Background="Black">
-                                <Border.Effect>
-                                    <DropShadowEffect BlurRadius="8"
-                                                      ShadowDepth="3"
-                                                      Direction="300"
-                                                      Opacity="0.67"
-                                                      Color="Black" />
-                                </Border.Effect>
-                            </Border>
-                        </Border>
+                        <controls:PopupShadow Margin="0,0,-10,-10"
+                                              Room="0,0,10,10"
+                                              Strength="0.67" />
                         <!-- The same raised 4-line bevel as a tab: an outer DarkShadow/Highlight pair around an
                              inner Shadow/Light pair. -->
                         <Border BorderThickness="0,0,1,1"
