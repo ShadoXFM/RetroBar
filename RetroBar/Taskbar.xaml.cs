@@ -208,9 +208,22 @@ namespace RetroBar
                 return;
             }
 
-            if (Application.Current.TryFindResource("TaskbarBackgroundStart") is not Color start ||
-                Application.Current.TryFindResource("TaskbarBackgroundEnd") is not Color end ||
-                (start.A == 0 && end.A == 0))
+            // Either end left transparent (not set by the theme) is the theme's own face, ButtonFace; neither set is no gradient.
+            Color face = (Application.Current.TryFindResource("ButtonFace") as SolidColorBrush)?.Color ?? Colors.Transparent;
+            Color start = Application.Current.TryFindResource("TaskbarBackgroundStart") is Color s ? s : Colors.Transparent;
+            Color end = Application.Current.TryFindResource("TaskbarBackgroundEnd") is Color e ? e : Colors.Transparent;
+            bool gradient = start.A > 0 || end.A > 0;
+            if (start.A == 0)
+            {
+                start = face;
+            }
+
+            if (end.A == 0)
+            {
+                end = face;
+            }
+
+            if (!gradient)
             {
                 if (_gradientOffset != -2)
                 {

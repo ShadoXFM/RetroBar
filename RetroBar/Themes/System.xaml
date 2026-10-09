@@ -189,10 +189,10 @@
 
     <!-- The two ends of an optional gradient across the right of the taskbar, from where the weather widget starts to the right edge
          (the taskbar to the left of it is all the first color; with no weather widget it starts at the left edge). A theme (or a theme of your own in
-         %LocalAppData%\RetroBar\Themes) sets both to opaque colors to get one, e.g.
+         %LocalAppData%\RetroBar\Themes) sets one or both to opaque colors to get one, e.g.
              <Color x:Key="TaskbarBackgroundStart">#121014</Color>
              <Color x:Key="TaskbarBackgroundEnd">#3C159E</Color>
-         and leaves them out, or transparent, for the plain taskbar. -->
+         An end left out, or transparent, is the theme's face color (ButtonFace); with both left out the taskbar is plain. -->
     <Color x:Key="TaskbarBackgroundStart">#00000000</Color>
     <Color x:Key="TaskbarBackgroundEnd">#00000000</Color>
 
