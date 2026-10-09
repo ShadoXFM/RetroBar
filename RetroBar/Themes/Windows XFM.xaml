@@ -16,8 +16,9 @@
     <SolidColorBrush x:Key="ButtonDarkShadow" Color="#000000" />
     <SolidColorBrush x:Key="ButtonFlashingFace" Color="#3c159e" />
 
-    <!-- The taskbar's background, as a gradient from its left edge (Start) to its right (End). Both the same as the
-         face colour (ButtonFace) is the plain taskbar: change either to get a gradient. -->
+    <!-- The taskbar's background as a gradient across its right side: the Start color all the way to where the weather widget
+         begins, then fading to the End color at the right edge (with no weather widget, from the left edge). Both the same as
+         the face color (ButtonFace) is the plain taskbar: change either to get a gradient. -->
     <Color x:Key="TaskbarBackgroundStart">#121014</Color>
     <Color x:Key="TaskbarBackgroundEnd">#121014</Color>
 

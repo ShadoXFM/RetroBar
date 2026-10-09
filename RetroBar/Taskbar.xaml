@@ -139,7 +139,8 @@
                              RelativeSource="{RelativeSource Mode=FindAncestor, AncestorType=Window}" />
                 </DockPanel.Dock>
             </controls:CpuTempDisplay>
-            <controls:WeatherDisplay VerticalAlignment="Center">
+            <controls:WeatherDisplay x:Name="WeatherDisplayControl"
+                                     VerticalAlignment="Center">
                 <DockPanel.Dock>
                     <Binding Converter="{StaticResource dockOrientationConverter}"
                              ConverterParameter="trailing"

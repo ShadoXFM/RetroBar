@@ -13,6 +13,7 @@ using System.Windows.Threading;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Input;
+using System.Windows.Media;
 using Application = System.Windows.Application;
 
 namespace RetroBar
@@ -122,6 +123,9 @@ namespace RetroBar
 
             AutoHideElement = TaskbarContentControl;
 
+            // The gradient across the taskbar starts at the weather widget, which is only known after layout.
+            Loaded += (s, e) => TaskbarContentControl.LayoutUpdated += (s2, e2) => UpdateGradient();
+
             PropertyChanged += Taskbar_PropertyChanged;
 
             _startMenuMonitor.StartMenuVisibilityChanged += StartMenuMonitor_StartMenuVisibilityChanged;
@@ -179,10 +183,81 @@ namespace RetroBar
             }));
         }
 
+        // ---- the optional gradient across the taskbar (TaskbarBackgroundStart/End in the theme)
+        private Border _gradientOverlay;
+        private Color _gradientStart;
+        private Color _gradientEnd;
+        private double _gradientOffset = -1;
+
+        /// <summary>
+        /// Paints the theme's gradient over the taskbar: the first color up to where the weather widget starts, then a
+        /// gradient to the second at the right edge. Does nothing (and clears it) while the theme has no opaque color for it.
+        /// </summary>
+        private void UpdateGradient()
+        {
+            _gradientOverlay ??= TaskbarContentControl.Template?.FindName("GradientOverlay", TaskbarContentControl) as Border;
+            if (_gradientOverlay == null || _gradientOverlay.ActualWidth <= 0)
+            {
+                return;
+            }
+
+            if (Application.Current.TryFindResource("TaskbarBackgroundStart") is not Color start ||
+                Application.Current.TryFindResource("TaskbarBackgroundEnd") is not Color end ||
+                (start.A == 0 && end.A == 0))
+            {
+                if (_gradientOffset != -2)
+                {
+                    _gradientOverlay.Background = Brushes.Transparent;
+                    _gradientOffset = -2;
+                }
+
+                return;
+            }
+
+            // Where the weather widget starts, as a fraction of the taskbar's width (nothing to start at on a vertical taskbar,
+            // or without the widget: the whole taskbar then).
+            double offset = 0;
+            if (Orientation == Orientation.Horizontal && WeatherDisplayControl.IsVisible && WeatherDisplayControl.ActualWidth > 0)
+            {
+                try
+                {
+                    offset = Math.Max(0, Math.Min(1, WeatherDisplayControl.TranslatePoint(new Point(0, 0), _gradientOverlay).X / _gradientOverlay.ActualWidth));
+                }
+                catch (InvalidOperationException)
+                {
+                    return;
+                }
+            }
+
+            offset = Math.Round(offset, 4);
+            if (offset == _gradientOffset && start == _gradientStart && end == _gradientEnd)
+            {
+                return;
+            }
+
+            _gradientOffset = offset;
+            _gradientStart = start;
+            _gradientEnd = end;
+
+            var brush = new LinearGradientBrush { StartPoint = new Point(0, 0), EndPoint = new Point(1, 0) };
+            brush.GradientStops.Add(new GradientStop(start, 0));
+            brush.GradientStops.Add(new GradientStop(start, offset));
+            brush.GradientStops.Add(new GradientStop(end, 1));
+            brush.Freeze();
+            _gradientOverlay.Background = brush;
+        }
+
         private void Settings_PropertyChanged(object sender, PropertyChangedEventArgs e)
         {
             if (e.PropertyName == nameof(Settings.Theme))
             {
+                // (After the theme has been applied.)
+                Dispatcher.BeginInvoke(new Action(() =>
+                {
+                    _gradientOffset = -1;
+                    UpdateGradient();
+                }), DispatcherPriority.Loaded);
+
                 bool newTransparency = AppBarMode == AppBarMode.AutoHide || (Application.Current.FindResource("AllowsTransparency") as bool? ?? false);
 
                 if (AllowsTransparency != newTransparency && Screen.Primary)
