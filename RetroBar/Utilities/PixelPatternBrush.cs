@@ -57,12 +57,25 @@ namespace RetroBar.Utilities
 
             // Re-applying on every Loaded is harmless, and needed: a template instance (the active
             // tab's) is rebuilt - and its Border reloaded - whenever the tab's style or theme changes.
+            // A taskbar window's DPI can be changed again and again for a moment while it is being positioned at startup (it
+            // starts with the primary monitor's DPI, and each repositioning is followed by another DPI change event, in no
+            // fixed order relative to this element's loading), so a pattern built for the DPI at one moment can be stale for
+            // good. So the DPI is also checked on every layout pass while loaded - one comparison - and the pattern built
+            // again when it no longer matches.
+            EventHandler layoutHandler = (s, args) => ApplyIfDpiChanged(border);
+
             border.Loaded += (s, args) =>
             {
                 Apply(border);
                 Watch(border);
+                border.LayoutUpdated -= layoutHandler;
+                border.LayoutUpdated += layoutHandler;
             };
-            border.Unloaded += (s, args) => Unwatch(border);
+            border.Unloaded += (s, args) =>
+            {
+                Unwatch(border);
+                border.LayoutUpdated -= layoutHandler;
+            };
 
             // The DPI the pattern is built for is the one the Border has when it loads, which is not always the
             // monitor's own: a taskbar window starts out with the DPI of the primary monitor and is only moved
@@ -100,6 +113,13 @@ namespace RetroBar.Utilities
 
         private static void OnWindowDpiChanged(object sender, DpiChangedEventArgs e)
         {
+            // A taskbar window is sent this over and over while it is positioned, often with the DPI it already had: nothing
+            // to do then (and rebuilding the patterns each time made them flicker).
+            if (e.OldDpi.DpiScaleX == e.NewDpi.DpiScaleX && e.OldDpi.DpiScaleY == e.NewDpi.DpiScaleY)
+            {
+                return;
+            }
+
             if (sender is DependencyObject window)
             {
                 ReapplyBelow(window);
@@ -114,7 +134,7 @@ namespace RetroBar.Utilities
                 DependencyObject child = VisualTreeHelper.GetChild(parent, i);
                 if (child is Border border && border.IsLoaded && border.GetValue(SourceBrushProperty) != null)
                 {
-                    Apply(border);
+                    ApplyIfDpiChanged(border);
                 }
 
                 ReapplyBelow(child);

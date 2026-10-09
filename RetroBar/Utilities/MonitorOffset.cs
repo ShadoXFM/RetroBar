@@ -111,7 +111,13 @@ namespace RetroBar.Utilities
             if (Window.GetWindow(element) is Window window)
             {
                 DpiChangedEventHandler dpiHandler = (sender, args) =>
-                    element.Dispatcher.BeginInvoke(new Action(() => Apply(element)), System.Windows.Threading.DispatcherPriority.Loaded);
+                {
+                    // Sent again and again while a taskbar is positioned, often with the DPI it already had.
+                    if (args.OldDpi.DpiScaleX != args.NewDpi.DpiScaleX || args.OldDpi.DpiScaleY != args.NewDpi.DpiScaleY)
+                    {
+                        element.Dispatcher.BeginInvoke(new Action(() => Apply(element)), System.Windows.Threading.DispatcherPriority.Loaded);
+                    }
+                };
                 window.DpiChanged += dpiHandler;
                 element.Unloaded += (sender, args) => window.DpiChanged -= dpiHandler;
             }
