@@ -65,7 +65,7 @@ namespace RetroBar.Converters
         {
             try
             {
-                // ICON_SMALL2, ICON_SMALL, ICON_BIG, then the window class' icons (GCLP_HICONSM, GCLP_HICON)
+                // What the title bar shows: ICON_SMALL2, ICON_SMALL, ICON_BIG, then the window class' icons (GCLP_HICONSM, GCLP_HICON)
                 IntPtr handle = IntPtr.Zero;
                 foreach (int which in new[] { 2, 0, 1 })
                 {
@@ -110,7 +110,7 @@ namespace RetroBar.Converters
 
         public object Convert(object[] values, Type targetType, object parameter, System.Globalization.CultureInfo culture)
         {
-            // The parameter "window" asks for the window's own icon, Explorer windows included.
+            // The parameter "window" asks for the icon in the window's title bar, Explorer windows included.
             bool ownIconWanted = parameter as string == "window";
 
             if (!ownIconWanted && values.Length > 0 && values[0] is ApplicationWindow window && IsFileExplorerWindow(window))
@@ -123,6 +123,12 @@ namespace RetroBar.Converters
             }
 
             object own = values.Length > 1 ? values[1] : null;
+
+            // The preview of a window shows the icon in the window's title bar.
+            if (ownIconWanted && values.Length > 0 && values[0] is ApplicationWindow titled && !titled.IsUWP)
+            {
+                return GetFallbackIcon(titled) ?? own;
+            }
 
             // A dialog of Explorer's own process (Run, ...) is given Explorer's icon when it has no big one of its
             // own, so take the icon the window itself has; the same for any window with no icon found at all.
