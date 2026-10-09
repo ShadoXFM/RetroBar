@@ -22,6 +22,7 @@ namespace RetroBar.Utilities
         private readonly ShellManager _shellManager;
         private readonly Updater _updater;
         private HotkeyManager _hotkeyManager;
+        private ExplorerTaskbarGuard _explorerTaskbarGuard;
 
         public WindowManager(DictionaryManager dictionaryManager, ExplorerMonitor explorerMonitor, ShellManager shellManager, StartMenuMonitor startMenuMonitor, Updater updater, HotkeyManager hotkeyManager)
         {
@@ -33,6 +34,7 @@ namespace RetroBar.Utilities
             _hotkeyManager = hotkeyManager;
 
             _shellManager.ExplorerHelper.HideExplorerTaskbar = true;
+            _explorerTaskbarGuard = new ExplorerTaskbarGuard();
 
             openTaskbars();
 
@@ -201,6 +203,7 @@ namespace RetroBar.Utilities
 
         public void Dispose()
         {
+            _explorerTaskbarGuard?.Dispose();
             _shellManager.ExplorerHelper.HideExplorerTaskbar = false;
             Settings.Instance.PropertyChanged -= Settings_PropertyChanged;
         }
