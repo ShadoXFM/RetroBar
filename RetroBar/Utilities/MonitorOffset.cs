@@ -283,7 +283,9 @@ namespace RetroBar.Utilities
             layoutPositionPx = default;
             layoutSizePx = default;
 
-            Window root = Window.GetWindow(element);
+            // The root of whatever window the element is in: a Window, or the root of a Popup/ToolTip (which has no
+            // Window above it, and was left unsnapped - and so softer than the same icon in the taskbar - before).
+            Visual root = PresentationSource.FromVisual(element)?.RootVisual;
             if (root == null || element.ActualWidth <= 0 || element.ActualHeight <= 0 ||
                 VisualTreeHelper.GetParent(element) is not Visual parent)
             {
