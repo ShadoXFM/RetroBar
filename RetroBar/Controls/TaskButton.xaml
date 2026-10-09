@@ -311,7 +311,7 @@
                                                                             <Image x:Name="PreviewTitleIcon"
                                                                                    Width="16"
                                                                                    Height="16"
-                                                                                   Margin="1,0,1,0"
+                                                                                   Margin="1,0,3,0"
                                                                                    VerticalAlignment="Center"
                                                                                    UseLayoutRounding="True"
                                                                                    SnapsToDevicePixels="True"
