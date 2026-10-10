@@ -3,6 +3,7 @@
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
              xmlns:utilities="clr-namespace:RetroBar.Utilities"
              xmlns:converters="clr-namespace:RetroBar.Converters"
+             xmlns:controls="clr-namespace:RetroBar.Controls"
              Loaded="UserControl_Loaded"
              Unloaded="UserControl_Unloaded"
              UseLayoutRounding="True"
@@ -171,8 +172,8 @@
         <Popup x:Name="SeekPopup"
                PlacementTarget="{Binding ElementName=TrackTextCanvas}"
                Placement="Top"
-               HorizontalOffset="-35"
-               VerticalOffset="-8"
+               HorizontalOffset="-45"
+               VerticalOffset="2"
                AllowsTransparency="True"
                StaysOpen="False"
                Opened="SeekPopup_OnOpened"
@@ -180,10 +181,20 @@
             <!-- Same 4-line raised bevel as a resting (non-pressed) tab (see TaskButton's own
                  template, not TaskButtonActive's sunken one): an outer DarkShadow/Highlight pair
                  around an inner Shadow/Light pair. -->
-            <Border BorderThickness="0"
-                    Padding="1">
+            <!-- The 10 DIP margin is room for the shadow to spread into inside the popup's window (and the
+                 popup's offsets above are 10 further left / 10 lower to make up for it). -->
+            <!-- The shadow is its own element behind the frame, not an Effect on it: an Effect redraws everything
+                 inside it into an offscreen bitmap, which blurred the text and buttons. -->
+            <Grid RenderOptions.ClearTypeHint="Enabled"
+                  UseLayoutRounding="True"
+                  SnapsToDevicePixels="True">
+                <controls:PopupShadow Strength="0.5" />
+                <!-- The outermost line of the bevel (DarkShadow, right and bottom) is the frame's own outer border, not a border inside
+                     another one that has a padding: it was not drawn at all that way at 125% (nothing red where it should be, with it
+                     colored), and what showed of the frame's outline there was the black of the shadow's rectangle. -->
                 <Border BorderThickness="0,0,1,1"
-                        BorderBrush="{DynamicResource ButtonDarkShadow}">
+                        BorderBrush="{DynamicResource ButtonDarkShadow}"
+                        Margin="10">
                     <Border BorderThickness="1,1,0,0"
                             BorderBrush="{DynamicResource ButtonHighlight}">
                         <Border BorderThickness="0,0,1,1"
@@ -380,7 +391,7 @@
                         </Border>
                     </Border>
                 </Border>
-            </Border>
+            </Grid>
         </Popup>
     </utilities:UnclippedStackPanel>
 </UserControl>

@@ -105,6 +105,23 @@ namespace RetroBar.Utilities
 
             element.SetValue(IsAttachedProperty, true);
 
+            // What is worked out here depends on the DPI (the pixel sizes of a snapped image above all), and a window can
+            // be given another DPI after its contents are loaded - a taskbar starts out with the DPI of the primary monitor
+            // and is only then moved to its own - so apply again whenever its DPI changes.
+            if (Window.GetWindow(element) is Window window)
+            {
+                DpiChangedEventHandler dpiHandler = (sender, args) =>
+                {
+                    // Sent again and again while a taskbar is positioned, often with the DPI it already had.
+                    if (args.OldDpi.DpiScaleX != args.NewDpi.DpiScaleX || args.OldDpi.DpiScaleY != args.NewDpi.DpiScaleY)
+                    {
+                        element.Dispatcher.BeginInvoke(new Action(() => Apply(element)), System.Windows.Threading.DispatcherPriority.Loaded);
+                    }
+                };
+                window.DpiChanged += dpiHandler;
+                element.Unloaded += (sender, args) => window.DpiChanged -= dpiHandler;
+            }
+
             if (element is System.Windows.Controls.Image)
             {
                 // An Image's pixel-snapped transform depends on its laid-out size and position,
@@ -114,9 +131,32 @@ namespace RetroBar.Utilities
                 // launch icons from ever loading.
                 SizeChangedEventHandler sizeHandler = (sender, args) => Apply(element);
                 element.SizeChanged += sizeHandler;
+
+                // The snapped transform also depends on where the image sits, which changes without its size
+                // when the items around it move (icons of a rearranged toolbar shift by a slot of e.g. 27.5px,
+                // so a stale transform leaves them half a pixel off the grid: blurry). Only the cheap position
+                // key is compared on a layout pass; Apply itself runs, once and later, only when it changed.
+                bool resnapQueued = false;
+                EventHandler layoutHandler = (sender, args) =>
+                {
+                    if (resnapQueued || element.GetValue(SnapKeyProperty) is not string appliedKey ||
+                        ComputeSnapKey(element, out _, out _) is not string currentKey || currentKey == appliedKey)
+                    {
+                        return;
+                    }
+
+                    resnapQueued = true;
+                    element.Dispatcher.BeginInvoke(new Action(() =>
+                    {
+                        resnapQueued = false;
+                        Apply(element);
+                    }), System.Windows.Threading.DispatcherPriority.Loaded);
+                };
+                element.LayoutUpdated += layoutHandler;
                 element.Unloaded += (sender, args) =>
                 {
                     element.SizeChanged -= sizeHandler;
+                    element.LayoutUpdated -= layoutHandler;
                 };
             }
 
@@ -260,7 +300,9 @@ namespace RetroBar.Utilities
             layoutPositionPx = default;
             layoutSizePx = default;
 
-            Window root = Window.GetWindow(element);
+            // The root of whatever window the element is in: a Window, or the root of a Popup/ToolTip (which has no
+            // Window above it, and was left unsnapped - and so softer than the same icon in the taskbar - before).
+            Visual root = PresentationSource.FromVisual(element)?.RootVisual;
             if (root == null || element.ActualWidth <= 0 || element.ActualHeight <= 0 ||
                 VisualTreeHelper.GetParent(element) is not Visual parent)
             {

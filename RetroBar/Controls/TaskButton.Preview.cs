@@ -41,7 +41,7 @@ namespace RetroBar.Controls
 
         // How long the pointer may be off both the tab and the preview before the preview closes (it
         // also has to be long enough to cross the gap between them).
-        private static readonly TimeSpan PreviewCloseGrace = TimeSpan.FromMilliseconds(1000);
+        private static readonly TimeSpan PreviewCloseGrace = TimeSpan.FromMilliseconds(500);
 
         // The tab whose preview is open. With the grace period this long, a preview can still be on its
         // way out when the pointer reaches the next tab, so opening one closes the other.
@@ -59,6 +59,13 @@ namespace RetroBar.Controls
 
         // The preview also slides in from the taskbar's edge (and back out), by this much.
         private const double PreviewSlideDistance = 12;
+
+        /// <summary>
+        /// The extra margin (DIPs) the preview frame has all round, for its shadow to spread into. It makes the popup
+        /// window that much bigger on every side, so the popup is placed that much closer to the tab (see the
+        /// tooltip offset converters) to leave the frame where it was.
+        /// </summary>
+        public const double PreviewShadowRoom = 6;
         private static readonly TimeSpan PreviewSlideIn = TimeSpan.FromMilliseconds(180);
 
         private bool _previewFadingOut;
@@ -70,10 +77,10 @@ namespace RetroBar.Controls
         {
             return Settings.Instance.Edge switch
             {
-                ManagedShell.AppBar.AppBarEdge.Left => (System.Windows.Controls.ToolTip.HorizontalOffsetProperty, -PreviewSlideDistance),
-                ManagedShell.AppBar.AppBarEdge.Right => (System.Windows.Controls.ToolTip.HorizontalOffsetProperty, PreviewSlideDistance),
-                ManagedShell.AppBar.AppBarEdge.Top => (System.Windows.Controls.ToolTip.VerticalOffsetProperty, -PreviewSlideDistance),
-                _ => (System.Windows.Controls.ToolTip.VerticalOffsetProperty, PreviewSlideDistance),
+                ManagedShell.AppBar.AppBarEdge.Left => (System.Windows.Controls.ToolTip.HorizontalOffsetProperty, -(PreviewSlideDistance + PreviewShadowRoom)),
+                ManagedShell.AppBar.AppBarEdge.Right => (System.Windows.Controls.ToolTip.HorizontalOffsetProperty, (PreviewSlideDistance + PreviewShadowRoom)),
+                ManagedShell.AppBar.AppBarEdge.Top => (System.Windows.Controls.ToolTip.VerticalOffsetProperty, -(PreviewSlideDistance + PreviewShadowRoom)),
+                _ => (System.Windows.Controls.ToolTip.VerticalOffsetProperty, PreviewSlideDistance + PreviewShadowRoom),
             };
         }
 
@@ -113,6 +120,10 @@ namespace RetroBar.Controls
             };
 
             AppButton.MouseEnter += (s, e) => StartPreviewShowTimer();
+
+            // MouseEnter is not enough: once the pointer has been over a preview, WPF still counts it as on the tab
+            // (see IsPointerOverTab), so coming back to the tab raises no MouseEnter. Moving over it still does.
+            AppButton.MouseMove += (s, e) => StartPreviewShowTimer();
             AppButton.MouseLeave += (s, e) => _previewShowTimer?.Stop();
 
             // Clicking the tab, or opening its context menu, dismisses the preview (the tooltip
@@ -163,11 +174,6 @@ namespace RetroBar.Controls
             }
         }
 
-        private void StopPreviewShowTimer()
-        {
-            _previewShowTimer?.Stop();
-        }
-
         private void StartPreviewShowTimer()
         {
             if (!Settings.Instance.ShowTaskThumbnails || AppButton.ToolTip is not ToolTip tip || (tip.IsOpen && !_previewFadingOut))
@@ -185,13 +191,17 @@ namespace RetroBar.Controls
                 };
             }
 
-            _previewShowTimer.Interval = PreviewShowDelay;
-            _previewShowTimer.Start();
+            // Already counting down (moving over the tab raises this again and again): let it.
+            if (!_previewShowTimer.IsEnabled)
+            {
+                _previewShowTimer.Interval = PreviewShowDelay;
+                _previewShowTimer.Start();
+            }
         }
 
         private void OpenPreview()
         {
-            if (!IsTabHovered || AppButton.ToolTip is not ToolTip tip || AppButton.ContextMenu?.IsOpen == true)
+            if (!IsPointerOverTab() || AppButton.ToolTip is not ToolTip tip || AppButton.ContextMenu?.IsOpen == true)
             {
                 return;
             }
@@ -306,7 +316,7 @@ namespace RetroBar.Controls
                 StopPeek();
             }
 
-            if (IsTabHovered || overPreview)
+            if (IsPointerOverTab() || overPreview)
             {
                 _previewOutsideSince = null;
                 return;
@@ -337,6 +347,8 @@ namespace RetroBar.Controls
             {
                 _previewOwner = null;
             }
+
+            ClearStaleHover();
 
             if (AppButton.ToolTip is ToolTip tip && tip.IsOpen)
             {
@@ -750,6 +762,55 @@ namespace RetroBar.Controls
         }
 
         #endregion
+
+        private const uint WM_MOUSELEAVE = 0x02A3;
+
+        // Once the pointer has been over the preview, WPF still counts it as over the tab - and keeps the tab's hover
+        // highlight on - after it has gone elsewhere, because the preview's own window took the mouse input in
+        // between. If the pointer is not over the taskbar, tell the taskbar window that it left (what Windows does
+        // itself when it is not in the way).
+        private void ClearStaleHover()
+        {
+            if (System.Windows.Window.GetWindow(this) is not System.Windows.Window window)
+            {
+                return;
+            }
+
+            IntPtr handle = new WindowInteropHelper(window).Handle;
+            if (handle == IntPtr.Zero || !GetCursorPos(out POINT cursor) || !GetWindowRect(handle, out RECT rect))
+            {
+                return;
+            }
+
+            bool overTaskbar = cursor.X >= rect.Left && cursor.X < rect.Right && cursor.Y >= rect.Top && cursor.Y < rect.Bottom;
+            if (!overTaskbar)
+            {
+                PostMessage(handle, WM_MOUSELEAVE, IntPtr.Zero, IntPtr.Zero);
+            }
+        }
+
+        [DllImport("user32.dll")]
+        [return: MarshalAs(UnmanagedType.Bool)]
+        private static extern bool PostMessage(IntPtr hWnd, uint msg, IntPtr wParam, IntPtr lParam);
+
+        // Whether the pointer is on the tab, measured against its screen rectangle rather than read from
+        // AppButton.IsMouseOver: that goes stale once the pointer has been over the preview - the preview's own
+        // window takes the mouse input (see PreviewWndProc), so WPF never hears the pointer leave the tab - and a
+        // preview waiting for it to turn false would then never close. A few pixels are added below the tab: its
+        // clickable area reaches down to the screen edge (see HitAreaExtension).
+        private bool IsPointerOverTab()
+        {
+            if (!GetCursorPos(out POINT cursor) || !AppButton.IsVisible)
+            {
+                return false;
+            }
+
+            Point topLeft = AppButton.PointToScreen(new Point(0, 0));
+            Point bottomRight = AppButton.PointToScreen(new Point(AppButton.ActualWidth, AppButton.ActualHeight));
+            double extra = 4 * VisualTreeHelper.GetDpi(AppButton).DpiScaleY;
+
+            return cursor.X >= topLeft.X && cursor.X < bottomRight.X && cursor.Y >= topLeft.Y && cursor.Y < bottomRight.Y + extra;
+        }
 
         // Compared against the popup window's screen rectangle rather than ToolTip.IsMouseOver: the
         // thumbnail itself is drawn by DWM over the window, and WPF's own hit-testing doesn't see the

@@ -1,0 +1,24 @@
+<UserControl x:Class="RetroBar.Controls.PopupShadow"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             Focusable="False"
+             IsHitTestVisible="False">
+    <!-- The one shadow all of the popups share (tab previews, the weather and media popups, right-click menus).
+         It is its own element behind the frame, not an Effect on the frame (an Effect redraws everything inside it into
+         an offscreen bitmap, which blurs text and icons). The black rectangle is a few DIP inside the frame's top-left,
+         so the shadow fades in there like a real one, and the border around it clips at the frame's top-left edge so
+         no tail of it shows above or to the left. See PopupShadow.xaml.cs for the two properties. -->
+    <Border x:Name="ShadowClip"
+            ClipToBounds="True">
+        <Border x:Name="ShadowShape"
+                Background="Black">
+            <Border.Effect>
+                <DropShadowEffect BlurRadius="8"
+                                  ShadowDepth="3"
+                                  Direction="300"
+                                  Opacity="0.75"
+                                  Color="Black" />
+            </Border.Effect>
+        </Border>
+    </Border>
+</UserControl>

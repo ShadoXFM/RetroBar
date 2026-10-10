@@ -50,6 +50,7 @@
     <s:String x:Key="select_location">_Changer de dossier...</s:String>
     <s:String x:Key="quick_launch_folder">Lancement rapide - Choisir un dossier</s:String>
     <s:String x:Key="show_badges">Afficher des _badges d'informations</s:String>
+    <s:String x:Key="show_program_name_on_tabs">Nommer les onglets d’après le _programme plutôt que le titre de la fenêtre</s:String>
     <s:String x:Key="group_task_windows">_Regrouper les fenêtres d’une même application en un onglet</s:String>
     <s:String x:Key="show_window_previews">Afficher l'aperçu des _fenêtres (vignettes/thumbnails)</s:String>
     <s:String x:Key="use_software_rendering">_Utiliser le rendu logiciel</s:String>

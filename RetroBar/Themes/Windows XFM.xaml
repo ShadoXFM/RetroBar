@@ -16,6 +16,18 @@
     <SolidColorBrush x:Key="ButtonDarkShadow" Color="#000000" />
     <SolidColorBrush x:Key="ButtonFlashingFace" Color="#3c159e" />
 
+    <!-- The two lines along the top of the taskbar, the one under the other: darker shades of ButtonHighlight (#737373) and
+         ButtonLight (#333333), which are what the other bevels use. Take either out to have the taskbar use the bevel color again. -->
+    <SolidColorBrush x:Key="TaskbarTopLineOuter" Color="#222222" />
+    <SolidColorBrush x:Key="TaskbarTopLine" Color="#4d4d4d" />
+
+    <!-- The taskbar's background as a gradient across the whole taskbar: the Start color at its left edge, fading to the End color
+         at its right edge. Left transparent (#00000000) an end is the face color (ButtonFace), and with both left that way the
+         taskbar is plain ButtonFace. Give either an opaque color, e.g. <Color x:Key="TaskbarBackgroundEnd">#3C159E</Color>, to get
+         a gradient. -->
+    <Color x:Key="TaskbarBackgroundStart">#00000000</Color>
+    <Color x:Key="TaskbarBackgroundEnd">#00000000</Color>
+
     <SolidColorBrush x:Key="ButtonForeground" Color="#d9d9d9" />
     <SolidColorBrush x:Key="ButtonFlashingForeground" Color="#d9d9d9" />
     <SolidColorBrush x:Key="ClockForeground" Color="#d9d9d9" />
@@ -118,7 +130,7 @@
         <Setter Property="OverridesDefaultStyle"
                 Value="True" />
         <Setter Property="Background"
-                Value="{DynamicResource ButtonFace}" />
+                Value="{DynamicResource TaskbarFace}" />
         <Setter Property="Template">
             <Setter.Value>
                 <ControlTemplate TargetType="GroupBox">
@@ -166,7 +178,7 @@
         <Setter Property="OverridesDefaultStyle"
                 Value="True" />
         <Setter Property="Background"
-                Value="{DynamicResource ButtonFace}" />
+                Value="{DynamicResource TaskbarFace}" />
         <Setter Property="Margin"
                 Value="-2,-3,7,-3" />
         <Setter Property="Template">

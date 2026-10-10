@@ -50,6 +50,12 @@ namespace RetroBar.Utilities
             _settingsManager.Settings = this;
         }
 
+        /// <summary>Tells everything that follows the theme to apply it again (the theme's file was changed on disk).</summary>
+        public void NotifyThemeChanged()
+        {
+            OnPropertyChanged(nameof(Theme));
+        }
+
         protected virtual void OnPropertyChanged([CallerMemberName] string propertyName = "")
         {
             PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(propertyName));
@@ -415,6 +421,14 @@ namespace RetroBar.Utilities
         {
             get => _groupTaskWindows;
             set => Set(ref _groupTaskWindows, value);
+        }
+
+        // A tab is labeled with its program's name ("Google Chrome") instead of the title its window has at the moment.
+        private bool _showProgramNameOnTabs = false;
+        public bool ShowProgramNameOnTabs
+        {
+            get => _showProgramNameOnTabs;
+            set => Set(ref _showProgramNameOnTabs, value);
         }
 
         private bool _showTaskThumbnails = false;

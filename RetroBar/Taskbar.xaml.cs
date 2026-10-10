@@ -8,9 +8,12 @@ using RetroBar.Utilities;
 using System;
 using System.ComponentModel;
 using System.Diagnostics;
+using System.Runtime.InteropServices;
+using System.Windows.Threading;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Input;
+using System.Windows.Media;
 using Application = System.Windows.Application;
 
 namespace RetroBar
@@ -116,7 +119,12 @@ namespace RetroBar
 
             UpdateStartButton();
 
+            StartWorkAreaWatchdog();
+
             AutoHideElement = TaskbarContentControl;
+
+            // The gradient across the taskbar starts at the weather widget, which is only known after layout.
+            Loaded += (s, e) => TaskbarContentControl.LayoutUpdated += (s2, e2) => UpdateGradient();
 
             PropertyChanged += Taskbar_PropertyChanged;
 
@@ -175,10 +183,86 @@ namespace RetroBar
             }));
         }
 
+        // ---- the optional gradient across the taskbar (TaskbarBackgroundStart/End in the theme)
+        private Border _gradientOverlay;
+        private Color _gradientStart;
+        private Color _gradientEnd;
+        private double _gradientOffset = -1;
+
+        /// <summary>
+        /// Paints the theme's gradient over the taskbar, from its first color at the left edge to the second at the right edge.
+        /// Does nothing (and clears it) while the theme has no opaque color for it.
+        /// </summary>
+        private void UpdateGradient()
+        {
+            // The template is built again when a theme is applied (its style is a new object then), with a new overlay in it.
+            Border overlay = TaskbarContentControl.Template?.FindName("GradientOverlay", TaskbarContentControl) as Border;
+            if (!ReferenceEquals(overlay, _gradientOverlay))
+            {
+                _gradientOverlay = overlay;
+                _gradientOffset = -1;
+            }
+
+            if (_gradientOverlay == null || _gradientOverlay.ActualWidth <= 0)
+            {
+                return;
+            }
+
+            // Either end left transparent (not set by the theme) is the theme's own face, ButtonFace; neither set is no gradient.
+            Color face = (Application.Current.TryFindResource("ButtonFace") as SolidColorBrush)?.Color ?? Colors.Transparent;
+            Color start = Application.Current.TryFindResource("TaskbarBackgroundStart") is Color s ? s : Colors.Transparent;
+            Color end = Application.Current.TryFindResource("TaskbarBackgroundEnd") is Color e ? e : Colors.Transparent;
+            bool gradient = start.A > 0 || end.A > 0;
+            if (start.A == 0)
+            {
+                start = face;
+            }
+
+            if (end.A == 0)
+            {
+                end = face;
+            }
+
+            if (!gradient)
+            {
+                if (_gradientOffset != -2)
+                {
+                    _gradientOverlay.Background = Brushes.Transparent;
+                    _gradientOffset = -2;
+                }
+
+                return;
+            }
+
+            // From the left edge of the taskbar to the right (the same on a vertical taskbar), across everything on it.
+            double offset = 0;
+            if (offset == _gradientOffset && start == _gradientStart && end == _gradientEnd)
+            {
+                return;
+            }
+
+            _gradientOffset = offset;
+            _gradientStart = start;
+            _gradientEnd = end;
+
+            var brush = new LinearGradientBrush { StartPoint = new Point(0, 0), EndPoint = new Point(1, 0) };
+            brush.GradientStops.Add(new GradientStop(start, offset));
+            brush.GradientStops.Add(new GradientStop(end, 1));
+            brush.Freeze();
+            _gradientOverlay.Background = brush;
+        }
+
         private void Settings_PropertyChanged(object sender, PropertyChangedEventArgs e)
         {
             if (e.PropertyName == nameof(Settings.Theme))
             {
+                // (After the theme has been applied.)
+                Dispatcher.BeginInvoke(new Action(() =>
+                {
+                    _gradientOffset = -1;
+                    UpdateGradient();
+                }), DispatcherPriority.Loaded);
+
                 bool newTransparency = AppBarMode == AppBarMode.AutoHide || (Application.Current.FindResource("AllowsTransparency") as bool? ?? false);
 
                 if (AllowsTransparency != newTransparency && Screen.Primary)
@@ -307,8 +391,93 @@ namespace RetroBar
             return IntPtr.Zero;
         }
 
+        // ---- keeping the space the taskbar takes from the desktop reserved
+        //
+        // A taskbar (an "app bar") reserves its strip of the screen by setting the monitor's work area, which is
+        // what stops maximized windows from covering it. Windows resets the work area on its own when the displays
+        // change (a monitor turned off or on, a resolution change) and then only tells the app bars that are
+        // registered at that moment - a taskbar that misses it keeps showing, but windows are free to maximize
+        // right over it. So the work area is checked every few seconds, and set again if it has lost the strip.
+        private DispatcherTimer _workAreaWatchdog;
+
+        [StructLayout(LayoutKind.Sequential)]
+        private struct WatchRect
+        {
+            public int Left;
+            public int Top;
+            public int Right;
+            public int Bottom;
+        }
+
+        [StructLayout(LayoutKind.Sequential)]
+        private struct WatchMonitorInfo
+        {
+            public int Size;
+            public WatchRect Monitor;
+            public WatchRect Work;
+            public int Flags;
+        }
+
+        [DllImport("user32.dll")]
+        [return: MarshalAs(UnmanagedType.Bool)]
+        private static extern bool GetMonitorInfo(IntPtr hMonitor, ref WatchMonitorInfo info);
+
+        [DllImport("user32.dll")]
+        [return: MarshalAs(UnmanagedType.Bool)]
+        private static extern bool GetWindowRect(IntPtr hWnd, out WatchRect rect);
+
+        private void StartWorkAreaWatchdog()
+        {
+            _workAreaWatchdog = new DispatcherTimer { Interval = TimeSpan.FromSeconds(3) };
+            _workAreaWatchdog.Tick += (s, e) => EnsureWorkAreaReserved();
+            _workAreaWatchdog.Start();
+        }
+
+        private void EnsureWorkAreaReserved()
+        {
+            // Only a normal taskbar reserves space (an auto-hidden one doesn't), and only once it is on its edge.
+            if (AppBarMode != AppBarMode.Normal || IsClosing || Screen == null || Handle == IntPtr.Zero ||
+                !GetWindowRect(Handle, out WatchRect bar))
+            {
+                return;
+            }
+
+            var info = new WatchMonitorInfo { Size = Marshal.SizeOf<WatchMonitorInfo>() };
+            if (!GetMonitorInfo(Screen.HMonitor, ref info))
+            {
+                return;
+            }
+
+            // How far into the bar's strip the work area reaches (more than a pixel or two means the strip is
+            // not reserved).
+            int overlap = AppBarEdge switch
+            {
+                AppBarEdge.Bottom => info.Work.Bottom - bar.Top,
+                AppBarEdge.Top => bar.Bottom - info.Work.Top,
+                AppBarEdge.Left => bar.Right - info.Work.Left,
+                _ => info.Work.Right - bar.Left,
+            };
+
+            // The bar must also be on the monitor's own edge for this to mean anything.
+            bool onEdge = AppBarEdge switch
+            {
+                AppBarEdge.Bottom => Math.Abs(bar.Bottom - info.Monitor.Bottom) <= 2,
+                AppBarEdge.Top => Math.Abs(bar.Top - info.Monitor.Top) <= 2,
+                AppBarEdge.Left => Math.Abs(bar.Left - info.Monitor.Left) <= 2,
+                _ => Math.Abs(bar.Right - info.Monitor.Right) <= 2,
+            };
+
+            if (onEdge && overlap > 2)
+            {
+                ShellLogger.Info($"Taskbar: the work area of {Screen.DeviceName} had lost the taskbar's strip; setting it again");
+                _shellManager.AppBarManager.SetWorkArea(Screen);
+            }
+        }
+
         protected override void CustomClosing()
         {
+            _workAreaWatchdog?.Stop();
+
             if (AllowClose)
             {
                 QuickLaunchToolbar.Visibility = Visibility.Collapsed;

@@ -2,7 +2,8 @@
                     xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
                     xmlns:system="clr-namespace:System;assembly=mscorlib"
                     xmlns:utilities="clr-namespace:RetroBar.Utilities"
-                    xmlns:converters="clr-namespace:RetroBar.Converters">
+                    xmlns:converters="clr-namespace:RetroBar.Converters"
+                    xmlns:controls="clr-namespace:RetroBar.Controls">
 
     <system:Double x:Key="TaskbarHeight">28</system:Double>
     <system:Double x:Key="TaskbarRowHeight">25</system:Double>
@@ -82,6 +83,55 @@
              which would smooth menu text regardless of the menu's own smoothing setting. -->
         <Setter Property="TextOptions.TextFormattingMode"
                 Value="Display" />
+        <Setter Property="HasDropShadow"
+                Value="True" />
+        <!-- The menu's usual template with a shadow of its own: a soft one on the right and bottom, as an
+             element behind the menu (not an Effect on it, which would blur the items). The 10 DIP of margin
+             right and below the menu is the room it has to spread into inside the popup window (the same
+             shadow as the popups' - see TaskButton.xaml). -->
+        <Setter Property="Template">
+            <Setter.Value>
+                <ControlTemplate TargetType="ContextMenu">
+                    <!-- Layout rounding makes every bevel line exactly one device pixel (at 125% a 1 DIP line came
+                         out 1px on the top/left and 2px on the right/bottom, with a notch at the corners). -->
+                    <Grid Margin="0,0,10,10"
+                          UseLayoutRounding="True"
+                          SnapsToDevicePixels="True">
+                        <controls:PopupShadow Margin="0,0,-10,-10"
+                                              Room="0,0,10,10"
+                                              Strength="0.67" />
+                        <!-- The same raised 4-line bevel as a tab: an outer DarkShadow/Highlight pair around an
+                             inner Shadow/Light pair. -->
+                        <Border BorderThickness="0,0,1,1"
+                                BorderBrush="{DynamicResource ButtonDarkShadow}"
+                                SnapsToDevicePixels="True">
+                            <Border BorderThickness="1,1,0,0"
+                                    BorderBrush="{DynamicResource ButtonHighlight}">
+                                <Border BorderThickness="0,0,1,1"
+                                        BorderBrush="{DynamicResource ButtonShadow}">
+                                    <Border BorderThickness="1,1,0,0"
+                                            BorderBrush="{DynamicResource ButtonLight}"
+                                            Background="{DynamicResource ButtonFace}">
+                                        <ScrollViewer Margin="1,0"
+                                                      CanContentScroll="True"
+                                                      Style="{DynamicResource {ComponentResourceKey TypeInTargetAssembly={x:Type FrameworkElement}, ResourceId=MenuScrollViewer}}">
+                                            <!-- As in WPF's own menu template: without the hint the text is smoothed in
+                                                 grayscale rather than ClearType, which made menus look blurry. -->
+                                            <Grid RenderOptions.ClearTypeHint="Enabled">
+                                                <ItemsPresenter Margin="{TemplateBinding Padding}"
+                                                                Grid.IsSharedSizeScope="True"
+                                                                KeyboardNavigation.DirectionalNavigation="Cycle"
+                                                                SnapsToDevicePixels="{TemplateBinding SnapsToDevicePixels}" />
+                                            </Grid>
+                                        </ScrollViewer>
+                                    </Border>
+                                </Border>
+                            </Border>
+                        </Border>
+                    </Grid>
+                </ControlTemplate>
+            </Setter.Value>
+        </Setter>
     </Style>
 
     <Style TargetType="ToolTip"
@@ -137,6 +187,27 @@
                 Value="Transparent" />
     </Style>
 
+    <!-- The two ends of an optional gradient across the taskbar, from the left edge (Start) to the right edge (End). A theme (or a theme of your own in
+         %LocalAppData%\RetroBar\Themes) sets one or both to opaque colors to get one, e.g.
+             <Color x:Key="TaskbarBackgroundStart">#121014</Color>
+             <Color x:Key="TaskbarBackgroundEnd">#3C159E</Color>
+         An end left out, or transparent, is the theme's face color (ButtonFace); with both left out the taskbar is plain. -->
+    <Color x:Key="TaskbarBackgroundStart">#00000000</Color>
+    <Color x:Key="TaskbarBackgroundEnd">#00000000</Color>
+
+    <!-- The line along the taskbar's inner edge (its top, on a bottom taskbar): the theme's ButtonHighlight, or the brush the theme
+         gives as TaskbarTopLine, for a taskbar whose line is not the same as the highlight of every other bevel. Like TaskbarFace it is
+         set in code each time a theme is loaded (DictionaryManager.UpdateTaskbarFace); this is only what it is until then. -->
+    <SolidColorBrush x:Key="TaskbarHighlight" Color="{x:Static SystemColors.ControlLightLightColor}" />
+
+    <!-- The same for the line outside it (the theme's ButtonLight, or its TaskbarTopLineOuter). -->
+    <SolidColorBrush x:Key="TaskbarOuterLine" Color="{x:Static SystemColors.ControlLightColor}" />
+
+    <!-- The face of the things on the taskbar (the buttons, the tray box, the toolbar): the theme's ButtonFace, or nothing at all
+         while the theme has a gradient across the taskbar, so that the gradient shows through them as it does between them.
+         It is set in code each time a theme is loaded (DictionaryManager.UpdateTaskbarFace); this is only what it is until then. -->
+    <SolidColorBrush x:Key="TaskbarFace" Color="{x:Static SystemColors.ControlColor}" />
+
     <Style TargetType="ContentControl"
            x:Key="Taskbar">
         <Setter Property="FocusVisualStyle"
@@ -151,13 +222,22 @@
             <Setter.Value>
                 <ControlTemplate TargetType="ContentControl">
                     <Border BorderThickness="0,1,0,0"
-                            BorderBrush="{DynamicResource ButtonLight}"
+                            BorderBrush="{DynamicResource TaskbarOuterLine}"
                             Name="OuterBorder">
                         <Border BorderThickness="0,1,0,0"
-                                BorderBrush="{DynamicResource ButtonHighlight}"
+                                BorderBrush="{DynamicResource TaskbarHighlight}"
                                 Background="{DynamicResource ButtonFace}"
                                 Name="InnerBorder">
-                            <ContentPresenter />
+                            <Grid>
+                                <!-- An optional gradient over the taskbar's face: a theme sets TaskbarBackgroundStart and
+                                     TaskbarBackgroundEnd (see below). Both are transparent here, which leaves the face
+                                     (ButtonFace) as it is. The brush is made in code (Taskbar.UpdateGradient), as an end left
+                                     out is the theme's ButtonFace. -->
+                                <Border x:Name="GradientOverlay"
+                                        Background="Transparent"
+                                        IsHitTestVisible="False" />
+                                <ContentPresenter />
+                            </Grid>
                         </Border>
                     </Border>
                     <ControlTemplate.Triggers>
@@ -217,7 +297,7 @@
         <Setter Property="OverridesDefaultStyle"
                 Value="True" />
         <Setter Property="Background"
-                Value="{DynamicResource ButtonFace}" />
+                Value="{DynamicResource TaskbarFace}" />
         <Setter Property="Template">
             <Setter.Value>
                 <!-- Sunken bevel: a single Highlight/DarkShadow pair. This used to also have an
@@ -264,7 +344,7 @@
         <Setter Property="OverridesDefaultStyle"
                 Value="True" />
         <Setter Property="Background"
-                Value="{DynamicResource ButtonFace}" />
+                Value="{DynamicResource TaskbarFace}" />
         <Setter Property="Foreground"
                 Value="{DynamicResource ButtonForeground}" />
         <Setter Property="Margin"
@@ -640,7 +720,7 @@
         <Setter Property="OverridesDefaultStyle"
                 Value="True" />
         <Setter Property="Background"
-                Value="{DynamicResource ButtonFace}" />
+                Value="{DynamicResource TaskbarFace}" />
         <Setter Property="Foreground"
                 Value="{DynamicResource ButtonForeground}" />
         <Setter Property="TextOptions.TextRenderingMode"
@@ -840,7 +920,7 @@
         <Setter Property="OverridesDefaultStyle"
                 Value="True" />
         <Setter Property="Background"
-                Value="{DynamicResource ButtonFace}" />
+                Value="{DynamicResource TaskbarFace}" />
         <Setter Property="Foreground"
                 Value="{DynamicResource ButtonForeground}" />
         <Setter Property="HorizontalAlignment"
@@ -1625,7 +1705,7 @@
         <Setter Property="OverridesDefaultStyle"
                 Value="True" />
         <Setter Property="Background"
-                Value="{DynamicResource ButtonFace}" />
+                Value="{DynamicResource TaskbarFace}" />
         <Setter Property="Margin"
                 Value="0,0,0,-1" />
         <!-- See ButtonChromeDpiSnap's own remarks - DPI-snaps this template's own nested Border
@@ -1857,7 +1937,7 @@
         <Setter Property="OverridesDefaultStyle"
                 Value="True" />
         <Setter Property="Background"
-                Value="{DynamicResource ButtonFace}" />
+                Value="{DynamicResource TaskbarFace}" />
         <Setter Property="Margin"
                 Value="-2,-3,1,-3" />
         <Setter Property="Template">

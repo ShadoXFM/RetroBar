@@ -48,6 +48,29 @@ namespace RetroBar.Utilities
 
         private static readonly ConditionalWeakTable<Border, EventHandler> BackgroundWatchers = new();
 
+        // Every border that has the pattern enabled, so it can be built again when a theme is applied.
+        private static readonly System.Collections.Generic.List<WeakReference<Border>> Registered = new();
+
+        /// <summary>
+        /// Builds every pattern again from the colors the current theme has. A theme change doesn't necessarily
+        /// replace a border's Background (the checkerboard resources are the same objects in every theme), so
+        /// nothing else would tell the patterns - built from the old theme's colors - that they are stale.
+        /// </summary>
+        public static void RefreshAll()
+        {
+            lock (Registered)
+            {
+                Registered.RemoveAll(r => !r.TryGetTarget(out _));
+                foreach (WeakReference<Border> reference in Registered)
+                {
+                    if (reference.TryGetTarget(out Border border) && border.IsLoaded && border.GetValue(SourceBrushProperty) != null)
+                    {
+                        Apply(border);
+                    }
+                }
+            }
+        }
+
         private static void OnEnabledChanged(DependencyObject d, DependencyPropertyChangedEventArgs e)
         {
             if (d is not Border border || e.NewValue is not true)
@@ -55,20 +78,94 @@ namespace RetroBar.Utilities
                 return;
             }
 
+            lock (Registered)
+            {
+                Registered.Add(new WeakReference<Border>(border));
+            }
+
             // Re-applying on every Loaded is harmless, and needed: a template instance (the active
             // tab's) is rebuilt - and its Border reloaded - whenever the tab's style or theme changes.
-            // (A taskbar stays on its own monitor, so the DPI doesn't change under a loaded Border.)
+            // A taskbar window's DPI can be changed again and again for a moment while it is being positioned at startup (it
+            // starts with the primary monitor's DPI, and each repositioning is followed by another DPI change event, in no
+            // fixed order relative to this element's loading), so a pattern built for the DPI at one moment can be stale for
+            // good. So the DPI is also checked on every layout pass while loaded - one comparison - and the pattern built
+            // again when it no longer matches.
+            EventHandler layoutHandler = (s, args) => ApplyIfDpiChanged(border);
+
             border.Loaded += (s, args) =>
             {
                 Apply(border);
                 Watch(border);
+                border.LayoutUpdated -= layoutHandler;
+                border.LayoutUpdated += layoutHandler;
             };
-            border.Unloaded += (s, args) => Unwatch(border);
+            border.Unloaded += (s, args) =>
+            {
+                Unwatch(border);
+                border.LayoutUpdated -= layoutHandler;
+            };
+
+            // The DPI the pattern is built for is the one the Border has when it loads, which is not always the
+            // monitor's own: a taskbar window starts out with the DPI of the primary monitor and is only moved
+            // to its monitor afterwards, so one on a monitor with another scale built its pattern for the wrong
+            // one (the tile then got resampled, and showed as coarse diagonal stripes). Build it again when
+            // the DPI changes, and when a layout pass finds it differs from what the pattern was built for.
+            border.SizeChanged += (s, args) => ApplyIfDpiChanged(border);
+            border.Loaded += (s, args) =>
+            {
+                if (Window.GetWindow(border) is Window window)
+                {
+                    window.DpiChanged -= OnWindowDpiChanged;
+                    window.DpiChanged += OnWindowDpiChanged;
+                }
+            };
 
             if (border.IsLoaded)
             {
                 Apply(border);
                 Watch(border);
+            }
+        }
+
+        private static readonly DependencyProperty BuiltForDpiProperty = DependencyProperty.RegisterAttached(
+            "BuiltForDpi", typeof(double), typeof(PixelPatternBrush), new PropertyMetadata(0.0));
+
+        private static void ApplyIfDpiChanged(Border border)
+        {
+            if (border.IsLoaded && border.Background is ImageBrush &&
+                (double)border.GetValue(BuiltForDpiProperty) != VisualTreeHelper.GetDpi(border).DpiScaleX)
+            {
+                Apply(border);
+            }
+        }
+
+        private static void OnWindowDpiChanged(object sender, DpiChangedEventArgs e)
+        {
+            // A taskbar window is sent this over and over while it is positioned, often with the DPI it already had: nothing
+            // to do then (and rebuilding the patterns each time made them flicker).
+            if (e.OldDpi.DpiScaleX == e.NewDpi.DpiScaleX && e.OldDpi.DpiScaleY == e.NewDpi.DpiScaleY)
+            {
+                return;
+            }
+
+            if (sender is DependencyObject window)
+            {
+                ReapplyBelow(window);
+            }
+        }
+
+        private static void ReapplyBelow(DependencyObject parent)
+        {
+            int count = VisualTreeHelper.GetChildrenCount(parent);
+            for (int i = 0; i < count; i++)
+            {
+                DependencyObject child = VisualTreeHelper.GetChild(parent, i);
+                if (child is Border border && border.IsLoaded && border.GetValue(SourceBrushProperty) != null)
+                {
+                    ApplyIfDpiChanged(border);
+                }
+
+                ReapplyBelow(child);
             }
         }
 
@@ -114,7 +211,7 @@ namespace RetroBar.Utilities
                 border.SetValue(SourceBrushProperty, source);
             }
 
-            if (source == null || !TryGetPattern(source, out Color color, out bool[,] cells))
+            if (source == null || !TryGetPattern(source, border, out Color color, out bool[,] cells))
             {
                 return;
             }
@@ -168,6 +265,7 @@ namespace RetroBar.Utilities
             // on Background for good, so the button face could never go back to its normal color.
             border.SetCurrentValue(Border.BackgroundProperty, brush);
             border.SetValue(AppliedBrushProperty, brush);
+            border.SetValue(BuiltForDpiProperty, dpi.DpiScaleX);
         }
 
         /// <summary>
@@ -175,13 +273,40 @@ namespace RetroBar.Utilities
         /// own single GeometryDrawing (checked cell by cell, so it works for either phase of the
         /// pattern - CheckeredBackground vs CheckeredBackgroundAlt).
         /// </summary>
-        private static bool TryGetPattern(DrawingBrush source, out Color color, out bool[,] cells)
+        // The color of each of the checkerboard resources: the theme brush its drawing is made with.
+        private static readonly (string Resource, string Color)[] KnownPatterns =
+        {
+            ("CheckeredBackground", "ButtonHighlight"),
+            ("CheckeredBackgroundLight", "ButtonLight"),
+            ("CheckeredBackgroundAlt", "ButtonHighlight"),
+        };
+
+        private static bool TryGetPattern(DrawingBrush source, Border border, out Color color, out bool[,] cells)
         {
             color = default;
             cells = null;
 
-            if (source.Drawing is not GeometryDrawing drawing || drawing.Geometry == null ||
-                drawing.Brush is not SolidColorBrush solid)
+            if (source.Drawing is not GeometryDrawing drawing || drawing.Geometry == null)
+            {
+                return false;
+            }
+
+            // The color comes from the theme's own brush, looked up now. Reading it back from the drawing is unreliable: the
+            // brush there is a DynamicResource that is only resolved once the resource has been used in a window, so right after
+            // a theme was loaded it can be missing (then no pattern was built, and the raw tile - which is resampled at a scale
+            // like 125% and shows as coarse diagonal stripes - stayed) or be the one of the theme before.
+            SolidColorBrush solid = null;
+            foreach ((string resource, string colorResource) in KnownPatterns)
+            {
+                if (ReferenceEquals(border.TryFindResource(resource), source) && border.TryFindResource(colorResource) is SolidColorBrush known)
+                {
+                    solid = known;
+                    break;
+                }
+            }
+
+            solid ??= drawing.Brush as SolidColorBrush;
+            if (solid == null)
             {
                 return false;
             }

@@ -12,6 +12,7 @@
         <converters:ToolTipVerticalOffsetConverter x:Key="toolTipVerticalOffsetConverter" />
         <converters:ToolTipPlacementConverter x:Key="toolTipPlacementConverter" />
         <converters:TaskLabelConverter x:Key="taskLabelConverter" />
+        <converters:TaskIconConverter x:Key="taskIconConverter" />
         <converters:TaskStateToMonitorTagConverter x:Key="taskStateToMonitorTagConverter" />
     </UserControl.Resources>
     <!-- MonitorOffset.Tag is TaskButton normally, TaskButtonActive while State==Active (or the
@@ -37,9 +38,15 @@
             <!-- MonitorOffset.Tag is TaskIcon normally, TaskIconActive while State==Active - see
                  TaskStateToMonitorTagConverter for why the active state needs its own tag. -->
             <Image x:Name="TaskIconImage"
-                   Source="{Binding Path=Icon, Mode=OneWay}"
                    Grid.Column="0"
-                   Style="{DynamicResource TaskIcon}" />
+                   Style="{DynamicResource TaskIcon}">
+                <Image.Source>
+                    <MultiBinding Converter="{StaticResource taskIconConverter}" Mode="OneWay">
+                        <Binding />
+                        <Binding Path="Icon" />
+                    </MultiBinding>
+                </Image.Source>
+            </Image>
             <!-- MonitorOffset.Tag is TaskOverlayIcon normally, TaskOverlayIconActive while
                  State==Active - see TaskStateToMonitorTagConverter for why the active state
                  needs its own tag. -->
@@ -59,6 +66,8 @@
                         <Binding Path="ProgressValue" />
                         <Binding Path="ProgressState" />
                         <Binding Path="Tag.Count" ElementName="AppButton" FallbackValue="1" />
+                        <Binding Source="{x:Static utilities:Settings.Instance}" Path="ShowProgramNameOnTabs" />
+                        <Binding />
                     </MultiBinding>
                 </TextBlock.Text>
             </TextBlock>
@@ -169,8 +178,16 @@
                                                      DWM on top of the window, so anything WPF put over it
                                                      would be hidden. -->
                                                 <Grid x:Name="PreviewRoot"
-                                                      Background="Transparent">
-                                                    <ContentControl Style="{DynamicResource TaskButtonThumbnail}">
+                                                      Background="Transparent"
+                                                      RenderOptions.ClearTypeHint="Enabled">
+                                                    <!-- The shadow is its own element behind the frame, not an Effect on the frame: an Effect
+                                                         redraws everything inside it into an offscreen bitmap, which made the text and icons
+                                                         blurry. It falls on the right and bottom only (see PopupShadow). The 6 of margin around the
+                                                         frame is the room it has to spread into (the converters that place the popup take it
+                                                         off again, see PreviewShadowRoom). -->
+                                                    <controls:PopupShadow />
+                                                    <ContentControl Style="{DynamicResource TaskButtonThumbnail}"
+                                                                    Margin="6">
                                                         <!-- One block per window of the tab (just the one, unless windows of an app are
                                                              combined - see TaskButton.GroupWindows, kept in the button's Tag). Side by side
                                                              on a top/bottom taskbar, stacked on a left/right one. -->
@@ -277,16 +294,24 @@
                                                                                 <ColumnDefinition Width="Auto" />
                                                                                 <ColumnDefinition Width="*" />
                                                                             </Grid.ColumnDefinitions>
-                                                                            <!-- The app's icon, before the window's title -->
+                                                                            <!-- The window's own icon (an Explorer window's folder, say), before its title; only the
+                                                                                 tab button always shows the regular File Explorer icon. -->
                                                                             <Image x:Name="PreviewTitleIcon"
-                                                                                   Source="{Binding Path=Icon}"
                                                                                    Width="16"
                                                                                    Height="16"
-                                                                                   Margin="1,0,5,0"
+                                                                                   Margin="1,0,2.4,0"
                                                                                    VerticalAlignment="Center"
                                                                                    UseLayoutRounding="True"
                                                                                    SnapsToDevicePixels="True"
-                                                                                   RenderOptions.BitmapScalingMode="HighQuality" />
+                                                                                   RenderOptions.BitmapScalingMode="HighQuality"
+                                                                                   utilities:MonitorOffset.Tag="PreviewTitleIcon">
+                                                                                <Image.Source>
+                                                                                    <MultiBinding Converter="{StaticResource taskIconConverter}" ConverterParameter="window" Mode="OneWay">
+                                                                                        <Binding />
+                                                                                        <Binding Path="Icon" />
+                                                                                    </MultiBinding>
+                                                                                </Image.Source>
+                                                                            </Image>
                                                                             <TextBlock Grid.Column="1"
                                                                                        utilities:MonitorOffset.Tag="PreviewTitleText"
                                                                                        Text="{Binding Path=Title}"
@@ -307,7 +332,6 @@
                                                                                                 VerticalAlignment="Center"
                                                                                                 SourceWindowHandle="{Binding Path=Handle}"
                                                                                                 Title="{Binding Path=Title}"
-                                                                                                Icon="{Binding Path=Icon}"
                                                                                                 BoxWidth="{Binding Path=PlacementTarget.ActualWidth, RelativeSource={RelativeSource AncestorType=ToolTip}}"/>
                                                                         </Grid>
                                                                     </Grid>

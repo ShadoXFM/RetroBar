@@ -26,7 +26,8 @@ namespace RetroBar.Converters
             }
             else
             {
-                return (double)0;
+                // Closer to the tab by the margin the preview frame has for its shadow.
+                return Settings.Instance.Edge == AppBarEdge.Top ? -RetroBar.Controls.TaskButton.PreviewShadowRoom : RetroBar.Controls.TaskButton.PreviewShadowRoom;
             }
         }
 

@@ -25,6 +25,111 @@ namespace RetroBar.Utilities
         public DictionaryManager()
         {
             Settings.Instance.PropertyChanged += Settings_PropertyChanged;
+            StartThemeWatchers();
+        }
+
+        // ---- applying the theme again when its file is saved, like monitor-adjustments.json is read again
+        private readonly System.Collections.Generic.List<FileSystemWatcher> _themeWatchers = new();
+        private System.Threading.Timer _themeReloadTimer;
+
+        private void StartThemeWatchers()
+        {
+            // The two places a theme is loaded from besides the app's own folder (see SetDictionary): the app's Themes folder,
+            // and the one in %LocalAppData%\RetroBar.
+            foreach (string dir in new[] { Path.Combine(AppDomain.CurrentDomain.BaseDirectory, THEME_FOLDER), THEME_FOLDER.InLocalAppData() })
+            {
+                try
+                {
+                    if (!Directory.Exists(dir))
+                    {
+                        continue;
+                    }
+
+                    var watcher = new FileSystemWatcher(dir, "*." + THEME_EXT)
+                    {
+                        NotifyFilter = NotifyFilters.LastWrite | NotifyFilters.Size | NotifyFilters.FileName,
+                        EnableRaisingEvents = true,
+                    };
+
+                    watcher.Changed += ThemeFileChanged;
+                    watcher.Created += ThemeFileChanged;
+                    watcher.Renamed += ThemeFileChanged;
+                    _themeWatchers.Add(watcher);
+                }
+                catch (Exception ex)
+                {
+                    ManagedShell.Common.Logging.ShellLogger.Warning($"DictionaryManager: Unable to watch {dir} for theme changes: {ex.Message}");
+                }
+            }
+        }
+
+
+        private void ThemeFileChanged(object sender, FileSystemEventArgs e)
+        {
+            // Only the theme in use matters (System, the base of every theme, is built into the app).
+            if (!string.Equals(Path.GetFileNameWithoutExtension(e.Name), Settings.Instance.Theme, StringComparison.OrdinalIgnoreCase))
+            {
+                return;
+            }
+
+            // An editor saves in several steps (a change event for each, sometimes through a temporary file), so wait
+            // until it is quiet for a moment, and then read the file whole.
+            _themeReloadTimer ??= new System.Threading.Timer(_ => ReloadTheme(), null, System.Threading.Timeout.Infinite, System.Threading.Timeout.Infinite);
+            _themeReloadTimer.Change(300, System.Threading.Timeout.Infinite);
+        }
+
+        private void ReloadTheme()
+        {
+            Application app = Application.Current;
+            if (app == null)
+            {
+                return;
+            }
+
+            app.Dispatcher.BeginInvoke(new Action(() =>
+            {
+                string path = FindThemeFile(Settings.Instance.Theme);
+                if (path == null)
+                {
+                    return;
+                }
+
+                // A theme that doesn't load (saved half way through an edit, or with a typo in it) is left alone: the theme in use
+                // stays as it is, instead of the taskbar losing all its colors until the file is fixed.
+                try
+                {
+                    _ = new ResourceDictionary { Source = new Uri(path, UriKind.RelativeOrAbsolute) };
+                }
+                catch (Exception ex)
+                {
+                    ManagedShell.Common.Logging.ShellLogger.Warning($"DictionaryManager: Theme file {path} can't be loaded yet, keeping the theme in use: {ex.Message}");
+                    return;
+                }
+
+                ManagedShell.Common.Logging.ShellLogger.Info($"DictionaryManager: Theme file {path} changed, applying it again");
+                Settings.Instance.NotifyThemeChanged();
+            }));
+        }
+
+        /// <summary>The file a theme is loaded from (the same places SetDictionary looks in), or null.</summary>
+        private static string FindThemeFile(string theme)
+        {
+            string[] candidates =
+            {
+                Path.ChangeExtension(Path.Combine(AppDomain.CurrentDomain.BaseDirectory, THEME_FOLDER, theme), THEME_EXT),
+                Path.ChangeExtension(THEME_FOLDER.InLocalAppData(theme), THEME_EXT),
+                Path.ChangeExtension(Path.Combine(Path.GetDirectoryName(ExePath.GetExecutablePath()), THEME_FOLDER, theme), THEME_EXT),
+            };
+
+            foreach (string candidate in candidates)
+            {
+                if (File.Exists(candidate))
+                {
+                    return candidate;
+                }
+            }
+
+            return null;
         }
 
         public void SetThemeFromSettings()
@@ -44,6 +149,34 @@ namespace RetroBar.Utilities
             {
                 SetTheme(Settings.Instance.Theme);
             }
+
+            UpdateTaskbarFace();
+
+            // The checkered patterns are built from the theme's colors: build them again from the new theme's, once the
+            // windows have picked its resources up.
+            Application.Current.Dispatcher.BeginInvoke(new Action(PixelPatternBrush.RefreshAll), System.Windows.Threading.DispatcherPriority.Loaded);
+        }
+
+        /// <summary>
+        /// Sets the face of the things on the taskbar (the TaskbarFace resource): the theme's own ButtonFace, or nothing at all
+        /// when the theme gives the taskbar a gradient (an opaque TaskbarBackgroundStart or TaskbarBackgroundEnd), so that the
+        /// gradient shows through the buttons and the tray box and not just between them.
+        /// </summary>
+        private static void UpdateTaskbarFace()
+        {
+            ResourceDictionary resources = Application.Current.Resources;
+
+            bool gradient = resources["TaskbarBackgroundStart"] is System.Windows.Media.Color start &&
+                            resources["TaskbarBackgroundEnd"] is System.Windows.Media.Color end &&
+                            (start.A > 0 || end.A > 0);
+
+            resources["TaskbarFace"] = gradient
+                ? System.Windows.Media.Brushes.Transparent
+                : resources["ButtonFace"];
+
+            // The taskbar's own edge line: the theme's TaskbarTopLine if it has one, else its ButtonHighlight.
+            resources["TaskbarHighlight"] = resources["TaskbarTopLine"] ?? resources["ButtonHighlight"];
+            resources["TaskbarOuterLine"] = resources["TaskbarTopLineOuter"] ?? resources["ButtonLight"];
         }
 
         private void SetSystemThemeParams()
@@ -79,9 +212,12 @@ namespace RetroBar.Utilities
 
         private void ClearPreviousThemes()
         {
-            if (GetActualThemeDictionary() != null)
+            // All of them: System (the base of every theme) and the theme on top of it, whichever ones were loaded before. Only the
+            // first was removed, so every theme change (and reload of a theme's file) left one more theme's dictionary behind.
+            ResourceDictionary previous;
+            while ((previous = GetActualThemeDictionary()) != null)
             {
-                _ = GetMergedDictionaries().Remove(GetActualThemeDictionary());
+                _ = GetMergedDictionaries().Remove(previous);
             }
         }
 
@@ -210,6 +346,14 @@ namespace RetroBar.Utilities
         public void Dispose()
         {
             Settings.Instance.PropertyChanged -= Settings_PropertyChanged;
+
+            foreach (FileSystemWatcher watcher in _themeWatchers)
+            {
+                watcher.Dispose();
+            }
+
+            _themeWatchers.Clear();
+            _themeReloadTimer?.Dispose();
         }
     }
 }

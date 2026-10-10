@@ -1,5 +1,4 @@
 ﻿using System;
-using System.Runtime.InteropServices;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Interop;
@@ -97,24 +96,6 @@ namespace RetroBar.Controls
             }
         }
 
-        // The app's icon, shown in place of the live picture when there isn't one (see Refresh).
-        public static DependencyProperty IconProperty = DependencyProperty.Register(nameof(Icon), typeof(ImageSource), typeof(TaskThumbnail),
-            new PropertyMetadata(null, (d, e) => ((TaskThumbnail)d).BlankIcon.Source = e.NewValue as ImageSource));
-
-        public ImageSource Icon
-        {
-            get { return (ImageSource)GetValue(IconProperty); }
-            set { SetValue(IconProperty, value); }
-        }
-
-        [DllImport("user32.dll")]
-        [return: MarshalAs(UnmanagedType.Bool)]
-        private static extern bool IsIconic(IntPtr hWnd);
-
-        // A minimized window has no live picture for DWM to show (the thumbnail comes out empty), nor
-        // does one that reports no size. A blank preview is no use, so those show the app's icon instead.
-        private const double BLANK_HEIGHT_RATIO = 0.6;
-
         public static DependencyProperty TitleProperty = DependencyProperty.Register(nameof(Title), typeof(string), typeof(TaskThumbnail), new PropertyMetadata(""));
 
         public string Title
@@ -204,12 +185,9 @@ namespace RetroBar.Controls
 
                 NativeMethods.DwmQueryThumbnailSourceSize(_thumbHandle, out NativeMethods.PSIZE size);
 
-                bool blank = size.x <= 0 || size.y <= 0 || IsIconic(SourceWindowHandle);
-                BlankPlaceholder.Visibility = blank ? Visibility.Visible : Visibility.Collapsed;
-
                 var props = new NativeMethods.DWM_THUMBNAIL_PROPERTIES
                 {
-                    fVisible = !blank,
+                    fVisible = true,
                     dwFlags = NativeMethods.DWM_TNP_VISIBLE | NativeMethods.DWM_TNP_RECTDESTINATION | NativeMethods.DWM_TNP_OPACITY,
                     rcDestination = Rect,
                     opacity = GetPopupOpacity()
@@ -217,11 +195,7 @@ namespace RetroBar.Controls
 
                 // Width is the tab's (scaled up a little); height follows the window's shape (clamped)...
                 double areaWidth = AreaWidth;
-                if (blank)
-                {
-                    _boxHeight = Math.Round(areaWidth * BLANK_HEIGHT_RATIO * DpiScale) / DpiScale;
-                }
-                else if (size.x > 0 && size.y > 0)
+                if (size.x > 0 && size.y > 0)
                 {
                     double ratio = Math.Min(MAX_HEIGHT_RATIO, Math.Max(MIN_HEIGHT_RATIO, (double)size.y / size.x));
                     _boxHeight = Math.Round(areaWidth * ratio * DpiScale) / DpiScale;
@@ -230,7 +204,7 @@ namespace RetroBar.Controls
                 Width = areaWidth;
                 Height = BoxHeight;
 
-                if (!blank && size.x > 0 && size.y > 0)
+                if (size.x > 0 && size.y > 0)
                 {
                     // ...and the picture is scaled to fill it - to the full width for a normal window,
                     // or fitted inside if the height was clamped - centered either way.
