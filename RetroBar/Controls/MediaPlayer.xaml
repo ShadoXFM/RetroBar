@@ -188,7 +188,8 @@
             <Grid RenderOptions.ClearTypeHint="Enabled">
                 <!-- The frame's bevel starts 1 DIP inside its 10 DIP margin (the Padding), so the room around it is 11: with 10 the
                      shadow's black rectangle stuck out past the bevel on the right and bottom. -->
-                <controls:PopupShadow Room="11" />
+                <controls:PopupShadow Room="11"
+                                       Strength="0.5" />
                 <Border BorderThickness="0"
                         Padding="1"
                         Margin="10">
