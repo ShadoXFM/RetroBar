@@ -11,7 +11,6 @@
     <s:String x:Key="media_player_heading">Media Player</s:String>
     <s:String x:Key="show_media_player">Montrer les contrôles du lecteur media</s:String>
     <s:String x:Key="show_media_player_album_art">Afficher la p_ochette de l'album</s:String>
-    <s:String x:Key="file_explorer">Explorateur de fichiers</s:String>
     <s:String x:Key="weather_heading">Météo</s:String>
     <s:String x:Key="show_weather">Afficher la _météo</s:String>
     <s:String x:Key="weather_use_fahrenheit">Utiliser les degrés _Fahrenheit (°F)</s:String>

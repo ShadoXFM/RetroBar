@@ -214,11 +214,12 @@ namespace RetroBar.Converters
 
             object own = values.Length > 1 ? values[1] : null;
 
-            // A lone File Explorer window has the icon in its title bar (the large one, which is what the taskbar's own
-            // icons are made from), not whatever icon the shell reports for the window's button.
+            // A lone File Explorer window has the icon in its title bar, not whatever icon the shell reports for the
+            // window's button.
             if (!ownIconWanted && explorerWindows < 2 && values.Length > 0 && values[0] is ApplicationWindow lone && IsFileExplorerWindow(lone))
             {
-                ImageSource titleBar = GetFallbackIcon(lone, preferLarge: true);
+                // Asked for the way the title bar's icon is (and a tab's preview shows it): the small one, at a large size.
+                ImageSource titleBar = GetFallbackIcon(lone, preferLarge: false, dpi: 192);
                 if (titleBar != null)
                 {
                     return titleBar;
