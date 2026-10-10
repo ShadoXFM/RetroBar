@@ -44,16 +44,51 @@ namespace RetroBar.Controls
             _viewModel = new WeatherViewModel();
             DataContext = _viewModel;
 
-            // Fetch immediately on load (or, if another monitor's display already has the reading,
-            // show it right away - see WeatherViewModel)
-            _ = _viewModel.UpdateWeatherAsync();
-
             // Set up the timer
             _timer = new DispatcherTimer();
             _timer.Interval = TimeSpan.FromMinutes(1);
 
             _timer.Tick += async (sender, args) => await _viewModel.UpdateWeatherAsync();
-            _timer.Start();
+
+            Settings.Instance.PropertyChanged += Settings_OnPropertyChanged;
+
+            // Fetch immediately on load (or, if another monitor's display already has the reading,
+            // show it right away - see WeatherViewModel) and start the timer - unless the weather is turned off
+            ApplyShowWeather();
+        }
+
+        private void Settings_OnPropertyChanged(object sender, PropertyChangedEventArgs e)
+        {
+            if (e.PropertyName == nameof(Settings.ShowWeather))
+            {
+                Dispatcher.BeginInvoke(new Action(ApplyShowWeather));
+            }
+        }
+
+        // Settings.ShowWeather off: nothing is shown or fetched (no requests, no popup); on: it starts again right away.
+        private void ApplyShowWeather()
+        {
+            if (_viewModel == null || _timer == null)
+            {
+                return;
+            }
+
+            if (Settings.Instance.ShowWeather)
+            {
+                Visibility = Visibility.Visible;
+                _ = _viewModel.UpdateWeatherAsync();
+                _timer.Start();
+            }
+            else
+            {
+                _timer.Stop();
+                _forecastOpenTimer?.Stop();
+                _forecastCloseTimer?.Stop();
+                _forecastClosing = false;
+                ClearForecastAnimations();
+                ForecastPopup.IsOpen = false;
+                Visibility = Visibility.Collapsed;
+            }
         }
 
         // Hover behavior: the forecast opens once the pointer has rested on the widget for a moment (so
@@ -254,6 +289,7 @@ namespace RetroBar.Controls
             _forecastClosing = false;
             ClearForecastAnimations();
             ForecastPopup.IsOpen = false;
+            Settings.Instance.PropertyChanged -= Settings_OnPropertyChanged;
             _timer?.Stop();
             _timer = null;
             _viewModel?.Dispose();

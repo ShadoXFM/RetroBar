@@ -439,7 +439,12 @@
                     </GroupBox>
                     <GroupBox Header="{DynamicResource weather_heading}">
                         <StackPanel Orientation="Vertical">
+                            <CheckBox x:Name="cbShowWeather"
+                                      IsChecked="{Binding Source={x:Static Settings:Settings.Instance}, Path=ShowWeather, UpdateSourceTrigger=PropertyChanged}">
+                                <Label Content="{DynamicResource show_weather}" />
+                            </CheckBox>
                             <CheckBox x:Name="cbWeatherUseFahrenheit"
+                                      IsEnabled="{Binding Source={x:Static Settings:Settings.Instance}, Path=ShowWeather, UpdateSourceTrigger=PropertyChanged}"
                                       IsChecked="{Binding Source={x:Static Settings:Settings.Instance}, Path=WeatherUseFahrenheit, UpdateSourceTrigger=PropertyChanged}">
                                 <Label Content="{DynamicResource weather_use_fahrenheit}" />
                             </CheckBox>
