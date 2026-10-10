@@ -9,18 +9,18 @@
         <!-- A small chip socket (a hollow body with a pin on each side, twice), in place of the "/" that used to sit here: with
              it the number reads as the processor's, not as the other half of the weather's. It sits inside this same UserControl
              (rather than as a separate element in Taskbar.xaml) so it only ever appears alongside CpuTempText - collapsing this
-             whole control (no admin, no sensor) hides it with it. This is the 100% drawing, 8 by 7 pixels, each rectangle on a
+             whole control (no admin, no sensor) hides it with it. This is the 100% drawing, 10 by 8 pixels, each rectangle on a
              whole pixel. At 125% a DIP is 1.25 pixels, so there the CpuTempChip tag in monitor-adjustments.json gives it a
-             Width/Height and a Geometry drawn in 0.8 DIP units (10 by 8 pixels), which are whole pixels again. -->
+             Width/Height and a Geometry drawn in 0.8 DIP units (12 by 10 pixels), which are whole pixels again. -->
         <Path x:Name="CpuTempChip"
-              Width="8"
-              Height="7"
+              Width="10"
+              Height="8"
               Margin="-4,0,3,2"
               VerticalAlignment="Center"
               SnapsToDevicePixels="True"
               UseLayoutRounding="True"
               Fill="{DynamicResource ClockForeground}"
-              Data="F1 M2,0 H6 V1 H2 Z M2,1 H3 V2 H2 Z M5,1 H6 V2 H5 Z M0,2 H3 V3 H0 Z M5,2 H8 V3 H5 Z M2,3 H3 V4 H2 Z M5,3 H6 V4 H5 Z M0,4 H3 V5 H0 Z M5,4 H8 V5 H5 Z M2,5 H3 V6 H2 Z M5,5 H6 V6 H5 Z M2,6 H6 V7 H2 Z"
+              Data="F1 M2,0 H8 V1 H2 Z M2,1 H3 V2 H2 Z M7,1 H8 V2 H7 Z M0,2 H3 V3 H0 Z M7,2 H10 V3 H7 Z M2,3 H3 V4 H2 Z M7,3 H8 V4 H7 Z M2,4 H3 V5 H2 Z M7,4 H8 V5 H7 Z M0,5 H3 V6 H0 Z M7,5 H10 V6 H7 Z M2,6 H3 V7 H2 Z M7,6 H8 V7 H7 Z M2,7 H8 V8 H2 Z"
               utilities:MonitorOffset.Tag="CpuTempChip" />
         <TextBlock x:Name="CpuTempText"
                    Style="{DynamicResource CpuTempStyle}"
