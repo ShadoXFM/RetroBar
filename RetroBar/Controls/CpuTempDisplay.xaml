@@ -15,7 +15,7 @@
         <Path x:Name="CpuTempChip"
               Width="10"
               Height="8"
-              Margin="-4,0,3,2"
+              Margin="-4,0,2,2"
               VerticalAlignment="Center"
               SnapsToDevicePixels="True"
               UseLayoutRounding="True"
