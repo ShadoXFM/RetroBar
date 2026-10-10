@@ -9,18 +9,19 @@
         <!-- A small chip, in place of the "/" that used to sit here: with it the number reads as the processor's, not as
              the other half of the weather's. It sits inside this same UserControl (rather than as a separate element in
              Taskbar.xaml) so it only ever appears alongside CpuTempText - collapsing this whole control (no admin, no
-             sensor) hides it with it. This is the 100% drawing: 10 pixels, a body with a 2 pixel outline and 2 pixel pins,
-             each on a whole pixel. At 125% a DIP is 1.25 pixels, so there the CpuTempChip tag in monitor-adjustments.json
-             gives it a Width/Height and a Geometry drawn in 0.8 DIP units (12 pixels), which are whole pixels again. -->
+             sensor) hides it with it. This is the 100% drawing: 8 pixels, a 6 pixel body with a 1 pixel outline and a 2 pixel
+             die in it, and 1 pixel pins, each on a whole pixel. At 125% a DIP is 1.25 pixels, so there the CpuTempChip tag in
+             monitor-adjustments.json gives it a Width/Height and a Geometry drawn in 0.8 DIP units (10 pixels), which are whole
+             pixels again. -->
         <Path x:Name="CpuTempChip"
-              Width="10"
-              Height="10"
-              Margin="-2,0,3,2"
+              Width="8"
+              Height="8"
+              Margin="-4,0,3,2"
               VerticalAlignment="Center"
               SnapsToDevicePixels="True"
               UseLayoutRounding="True"
               Fill="{DynamicResource ClockForeground}"
-              Data="F0 M1,1 H9 V9 H1 Z M3,3 V7 H7 V3 Z M2,0 H4 V1 H2 Z M6,0 H8 V1 H6 Z M2,9 H4 V10 H2 Z M6,9 H8 V10 H6 Z M0,2 H1 V4 H0 Z M0,6 H1 V8 H0 Z M9,2 H10 V4 H9 Z M9,6 H10 V8 H9 Z"
+              Data="F0 M1,1 H7 V7 H1 Z M2,2 V6 H6 V2 Z M3,3 H5 V5 H3 Z M2,0 H3 V1 H2 Z M5,0 H6 V1 H5 Z M2,7 H3 V8 H2 Z M5,7 H6 V8 H5 Z M0,2 H1 V3 H0 Z M0,5 H1 V6 H0 Z M7,2 H8 V3 H7 Z M7,5 H8 V6 H7 Z"
               utilities:MonitorOffset.Tag="CpuTempChip" />
         <TextBlock x:Name="CpuTempText"
                    Style="{DynamicResource CpuTempStyle}"
