@@ -3,6 +3,7 @@ using System;
 using System.ComponentModel;
 using System.Windows;
 using System.Windows.Controls;
+using System.Windows.Media;
 using System.Windows.Threading;
 
 namespace RetroBar.Controls
@@ -20,6 +21,12 @@ namespace RetroBar.Controls
     /// </summary>
     public partial class CpuTempDisplay : UserControl
     {
+        // Above these the temperature is drawn in full strength, in amber and then red, instead of dimmer than the clock.
+        private const double WarmFrom = 80;
+        private const double HotFrom = 90;
+        private static readonly Brush WarmBrush = Frozen(new SolidColorBrush(Color.FromRgb(0xE8, 0xA8, 0x38)));
+        private static readonly Brush HotBrush = Frozen(new SolidColorBrush(Color.FromRgb(0xE8, 0x52, 0x48)));
+
         private readonly CpuTemperatureMonitor _monitor = new CpuTemperatureMonitor();
         private DispatcherTimer _timer;
 
@@ -79,6 +86,30 @@ namespace RetroBar.Controls
             SetIsCpuTempShown(false);
         }
 
+        private static Brush Frozen(Brush brush)
+        {
+            brush.Freeze();
+            return brush;
+        }
+
+        private void ShowTemperatureColor(double temperature)
+        {
+            if (temperature >= WarmFrom)
+            {
+                Brush brush = temperature >= HotFrom ? HotBrush : WarmBrush;
+                CpuTempText.Foreground = brush;
+                CpuTempChip.Fill = brush;
+                CpuTempText.Opacity = CpuTempChip.Opacity = 1;
+            }
+            else
+            {
+                // Back to the theme's clock colour, which follows theme changes.
+                CpuTempText.SetResourceReference(TextBlock.ForegroundProperty, "ClockForeground");
+                CpuTempChip.SetResourceReference(System.Windows.Shapes.Shape.FillProperty, "ClockForeground");
+                CpuTempText.Opacity = CpuTempChip.Opacity = 0.7;
+            }
+        }
+
         private void UpdateTemperature()
         {
             double? temperature = _monitor.ReadTemperature();
@@ -86,6 +117,7 @@ namespace RetroBar.Controls
             if (temperature.HasValue)
             {
                 CpuTempText.Text = $"{Math.Round(temperature.Value)}°C";
+                ShowTemperatureColor(temperature.Value);
                 Visibility = Visibility.Visible;
             }
             else
