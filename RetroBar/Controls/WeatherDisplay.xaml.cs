@@ -24,22 +24,6 @@ namespace RetroBar.Controls
     {
         private DispatcherTimer _timer;
         private WeatherViewModel _viewModel;
-        private Window _window;
-
-        // The taskbar draws small, hand-drawn icons on a monitor at 100% (see WeatherViewModel.UseSmallBarIcon).
-        private void UpdateSmallBarIcon()
-        {
-            if (_viewModel != null)
-            {
-                _viewModel.UseSmallBarIcon = VisualTreeHelper.GetDpi(this).DpiScaleX <= 1.0;
-            }
-        }
-
-        private void Window_OnDpiChanged(object sender, DpiChangedEventArgs e)
-        {
-            // The scale this control draws at is only updated once the change has been laid out.
-            Dispatcher.BeginInvoke(new Action(UpdateSmallBarIcon), DispatcherPriority.Loaded);
-        }
 
         public WeatherDisplay()
         {
@@ -59,13 +43,6 @@ namespace RetroBar.Controls
 
             _viewModel = new WeatherViewModel();
             DataContext = _viewModel;
-
-            UpdateSmallBarIcon();
-            if (Window.GetWindow(this) is Window window)
-            {
-                _window = window;
-                _window.DpiChanged += Window_OnDpiChanged;
-            }
 
             // Fetch immediately on load (or, if another monitor's display already has the reading,
             // show it right away - see WeatherViewModel)
@@ -279,12 +256,6 @@ namespace RetroBar.Controls
             ForecastPopup.IsOpen = false;
             _timer?.Stop();
             _timer = null;
-            if (_window != null)
-            {
-                _window.DpiChanged -= Window_OnDpiChanged;
-                _window = null;
-            }
-
             _viewModel?.Dispose();
             _viewModel = null;
         }
@@ -493,53 +464,7 @@ namespace RetroBar.Controls
                     _weatherIconPath = value;
                     OnPropertyChanged();
                 }
-
-                WeatherBarIconPath = BarIconPathFor(_weatherIconPath);
             }
-        }
-
-        // The icon as the taskbar draws it: the same as WeatherIconPath, except that where UseSmallBarIcon is set (a monitor
-        // at 100%) it is the small hand-drawn one (sun-sm.png for sun.png, and so on) when there is one: a 16 pixel bitmap,
-        // sharp where the big one scaled down comes out soft. The forecast popup, which draws the icon large, always uses
-        // WeatherIconPath.
-        private string _weatherBarIconPath;
-        public string WeatherBarIconPath
-        {
-            get => _weatherBarIconPath;
-            private set
-            {
-                if (_weatherBarIconPath != value)
-                {
-                    _weatherBarIconPath = value;
-                    OnPropertyChanged();
-                }
-            }
-        }
-
-        private bool _useSmallBarIcon;
-        public bool UseSmallBarIcon
-        {
-            get => _useSmallBarIcon;
-            set
-            {
-                if (_useSmallBarIcon != value)
-                {
-                    _useSmallBarIcon = value;
-                    WeatherBarIconPath = BarIconPathFor(_weatherIconPath);
-                }
-            }
-        }
-
-        private string BarIconPathFor(string iconPath)
-        {
-            if (!_useSmallBarIcon || iconPath == null || !iconPath.EndsWith(".png", StringComparison.OrdinalIgnoreCase) ||
-                iconPath.EndsWith("-sm.png", StringComparison.OrdinalIgnoreCase))
-            {
-                return iconPath;
-            }
-
-            string smallPath = iconPath.Substring(0, iconPath.Length - ".png".Length) + "-sm.png";
-            return File.Exists(new Uri(smallPath).LocalPath) ? smallPath : iconPath;
         }
 
         private string _weatherTemp;

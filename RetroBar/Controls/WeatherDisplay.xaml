@@ -28,7 +28,7 @@
                    Style="{DynamicResource WeatherIconStyle}"
                    utilities:MonitorOffset.Tag="{Binding Path=IsCpuTempShown, RelativeSource={RelativeSource Mode=FindAncestor, AncestorType={x:Type Window}}, Converter={StaticResource cpuTempShownToMonitorTagConverter}, ConverterParameter=WeatherIcon}">
             <Rectangle.OpacityMask>
-                <ImageBrush ImageSource="{Binding WeatherBarIconPath}" Stretch="Uniform" />
+                <ImageBrush ImageSource="{Binding WeatherIconPath}" Stretch="Uniform" />
             </Rectangle.OpacityMask>
         </Rectangle>
         <TextBlock Text="{Binding WeatherBarTemp}"
