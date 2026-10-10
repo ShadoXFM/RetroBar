@@ -127,26 +127,13 @@
                     <controls:MediaPlayer x:Name="MediaPlayerControl"
                                           VerticalAlignment="Center"
                                           ShellManager="{Binding}" />
+                    <!-- Weather and the CPU temperature sit right after the media buttons, inside the tray box (they were in front of the media player) -->
+                    <controls:WeatherDisplay VerticalAlignment="Center" />
+                    <controls:CpuTempDisplay VerticalAlignment="Center" />
                     <controls:NotifyIconList NotificationArea="{Binding NotificationArea}" />
                     <controls:Clock VerticalAlignment="Center" />
                 </StackPanel>
             </GroupBox>
-            <controls:CpuTempDisplay VerticalAlignment="Center">
-                <DockPanel.Dock>
-                    <Binding Converter="{StaticResource dockOrientationConverter}"
-                             ConverterParameter="trailing"
-                             Path="Orientation"
-                             RelativeSource="{RelativeSource Mode=FindAncestor, AncestorType=Window}" />
-                </DockPanel.Dock>
-            </controls:CpuTempDisplay>
-            <controls:WeatherDisplay VerticalAlignment="Center">
-                <DockPanel.Dock>
-                    <Binding Converter="{StaticResource dockOrientationConverter}"
-                             ConverterParameter="trailing"
-                             Path="Orientation"
-                             RelativeSource="{RelativeSource Mode=FindAncestor, AncestorType=Window}" />
-                </DockPanel.Dock>
-            </controls:WeatherDisplay>
             <!-- Invisible, zero-width by default - a dedicated gap between weather and the task
                  buttons, adjustable via its own Margin in monitor-adjustments.json, independent
                  of WeatherPanel's own Margin. A single Margin/Padding layer can't shrink just the
