@@ -176,6 +176,7 @@ namespace RetroBar.Utilities
 
             // The taskbar's own edge line: the theme's TaskbarTopLine if it has one, else its ButtonHighlight.
             resources["TaskbarHighlight"] = resources["TaskbarTopLine"] ?? resources["ButtonHighlight"];
+            resources["TaskbarOuterLine"] = resources["TaskbarTopLineOuter"] ?? resources["ButtonLight"];
         }
 
         private void SetSystemThemeParams()

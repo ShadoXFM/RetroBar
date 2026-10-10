@@ -16,8 +16,9 @@
     <SolidColorBrush x:Key="ButtonDarkShadow" Color="#000000" />
     <SolidColorBrush x:Key="ButtonFlashingFace" Color="#3c159e" />
 
-    <!-- The line along the top of the taskbar (ButtonHighlight, #737373, is what the other bevels use): a darker shade of it.
-         Take this line out to have the taskbar use ButtonHighlight again. -->
+    <!-- The two lines along the top of the taskbar, the one under the other: darker shades of ButtonHighlight (#737373) and
+         ButtonLight (#333333), which are what the other bevels use. Take either out to have the taskbar use the bevel color again. -->
+    <SolidColorBrush x:Key="TaskbarTopLineOuter" Color="#222222" />
     <SolidColorBrush x:Key="TaskbarTopLine" Color="#4d4d4d" />
 
     <!-- The taskbar's background as a gradient across its right side: the Start color all the way to where the weather widget

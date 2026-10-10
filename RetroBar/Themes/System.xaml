@@ -201,6 +201,9 @@
          set in code each time a theme is loaded (DictionaryManager.UpdateTaskbarFace); this is only what it is until then. -->
     <SolidColorBrush x:Key="TaskbarHighlight" Color="{x:Static SystemColors.ControlLightLightColor}" />
 
+    <!-- The same for the line outside it (the theme's ButtonLight, or its TaskbarTopLineOuter). -->
+    <SolidColorBrush x:Key="TaskbarOuterLine" Color="{x:Static SystemColors.ControlLightColor}" />
+
     <!-- The face of the things on the taskbar (the buttons, the tray box, the toolbar): the theme's ButtonFace, or nothing at all
          while the theme has a gradient across the taskbar, so that the gradient shows through them as it does between them.
          It is set in code each time a theme is loaded (DictionaryManager.UpdateTaskbarFace); this is only what it is until then. -->
@@ -220,7 +223,7 @@
             <Setter.Value>
                 <ControlTemplate TargetType="ContentControl">
                     <Border BorderThickness="0,1,0,0"
-                            BorderBrush="{DynamicResource ButtonLight}"
+                            BorderBrush="{DynamicResource TaskbarOuterLine}"
                             Name="OuterBorder">
                         <Border BorderThickness="0,1,0,0"
                                 BorderBrush="{DynamicResource TaskbarHighlight}"
