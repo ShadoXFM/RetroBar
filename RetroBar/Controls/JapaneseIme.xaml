@@ -9,6 +9,9 @@
             IsEnabled="{Binding Path=JapaneseImeEnabled, Mode=OneWay}"
             ToolTip="{Binding Path=JapaneseImeTip, Mode=OneWay}"
             Style="{DynamicResource ToolbarButton}">
+        <Button.Resources>
+            <SolidColorBrush x:Key="ClockForeground" Color="Transparent" />
+        </Button.Resources>
         <TextBlock Text="{Binding Path=JapaneseImeStatus, Mode=OneWay}"
                    Style="{DynamicResource JapaneseIme}" />
         <Button.ContextMenu>
