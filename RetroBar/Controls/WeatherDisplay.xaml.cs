@@ -26,7 +26,7 @@ namespace RetroBar.Controls
         private WeatherViewModel _viewModel;
         private Window _window;
 
-        // The taskbar's icon of the moon is a small, hand-drawn one on a monitor at 100% (see WeatherViewModel.UseSmallBarIcon).
+        // The taskbar draws small, hand-drawn icons on a monitor at 100% (see WeatherViewModel.UseSmallBarIcon).
         private void UpdateSmallBarIcon()
         {
             if (_viewModel != null)
@@ -498,9 +498,10 @@ namespace RetroBar.Controls
             }
         }
 
-        // The icon as the taskbar draws it: the same as WeatherIconPath, except that the moon is a small hand-drawn one
-        // (moon-sm.png) where UseSmallBarIcon is set (a monitor at 100%), where the big one scaled down comes out soft.
-        // The forecast popup, which draws the icon large, always uses WeatherIconPath.
+        // The icon as the taskbar draws it: the same as WeatherIconPath, except that where UseSmallBarIcon is set (a monitor
+        // at 100%) it is the small hand-drawn one (sun-sm.png for sun.png, and so on) when there is one: a 16 pixel bitmap,
+        // sharp where the big one scaled down comes out soft. The forecast popup, which draws the icon large, always uses
+        // WeatherIconPath.
         private string _weatherBarIconPath;
         public string WeatherBarIconPath
         {
@@ -531,9 +532,14 @@ namespace RetroBar.Controls
 
         private string BarIconPathFor(string iconPath)
         {
-            return _useSmallBarIcon && iconPath != null && iconPath.EndsWith("/moon.png", StringComparison.OrdinalIgnoreCase)
-                ? GetImagePath("moon-sm.png")
-                : iconPath;
+            if (!_useSmallBarIcon || iconPath == null || !iconPath.EndsWith(".png", StringComparison.OrdinalIgnoreCase) ||
+                iconPath.EndsWith("-sm.png", StringComparison.OrdinalIgnoreCase))
+            {
+                return iconPath;
+            }
+
+            string smallPath = iconPath.Substring(0, iconPath.Length - ".png".Length) + "-sm.png";
+            return File.Exists(new Uri(smallPath).LocalPath) ? smallPath : iconPath;
         }
 
         private string _weatherTemp;
