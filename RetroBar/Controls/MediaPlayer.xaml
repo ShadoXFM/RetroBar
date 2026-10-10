@@ -24,6 +24,63 @@
     <utilities:UnclippedStackPanel x:Name="MediaPlayerRoot"
                 Orientation="Horizontal"
                 Style="{DynamicResource MediaPlayerPanelStyle}">
+        <!-- The transport buttons come first, before the album art and the track text. -->
+        <!-- Real, interactive buttons live in code (see InitializeTransportButtonAdorners in
+             MediaPlayer.xaml.cs), each hosted in its own Adorner anchored to one of these
+             spacers. A spacer only reserves this Grid column's layout space (same Style, so it
+             naturally sizes the same as the real button would) and is never itself shown -
+             Visibility="Hidden" both hides it and excludes it from hit-testing/focus. This
+             escapes the Tray GroupBox's own Padding/BorderThickness-driven clip (see
+             Taskbar.xaml's AdornerDecorator comment) the same way MediaAlbumArt's Adorner
+             already does, which a real per-monitor Margin/X shift on the button itself can't.
+             The buttons are always visible now - there used to be an in-place spectrum
+             visualizer here that swapped in when the mouse wasn't hovering (and, later, a
+             relocated copy of it next to weather), both since removed in favor of the VU meter
+             behind the track text as the only visualizer, so there's no more hover polling or
+             show/hide animation tied to this area. -->
+        <Grid x:Name="TransportButtonsArea"
+              Background="Transparent"
+              Margin="0,0,6,0"
+              utilities:MonitorOffset.Tag="MediaTransportButtonsArea">
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="Auto" />
+                <ColumnDefinition Width="Auto" />
+                <ColumnDefinition Width="Auto" />
+            </Grid.ColumnDefinitions>
+            <!-- Own dedicated Margin-only tag (distinct from the real button's own
+                 "MediaButtonPrevious"/etc tag) - deliberately NOT given Height/Width/X/Y, since
+                 those already flow onto the spacer indirectly via the real button's own DesiredSize
+                 (see AttachTransportButtonAdorner's remarks on why the spacer itself never got a
+                 full tag). Margin is different: it's what sets this column's own Grid-measured
+                 width, i.e. the actual pitch between adjacent buttons - the real button's own
+                 Margin only resizes its rendered content within a column whose width was already
+                 fixed by the spacer, so it can't close the gap on its own. -->
+            <Button x:Name="PreviousButtonSpacer"
+                    Grid.Column="0"
+                    Style="{DynamicResource MediaPlayerButtonStyle}"
+                    Visibility="Hidden"
+                    utilities:MonitorOffset.Tag="MediaButtonPreviousSpacer">
+                <Path Data="{DynamicResource MediaPlayerPreviousGeometry}"
+                      Style="{DynamicResource MediaPlayerGlyphStyle}" />
+            </Button>
+            <Button x:Name="PlayPauseButtonSpacer"
+                    Grid.Column="1"
+                    Style="{DynamicResource MediaPlayerButtonStyle}"
+                    Visibility="Hidden"
+                    utilities:MonitorOffset.Tag="MediaButtonPlayPauseSpacer">
+                <Path Data="{DynamicResource MediaPlayerPlayGeometry}"
+                      Style="{DynamicResource MediaPlayerGlyphStyle}" />
+            </Button>
+            <Button x:Name="NextButtonSpacer"
+                    Grid.Column="2"
+                    Style="{DynamicResource MediaPlayerButtonStyle}"
+                    Visibility="Hidden"
+                    utilities:MonitorOffset.Tag="MediaButtonNextSpacer">
+                <Path Data="{DynamicResource MediaPlayerNextGeometry}"
+                      Style="{DynamicResource MediaPlayerGlyphStyle}" />
+            </Button>
+        </Grid>
+
         <!-- A layout/position anchor only - always Hidden (never actually painted) when
              there's art. The visible copy lives in an Adorner (see UpdateAlbumArtAdorner
              in the code-behind) so a per-monitor MonitorAdjustments offset can push it
@@ -110,62 +167,6 @@
                 </Canvas>
             </Border>
         </Grid>
-        <!-- Real, interactive buttons live in code (see InitializeTransportButtonAdorners in
-             MediaPlayer.xaml.cs), each hosted in its own Adorner anchored to one of these
-             spacers. A spacer only reserves this Grid column's layout space (same Style, so it
-             naturally sizes the same as the real button would) and is never itself shown -
-             Visibility="Hidden" both hides it and excludes it from hit-testing/focus. This
-             escapes the Tray GroupBox's own Padding/BorderThickness-driven clip (see
-             Taskbar.xaml's AdornerDecorator comment) the same way MediaAlbumArt's Adorner
-             already does, which a real per-monitor Margin/X shift on the button itself can't.
-             The buttons are always visible now - there used to be an in-place spectrum
-             visualizer here that swapped in when the mouse wasn't hovering (and, later, a
-             relocated copy of it next to weather), both since removed in favor of the VU meter
-             behind the track text as the only visualizer, so there's no more hover polling or
-             show/hide animation tied to this area. -->
-        <Grid x:Name="TransportButtonsArea"
-              Background="Transparent"
-              Margin="0,0,6,0"
-              utilities:MonitorOffset.Tag="MediaTransportButtonsArea">
-            <Grid.ColumnDefinitions>
-                <ColumnDefinition Width="Auto" />
-                <ColumnDefinition Width="Auto" />
-                <ColumnDefinition Width="Auto" />
-            </Grid.ColumnDefinitions>
-            <!-- Own dedicated Margin-only tag (distinct from the real button's own
-                 "MediaButtonPrevious"/etc tag) - deliberately NOT given Height/Width/X/Y, since
-                 those already flow onto the spacer indirectly via the real button's own DesiredSize
-                 (see AttachTransportButtonAdorner's remarks on why the spacer itself never got a
-                 full tag). Margin is different: it's what sets this column's own Grid-measured
-                 width, i.e. the actual pitch between adjacent buttons - the real button's own
-                 Margin only resizes its rendered content within a column whose width was already
-                 fixed by the spacer, so it can't close the gap on its own. -->
-            <Button x:Name="PreviousButtonSpacer"
-                    Grid.Column="0"
-                    Style="{DynamicResource MediaPlayerButtonStyle}"
-                    Visibility="Hidden"
-                    utilities:MonitorOffset.Tag="MediaButtonPreviousSpacer">
-                <Path Data="{DynamicResource MediaPlayerPreviousGeometry}"
-                      Style="{DynamicResource MediaPlayerGlyphStyle}" />
-            </Button>
-            <Button x:Name="PlayPauseButtonSpacer"
-                    Grid.Column="1"
-                    Style="{DynamicResource MediaPlayerButtonStyle}"
-                    Visibility="Hidden"
-                    utilities:MonitorOffset.Tag="MediaButtonPlayPauseSpacer">
-                <Path Data="{DynamicResource MediaPlayerPlayGeometry}"
-                      Style="{DynamicResource MediaPlayerGlyphStyle}" />
-            </Button>
-            <Button x:Name="NextButtonSpacer"
-                    Grid.Column="2"
-                    Style="{DynamicResource MediaPlayerButtonStyle}"
-                    Visibility="Hidden"
-                    utilities:MonitorOffset.Tag="MediaButtonNextSpacer">
-                <Path Data="{DynamicResource MediaPlayerNextGeometry}"
-                      Style="{DynamicResource MediaPlayerGlyphStyle}" />
-            </Button>
-        </Grid>
-
         <!-- Opens on a click on the track text (see TrackTextCanvas_OnMouseLeftButtonUp) - lets
              seeking within the current track, which doesn't fit as a permanently-visible part of
              the compact taskbar widget. StaysOpen="False" closes it on any click outside. -->

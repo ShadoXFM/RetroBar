@@ -571,7 +571,10 @@ namespace RetroBar.Controls
             // already starts here too (it's TrackTextHost's own first child) - shifting it left
             // by exactly this amount moves its start back to the tray box's own left edge.
             Point trackTextHostOrigin = TrackTextHost.TransformToVisual(MediaPlayerRoot).Transform(new Point(0, 0));
-            double leftOffset = Math.Max(0, trackTextHostOrigin.X);
+
+            // The transport buttons come before the album art, and the meter starts at the art, not behind the buttons.
+            double buttonsWidth = TransportButtonsArea.ActualWidth + TransportButtonsArea.Margin.Left + TransportButtonsArea.Margin.Right;
+            double leftOffset = Math.Max(0, trackTextHostOrigin.X - buttonsWidth);
 
             // TrackText's own ActualWidth capped by TrackTextHost's own MaxWidth (its Style's
             // fixed 150, not its dynamic ActualWidth) - the actual glyph width for short text,
