@@ -187,8 +187,7 @@
                 Value="Transparent" />
     </Style>
 
-    <!-- The two ends of an optional gradient across the right of the taskbar, from where the weather widget starts to the right edge
-         (the taskbar to the left of it is all the first color; with no weather widget it starts at the left edge). A theme (or a theme of your own in
+    <!-- The two ends of an optional gradient across the taskbar, from the left edge (Start) to the right edge (End). A theme (or a theme of your own in
          %LocalAppData%\RetroBar\Themes) sets one or both to opaque colors to get one, e.g.
              <Color x:Key="TaskbarBackgroundStart">#121014</Color>
              <Color x:Key="TaskbarBackgroundEnd">#3C159E</Color>
@@ -232,8 +231,8 @@
                             <Grid>
                                 <!-- An optional gradient over the taskbar's face: a theme sets TaskbarBackgroundStart and
                                      TaskbarBackgroundEnd (see below). Both are transparent here, which leaves the face
-                                     (ButtonFace) as it is. The brush is made in code (Taskbar.UpdateGradient), since where it
-                                     starts - at the weather widget - depends on the layout. -->
+                                     (ButtonFace) as it is. The brush is made in code (Taskbar.UpdateGradient), as an end left
+                                     out is the theme's ButtonFace. -->
                                 <Border x:Name="GradientOverlay"
                                         Background="Transparent"
                                         IsHitTestVisible="False" />

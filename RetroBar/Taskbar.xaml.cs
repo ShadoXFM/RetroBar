@@ -190,8 +190,8 @@ namespace RetroBar
         private double _gradientOffset = -1;
 
         /// <summary>
-        /// Paints the theme's gradient over the taskbar: the first color up to where the weather widget starts, then a
-        /// gradient to the second at the right edge. Does nothing (and clears it) while the theme has no opaque color for it.
+        /// Paints the theme's gradient over the taskbar, from its first color at the left edge to the second at the right edge.
+        /// Does nothing (and clears it) while the theme has no opaque color for it.
         /// </summary>
         private void UpdateGradient()
         {
@@ -234,22 +234,8 @@ namespace RetroBar
                 return;
             }
 
-            // Where the weather widget starts, as a fraction of the taskbar's width (nothing to start at on a vertical taskbar,
-            // or without the widget: the whole taskbar then).
+            // From the left edge of the taskbar to the right (the same on a vertical taskbar), across everything on it.
             double offset = 0;
-            if (Orientation == Orientation.Horizontal && WeatherDisplayControl.IsVisible && WeatherDisplayControl.ActualWidth > 0)
-            {
-                try
-                {
-                    offset = Math.Max(0, Math.Min(1, WeatherDisplayControl.TranslatePoint(new Point(0, 0), _gradientOverlay).X / _gradientOverlay.ActualWidth));
-                }
-                catch (InvalidOperationException)
-                {
-                    return;
-                }
-            }
-
-            offset = Math.Round(offset, 4);
             if (offset == _gradientOffset && start == _gradientStart && end == _gradientEnd)
             {
                 return;
@@ -260,7 +246,6 @@ namespace RetroBar
             _gradientEnd = end;
 
             var brush = new LinearGradientBrush { StartPoint = new Point(0, 0), EndPoint = new Point(1, 0) };
-            brush.GradientStops.Add(new GradientStop(start, 0));
             brush.GradientStops.Add(new GradientStop(start, offset));
             brush.GradientStops.Add(new GradientStop(end, 1));
             brush.Freeze();
