@@ -11,7 +11,6 @@ using System.Linq;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Data;
-using System.Windows.Input;
 using System.Windows.Threading;
 using Tray = ManagedShell.WindowsTray;
 
@@ -214,14 +213,6 @@ namespace RetroBar.Controls
         private void NotifyIconToggleButton_OnClick(object sender, RoutedEventArgs e)
         {
             collectionView?.Refresh();
-        }
-
-        // The click on the transparent border over the toggle button, which does what a click on the button would.
-        private void NotifyIconToggleOverlay_OnMouseLeftButtonUp(object sender, MouseButtonEventArgs e)
-        {
-            NotifyIconToggleButton.IsChecked = NotifyIconToggleButton.IsChecked != true;
-            NotifyIconToggleButton_OnClick(NotifyIconToggleButton, new RoutedEventArgs());
-            e.Handled = true;
         }
 
         private void SetToggleVisibility()
