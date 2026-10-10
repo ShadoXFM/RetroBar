@@ -85,7 +85,7 @@ namespace RetroBar.Controls
 
             if (temperature.HasValue)
             {
-                CpuTempText.Text = $"{Math.Round(temperature.Value)}";
+                CpuTempText.Text = $"{Math.Round(temperature.Value)}°";
                 Visibility = Visibility.Visible;
             }
             else
