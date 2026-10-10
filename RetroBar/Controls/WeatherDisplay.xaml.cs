@@ -268,9 +268,8 @@ namespace RetroBar.Controls
     /// WMO weather code instead of a free-text condition string that has to be guessed at via
     /// keyword matching. It takes latitude/longitude rather than a place name, so a location is
     /// resolved once via Open-Meteo's own (also free, keyless) geocoding endpoint and cached
-    /// until Settings.WeatherLocation changes. It also reports is_day and the current lunar
-    /// phase, which a clear sky (WMO 0/1) uses to show the correct one of the 8 moon phase icons
-    /// at night instead of the sun icon - see GetIconFileName/GetMoonPhaseIconFileName.
+    /// until Settings.WeatherLocation changes. It also reports is_day, which a clear sky (WMO 0/1)
+    /// uses to show the moon instead of the sun icon at night - see GetIconFileName.
     /// </summary>
     public class WeatherViewModel : INotifyPropertyChanged, IDisposable
     {
@@ -575,7 +574,7 @@ namespace RetroBar.Controls
 
                 _cachedLocation = reading.Location;
                 _cachedCelsius = reading.Celsius;
-                _cachedIconPath = GetImagePath(reading.IconFile);
+                _cachedIconPath = GetImagePath(reading.IconFile.StartsWith("moon_", StringComparison.Ordinal) ? "moon.png" : reading.IconFile);
                 _cachedForecast = reading.Forecast ?? new List<DailyForecast>();
 
                 // Without these a later fetch would skip geocoding (the location "is" geocoded) and use no coordinates.
@@ -671,7 +670,7 @@ namespace RetroBar.Controls
                 }
 
                 string url = string.Format(CultureInfo.InvariantCulture,
-                    "https://api.open-meteo.com/v1/forecast?latitude={0}&longitude={1}&current=temperature_2m,weather_code,is_day&daily=weather_code,temperature_2m_max,temperature_2m_min,moon_phase&forecast_days=7&timezone=auto&temperature_unit=celsius",
+                    "https://api.open-meteo.com/v1/forecast?latitude={0}&longitude={1}&current=temperature_2m,weather_code,is_day&daily=weather_code,temperature_2m_max,temperature_2m_min&forecast_days=7&timezone=auto&temperature_unit=celsius",
                     _latitude, _longitude);
 
                 string json = await _httpClient.GetStringAsync(url);
@@ -682,7 +681,6 @@ namespace RetroBar.Controls
                 double temperature = current.GetProperty("temperature_2m").GetDouble();
                 int weatherCode = current.GetProperty("weather_code").GetInt32();
                 bool isDay = current.GetProperty("is_day").GetInt32() != 0;
-                double moonPhase = daily.GetProperty("moon_phase")[0].GetDouble();
 
                 var forecast = new List<DailyForecast>();
                 JsonElement days = daily.GetProperty("time");
@@ -698,7 +696,7 @@ namespace RetroBar.Controls
                         lows[i].GetDouble()));
                 }
 
-                string iconFile = GetIconFileName(weatherCode, isDay, moonPhase);
+                string iconFile = GetIconFileName(weatherCode, isDay);
                 _cachedLocation = location;
                 _cachedCelsius = temperature;
                 _cachedForecast = forecast;
@@ -750,7 +748,7 @@ namespace RetroBar.Controls
 
                     Forecast.Add(new ForecastDay(
                         dayName,
-                        GetImagePath(GetIconFileName(day.WeatherCode, true, 0)),
+                        GetImagePath(GetIconFileName(day.WeatherCode, true)),
                         $"{FormatShortTemperature(day.HighCelsius)} / {FormatShortTemperature(day.LowCelsius)}",
                         day.Date.Date == DateTime.Today));
                 }
@@ -812,13 +810,14 @@ namespace RetroBar.Controls
         // real system regardless of EdgeMode/rendering-tier/software-rendering settings (a
         // WPF/driver-level quirk outside the app's control), while bitmap rendering has always
         // been reliably smooth, so the shapes are delivered as bitmaps instead. Only clear sky
-        // (0/1) gets a night variant - the only assets on hand are the 8 moon phases, and
+        // (0/1) gets a night variant, a single moon whatever the phase (the phases were tried: the
+        // new moon has nothing to draw, and the others only their lit part), and
         // overcast/rain/snow/fog/thunder icons don't have a sun/moon in them to begin with, so
         // there's nothing for a "night" version to change. Falls back to cloud.png for any
         // WMO code Open-Meteo might add later that isn't one of the above.
-        private static string GetIconFileName(int weatherCode, bool isDay, double moonPhase) => weatherCode switch
+        private static string GetIconFileName(int weatherCode, bool isDay) => weatherCode switch
         {
-            0 or 1 => isDay ? "sun.png" : GetMoonPhaseIconFileName(moonPhase),
+            0 or 1 => isDay ? "sun.png" : "moon.png",
             2 => "partly_cloudy.png",
             3 => "cloud.png",
             45 or 48 => "fog.png",
@@ -828,27 +827,6 @@ namespace RetroBar.Controls
             95 or 96 or 99 => "thunder.png",
             _ => "cloud.png",
         };
-
-        // moonPhase is a 0-1 fraction of the lunar cycle (0/1 = new, 0.25 = first quarter,
-        // 0.5 = full, 0.75 = last quarter). Bucketed into 8 equal slices, each centered on one
-        // of the 8 standard phase names.
-        private static string GetMoonPhaseIconFileName(double moonPhase)
-        {
-            double phase = moonPhase - Math.Floor(moonPhase); // normalize into [0, 1)
-            int bucket = (int)Math.Round(phase / 0.125) % 8;
-
-            return bucket switch
-            {
-                0 => "moon_new.png",
-                1 => "moon_waxing_crescent.png",
-                2 => "moon_first_quarter.png",
-                3 => "moon_waxing_gibbous.png",
-                4 => "moon_full.png",
-                5 => "moon_waning_gibbous.png",
-                6 => "moon_last_quarter.png",
-                _ => "moon_waning_crescent.png",
-            };
-        }
 
         public event PropertyChangedEventHandler PropertyChanged;
 
