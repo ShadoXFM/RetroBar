@@ -22,6 +22,7 @@
             <converters:DockOrientationConverter x:Key="dockOrientationConverter" />
             <converters:BoolToVisibilityConverter x:Key="boolToVisibilityConverter" />
             <converters:CpuTempShownToMonitorTagConverter x:Key="cpuTempShownToMonitorTagConverter" />
+            <converters:MediaPlayingToMonitorTagConverter x:Key="mediaPlayingToMonitorTagConverter" />
             <MenuItem x:Shared="false" x:Key="ToolbarsItem" Header="{DynamicResource toolbars}">
                 <MenuItem Header="{DynamicResource quick_launch}" IsCheckable="true" IsChecked="{Binding Source={x:Static utilities:Settings.Instance}, Path=ShowQuickLaunch, UpdateSourceTrigger=PropertyChanged}" />
                 <Separator />
@@ -118,7 +119,7 @@
                              Path="Orientation"
                              RelativeSource="{RelativeSource Mode=FindAncestor, AncestorType=Window}" />
                 </DockPanel.Dock>
-                <StackPanel>
+                <StackPanel UseLayoutRounding="True">
                     <StackPanel.Orientation>
                         <Binding Converter="{StaticResource edgeOrientationConverter}"
                                  Path="Orientation"
@@ -127,26 +128,21 @@
                     <controls:MediaPlayer x:Name="MediaPlayerControl"
                                           VerticalAlignment="Center"
                                           ShellManager="{Binding}" />
+                    <!-- Weather and the CPU temperature sit right after the media buttons, inside the tray box (they were in front of the
+                         media player). The tray box moves what is in it by a pixel or two (its padding and offsets), so this group has its
+                         own per-monitor tag - WeatherGroup, or WeatherGroupPlaying while media plays, as the tray box's own bevel does - to
+                         put them back level with the clock; the 5 of margin is the gap from the media buttons. -->
+                    <StackPanel Orientation="Horizontal"
+                                VerticalAlignment="Center"
+                                Margin="5,0,0,0"
+                                utilities:MonitorOffset.Tag="{Binding Path=IsMediaPlaying, RelativeSource={RelativeSource Mode=FindAncestor, AncestorType=Window}, Converter={StaticResource mediaPlayingToMonitorTagConverter}, ConverterParameter=WeatherGroup}">
+                        <controls:WeatherDisplay VerticalAlignment="Center" />
+                        <controls:CpuTempDisplay VerticalAlignment="Center" />
+                    </StackPanel>
                     <controls:NotifyIconList NotificationArea="{Binding NotificationArea}" />
                     <controls:Clock VerticalAlignment="Center" />
                 </StackPanel>
             </GroupBox>
-            <controls:CpuTempDisplay VerticalAlignment="Center">
-                <DockPanel.Dock>
-                    <Binding Converter="{StaticResource dockOrientationConverter}"
-                             ConverterParameter="trailing"
-                             Path="Orientation"
-                             RelativeSource="{RelativeSource Mode=FindAncestor, AncestorType=Window}" />
-                </DockPanel.Dock>
-            </controls:CpuTempDisplay>
-            <controls:WeatherDisplay VerticalAlignment="Center">
-                <DockPanel.Dock>
-                    <Binding Converter="{StaticResource dockOrientationConverter}"
-                             ConverterParameter="trailing"
-                             Path="Orientation"
-                             RelativeSource="{RelativeSource Mode=FindAncestor, AncestorType=Window}" />
-                </DockPanel.Dock>
-            </controls:WeatherDisplay>
             <!-- Invisible, zero-width by default - a dedicated gap between weather and the task
                  buttons, adjustable via its own Margin in monitor-adjustments.json, independent
                  of WeatherPanel's own Margin. A single Margin/Padding layer can't shrink just the

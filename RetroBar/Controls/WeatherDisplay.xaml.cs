@@ -482,6 +482,118 @@ namespace RetroBar.Controls
             }
         }
 
+        // The temperature as the taskbar shows it: just the number (with a minus below zero), without the plus sign or the
+        // degree and unit, which the forecast popup keeps (WeatherTemp).
+        private string _weatherBarTemp;
+        public string WeatherBarTemp
+        {
+            get => _weatherBarTemp;
+            set
+            {
+                if (_weatherBarTemp != value)
+                {
+                    _weatherBarTemp = value;
+                    OnPropertyChanged();
+                }
+            }
+        }
+
+        private static string FormatBarTemperature(double celsius)
+        {
+            double value = Settings.Instance.WeatherUseFahrenheit ? celsius * 9 / 5 + 32 : celsius;
+            return ((int)Math.Round(value, MidpointRounding.AwayFromZero)).ToString();
+        }
+
+        // The last good reading is kept on disk too (weather-cache.json), so that after a restart without a
+        // connection the taskbar still shows the latest temperature that was recorded instead of "N/A". It is
+        // only used for the location it was recorded for, and a fresh fetch replaces it as soon as one works
+        // (_lastSuccessUtc stays at its minimum, so the first update refetches).
+        private static readonly string PersistedReadingPath = "weather-cache.json".InLocalAppData();
+        private static bool _persistedReadingLoaded;
+
+        private sealed class PersistedReading
+        {
+            public string Location { get; set; }
+            public double Celsius { get; set; }
+            public string IconFile { get; set; }
+            public List<DailyForecast> Forecast { get; set; }
+            public string GeocodedDisplayName { get; set; }
+            public string GeocodedCountryCode { get; set; }
+            public double Latitude { get; set; }
+            public double Longitude { get; set; }
+        }
+
+        private static void SavePersistedReading(string iconFile)
+        {
+            try
+            {
+                var reading = new PersistedReading
+                {
+                    Location = _cachedLocation,
+                    Celsius = _cachedCelsius.Value,
+                    IconFile = iconFile,
+                    Forecast = _cachedForecast,
+                    GeocodedDisplayName = _geocodedDisplayName,
+                    GeocodedCountryCode = _geocodedCountryCode,
+                    Latitude = _latitude,
+                    Longitude = _longitude,
+                };
+                File.WriteAllText(PersistedReadingPath, JsonSerializer.Serialize(reading));
+            }
+            catch
+            {
+                // Only a convenience: failing to save it changes nothing else.
+            }
+        }
+
+        private static void LoadPersistedReading()
+        {
+            if (_persistedReadingLoaded)
+            {
+                return;
+            }
+
+            _persistedReadingLoaded = true;
+
+            if (_cachedCelsius.HasValue)
+            {
+                return;
+            }
+
+            try
+            {
+                if (!File.Exists(PersistedReadingPath))
+                {
+                    return;
+                }
+
+                PersistedReading reading = JsonSerializer.Deserialize<PersistedReading>(File.ReadAllText(PersistedReadingPath));
+                if (reading == null || string.IsNullOrWhiteSpace(reading.Location) || string.IsNullOrWhiteSpace(reading.IconFile))
+                {
+                    return;
+                }
+
+                _cachedLocation = reading.Location;
+                _cachedCelsius = reading.Celsius;
+                _cachedIconPath = GetImagePath(reading.IconFile);
+                _cachedForecast = reading.Forecast ?? new List<DailyForecast>();
+
+                // Without these a later fetch would skip geocoding (the location "is" geocoded) and use no coordinates.
+                if (reading.Latitude != 0 || reading.Longitude != 0)
+                {
+                    _geocodedLocation = reading.Location;
+                    _geocodedDisplayName = reading.GeocodedDisplayName;
+                    _geocodedCountryCode = reading.GeocodedCountryCode;
+                    _latitude = reading.Latitude;
+                    _longitude = reading.Longitude;
+                }
+            }
+            catch
+            {
+                // A missing or damaged file is the same as none.
+            }
+        }
+
         private static string GetImagePath(string fileName)
         {
             string fullPath = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "Resources", fileName);
@@ -495,6 +607,7 @@ namespace RetroBar.Controls
             if (string.IsNullOrWhiteSpace(location))
             {
                 WeatherTemp = "N/A";
+                WeatherBarTemp = "N/A";
                 return;
             }
 
@@ -518,6 +631,7 @@ namespace RetroBar.Controls
 
         private static bool HasCacheFor(string location)
         {
+            LoadPersistedReading();
             return _cachedCelsius.HasValue && string.Equals(location, _cachedLocation, StringComparison.OrdinalIgnoreCase);
         }
 
@@ -584,12 +698,14 @@ namespace RetroBar.Controls
                         lows[i].GetDouble()));
                 }
 
+                string iconFile = GetIconFileName(weatherCode, isDay, moonPhase);
                 _cachedLocation = location;
                 _cachedCelsius = temperature;
                 _cachedForecast = forecast;
-                _cachedIconPath = GetImagePath(GetIconFileName(weatherCode, isDay, moonPhase));
+                _cachedIconPath = GetImagePath(iconFile);
                 _lastSuccessUtc = DateTime.UtcNow;
                 _consecutiveFailures = 0;
+                SavePersistedReading(iconFile);
             }
             catch
             {
@@ -603,7 +719,7 @@ namespace RetroBar.Controls
             SharedStateChanged?.Invoke();
         }
 
-        // Shows the shared reading if it's for the location currently set; otherwise N/A.
+        // Shows the shared reading (or the one saved on disk) if it's for the location currently set; otherwise N/A.
         private void ApplyShared()
         {
             string location = Settings.Instance.WeatherLocation;
@@ -619,6 +735,7 @@ namespace RetroBar.Controls
                 }
 
                 WeatherTemp = FormatTemperature(_cachedCelsius.Value);
+                WeatherBarTemp = FormatBarTemperature(_cachedCelsius.Value);
                 WeatherIconPath = _cachedIconPath;
 
                 Forecast.Clear();
@@ -641,6 +758,7 @@ namespace RetroBar.Controls
             else
             {
                 WeatherTemp = "N/A";
+                WeatherBarTemp = "N/A";
                 Forecast.Clear();
             }
         }

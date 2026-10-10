@@ -21,7 +21,14 @@
         <ToggleButton Name="NotifyIconToggleButton"
                       Visibility="Collapsed"
                       Click="NotifyIconToggleButton_OnClick"
-                      Style="{DynamicResource TrayToggleButton}"/>
+                      Style="{DynamicResource TrayToggleButton}">
+            <!-- The "show hidden icons" arrow keeps its raised/pressed bevel but not the translucent fill the themes that have
+                 one (System, Windows XFM) lay over it on hover and press: that fill is a border drawn in ClockForeground, which
+                 nothing else in the button uses, so here it is transparent. -->
+            <ToggleButton.Resources>
+                <SolidColorBrush x:Key="ClockForeground" Color="Transparent" />
+            </ToggleButton.Resources>
+        </ToggleButton>
         <ItemsControl x:Name="NotifyIcons"
                       Focusable="False"
                       Style="{DynamicResource NotifyIconItems}"

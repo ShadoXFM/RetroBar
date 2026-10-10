@@ -135,22 +135,28 @@ namespace RetroBar.Utilities
                 // The snapped transform also depends on where the image sits, which changes without its size
                 // when the items around it move (icons of a rearranged toolbar shift by a slot of e.g. 27.5px,
                 // so a stale transform leaves them half a pixel off the grid: blurry). Only the cheap position
-                // key is compared on a layout pass; Apply itself runs, once and later, only when it changed.
-                bool resnapQueued = false;
+                // key is compared on a layout pass; Apply itself runs only when it changed, and right then, in that same
+                // layout pass (it only sets a transform, which doesn't ask for another layout): queued for later instead,
+                // the frame with the icons in their new places was drawn first, with the old transform - a blur for an
+                // instant after an icon was dragged.
+                bool resnapping = false;
                 EventHandler layoutHandler = (sender, args) =>
                 {
-                    if (resnapQueued || element.GetValue(SnapKeyProperty) is not string appliedKey ||
+                    if (resnapping || element.GetValue(SnapKeyProperty) is not string appliedKey ||
                         ComputeSnapKey(element, out _, out _) is not string currentKey || currentKey == appliedKey)
                     {
                         return;
                     }
 
-                    resnapQueued = true;
-                    element.Dispatcher.BeginInvoke(new Action(() =>
+                    resnapping = true;
+                    try
                     {
-                        resnapQueued = false;
                         Apply(element);
-                    }), System.Windows.Threading.DispatcherPriority.Loaded);
+                    }
+                    finally
+                    {
+                        resnapping = false;
+                    }
                 };
                 element.LayoutUpdated += layoutHandler;
                 element.Unloaded += (sender, args) =>

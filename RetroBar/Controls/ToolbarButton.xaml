@@ -5,6 +5,11 @@
     <Button ToolTip="{Binding Path=DisplayName}"
             Style="{DynamicResource ToolbarButton}"
             utilities:MonitorOffset.Tag="ToolbarButtonBox">
+        <!-- Like the tray arrow, these keep the raised/pressed bevel their themes give them but not the translucent fill (a border
+             drawn in ClockForeground, which nothing else in the button uses) laid over them on hover and press. -->
+        <Button.Resources>
+            <SolidColorBrush x:Key="ClockForeground" Color="Transparent" />
+        </Button.Resources>
         <Image Style="{DynamicResource ToolbarIcon}"
                Name="ToolbarIcon"
                utilities:MonitorOffset.Tag="ToolbarIcon" />

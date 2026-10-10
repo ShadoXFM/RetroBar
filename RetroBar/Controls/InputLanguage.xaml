@@ -26,6 +26,9 @@
                     x:Name="InputLanguageButton"
                     ToolTip="{Binding Path=LocaleIdentifier, Converter={StaticResource cultureInfoToLocaleNameConverter}, ConverterParameter=EnglishName, Mode=OneWay}"
                     Style="{DynamicResource ToolbarButton}">
+                <Button.Resources>
+                    <SolidColorBrush x:Key="ClockForeground" Color="Transparent" />
+                </Button.Resources>
                 <TextBlock x:Name="InputLanguageText" 
                            Style="{DynamicResource InputLanguage}"
                            Text="{Binding Path=LocaleIdentifier, Converter={StaticResource cultureInfoToLocaleNameConverter}, ConverterParameter=TwoLetterIsoLanguageName, Mode=OneWay}">
