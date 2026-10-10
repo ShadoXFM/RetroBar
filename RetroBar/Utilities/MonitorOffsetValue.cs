@@ -86,11 +86,15 @@ namespace RetroBar.Utilities
         /// Style/XAML geometry alone. Only meaningful on a Path.</summary>
         public string Geometry { get; set; }
 
+        /// <summary>Gaussian blur radius in device-independent pixels (0 or null = none). Softens
+        /// whatever the tagged element draws - e.g. the WeatherIcon tags. Only ever adds blur.</summary>
+        public double? Blur { get; set; }
+
         public bool IsEmpty =>
             X == 0 && Y == 0 &&
             Width == null && Height == null && Scale == null &&
             TextRendering == null && BitmapScaling == null && Bold == null && FontSize == null &&
             FontFamily == null && Margin == null && Padding == null && Background == null &&
-            Geometry == null;
+            Geometry == null && Blur == null;
     }
 }

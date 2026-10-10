@@ -243,6 +243,8 @@ namespace RetroBar.Utilities
 
             ApplyGeometry(element, offset.Geometry);
 
+            element.Effect = offset.Blur > 0 ? new System.Windows.Media.Effects.BlurEffect { Radius = offset.Blur.Value } : null;
+
             if (offset.Bold.HasValue)
             {
                 element.SetValue(System.Windows.Documents.TextElement.FontWeightProperty,
