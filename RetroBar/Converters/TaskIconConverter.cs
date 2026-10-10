@@ -12,20 +12,69 @@ namespace RetroBar.Converters
 {
     /// <summary>
     /// The icon shown for a window: its own, except that a File Explorer window always gets the regular File Explorer
-    /// icon. Explorer windows report the icon of the folder they are showing (Downloads, This PC, ...) - and with tabs
+    /// icon (or an explorer.ico / explorer.png in %LOCALAPPDATA%RetroBarIcons, when there is one). Explorer windows report the icon of the folder they are showing (Downloads, This PC, ...) - and with tabs
     /// in one window, whichever tab is current - which makes the taskbar button change whenever the user moves around.
     ///
     /// A window that has no icon found for it, or a dialog of Explorer's process that was given Explorer's icon (Run only
     /// has a small one, which isn't looked for), gets the icon the window itself has.
     ///
-    /// Values: the window, then its Icon (only there so the binding updates when the icon does).
+    /// Values: the window, then its Icon (only there so the binding updates when the icon does), then the number of
+    /// Explorer windows open (likewise: a lone one has its own icon, see Convert).
     /// </summary>
     public class TaskIconConverter : IMultiValueConverter
     {
         private static ImageSource _fileExplorerIcon;
 
+        // A File Explorer icon of the user's own: %LOCALAPPDATA%\RetroBar\Icons\explorer.ico (or .png) takes the place of the
+        // one in explorer.exe - the old Windows 10 one, say, which Windows 11 does not have. An .ico with several sizes gives
+        // the 32 pixel one (what the icon from the file is), or the next one up.
+        private static ImageSource LoadCustomFileExplorerIcon()
+        {
+            try
+            {
+                foreach (string name in new[] { "explorer.ico", "explorer.png" })
+                {
+                    string path = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "RetroBar", "Icons", name);
+                    if (!File.Exists(path))
+                    {
+                        continue;
+                    }
+
+                    BitmapDecoder decoder = BitmapDecoder.Create(new Uri(path), BitmapCreateOptions.PreservePixelFormat, BitmapCacheOption.OnLoad);
+                    BitmapFrame frame = null;
+                    foreach (BitmapFrame candidate in decoder.Frames)
+                    {
+                        bool better = frame == null
+                            || (frame.PixelWidth < 32 && candidate.PixelWidth > frame.PixelWidth)
+                            || (frame.PixelWidth >= 32 && candidate.PixelWidth >= 32 && candidate.PixelWidth < frame.PixelWidth);
+                        if (better)
+                        {
+                            frame = candidate;
+                        }
+                    }
+
+                    if (frame != null)
+                    {
+                        frame.Freeze();
+                        return frame;
+                    }
+                }
+            }
+            catch (Exception)
+            {
+                // A damaged file is the same as none.
+            }
+
+            return null;
+        }
+
         private static ImageSource GetFileExplorerIcon()
         {
+            if (_fileExplorerIcon == null)
+            {
+                _fileExplorerIcon = LoadCustomFileExplorerIcon();
+            }
+
             if (_fileExplorerIcon == null)
             {
                 try
@@ -149,7 +198,12 @@ namespace RetroBar.Converters
             // The parameter "window" asks for the window's own icon (the one in its title bar), Explorer windows included.
             bool ownIconWanted = parameter as string == "window";
 
-            if (!ownIconWanted && values.Length > 0 && values[0] is ApplicationWindow window && IsFileExplorerWindow(window))
+            // A lone Explorer window shows its own icon (the folder it is in), several of them the regular Explorer icon, so
+            // that they look alike. values[2], when there, is the number of Explorer windows (see ExplorerWindowCount) - there
+            // only so that the binding asks again when it changes.
+            int explorerWindows = values.Length > 2 && values[2] is int counted ? counted : 2;
+
+            if (!ownIconWanted && explorerWindows >= 2 && values.Length > 0 && values[0] is ApplicationWindow window && IsFileExplorerWindow(window))
             {
                 ImageSource icon = GetFileExplorerIcon();
                 if (icon != null)

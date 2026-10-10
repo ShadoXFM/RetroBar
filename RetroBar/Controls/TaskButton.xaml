@@ -44,6 +44,7 @@
                     <MultiBinding Converter="{StaticResource taskIconConverter}" Mode="OneWay">
                         <Binding />
                         <Binding Path="Icon" />
+                        <Binding Source="{x:Static utilities:ExplorerWindowCount.Instance}" Path="Count" />
                     </MultiBinding>
                 </Image.Source>
             </Image>
