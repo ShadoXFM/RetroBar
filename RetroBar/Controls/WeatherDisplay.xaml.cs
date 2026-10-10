@@ -482,6 +482,28 @@ namespace RetroBar.Controls
             }
         }
 
+        // The temperature as the taskbar shows it: just the number (with a minus below zero), without the plus sign or the
+        // degree and unit, which the forecast popup keeps (WeatherTemp).
+        private string _weatherBarTemp;
+        public string WeatherBarTemp
+        {
+            get => _weatherBarTemp;
+            set
+            {
+                if (_weatherBarTemp != value)
+                {
+                    _weatherBarTemp = value;
+                    OnPropertyChanged();
+                }
+            }
+        }
+
+        private static string FormatBarTemperature(double celsius)
+        {
+            double value = Settings.Instance.WeatherUseFahrenheit ? celsius * 9 / 5 + 32 : celsius;
+            return ((int)Math.Round(value, MidpointRounding.AwayFromZero)).ToString();
+        }
+
         private static string GetImagePath(string fileName)
         {
             string fullPath = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "Resources", fileName);
@@ -495,6 +517,7 @@ namespace RetroBar.Controls
             if (string.IsNullOrWhiteSpace(location))
             {
                 WeatherTemp = "N/A";
+                WeatherBarTemp = "N/A";
                 return;
             }
 
@@ -619,6 +642,7 @@ namespace RetroBar.Controls
                 }
 
                 WeatherTemp = FormatTemperature(_cachedCelsius.Value);
+                WeatherBarTemp = FormatBarTemperature(_cachedCelsius.Value);
                 WeatherIconPath = _cachedIconPath;
 
                 Forecast.Clear();
@@ -641,6 +665,7 @@ namespace RetroBar.Controls
             else
             {
                 WeatherTemp = "N/A";
+                WeatherBarTemp = "N/A";
                 Forecast.Clear();
             }
         }
