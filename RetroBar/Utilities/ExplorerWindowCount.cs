@@ -66,9 +66,30 @@ namespace RetroBar.Utilities
             }
         }
 
+        private int _tick;
+
+        /// <summary>
+        /// Goes up once a second while exactly one Explorer window is open, which has its icon asked for again each time:
+        /// the icon in its title bar changes as the user moves from folder to folder, with nothing else for a button to
+        /// notice it by.
+        /// </summary>
+        public int Tick
+        {
+            get => _tick;
+            private set
+            {
+                _tick = value;
+                PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(Tick)));
+            }
+        }
+
         private void Update()
         {
             Count = Count_();
+            if (_count == 1)
+            {
+                Tick = _tick + 1;
+            }
         }
 
         private static int Count_()

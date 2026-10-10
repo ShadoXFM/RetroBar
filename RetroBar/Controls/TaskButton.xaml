@@ -45,6 +45,7 @@
                         <Binding />
                         <Binding Path="Icon" />
                         <Binding Source="{x:Static utilities:ExplorerWindowCount.Instance}" Path="Count" />
+                        <Binding Source="{x:Static utilities:ExplorerWindowCount.Instance}" Path="Tick" />
                     </MultiBinding>
                 </Image.Source>
             </Image>

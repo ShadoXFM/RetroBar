@@ -145,6 +145,53 @@ namespace RetroBar.Converters
             return found;
         }
 
+        private static readonly System.Collections.Generic.Dictionary<IntPtr, (IntPtr Handle, ImageSource Icon)> TitleBarIcons = new();
+
+        // The icon in a window's title bar as it is now: no cache of a few seconds, but the bitmap made from it is kept for as
+        // long as the window keeps the same icon, so asking often costs a message and not a new image each time.
+        private static ImageSource GetTitleBarIcon(ApplicationWindow window)
+        {
+            try
+            {
+                IntPtr handle = IntPtr.Zero;
+                foreach (int which in new[] { 2, 0, 1 })
+                {
+                    if (SendMessageTimeout(window.Handle, WM_GETICON, (IntPtr)which, (IntPtr)192, SMTO_ABORTIFHUNG, 50, out IntPtr result) != IntPtr.Zero && result != IntPtr.Zero)
+                    {
+                        handle = result;
+                        break;
+                    }
+                }
+
+                if (handle == IntPtr.Zero)
+                {
+                    return GetFallbackIcon(window, preferLarge: false, dpi: 192);
+                }
+
+                lock (TitleBarIcons)
+                {
+                    if (TitleBarIcons.TryGetValue(window.Handle, out var kept) && kept.Handle == handle)
+                    {
+                        return kept.Icon;
+                    }
+                }
+
+                BitmapSource icon = Imaging.CreateBitmapSourceFromHIcon(handle, Int32Rect.Empty, BitmapSizeOptions.FromEmptyOptions());
+                icon.Freeze();
+
+                lock (TitleBarIcons)
+                {
+                    TitleBarIcons[window.Handle] = (handle, icon);
+                }
+
+                return icon;
+            }
+            catch (Exception)
+            {
+                return null;
+            }
+        }
+
         private static ImageSource QueryIcon(ApplicationWindow window, bool preferLarge, int dpi)
         {
             try
@@ -218,8 +265,10 @@ namespace RetroBar.Converters
             // window's button.
             if (!ownIconWanted && explorerWindows < 2 && values.Length > 0 && values[0] is ApplicationWindow lone && IsFileExplorerWindow(lone))
             {
-                // Asked for the way the title bar's icon is (and a tab's preview shows it): the small one, at a large size.
-                ImageSource titleBar = GetFallbackIcon(lone, preferLarge: false, dpi: 192);
+                // Asked for the way the title bar's icon is (and a tab's preview shows it): the small one, at a large size - and
+                // asked again each time (it changes as the window moves from folder to folder), the same bitmap handed back
+                // while the icon is the same one.
+                ImageSource titleBar = GetTitleBarIcon(lone);
                 if (titleBar != null)
                 {
                     return titleBar;
