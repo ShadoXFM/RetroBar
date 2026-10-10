@@ -225,6 +225,7 @@ namespace RetroBar.Controls
         }
 
         private Path _toggleGlyph;
+        private string _toggleGlyphKey;
 
         private void UpdateToggleGlyph()
         {
@@ -240,18 +241,49 @@ namespace RetroBar.Controls
                 dpi = 1;
             }
 
-            // Already in this TextBlock (the template was not replaced): only the scale may have changed.
-            if (_toggleGlyph != null && arrowText.Inlines.FirstInline is InlineUIContainer container && ReferenceEquals(container.Child, _toggleGlyph))
+            // A monitor can have a glyph of its own ("TrayToggleGlyph" in monitor-adjustments.json: a Geometry in device pixels,
+            // from 0,0), for instance a bigger one on a monitor where this one comes out small.
+            string deviceName = (Window.GetWindow(this) as Taskbar)?.Screen.DeviceName;
+            string figures = MonitorAdjustments.Get(deviceName, "TrayToggleGlyph").Geometry;
+            Geometry data = ToggleGlyphGeometry;
+            double glyphWidth = ToggleGlyphRows[0].Length;
+            double glyphHeight = ToggleGlyphRows.Length;
+            if (!string.IsNullOrWhiteSpace(figures))
+            {
+                try
+                {
+                    Geometry custom = Geometry.Parse(figures);
+                    custom.Freeze();
+                    Rect bounds = custom.Bounds;
+                    data = custom;
+                    glyphWidth = Math.Ceiling(bounds.Right);
+                    glyphHeight = Math.Ceiling(bounds.Bottom);
+                }
+                catch (Exception ex) when (ex is FormatException or InvalidOperationException)
+                {
+                    figures = null;
+                }
+            }
+            else
+            {
+                figures = null;
+            }
+
+            string key = figures ?? "";
+
+            // Already in this TextBlock (the template was not replaced) and the same glyph: only the scale may have changed.
+            if (_toggleGlyph != null && _toggleGlyphKey == key && arrowText.Inlines.FirstInline is InlineUIContainer container && ReferenceEquals(container.Child, _toggleGlyph))
             {
                 _toggleGlyph.LayoutTransform = new ScaleTransform(1 / dpi, 1 / dpi);
                 return;
             }
 
+            _toggleGlyphKey = key;
             _toggleGlyph = new Path
             {
-                Data = ToggleGlyphGeometry,
-                Width = ToggleGlyphRows[0].Length,
-                Height = ToggleGlyphRows.Length,
+                Data = data,
+                Width = glyphWidth,
+                Height = glyphHeight,
                 Stretch = Stretch.None,
                 SnapsToDevicePixels = true,
                 LayoutTransform = new ScaleTransform(1 / dpi, 1 / dpi),
