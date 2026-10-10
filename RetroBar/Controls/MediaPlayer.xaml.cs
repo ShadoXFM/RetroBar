@@ -620,7 +620,8 @@ namespace RetroBar.Controls
             // every other MonitorOffset-tagged Width.
             double textWidth = Math.Min(TrackText.ActualWidth, TrackTextHost.MaxWidth);
             double naturalWidth = leftOffset + Math.Max(0, textWidth);
-            _vuMeterMaxWidth = offset.Width ?? naturalWidth;
+            // X nudges the meter's left edge only: the width absorbs it, so the right edge stays on the end of the text.
+            _vuMeterMaxWidth = offset.Width ?? Math.Max(0, naturalWidth - offset.X);
 
             VuMeterContainer.Width = _vuMeterMaxWidth;
 
