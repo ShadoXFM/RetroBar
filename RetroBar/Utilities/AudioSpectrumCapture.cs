@@ -24,7 +24,7 @@ namespace RetroBar.Utilities
 
         // Re-tuned for LevelCurveExponent below (a square-root curve saturates at a much smaller
         // input than a log curve would at the same scale).
-        private const double LevelScale = 13;
+        private const double LevelScale = 28;
 
         // A log curve compresses dynamic range hard once its input crosses roughly 1 - most of a
         // track's actual loudness swings ended up crammed into the flat, near-1.0 tail, reading
