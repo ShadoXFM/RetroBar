@@ -186,7 +186,7 @@ namespace RetroBar.Converters
             }
         }
 
-        private static bool IsFileExplorerWindow(ApplicationWindow window)
+        internal static bool IsFileExplorerWindow(ApplicationWindow window)
         {
             return !window.IsUWP &&
                    (window.ClassName == "CabinetWClass" || window.ClassName == "ExploreWClass") &&
@@ -213,6 +213,17 @@ namespace RetroBar.Converters
             }
 
             object own = values.Length > 1 ? values[1] : null;
+
+            // A lone File Explorer window has the icon in its title bar (the large one, which is what the taskbar's own
+            // icons are made from), not whatever icon the shell reports for the window's button.
+            if (!ownIconWanted && explorerWindows < 2 && values.Length > 0 && values[0] is ApplicationWindow lone && IsFileExplorerWindow(lone))
+            {
+                ImageSource titleBar = GetFallbackIcon(lone, preferLarge: true);
+                if (titleBar != null)
+                {
+                    return titleBar;
+                }
+            }
 
             // A window's preview shows the icon in the window's title bar. A DPI is asked for along with it (a window
             // that has icons of several sizes then hands back a large one), so it can be scaled down to the size of

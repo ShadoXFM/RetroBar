@@ -2,6 +2,7 @@
 using ManagedShell.WindowsTasks;
 using RetroBar.Utilities;
 using System;
+using System.Windows;
 using System.Windows.Data;
 
 namespace RetroBar.Converters
@@ -23,6 +24,13 @@ namespace RetroBar.Converters
                 values[5] is ApplicationWindow window)
             {
                 title = ProgramName.Get(window) ?? title;
+            }
+
+            // With several File Explorer windows open the tab is "File Explorer", not the name of one of the folders.
+            if (values.Length > 6 && values[6] is int explorerWindows && explorerWindows >= 2 &&
+                values[5] is ApplicationWindow explorer && TaskIconConverter.IsFileExplorerWindow(explorer))
+            {
+                title = Application.Current?.TryFindResource("file_explorer") as string ?? "File Explorer";
             }
 
             // A tab standing for several windows leads with how many: "(3) Title".

@@ -69,6 +69,7 @@
                         <Binding Path="Tag.Count" ElementName="AppButton" FallbackValue="1" />
                         <Binding Source="{x:Static utilities:Settings.Instance}" Path="ShowProgramNameOnTabs" />
                         <Binding />
+                        <Binding Source="{x:Static utilities:ExplorerWindowCount.Instance}" Path="Count" />
                     </MultiBinding>
                 </TextBlock.Text>
             </TextBlock>
