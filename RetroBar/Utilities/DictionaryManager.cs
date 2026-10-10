@@ -173,6 +173,9 @@ namespace RetroBar.Utilities
             resources["TaskbarFace"] = gradient
                 ? System.Windows.Media.Brushes.Transparent
                 : resources["ButtonFace"];
+
+            // The taskbar's own edge line: the theme's TaskbarTopLine if it has one, else its ButtonHighlight.
+            resources["TaskbarHighlight"] = resources["TaskbarTopLine"] ?? resources["ButtonHighlight"];
         }
 
         private void SetSystemThemeParams()

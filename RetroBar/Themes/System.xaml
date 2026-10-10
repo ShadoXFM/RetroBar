@@ -196,6 +196,11 @@
     <Color x:Key="TaskbarBackgroundStart">#00000000</Color>
     <Color x:Key="TaskbarBackgroundEnd">#00000000</Color>
 
+    <!-- The line along the taskbar's inner edge (its top, on a bottom taskbar): the theme's ButtonHighlight, or the brush the theme
+         gives as TaskbarTopLine, for a taskbar whose line is not the same as the highlight of every other bevel. Like TaskbarFace it is
+         set in code each time a theme is loaded (DictionaryManager.UpdateTaskbarFace); this is only what it is until then. -->
+    <SolidColorBrush x:Key="TaskbarHighlight" Color="{x:Static SystemColors.ControlLightLightColor}" />
+
     <!-- The face of the things on the taskbar (the buttons, the tray box, the toolbar): the theme's ButtonFace, or nothing at all
          while the theme has a gradient across the taskbar, so that the gradient shows through them as it does between them.
          It is set in code each time a theme is loaded (DictionaryManager.UpdateTaskbarFace); this is only what it is until then. -->
@@ -218,7 +223,7 @@
                             BorderBrush="{DynamicResource ButtonLight}"
                             Name="OuterBorder">
                         <Border BorderThickness="0,1,0,0"
-                                BorderBrush="{DynamicResource ButtonHighlight}"
+                                BorderBrush="{DynamicResource TaskbarHighlight}"
                                 Background="{DynamicResource ButtonFace}"
                                 Name="InnerBorder">
                             <Grid>

@@ -16,6 +16,10 @@
     <SolidColorBrush x:Key="ButtonDarkShadow" Color="#000000" />
     <SolidColorBrush x:Key="ButtonFlashingFace" Color="#3c159e" />
 
+    <!-- The line along the top of the taskbar (ButtonHighlight, #737373, is what the other bevels use): a darker shade of it.
+         Take this line out to have the taskbar use ButtonHighlight again. -->
+    <SolidColorBrush x:Key="TaskbarTopLine" Color="#4d4d4d" />
+
     <!-- The taskbar's background as a gradient across its right side: the Start color all the way to where the weather widget
          begins, then fading to the End color at the right edge (with no weather widget, from the left edge). Left transparent
          (#00000000) an end is the face color (ButtonFace), and with both left that way the taskbar is plain ButtonFace. Give either
