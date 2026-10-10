@@ -11,6 +11,9 @@ using System.Linq;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Data;
+using System.Windows.Documents;
+using System.Windows.Media;
+using System.Windows.Shapes;
 using System.Windows.Threading;
 using Tray = ManagedShell.WindowsTray;
 
@@ -22,6 +25,7 @@ namespace RetroBar.Controls
     public partial class NotifyIconList : UserControl
     {
         private bool _isLoaded;
+        private bool _toggleGlyphHooked;
         private ObservableCollection<Tray.NotifyIcon> promotedIcons = new ObservableCollection<Tray.NotifyIcon>();
         private NotifyIconDropHandler dropHandler;
         private ListCollectionView collectionView;
@@ -175,9 +179,117 @@ namespace RetroBar.Controls
             unpromoteTimer.Start();
         }
 
+        // The "show hidden icons" arrow is the pixel double chevron the original RetroBar uses (two chevrons pointing
+        // left; turned half way round, so pointing right, while the hidden icons are shown), not a "^": where a theme's
+        // button has the TextBlock "ArrowText" (the ones that draw the arrow as text), this puts the glyph in it, and the
+        // theme's own turning of that TextBlock still applies. Drawn on whole device pixels at any scale: each pixel of the
+        // glyph is one unit and a layout transform of 1 / DPI scale makes a unit one device pixel.
+        private static readonly string[] ToggleGlyphRows =
+        {
+            "..##..##",
+            ".##..##.",
+            "##..##..",
+            ".##..##.",
+            "..##..##",
+        };
+
+        private static readonly Geometry ToggleGlyphGeometry = CreateToggleGlyphGeometry();
+
+        private static Geometry CreateToggleGlyphGeometry()
+        {
+            var group = new GeometryGroup { FillRule = FillRule.Nonzero };
+            for (int y = 0; y < ToggleGlyphRows.Length; y++)
+            {
+                string row = ToggleGlyphRows[y];
+                int x = 0;
+                while (x < row.Length)
+                {
+                    if (row[x] != '#')
+                    {
+                        x++;
+                        continue;
+                    }
+
+                    int start = x;
+                    while (x < row.Length && row[x] == '#')
+                    {
+                        x++;
+                    }
+
+                    group.Children.Add(new RectangleGeometry(new Rect(start, y, x - start, 1)));
+                }
+            }
+
+            group.Freeze();
+            return group;
+        }
+
+        private Path _toggleGlyph;
+
+        private void UpdateToggleGlyph()
+        {
+            NotifyIconToggleButton.ApplyTemplate();
+            if (NotifyIconToggleButton.Template?.FindName("ArrowText", NotifyIconToggleButton) is not TextBlock arrowText)
+            {
+                return;
+            }
+
+            double dpi = VisualTreeHelper.GetDpi(NotifyIconToggleButton).DpiScaleX;
+            if (dpi <= 0)
+            {
+                dpi = 1;
+            }
+
+            // Already in this TextBlock (the template was not replaced): only the scale may have changed.
+            if (_toggleGlyph != null && arrowText.Inlines.FirstInline is InlineUIContainer container && ReferenceEquals(container.Child, _toggleGlyph))
+            {
+                _toggleGlyph.LayoutTransform = new ScaleTransform(1 / dpi, 1 / dpi);
+                return;
+            }
+
+            _toggleGlyph = new Path
+            {
+                Data = ToggleGlyphGeometry,
+                Width = ToggleGlyphRows[0].Length,
+                Height = ToggleGlyphRows.Length,
+                Stretch = Stretch.None,
+                SnapsToDevicePixels = true,
+                LayoutTransform = new ScaleTransform(1 / dpi, 1 / dpi),
+            };
+            _toggleGlyph.SetBinding(Shape.FillProperty, new Binding(nameof(TextBlock.Foreground)) { Source = arrowText });
+
+            // The theme moves the "^" (up by 3, down by 4, as a margin) while the hidden icons are shown, to make up for it
+            // turning half way round off its line; this glyph turns about its own center, so it stays where it is (a local
+            // value, which a template trigger does not override).
+            arrowText.Margin = new Thickness(0);
+
+            arrowText.Text = "";
+            arrowText.Inlines.Clear();
+            arrowText.Inlines.Add(new InlineUIContainer(_toggleGlyph) { BaselineAlignment = BaselineAlignment.Center });
+        }
+
+        private void QueueUpdateToggleGlyph()
+        {
+            Dispatcher.BeginInvoke(new Action(UpdateToggleGlyph), DispatcherPriority.Loaded);
+        }
+
         private void NotifyIconList_Loaded(object sender, RoutedEventArgs e)
         {
             SetNotificationAreaCollections();
+
+            // Again whenever the button's template is replaced (another theme) or the scale changes.
+            if (!_toggleGlyphHooked)
+            {
+                _toggleGlyphHooked = true;
+                DependencyPropertyDescriptor.FromProperty(Control.TemplateProperty, typeof(Control))
+                    .AddValueChanged(NotifyIconToggleButton, (s, args) => { _toggleGlyph = null; QueueUpdateToggleGlyph(); });
+                if (Window.GetWindow(this) is Window window)
+                {
+                    window.DpiChanged += (s, args) => QueueUpdateToggleGlyph();
+                }
+            }
+
+            QueueUpdateToggleGlyph();
 
             // Set up drag/drop handler
             if (dropHandler == null)
