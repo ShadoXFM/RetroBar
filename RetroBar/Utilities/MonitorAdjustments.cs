@@ -87,7 +87,7 @@ namespace RetroBar.Utilities
     /// actively playing - see System.xaml's TrayBoxBevel tag Binding and Taskbar.IsMediaPlaying),
     /// or a new one you tag yourself), and every field on
     /// MonitorOffsetValue is optional - X, Y, Width, Height, Scale, TextRendering, BitmapScaling,
-    /// Bold, FontSize, FontFamily, Margin, Padding, Background, Geometry (Path mini-language
+    /// Bold, FontSize, FontFamily, Margin, Padding, Background, Blur (radius), Geometry (Path mini-language
     /// Figures, only meaningful on a Path - e.g. one of the MediaGlyph* tags - to replace its
     /// vector shape entirely per monitor) - omit whatever you don't want to change.
     ///

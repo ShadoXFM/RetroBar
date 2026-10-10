@@ -12,6 +12,7 @@
     <s:String x:Key="show_media_player">Show media player _controls</s:String>
     <s:String x:Key="show_media_player_album_art">Show album _art</s:String>
     <s:String x:Key="weather_heading">Weather</s:String>
+    <s:String x:Key="show_weather">Show _weather</s:String>
     <s:String x:Key="weather_use_fahrenheit">Use _Fahrenheit (°F)</s:String>
     <s:String x:Key="media_source_automatic">Automatic (follow Windows)</s:String>
     <s:String x:Key="media_source_browser">Browser</s:String>

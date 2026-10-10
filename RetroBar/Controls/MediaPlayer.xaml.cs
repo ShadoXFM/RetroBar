@@ -375,6 +375,33 @@ namespace RetroBar.Controls
 
         private Geometry GetGlyph(string resourceKey)
         {
+            // The play and pause glyphs can be given a Geometry of their own per monitor ("MediaGlyphPlay" and
+            // "MediaGlyphPause" in monitor-adjustments.json) - one drawn for that monitor's scale, so its pixels come out evenly.
+            string overrideTag = resourceKey switch
+            {
+                "MediaPlayerPlayGeometry" => "MediaGlyphPlay",
+                "MediaPlayerPauseGeometry" => "MediaGlyphPause",
+                _ => null,
+            };
+            if (overrideTag != null)
+            {
+                string deviceName = (Window.GetWindow(this) as Taskbar)?.Screen.DeviceName;
+                string figures = MonitorAdjustments.Get(deviceName, overrideTag).Geometry;
+                if (!string.IsNullOrWhiteSpace(figures))
+                {
+                    try
+                    {
+                        Geometry custom = Geometry.Parse(figures);
+                        custom.Freeze();
+                        return custom;
+                    }
+                    catch (Exception ex) when (ex is FormatException or InvalidOperationException)
+                    {
+                        // An invalid one is ignored, as for every other Geometry in that file.
+                    }
+                }
+            }
+
             if (TryFindResource(resourceKey) is Geometry geometry)
             {
                 return geometry;
@@ -571,7 +598,10 @@ namespace RetroBar.Controls
             // already starts here too (it's TrackTextHost's own first child) - shifting it left
             // by exactly this amount moves its start back to the tray box's own left edge.
             Point trackTextHostOrigin = TrackTextHost.TransformToVisual(MediaPlayerRoot).Transform(new Point(0, 0));
-            double leftOffset = Math.Max(0, trackTextHostOrigin.X);
+
+            // The transport buttons come before the album art, and the meter starts at the art, not behind the buttons.
+            double buttonsWidth = TransportButtonsArea.ActualWidth + TransportButtonsArea.Margin.Left + TransportButtonsArea.Margin.Right;
+            double leftOffset = Math.Max(0, trackTextHostOrigin.X - buttonsWidth);
 
             // TrackText's own ActualWidth capped by TrackTextHost's own MaxWidth (its Style's
             // fixed 150, not its dynamic ActualWidth) - the actual glyph width for short text,
@@ -590,7 +620,8 @@ namespace RetroBar.Controls
             // every other MonitorOffset-tagged Width.
             double textWidth = Math.Min(TrackText.ActualWidth, TrackTextHost.MaxWidth);
             double naturalWidth = leftOffset + Math.Max(0, textWidth);
-            _vuMeterMaxWidth = offset.Width ?? naturalWidth;
+            // X nudges the meter's left edge only: the width absorbs it, so the right edge stays on the end of the text.
+            _vuMeterMaxWidth = offset.Width ?? Math.Max(0, naturalWidth - offset.X);
 
             VuMeterContainer.Width = _vuMeterMaxWidth;
 
@@ -637,6 +668,18 @@ namespace RetroBar.Controls
                 _playPauseGlyph.Data = GetGlyph(_sessionManager.PlaybackState == MediaPlaybackState.Playing
                     ? "MediaPlayerPauseGeometry"
                     : "MediaPlayerPlayGeometry");
+
+                // The monitor's own glyphs (see GetGlyph) need the window this is in, which may not be known yet: again
+                // once the control is laid out.
+                Dispatcher.BeginInvoke(new Action(() =>
+                {
+                    if (_playPauseGlyph != null && _sessionManager != null)
+                    {
+                        _playPauseGlyph.Data = GetGlyph(_sessionManager.PlaybackState == MediaPlaybackState.Playing
+                            ? "MediaPlayerPauseGeometry"
+                            : "MediaPlayerPlayGeometry");
+                    }
+                }), System.Windows.Threading.DispatcherPriority.Loaded);
             }
 
             // Freshly (re)created buttons default to visible - the transport buttons are always

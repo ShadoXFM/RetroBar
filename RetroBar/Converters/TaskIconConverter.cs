@@ -12,20 +12,69 @@ namespace RetroBar.Converters
 {
     /// <summary>
     /// The icon shown for a window: its own, except that a File Explorer window always gets the regular File Explorer
-    /// icon. Explorer windows report the icon of the folder they are showing (Downloads, This PC, ...) - and with tabs
+    /// icon (or an explorer.ico / explorer.png in %LOCALAPPDATA%RetroBarIcons, when there is one). Explorer windows report the icon of the folder they are showing (Downloads, This PC, ...) - and with tabs
     /// in one window, whichever tab is current - which makes the taskbar button change whenever the user moves around.
     ///
     /// A window that has no icon found for it, or a dialog of Explorer's process that was given Explorer's icon (Run only
     /// has a small one, which isn't looked for), gets the icon the window itself has.
     ///
-    /// Values: the window, then its Icon (only there so the binding updates when the icon does).
+    /// Values: the window, then its Icon (only there so the binding updates when the icon does), then the number of
+    /// Explorer windows open (likewise: a lone one has its own icon, see Convert).
     /// </summary>
     public class TaskIconConverter : IMultiValueConverter
     {
         private static ImageSource _fileExplorerIcon;
 
+        // A File Explorer icon of the user's own: %LOCALAPPDATA%\RetroBar\Icons\explorer.ico (or .png) takes the place of the
+        // one in explorer.exe - the old Windows 10 one, say, which Windows 11 does not have. An .ico with several sizes gives
+        // the 32 pixel one (what the icon from the file is), or the next one up.
+        private static ImageSource LoadCustomFileExplorerIcon()
+        {
+            try
+            {
+                foreach (string name in new[] { "explorer.ico", "explorer.png" })
+                {
+                    string path = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "RetroBar", "Icons", name);
+                    if (!File.Exists(path))
+                    {
+                        continue;
+                    }
+
+                    BitmapDecoder decoder = BitmapDecoder.Create(new Uri(path), BitmapCreateOptions.PreservePixelFormat, BitmapCacheOption.OnLoad);
+                    BitmapFrame frame = null;
+                    foreach (BitmapFrame candidate in decoder.Frames)
+                    {
+                        bool better = frame == null
+                            || (frame.PixelWidth < 32 && candidate.PixelWidth > frame.PixelWidth)
+                            || (frame.PixelWidth >= 32 && candidate.PixelWidth >= 32 && candidate.PixelWidth < frame.PixelWidth);
+                        if (better)
+                        {
+                            frame = candidate;
+                        }
+                    }
+
+                    if (frame != null)
+                    {
+                        frame.Freeze();
+                        return frame;
+                    }
+                }
+            }
+            catch (Exception)
+            {
+                // A damaged file is the same as none.
+            }
+
+            return null;
+        }
+
         private static ImageSource GetFileExplorerIcon()
         {
+            if (_fileExplorerIcon == null)
+            {
+                _fileExplorerIcon = LoadCustomFileExplorerIcon();
+            }
+
             if (_fileExplorerIcon == null)
             {
                 try
@@ -96,6 +145,53 @@ namespace RetroBar.Converters
             return found;
         }
 
+        private static readonly System.Collections.Generic.Dictionary<IntPtr, (IntPtr Handle, ImageSource Icon)> TitleBarIcons = new();
+
+        // The icon in a window's title bar as it is now: no cache of a few seconds, but the bitmap made from it is kept for as
+        // long as the window keeps the same icon, so asking often costs a message and not a new image each time.
+        private static ImageSource GetTitleBarIcon(ApplicationWindow window)
+        {
+            try
+            {
+                IntPtr handle = IntPtr.Zero;
+                foreach (int which in new[] { 2, 0, 1 })
+                {
+                    if (SendMessageTimeout(window.Handle, WM_GETICON, (IntPtr)which, (IntPtr)192, SMTO_ABORTIFHUNG, 50, out IntPtr result) != IntPtr.Zero && result != IntPtr.Zero)
+                    {
+                        handle = result;
+                        break;
+                    }
+                }
+
+                if (handle == IntPtr.Zero)
+                {
+                    return GetFallbackIcon(window, preferLarge: false, dpi: 192);
+                }
+
+                lock (TitleBarIcons)
+                {
+                    if (TitleBarIcons.TryGetValue(window.Handle, out var kept) && kept.Handle == handle)
+                    {
+                        return kept.Icon;
+                    }
+                }
+
+                BitmapSource icon = Imaging.CreateBitmapSourceFromHIcon(handle, Int32Rect.Empty, BitmapSizeOptions.FromEmptyOptions());
+                icon.Freeze();
+
+                lock (TitleBarIcons)
+                {
+                    TitleBarIcons[window.Handle] = (handle, icon);
+                }
+
+                return icon;
+            }
+            catch (Exception)
+            {
+                return null;
+            }
+        }
+
         private static ImageSource QueryIcon(ApplicationWindow window, bool preferLarge, int dpi)
         {
             try
@@ -137,7 +233,7 @@ namespace RetroBar.Converters
             }
         }
 
-        private static bool IsFileExplorerWindow(ApplicationWindow window)
+        internal static bool IsFileExplorerWindow(ApplicationWindow window)
         {
             return !window.IsUWP &&
                    (window.ClassName == "CabinetWClass" || window.ClassName == "ExploreWClass") &&
@@ -149,7 +245,12 @@ namespace RetroBar.Converters
             // The parameter "window" asks for the window's own icon (the one in its title bar), Explorer windows included.
             bool ownIconWanted = parameter as string == "window";
 
-            if (!ownIconWanted && values.Length > 0 && values[0] is ApplicationWindow window && IsFileExplorerWindow(window))
+            // A lone Explorer window shows its own icon (the folder it is in), several of them the regular Explorer icon, so
+            // that they look alike. values[2], when there, is the number of Explorer windows (see ExplorerWindowCount) - there
+            // only so that the binding asks again when it changes.
+            int explorerWindows = values.Length > 2 && values[2] is int counted ? counted : 2;
+
+            if (!ownIconWanted && explorerWindows >= 2 && values.Length > 0 && values[0] is ApplicationWindow window && IsFileExplorerWindow(window))
             {
                 ImageSource icon = GetFileExplorerIcon();
                 if (icon != null)
@@ -159,6 +260,20 @@ namespace RetroBar.Converters
             }
 
             object own = values.Length > 1 ? values[1] : null;
+
+            // A lone File Explorer window has the icon in its title bar, not whatever icon the shell reports for the
+            // window's button.
+            if (!ownIconWanted && explorerWindows < 2 && values.Length > 0 && values[0] is ApplicationWindow lone && IsFileExplorerWindow(lone))
+            {
+                // Asked for the way the title bar's icon is (and a tab's preview shows it): the small one, at a large size - and
+                // asked again each time (it changes as the window moves from folder to folder), the same bitmap handed back
+                // while the icon is the same one.
+                ImageSource titleBar = GetTitleBarIcon(lone);
+                if (titleBar != null)
+                {
+                    return titleBar;
+                }
+            }
 
             // A window's preview shows the icon in the window's title bar. A DPI is asked for along with it (a window
             // that has icons of several sizes then hands back a large one), so it can be scaled down to the size of
