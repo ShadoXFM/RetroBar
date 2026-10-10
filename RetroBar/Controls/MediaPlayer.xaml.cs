@@ -667,6 +667,18 @@ namespace RetroBar.Controls
                 _playPauseGlyph.Data = GetGlyph(_sessionManager.PlaybackState == MediaPlaybackState.Playing
                     ? "MediaPlayerPauseGeometry"
                     : "MediaPlayerPlayGeometry");
+
+                // The monitor's own glyphs (see GetGlyph) need the window this is in, which may not be known yet: again
+                // once the control is laid out.
+                Dispatcher.BeginInvoke(new Action(() =>
+                {
+                    if (_playPauseGlyph != null && _sessionManager != null)
+                    {
+                        _playPauseGlyph.Data = GetGlyph(_sessionManager.PlaybackState == MediaPlaybackState.Playing
+                            ? "MediaPlayerPauseGeometry"
+                            : "MediaPlayerPlayGeometry");
+                    }
+                }), System.Windows.Threading.DispatcherPriority.Loaded);
             }
 
             // Freshly (re)created buttons default to visible - the transport buttons are always
