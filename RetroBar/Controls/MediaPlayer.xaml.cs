@@ -375,6 +375,33 @@ namespace RetroBar.Controls
 
         private Geometry GetGlyph(string resourceKey)
         {
+            // The play and pause glyphs can be given a Geometry of their own per monitor ("MediaGlyphPlay" and
+            // "MediaGlyphPause" in monitor-adjustments.json) - one drawn for that monitor's scale, so its pixels come out evenly.
+            string overrideTag = resourceKey switch
+            {
+                "MediaPlayerPlayGeometry" => "MediaGlyphPlay",
+                "MediaPlayerPauseGeometry" => "MediaGlyphPause",
+                _ => null,
+            };
+            if (overrideTag != null)
+            {
+                string deviceName = (Window.GetWindow(this) as Taskbar)?.Screen.DeviceName;
+                string figures = MonitorAdjustments.Get(deviceName, overrideTag).Geometry;
+                if (!string.IsNullOrWhiteSpace(figures))
+                {
+                    try
+                    {
+                        Geometry custom = Geometry.Parse(figures);
+                        custom.Freeze();
+                        return custom;
+                    }
+                    catch (Exception ex) when (ex is FormatException or InvalidOperationException)
+                    {
+                        // An invalid one is ignored, as for every other Geometry in that file.
+                    }
+                }
+            }
+
             if (TryFindResource(resourceKey) is Geometry geometry)
             {
                 return geometry;
