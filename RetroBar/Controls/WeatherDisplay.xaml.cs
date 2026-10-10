@@ -24,6 +24,22 @@ namespace RetroBar.Controls
     {
         private DispatcherTimer _timer;
         private WeatherViewModel _viewModel;
+        private Window _window;
+
+        // The taskbar's icon of the moon is a small, hand-drawn one on a monitor at 100% (see WeatherViewModel.UseSmallBarIcon).
+        private void UpdateSmallBarIcon()
+        {
+            if (_viewModel != null)
+            {
+                _viewModel.UseSmallBarIcon = VisualTreeHelper.GetDpi(this).DpiScaleX <= 1.0;
+            }
+        }
+
+        private void Window_OnDpiChanged(object sender, DpiChangedEventArgs e)
+        {
+            // The scale this control draws at is only updated once the change has been laid out.
+            Dispatcher.BeginInvoke(new Action(UpdateSmallBarIcon), DispatcherPriority.Loaded);
+        }
 
         public WeatherDisplay()
         {
@@ -43,6 +59,13 @@ namespace RetroBar.Controls
 
             _viewModel = new WeatherViewModel();
             DataContext = _viewModel;
+
+            UpdateSmallBarIcon();
+            if (Window.GetWindow(this) is Window window)
+            {
+                _window = window;
+                _window.DpiChanged += Window_OnDpiChanged;
+            }
 
             // Fetch immediately on load (or, if another monitor's display already has the reading,
             // show it right away - see WeatherViewModel)
@@ -256,6 +279,12 @@ namespace RetroBar.Controls
             ForecastPopup.IsOpen = false;
             _timer?.Stop();
             _timer = null;
+            if (_window != null)
+            {
+                _window.DpiChanged -= Window_OnDpiChanged;
+                _window = null;
+            }
+
             _viewModel?.Dispose();
             _viewModel = null;
         }
@@ -464,7 +493,51 @@ namespace RetroBar.Controls
                     _weatherIconPath = value;
                     OnPropertyChanged();
                 }
+
+                WeatherBarIconPath = BarIconPathFor(_weatherIconPath);
             }
+        }
+
+        // The icon as the taskbar draws it: the same as WeatherIconPath, except that the moon is a small hand-drawn one
+        // (moon-sm.png) where UseSmallBarIcon is set (a monitor at 100%), where the big one scaled down comes out soft.
+        // The forecast popup, which draws the icon large, always uses WeatherIconPath.
+        private string _weatherBarIconPath;
+        public string WeatherBarIconPath
+        {
+            get => _weatherBarIconPath;
+            private set
+            {
+                if (_weatherBarIconPath != value)
+                {
+                    _weatherBarIconPath = value;
+                    OnPropertyChanged();
+                    OnPropertyChanged(nameof(IsSmallMoonShown));
+                }
+            }
+        }
+
+        /// <summary>The small moon is the icon on the taskbar, which takes its own MonitorOffset tag (see WeatherIconTagConverter).</summary>
+        public bool IsSmallMoonShown => _weatherBarIconPath != null && _weatherBarIconPath.EndsWith("/moon-sm.png", StringComparison.OrdinalIgnoreCase);
+
+        private bool _useSmallBarIcon;
+        public bool UseSmallBarIcon
+        {
+            get => _useSmallBarIcon;
+            set
+            {
+                if (_useSmallBarIcon != value)
+                {
+                    _useSmallBarIcon = value;
+                    WeatherBarIconPath = BarIconPathFor(_weatherIconPath);
+                }
+            }
+        }
+
+        private string BarIconPathFor(string iconPath)
+        {
+            return _useSmallBarIcon && iconPath != null && iconPath.EndsWith("/moon.png", StringComparison.OrdinalIgnoreCase)
+                ? GetImagePath("moon-sm.png")
+                : iconPath;
         }
 
         private string _weatherTemp;
