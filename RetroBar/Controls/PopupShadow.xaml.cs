@@ -16,6 +16,11 @@ namespace RetroBar.Controls
         private const double Inset = 3;
         private const double ClipOverlap = 1;
 
+        // How far the rectangle's right and bottom are kept inside the frame's (DIPs): at a fractional scale (125%) the
+        // offscreen bitmap the shadow effect draws the rectangle into is rounded outward, and without this its opaque black
+        // stuck out a pixel or two past the frame's outline there (a hard black band; the shadow itself is soft).
+        private const double Tuck = 2;
+
         public static readonly DependencyProperty RoomProperty = DependencyProperty.Register(
             nameof(Room), typeof(Thickness), typeof(PopupShadow),
             new PropertyMetadata(new Thickness(10), (d, e) => ((PopupShadow)d).Apply()));
@@ -58,7 +63,7 @@ namespace RetroBar.Controls
 
             Thickness room = Room;
             ShadowClip.Margin = new Thickness(room.Left + ClipOverlap, room.Top + ClipOverlap, 0, 0);
-            ShadowShape.Margin = new Thickness(Inset, Inset, room.Right, room.Bottom);
+            ShadowShape.Margin = new Thickness(Inset, Inset, room.Right + Tuck, room.Bottom + Tuck);
 
             if (ShadowShape.Effect is DropShadowEffect effect)
             {
