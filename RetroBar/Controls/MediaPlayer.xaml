@@ -186,7 +186,9 @@
             <!-- The shadow is its own element behind the frame, not an Effect on it: an Effect redraws everything
                  inside it into an offscreen bitmap, which blurred the text and buttons. -->
             <Grid RenderOptions.ClearTypeHint="Enabled">
-                <controls:PopupShadow />
+                <!-- The frame's bevel starts 1 DIP inside its 10 DIP margin (the Padding), so the room around it is 11: with 10 the
+                     shadow's black rectangle stuck out past the bevel on the right and bottom. -->
+                <controls:PopupShadow Room="11" />
                 <Border BorderThickness="0"
                         Padding="1"
                         Margin="10">
