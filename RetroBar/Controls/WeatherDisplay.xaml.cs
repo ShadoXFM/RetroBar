@@ -511,13 +511,9 @@ namespace RetroBar.Controls
                 {
                     _weatherBarIconPath = value;
                     OnPropertyChanged();
-                    OnPropertyChanged(nameof(IsSmallMoonShown));
                 }
             }
         }
-
-        /// <summary>The small moon is the icon on the taskbar, which takes its own MonitorOffset tag (see WeatherIconTagConverter).</summary>
-        public bool IsSmallMoonShown => _weatherBarIconPath != null && _weatherBarIconPath.EndsWith("/moon-sm.png", StringComparison.OrdinalIgnoreCase);
 
         private bool _useSmallBarIcon;
         public bool UseSmallBarIcon

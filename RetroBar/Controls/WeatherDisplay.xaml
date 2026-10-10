@@ -6,7 +6,6 @@
              xmlns:controls="clr-namespace:RetroBar.Controls">
     <UserControl.Resources>
         <converters:CpuTempShownToMonitorTagConverter x:Key="cpuTempShownToMonitorTagConverter" />
-        <converters:WeatherIconTagConverter x:Key="weatherIconTagConverter" />
     </UserControl.Resources>
     <Grid>
     <!-- Transparent background so the whole widget (not just its icon and text) takes the click that
@@ -26,13 +25,8 @@
              CpuTempDisplay.xaml.cs, which sets IsCpuTempShown). Same pattern TrayBoxBevel uses
              for its own media-playing-state tag. -->
         <Rectangle Fill="{DynamicResource ClockForeground}"
-                   Style="{DynamicResource WeatherIconStyle}">
-            <utilities:MonitorOffset.Tag>
-                <MultiBinding Converter="{StaticResource weatherIconTagConverter}" ConverterParameter="WeatherIcon">
-                    <Binding Path="IsCpuTempShown" RelativeSource="{RelativeSource Mode=FindAncestor, AncestorType={x:Type Window}}" />
-                    <Binding Path="IsSmallMoonShown" />
-                </MultiBinding>
-            </utilities:MonitorOffset.Tag>
+                   Style="{DynamicResource WeatherIconStyle}"
+                   utilities:MonitorOffset.Tag="{Binding Path=IsCpuTempShown, RelativeSource={RelativeSource Mode=FindAncestor, AncestorType={x:Type Window}}, Converter={StaticResource cpuTempShownToMonitorTagConverter}, ConverterParameter=WeatherIcon}">
             <Rectangle.OpacityMask>
                 <ImageBrush ImageSource="{Binding WeatherBarIconPath}" Stretch="Uniform" />
             </Rectangle.OpacityMask>
