@@ -9,9 +9,9 @@
         <!-- A small chip, in place of the "/" that used to sit here: with it the number reads as the processor's, not as
              the other half of the weather's. It sits inside this same UserControl (rather than as a separate element in
              Taskbar.xaml) so it only ever appears alongside CpuTempText - collapsing this whole control (no admin, no
-             sensor) hides it with it. Drawn on whole DIPs (a 6 DIP body with two 1 DIP pins on each side) and snapped to
-             the device pixels. CpuTempText's own colour and opacity are set in CpuTempDisplay.xaml.cs (dimmer than the
-             clock, amber then red as it gets hot), and this takes the same ones. -->
+             sensor) hides it with it. This is the 100% drawing: 10 pixels, a body with a 2 pixel outline and 2 pixel pins,
+             each on a whole pixel. At 125% a DIP is 1.25 pixels, so there the CpuTempChip tag in monitor-adjustments.json
+             gives it a Width/Height and a Geometry drawn in 0.8 DIP units (12 pixels), which are whole pixels again. -->
         <Path x:Name="CpuTempChip"
               Width="10"
               Height="10"
@@ -20,13 +20,11 @@
               SnapsToDevicePixels="True"
               UseLayoutRounding="True"
               Fill="{DynamicResource ClockForeground}"
-              Opacity="0.7"
-              Data="F0 M2,2 H8 V8 H2 Z M3,3 V7 H7 V3 Z M3,0 H4 V2 H3 Z M6,0 H7 V2 H6 Z M3,8 H4 V10 H3 Z M6,8 H7 V10 H6 Z M0,3 H2 V4 H0 Z M0,6 H2 V7 H0 Z M8,3 H10 V4 H8 Z M8,6 H10 V7 H8 Z"
+              Data="F0 M1,1 H9 V9 H1 Z M3,3 V7 H7 V3 Z M2,0 H4 V1 H2 Z M6,0 H8 V1 H6 Z M2,9 H4 V10 H2 Z M6,9 H8 V10 H6 Z M0,2 H1 V4 H0 Z M0,6 H1 V8 H0 Z M9,2 H10 V4 H9 Z M9,6 H10 V8 H9 Z"
               utilities:MonitorOffset.Tag="CpuTempChip" />
         <TextBlock x:Name="CpuTempText"
                    Style="{DynamicResource CpuTempStyle}"
                    Foreground="{DynamicResource ClockForeground}"
-                   Opacity="0.7"
                    utilities:MonitorOffset.Tag="CpuTemp" />
     </StackPanel>
 </UserControl>
