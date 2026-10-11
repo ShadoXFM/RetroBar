@@ -458,13 +458,13 @@ namespace RetroBar.Controls
             // The bold one is the window's default action: restore while it can be restored and maximized, close otherwise.
             (restoreEnabled && maximizeEnabled ? restore : close).FontWeight = FontWeights.Bold;
 
-            // The preview stays up while the menu is open (see PreviewPollTimer_Tick), and a click anywhere else closes the menu.
+            // The preview stays up while the menu is open, and a click anywhere else closes both together (see PreviewPollTimer_Tick): WPF does not close the menu itself, so the two can be faded out in step.
             CloseWindowMenu();
 
             // No peek at the window while its menu is open (and a peek already on stops).
             StopPeek();
 
-            var menu = new ContextMenu { PlacementTarget = AppButton, Placement = System.Windows.Controls.Primitives.PlacementMode.MousePoint, StaysOpen = false };
+            var menu = new ContextMenu { PlacementTarget = AppButton, Placement = System.Windows.Controls.Primitives.PlacementMode.MousePoint, StaysOpen = true };
             _windowMenu = menu;
 
             // Once the menu is gone (a click elsewhere, an item chosen, Escape) the preview goes too - unless the pointer is
