@@ -1231,21 +1231,10 @@ namespace RetroBar.Controls
             menu.IsOpen = true;
         }
 
-        // The theme's menus draw a plain Separator as empty space; this one is a visible bevelled line.
+        // The theme's menus draw a plain Separator as empty space; this one is a visible bevelled line (see MenuSeparator).
         private static Separator MakeMenuSeparator()
         {
-            var line = new FrameworkElementFactory(typeof(StackPanel));
-            line.SetValue(FrameworkElement.MarginProperty, new Thickness(4, 1, 2.5, 1));
-
-            foreach (string brush in new[] { "ButtonShadow", "ButtonHighlight" })
-            {
-                var rect = new FrameworkElementFactory(typeof(System.Windows.Shapes.Rectangle));
-                rect.SetValue(FrameworkElement.HeightProperty, 1.0);
-                rect.SetResourceReference(System.Windows.Shapes.Shape.FillProperty, brush);
-                line.AppendChild(rect);
-            }
-
-            return new Separator { Template = new ControlTemplate(typeof(Separator)) { VisualTree = line } };
+            return new Separator { Style = MenuSeparator.Style };
         }
 
         private void TrackTextCanvas_OnMouseLeftButtonUp(object sender, MouseButtonEventArgs e)

@@ -67,6 +67,11 @@ namespace RetroBar
 
         private static void ContextMenu_OnLoaded(object sender, RoutedEventArgs e)
         {
+            if (sender is System.Windows.Controls.ContextMenu separated)
+            {
+                MenuSeparator.Apply(separated);
+            }
+
             if (sender is System.Windows.Controls.ContextMenu menu && menu.ReadLocalValue(TextOptions.TextRenderingModeProperty) == DependencyProperty.UnsetValue)
             {
                 menu.SetBinding(TextOptions.TextRenderingModeProperty, new System.Windows.Data.Binding(nameof(Settings.AllowFontSmoothingMenu))
