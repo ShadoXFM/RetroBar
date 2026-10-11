@@ -335,7 +335,7 @@ namespace RetroBar.Controls
         // animate: fade out (the normal case); false closes at once (tab unloaded, thumbnails turned off).
         private void ClosePreview(bool animate = true)
         {
-            CloseWindowMenu();
+            CloseWindowMenu(animate);
             _previewShowTimer?.Stop();
             _previewPollTimer?.Stop();
             _previewOutsideSince = null;
@@ -826,12 +826,46 @@ namespace RetroBar.Controls
         // Compared against the popup window's screen rectangle rather than ToolTip.IsMouseOver: the
         // thumbnail itself is drawn by DWM over the window, and WPF's own hit-testing doesn't see the
         // pointer over parts of the popup that have no background brush.
-        private void CloseWindowMenu()
+        private bool _windowMenuFading;
+
+        // The window menu goes along with the preview: faded out over the same time as the preview's own fade when that is
+        // animated, so the two vanish together.
+        private void CloseWindowMenu(bool animate = false)
         {
-            if (_windowMenu?.IsOpen == true)
+            ContextMenu menu = _windowMenu;
+            if (menu?.IsOpen != true)
             {
-                _windowMenu.IsOpen = false;
+                return;
             }
+
+            if (!animate)
+            {
+                _windowMenuFading = false;
+                menu.BeginAnimation(UIElement.OpacityProperty, null);
+                menu.IsOpen = false;
+                return;
+            }
+
+            if (_windowMenuFading)
+            {
+                return;
+            }
+
+            _windowMenuFading = true;
+            var fade = new DoubleAnimation(1, 0, PreviewFadeOut)
+            {
+                EasingFunction = new QuadraticEase { EasingMode = EasingMode.EaseIn },
+            };
+            fade.Completed += (sender, args) =>
+            {
+                if (_windowMenuFading)
+                {
+                    _windowMenuFading = false;
+                    menu.BeginAnimation(UIElement.OpacityProperty, null);
+                    menu.IsOpen = false;
+                }
+            };
+            menu.BeginAnimation(UIElement.OpacityProperty, fade);
         }
 
         // A click anywhere but on the window menu (another window, the desktop, the preview) closes it - checked by the
@@ -852,7 +886,17 @@ namespace RetroBar.Controls
             bool overMenu = PresentationSource.FromVisual(_windowMenu) is HwndSource source && GetCursorPos(out POINT cursor) &&
                             GetWindowRect(source.Handle, out RECT rect) &&
                             cursor.X >= rect.Left && cursor.X < rect.Right && cursor.Y >= rect.Top && cursor.Y < rect.Bottom;
-            if (!overMenu)
+            if (overMenu || _windowMenuFading)
+            {
+                return;
+            }
+
+            if (AppButton.ToolTip is ToolTip tip && tip.IsOpen && !IsPointerOverPopup(tip) && !IsPointerOverTab())
+            {
+                // Away from the preview too: preview and menu fade out together.
+                ClosePreview();
+            }
+            else
             {
                 _windowMenu.IsOpen = false;
             }

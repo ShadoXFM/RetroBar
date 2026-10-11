@@ -472,10 +472,10 @@ namespace RetroBar.Controls
             menu.Closed += (s, args) =>
             {
                 _previewHoverSince = DateTime.UtcNow;
-                if (AppButton.ToolTip is ToolTip tip && tip.IsOpen && !IsPointerOverPopup(tip) && !IsPointerOverTab())
+                _windowMenuFading = false;
+                if (AppButton.ToolTip is ToolTip tip && tip.IsOpen && !_previewFadingOut && !IsPointerOverPopup(tip) && !IsPointerOverTab())
                 {
-                    // At once, not faded: the menu has already gone.
-                    ClosePreview(false);
+                    ClosePreview();
                 }
             };
             menu.SetBinding(System.Windows.Media.TextOptions.TextRenderingModeProperty, new System.Windows.Data.Binding("AllowFontSmoothingMenu")
