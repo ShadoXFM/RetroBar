@@ -42,6 +42,10 @@ namespace RetroBar.Utilities
         // inherit a closed window's old timestamp.
         private static readonly ConditionalWeakTable<ApplicationWindow, object> OpenedAt = new();
 
+        // Windows first seen after startup, and those among them already put at their pin's place.
+        private static readonly ConditionalWeakTable<ApplicationWindow, object> Fresh = new();
+        private static readonly ConditionalWeakTable<ApplicationWindow, object> PinPlaced = new();
+
         public static bool InStartupGrace => DateTime.UtcNow - AppStartUtc < StartupGrace;
 
         /// <summary>
@@ -58,8 +62,20 @@ namespace RetroBar.Utilities
             Dictionary<ApplicationWindow, string> keys = ComputeKeys(source);
             List<string> saved = Settings.Instance.TaskOrder ?? new List<string>();
 
+            List<string> pinned = PinnedApps.Get();
+
+            // A pinned program's window that opened after startup is put where its pin is (once), whatever the saved
+            // arrangement says - see below.
+            bool IsFreshPinned(ApplicationWindow window) =>
+                Fresh.TryGetValue(window, out _) && !PinPlaced.TryGetValue(window, out _) && PinnedApps.IndexOf(window, pinned) >= 0;
+
             int Rank(ApplicationWindow window)
             {
+                if (IsFreshPinned(window))
+                {
+                    return int.MaxValue;
+                }
+
                 int index = saved.IndexOf(keys[window]);
                 return index >= 0 ? index : int.MaxValue;
             }
@@ -71,6 +87,35 @@ namespace RetroBar.Utilities
                 return byRank != 0 ? byRank : CompareOpened(a, b);
             });
 
+            // A pinned program that has no place of its own yet goes where its pin is - after the tab of the nearest
+            // pinned program before it (or before the nearest one after it) - not at the far right.
+            List<ApplicationWindow> placed = sorted.ToList();
+
+            foreach (ApplicationWindow window in sorted.Where(w => Rank(w) == int.MaxValue && PinnedApps.IndexOf(w, pinned) >= 0))
+            {
+                int pin = PinnedApps.IndexOf(window, pinned);
+                placed.Remove(window);
+
+                int before = placed.Select(w => PinnedApps.IndexOf(w, pinned)).Where(i => i >= 0 && i <= pin).DefaultIfEmpty(-1).Max();
+                if (before >= 0)
+                {
+                    placed.Insert(placed.FindLastIndex(w => PinnedApps.IndexOf(w, pinned) == before) + 1, window);
+                    continue;
+                }
+
+                int after = placed.Select(w => PinnedApps.IndexOf(w, pinned)).Where(i => i > pin).DefaultIfEmpty(-1).Min();
+                if (after >= 0)
+                {
+                    placed.Insert(placed.FindIndex(w => PinnedApps.IndexOf(w, pinned) == after), window);
+                }
+                else
+                {
+                    placed.Add(window);
+                }
+            }
+
+            sorted = placed.ToArray();
+
             for (int target = 0; target < sorted.Length; target++)
             {
                 int current = source.IndexOf(sorted[target]);
@@ -78,6 +123,18 @@ namespace RetroBar.Utilities
                 {
                     source.Move(current, target);
                 }
+            }
+
+            ApplicationWindow[] freshPinned = sorted.Where(IsFreshPinned).ToArray();
+            if (freshPinned.Length > 0)
+            {
+                foreach (ApplicationWindow window in freshPinned)
+                {
+                    PinPlaced.Add(window, null);
+                }
+
+                // Saved, so that the next sort doesn't take it back to where an older arrangement had it.
+                SaveOrder(source);
             }
         }
 
@@ -205,6 +262,10 @@ namespace RetroBar.Utilities
             }
 
             DateTime openedAt = InStartupGrace ? GetProcessStartUtc(window) : DateTime.UtcNow;
+            if (!InStartupGrace)
+            {
+                Fresh.Add(window, null);
+            }
 
             OpenedAt.Add(window, openedAt);
             return openedAt;
