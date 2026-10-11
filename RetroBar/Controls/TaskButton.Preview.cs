@@ -826,6 +826,57 @@ namespace RetroBar.Controls
         // Compared against the popup window's screen rectangle rather than ToolTip.IsMouseOver: the
         // thumbnail itself is drawn by DWM over the window, and WPF's own hit-testing doesn't see the
         // pointer over parts of the popup that have no background brush.
+        // The tab's menus slide in like the preview does, and the window menu slides back out with it. A context menu's popup
+        // takes its position once, when it opens (changing the menu's own offsets afterwards does nothing), so the popup
+        // window itself is moved, a few milliseconds at a time, between its resting place and a little toward the taskbar.
+        private static void SlideMenu(ContextMenu menu, bool opening)
+        {
+            if (PresentationSource.FromVisual(menu) is not HwndSource source || !GetWindowRect(source.Handle, out RECT rect))
+            {
+                return;
+            }
+
+            ManagedShell.AppBar.AppBarEdge edge = Settings.Instance.Edge;
+            bool horizontal = edge is ManagedShell.AppBar.AppBarEdge.Left or ManagedShell.AppBar.AppBarEdge.Right;
+            double sign = edge is ManagedShell.AppBar.AppBarEdge.Left or ManagedShell.AppBar.AppBarEdge.Top ? -1 : 1;
+            double distance = sign * PreviewSlideDistance * source.CompositionTarget.TransformToDevice.M11;
+            TimeSpan duration = opening ? PreviewSlideIn : PreviewFadeOut;
+            var ease = new CubicEase { EasingMode = opening ? EasingMode.EaseOut : EasingMode.EaseIn };
+            IntPtr handle = source.Handle;
+
+            void Place(double progress)
+            {
+                double eased = ease.Ease(progress);
+                int offset = (int)Math.Round(opening ? distance * (1 - eased) : distance * eased);
+                SetWindowPos(handle, IntPtr.Zero, rect.Left + (horizontal ? offset : 0), rect.Top + (horizontal ? 0 : offset), 0, 0, SWP_NOSIZE | SWP_NOZORDER | SWP_NOACTIVATE);
+            }
+
+            if (opening)
+            {
+                Place(0);
+            }
+
+            var clock = System.Diagnostics.Stopwatch.StartNew();
+            var timer = new DispatcherTimer(DispatcherPriority.Render) { Interval = TimeSpan.FromMilliseconds(8) };
+            timer.Tick += (s, e) =>
+            {
+                double progress = Math.Min(1, clock.Elapsed.TotalMilliseconds / duration.TotalMilliseconds);
+                Place(progress);
+                if (progress >= 1)
+                {
+                    timer.Stop();
+                }
+            };
+            timer.Start();
+        }
+
+        private const uint SWP_NOSIZE = 0x0001;
+        private const uint SWP_NOZORDER = 0x0004;
+        private const uint SWP_NOACTIVATE = 0x0010;
+
+        [DllImport("user32.dll")]
+        private static extern bool SetWindowPos(IntPtr hWnd, IntPtr hWndInsertAfter, int x, int y, int cx, int cy, uint flags);
+
         private bool _windowMenuFading;
 
         // The window menu goes along with the preview: faded out over the same time as the preview's own fade when that is
@@ -864,6 +915,8 @@ namespace RetroBar.Controls
                 }
             };
             menu.BeginAnimation(UIElement.OpacityProperty, fade);
+
+            SlideMenu(menu, false);
         }
 
         // A click anywhere but on the window menu (another window, the desktop, the preview) closes it - checked by the

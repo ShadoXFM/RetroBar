@@ -501,6 +501,7 @@ namespace RetroBar.Controls
             menu.Items.Add(WindowMenuItem("maximize", "1", maximizeEnabled, () => window.Maximize()));
             menu.Items.Add(new Separator());
             menu.Items.Add(close);
+            menu.Opened += (s, args) => SlideMenu(menu, true);
             menu.IsOpen = true;
         }
 
@@ -670,6 +671,10 @@ namespace RetroBar.Controls
             // Tags and Style together, in one dispatcher turn, so no frame is rendered with the
             // active template and the inactive offsets (or the reverse).
             IsContextMenuActive = AppButton.ContextMenu?.IsOpen == true;
+            if (IsContextMenuActive)
+            {
+                SlideMenu(AppButton.ContextMenu, true);
+            }
             BindingOperations.GetMultiBindingExpression(AppButton, StyleProperty).UpdateTarget();
         }
     }
