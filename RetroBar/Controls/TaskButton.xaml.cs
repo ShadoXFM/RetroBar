@@ -439,12 +439,7 @@ namespace RetroBar.Controls
         private MenuItem WindowMenuItem(string resourceKey, string marlett, bool enabled, Action action)
         {
             var item = new MenuItem { Header = Application.Current.FindResource(resourceKey), IsEnabled = enabled, Style = MenuItemStyle.Style };
-            if (marlett == "r")
-            {
-                // The X is drawn in whole pixels, like the preview's close button's.
-                item.Icon = new PixelGlyph { Rows = PixelGlyph.Close };
-            }
-            else if (marlett != null)
+            if (marlett != null)
             {
                 item.Icon = new TextBlock { FontFamily = new System.Windows.Media.FontFamily("Marlett"), Text = marlett, HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Center };
             }

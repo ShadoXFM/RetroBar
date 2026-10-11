@@ -11,12 +11,6 @@ namespace RetroBar.Utilities
     /// </summary>
     public class PixelGlyph : FrameworkElement
     {
-        /// <summary>The classic 8x7 close glyph, as on the preview's close button.</summary>
-        public const string Close = "XX....XX|.XX..XX.|..XXXX..|...XX...|..XXXX..|.XX..XX.|XX....XX";
-
-        /// <summary>A check mark of the same 8x7 size.</summary>
-        public const string Check = ".......X|......XX|.....XX.|X...XX..|XX.XX...|.XXX....|..X.....";
-
         public static readonly DependencyProperty RowsProperty = DependencyProperty.Register(
             nameof(Rows), typeof(string), typeof(PixelGlyph),
             new FrameworkPropertyMetadata("", FrameworkPropertyMetadataOptions.AffectsMeasure | FrameworkPropertyMetadataOptions.AffectsRender));
