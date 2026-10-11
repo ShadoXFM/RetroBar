@@ -17,6 +17,12 @@ namespace RetroBar.Utilities
 
         // The text color of whatever it is in (a menu item's, which turns white when highlighted and grey when disabled), unless
         // given one.
+        /// <summary>The cells to draw instead on a monitor scaled to 125% or more, where the same number of pixels is a smaller
+        /// glyph.</summary>
+        public static readonly DependencyProperty ScaledRowsProperty = DependencyProperty.Register(
+            nameof(ScaledRows), typeof(string), typeof(PixelGlyph),
+            new FrameworkPropertyMetadata("", FrameworkPropertyMetadataOptions.AffectsMeasure | FrameworkPropertyMetadataOptions.AffectsRender));
+
         public static readonly DependencyProperty ForegroundProperty = System.Windows.Documents.TextElement.ForegroundProperty.AddOwner(
             typeof(PixelGlyph),
             new FrameworkPropertyMetadata(SystemColors.ControlTextBrush, FrameworkPropertyMetadataOptions.AffectsRender | FrameworkPropertyMetadataOptions.Inherits));
@@ -36,13 +42,26 @@ namespace RetroBar.Utilities
             set => SetValue(RowsProperty, value);
         }
 
+        public string ScaledRows
+        {
+            get => (string)GetValue(ScaledRowsProperty);
+            set => SetValue(ScaledRowsProperty, value);
+        }
+
         public Brush Foreground
         {
             get => (Brush)GetValue(ForegroundProperty);
             set => SetValue(ForegroundProperty, value);
         }
 
-        private string[] Cells => (Rows ?? "").Split('|', StringSplitOptions.RemoveEmptyEntries);
+        private string[] Cells
+        {
+            get
+            {
+                bool scaled = VisualTreeHelper.GetDpi(this).DpiScaleX >= 1.2 && !string.IsNullOrEmpty(ScaledRows);
+                return (scaled ? ScaledRows : Rows ?? "").Split('|', StringSplitOptions.RemoveEmptyEntries);
+            }
+        }
 
         protected override Size MeasureOverride(Size availableSize)
         {

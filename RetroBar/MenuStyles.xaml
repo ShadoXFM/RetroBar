@@ -22,9 +22,10 @@
                                 </Grid.ColumnDefinitions>
                                 <!-- 20 DIP is a whole number of pixels at the usual scales (25 at 125%), so the text starts on the same pixel in every menu. -->
                                 <ContentPresenter ContentSource="Icon" MinWidth="20" VerticalAlignment="Center" HorizontalAlignment="Center" SnapsToDevicePixels="True" />
-                                <!-- A check of whole pixels, the same size as the close glyph of the Close item. -->
+                                <!-- A check of whole pixels: 8x7 and, on a monitor scaled to 125% or more (where that is too small), 10x8. -->
                                 <utilities:PixelGlyph x:Name="CheckMark"
                                                       Rows=".......X|......XX|.....XX.|X...XX..|XX.XX...|.XXX....|..X....."
+                                                      ScaledRows=".........X|........XX|.......XX.|X.....XX..|XX...XX...|.XX.XX....|..XXXX....|...XX....."
                                                       Visibility="Collapsed" />
                                 <ContentPresenter Grid.Column="1" ContentSource="Header" Margin="0,2,10,2" VerticalAlignment="Center" RecognizesAccessKey="True" SnapsToDevicePixels="True" />
                                 <Path x:Name="SubmenuArrow"
