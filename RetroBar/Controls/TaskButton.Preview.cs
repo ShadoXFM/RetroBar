@@ -408,6 +408,7 @@ namespace RetroBar.Controls
         private const int WM_MOUSEMOVE = 0x0200;
         private const int WM_LBUTTONDOWN = 0x0201;
         private const int WM_LBUTTONUP = 0x0202;
+        private const int WM_RBUTTONUP = 0x0205;
 
         private enum CloseButtonState
         {
@@ -572,7 +573,7 @@ namespace RetroBar.Controls
 
         private IntPtr PreviewWndProc(IntPtr hwnd, int msg, IntPtr wParam, IntPtr lParam, ref bool handled)
         {
-            if (msg is not (WM_MOUSEMOVE or WM_LBUTTONDOWN or WM_LBUTTONUP) || AppButton.ToolTip is not ToolTip tip)
+            if (msg is not (WM_MOUSEMOVE or WM_LBUTTONDOWN or WM_LBUTTONUP or WM_RBUTTONUP) || AppButton.ToolTip is not ToolTip tip)
             {
                 return IntPtr.Zero;
             }
@@ -587,6 +588,12 @@ namespace RetroBar.Controls
             {
                 case WM_MOUSEMOVE:
                     UpdatePreviewItemStates(items, item, hit);
+                    break;
+
+                case WM_RBUTTONUP:
+                    // The window's own menu (restore, move, size, ...).
+                    ApplicationWindow menuWindow = item?.Window ?? Window;
+                    Dispatcher.BeginInvoke(new Action(() => ShowWindowMenu(menuWindow)));
                     break;
 
                 case WM_LBUTTONDOWN:

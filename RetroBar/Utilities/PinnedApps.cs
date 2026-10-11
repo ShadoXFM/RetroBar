@@ -23,6 +23,46 @@ namespace RetroBar.Utilities
             return string.IsNullOrEmpty(exe) ? -1 : pinned.FindIndex(p => p.Equals(exe, StringComparison.OrdinalIgnoreCase));
         }
 
+        /// <summary>The pin (shortcut file) of the window's program, or null when it isn't pinned.</summary>
+        public static string FindLink(ApplicationWindow window)
+        {
+            string exe = window.IsUWP ? null : Path.GetFileName(window.WinFileName);
+            string folder = Environment.ExpandEnvironmentVariables(Settings.Instance.QuickLaunchPath ?? "");
+
+            if (string.IsNullOrEmpty(exe) || !Directory.Exists(folder))
+            {
+                return null;
+            }
+
+            return Directory.GetFiles(folder, "*.lnk").FirstOrDefault(link => GetTargetExe(link).Equals(exe, StringComparison.OrdinalIgnoreCase));
+        }
+
+        /// <summary>Pins the window's program: a shortcut to it in the quick launch folder.</summary>
+        public static void Pin(ApplicationWindow window)
+        {
+            string folder = Environment.ExpandEnvironmentVariables(Settings.Instance.QuickLaunchPath ?? "");
+            if (window.IsUWP || string.IsNullOrEmpty(window.WinFileName) || string.IsNullOrEmpty(folder))
+            {
+                return;
+            }
+
+            Directory.CreateDirectory(folder);
+
+            string name = ProgramName.Get(window) ?? Path.GetFileNameWithoutExtension(window.WinFileName);
+            foreach (char invalid in Path.GetInvalidFileNameChars())
+            {
+                name = name.Replace(invalid, ' ');
+            }
+
+            string path = Path.Combine(folder, name + ".lnk");
+            for (int copy = 1; File.Exists(path); copy++)
+            {
+                path = Path.Combine(folder, $"{name} ({copy}).lnk");
+            }
+
+            ManagedShell.ShellFolders.ShellLinkHelper.CreateAndSave(window.WinFileName, path);
+        }
+
         /// <summary>Executable file names of the pinned programs, in the quick launch toolbar's order.</summary>
         public static List<string> Get()
         {

@@ -325,24 +325,130 @@ namespace RetroBar.Controls
                 return;
             }
 
-            NativeMethods.WindowShowStyle wss = Window.ShowStyle;
-            int ws = Window.WindowStyles;
+            // The program's name and icon: a click starts another instance of it.
+            ProgramMenuItem.Header = GetProgramDisplayName();
+            ProgramMenuItem.Icon = TaskIconImage.Source == null ? null : new Image { Source = TaskIconImage.Source, Width = 16, Height = 16 };
+            ProgramMenuItem.Visibility = GetProgramLaunchTarget() == null ? Visibility.Collapsed : Visibility.Visible;
 
-            // disable window operations depending on current window state. originally tried implementing via bindings but found there is no notification we get regarding maximized state
-            MaximizeMenuItem.IsEnabled = wss != NativeMethods.WindowShowStyle.ShowMaximized && (ws & (int)NativeMethods.WindowStyles.WS_MAXIMIZEBOX) != 0;
-            MinimizeMenuItem.IsEnabled = wss != NativeMethods.WindowShowStyle.ShowMinimized && Window.CanMinimize;
-            if (RestoreMenuItem.IsEnabled = wss != NativeMethods.WindowShowStyle.ShowNormal)
+            PinMenuItem.Visibility = Window.IsUWP || string.IsNullOrEmpty(Window.WinFileName) ? Visibility.Collapsed : Visibility.Visible;
+            PinMenuItem.Header = FindResource(PinnedApps.FindLink(Window) != null ? "unpin_from_taskbar" : "pin_to_taskbar");
+            CloseMenuItem.FontWeight = FontWeights.Bold;
+        }
+
+        private string GetProgramDisplayName()
+        {
+            return ProgramName.Get(Window) ??
+                   (string.IsNullOrEmpty(Window.WinFileName) ? Window.Title : System.IO.Path.GetFileNameWithoutExtension(Window.WinFileName));
+        }
+
+        // What starting another instance runs: the executable, or for a packaged app its entry in the Apps folder.
+        private string GetProgramLaunchTarget()
+        {
+            if (Window.IsUWP)
             {
-                CloseMenuItem.FontWeight = FontWeights.Normal;
-                RestoreMenuItem.FontWeight = FontWeights.Bold;
+                return string.IsNullOrEmpty(Window.AppUserModelID) ? null : @"shell:AppsFolder\" + Window.AppUserModelID;
             }
-            if (!RestoreMenuItem.IsEnabled || RestoreMenuItem.IsEnabled && !MaximizeMenuItem.IsEnabled)
+
+            return string.IsNullOrEmpty(Window.WinFileName) ? null : Window.WinFileName;
+        }
+
+        private void ProgramMenuItem_OnClick(object sender, RoutedEventArgs e)
+        {
+            string target = GetProgramLaunchTarget();
+            if (target == null)
             {
-                CloseMenuItem.FontWeight = FontWeights.Bold;
-                RestoreMenuItem.FontWeight = FontWeights.Normal;
+                return;
             }
-            MoveMenuItem.IsEnabled = wss == NativeMethods.WindowShowStyle.ShowNormal;
-            SizeMenuItem.IsEnabled = wss == NativeMethods.WindowShowStyle.ShowNormal && (ws & (int)NativeMethods.WindowStyles.WS_MAXIMIZEBOX) != 0;
+
+            try
+            {
+                var info = new ProcessStartInfo(target) { UseShellExecute = true };
+                if (!Window.IsUWP)
+                {
+                    info.WorkingDirectory = System.IO.Path.GetDirectoryName(target);
+                }
+
+                Process.Start(info);
+            }
+            catch (Exception ex)
+            {
+                ManagedShell.Common.Logging.ShellLogger.Error("TaskButton: Unable to start another instance of the program", ex);
+            }
+        }
+
+        private static MenuItem WindowMenuItem(string resourceKey, string marlett, bool enabled, Action action)
+        {
+            var item = new MenuItem { Header = Application.Current.FindResource(resourceKey), IsEnabled = enabled };
+            if (marlett != null)
+            {
+                item.Icon = new TextBlock { FontFamily = new System.Windows.Media.FontFamily("Marlett"), Text = marlett, HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Center };
+            }
+
+            item.Click += (s, args) => action();
+            return item;
+        }
+
+        /// <summary>Opens the menu of one window's own operations (restore, move, size, minimize, maximize, close) -
+        /// what the right-click on a window's preview shows.</summary>
+        private void ShowWindowMenu(ApplicationWindow window)
+        {
+            if (window == null)
+            {
+                return;
+            }
+
+            ClosePreview();
+
+            NativeMethods.WindowShowStyle wss = window.ShowStyle;
+            bool canMaximize = (window.WindowStyles & (int)NativeMethods.WindowStyles.WS_MAXIMIZEBOX) != 0;
+            bool restoreEnabled = wss != NativeMethods.WindowShowStyle.ShowNormal;
+            bool maximizeEnabled = wss != NativeMethods.WindowShowStyle.ShowMaximized && canMaximize;
+
+            MenuItem restore = WindowMenuItem("restore", "2", restoreEnabled, () => window.Restore());
+            MenuItem close = WindowMenuItem("close", "r", true, () => window.Close());
+
+            // The bold one is the window's default action: restore while it can be restored and maximized, close otherwise.
+            (restoreEnabled && maximizeEnabled ? restore : close).FontWeight = FontWeights.Bold;
+
+            var menu = new ContextMenu { PlacementTarget = AppButton, Placement = System.Windows.Controls.Primitives.PlacementMode.MousePoint };
+            menu.SetBinding(System.Windows.Media.TextOptions.TextRenderingModeProperty, new System.Windows.Data.Binding("AllowFontSmoothingMenu")
+            {
+                Source = Settings.Instance,
+                Converter = (System.Windows.Data.IValueConverter)FindResource("menuTextRenderingModeConverter"),
+            });
+            menu.Items.Add(restore);
+            menu.Items.Add(WindowMenuItem("move", null, wss == NativeMethods.WindowShowStyle.ShowNormal, () => window.Move()));
+            menu.Items.Add(WindowMenuItem("size", null, wss == NativeMethods.WindowShowStyle.ShowNormal && canMaximize, () => window.Size()));
+            menu.Items.Add(WindowMenuItem("minimize", "0", wss != NativeMethods.WindowShowStyle.ShowMinimized && window.CanMinimize, () => window.Minimize()));
+            menu.Items.Add(WindowMenuItem("maximize", "1", maximizeEnabled, () => window.Maximize()));
+            menu.Items.Add(new Separator());
+            menu.Items.Add(close);
+            menu.IsOpen = true;
+        }
+
+        private void PinMenuItem_OnClick(object sender, RoutedEventArgs e)
+        {
+            if (Window == null)
+            {
+                return;
+            }
+
+            try
+            {
+                string link = PinnedApps.FindLink(Window);
+                if (link != null)
+                {
+                    System.IO.File.Delete(link);
+                }
+                else
+                {
+                    PinnedApps.Pin(Window);
+                }
+            }
+            catch (Exception ex)
+            {
+                ManagedShell.Common.Logging.ShellLogger.Error("TaskButton: Unable to pin or unpin the program", ex);
+            }
         }
 
         private void CloseMenuItem_OnClick(object sender, RoutedEventArgs e)
@@ -380,31 +486,6 @@ namespace RetroBar.Controls
             {
                 Window?.Close();
             }
-        }
-
-        private void RestoreMenuItem_OnClick(object sender, RoutedEventArgs e)
-        {
-            Window?.Restore();
-        }
-
-        private void MoveMenuItem_OnClick(object sender, RoutedEventArgs e)
-        {
-            Window?.Move();
-        }
-
-        private void SizeMenuItem_OnClick(object sender, RoutedEventArgs e)
-        {
-            Window?.Size();
-        }
-
-        private void MinimizeMenuItem_OnClick(object sender, RoutedEventArgs e)
-        {
-            Window?.Minimize();
-        }
-
-        private void MaximizeMenuItem_OnClick(object sender, RoutedEventArgs e)
-        {
-            Window?.Maximize();
         }
 
         private void AppButton_OnClick(object sender, RoutedEventArgs e)

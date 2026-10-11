@@ -81,42 +81,13 @@
                 <TextOptions.TextRenderingMode>
                     <Binding Source="{x:Static utilities:Settings.Instance}" Path="AllowFontSmoothingMenu" Converter="{StaticResource menuTextRenderingModeConverter}" />
                 </TextOptions.TextRenderingMode>
-                <MenuItem Header="{DynamicResource restore}"
-                          Click="RestoreMenuItem_OnClick"
-                          Name="RestoreMenuItem">
-                    <MenuItem.Icon>
-                        <TextBlock FontFamily="Marlett"
-                                   Text="&#x32;"
-                                   HorizontalAlignment="Center"
-                                   VerticalAlignment="Center" />
-                    </MenuItem.Icon>
-                </MenuItem>
-                <MenuItem Header="{DynamicResource move}"
-                          Click="MoveMenuItem_OnClick"
-                          Name="MoveMenuItem" />
-                <MenuItem Header="{DynamicResource size}"
-                          Click="SizeMenuItem_OnClick"
-                          Name="SizeMenuItem" />
-                <MenuItem Header="{DynamicResource minimize}"
-                          Click="MinimizeMenuItem_OnClick"
-                          Name="MinimizeMenuItem">
-                    <MenuItem.Icon>
-                        <TextBlock FontFamily="Marlett"
-                                   Text="&#x30;"
-                                   HorizontalAlignment="Center"
-                                   VerticalAlignment="Center" />
-                    </MenuItem.Icon>
-                </MenuItem>
-                <MenuItem Header="{DynamicResource maximize}"
-                          Click="MaximizeMenuItem_OnClick"
-                          Name="MaximizeMenuItem">
-                    <MenuItem.Icon>
-                        <TextBlock FontFamily="Marlett"
-                                   Text="&#x31;"
-                                   HorizontalAlignment="Center"
-                                   VerticalAlignment="Center" />
-                    </MenuItem.Icon>
-                </MenuItem>
+                <!-- Starts another instance of the program (see ProgramMenuItem_OnClick); the window's own operations
+                     (restore, move, ...) are on the context menu of its preview. -->
+                <MenuItem Name="ProgramMenuItem"
+                          Click="ProgramMenuItem_OnClick" />
+                <MenuItem Header="{DynamicResource pin_to_taskbar}"
+                          Click="PinMenuItem_OnClick"
+                          Name="PinMenuItem" />
                 <Separator />
                 <MenuItem Header="{DynamicResource end_task}"
                           Click="EndTaskMenuItem_OnClick"
