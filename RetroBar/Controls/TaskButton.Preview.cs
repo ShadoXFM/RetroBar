@@ -841,7 +841,6 @@ namespace RetroBar.Controls
             if (!animate)
             {
                 _windowMenuFading = false;
-                menu.BeginAnimation(UIElement.OpacityProperty, null);
                 menu.IsOpen = false;
                 return;
             }
@@ -861,7 +860,6 @@ namespace RetroBar.Controls
                 if (_windowMenuFading)
                 {
                     _windowMenuFading = false;
-                    menu.BeginAnimation(UIElement.OpacityProperty, null);
                     menu.IsOpen = false;
                 }
             };
