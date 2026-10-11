@@ -46,6 +46,12 @@ namespace RetroBar.Utilities
         // A WasapiLoopbackCapture (a playback device's own output) or a plain WasapiCapture (a
         // recording device, e.g. a virtual cable/bus), depending on Settings.VuMeterCaptureDevice.
         private IWaveIn _capture;
+
+        // The output device being listened to (a loopback capture hears the sound before the device's own volume is applied, so
+        // a quiet listening volume still read as a loud signal).
+        private MMDevice _outputDevice;
+        private float _outputVolume = 1;
+        private DateTime _outputVolumeRead = DateTime.MinValue;
         private readonly object _lifecycleLock = new();
 
         public void Start()
@@ -59,7 +65,7 @@ namespace RetroBar.Utilities
 
                 try
                 {
-                    _capture = CreateCapture(Settings.Instance.VuMeterCaptureDevice);
+                    _capture = CreateCapture(Settings.Instance.VuMeterCaptureDevice, out _outputDevice);
                     _capture.DataAvailable += OnDataAvailable;
                     _capture.RecordingStopped += OnRecordingStopped;
                     _capture.StartRecording();
@@ -99,13 +105,16 @@ namespace RetroBar.Utilities
                 {
                     _capture.Dispose();
                     _capture = null;
+                    _outputDevice?.Dispose();
+                    _outputDevice = null;
                 }
             }
         }
 
-        private static IWaveIn CreateCapture(string deviceName)
+        private static IWaveIn CreateCapture(string deviceName, out MMDevice outputDevice)
         {
-            using var enumerator = new MMDeviceEnumerator();
+            outputDevice = null;
+            var enumerator = new MMDeviceEnumerator();
 
             if (!string.IsNullOrWhiteSpace(deviceName))
             {
@@ -125,6 +134,7 @@ namespace RetroBar.Utilities
                 {
                     if (device.FriendlyName.Contains(wanted, StringComparison.OrdinalIgnoreCase))
                     {
+                        outputDevice = device;
                         return new WasapiLoopbackCapture(device);
                     }
                 }
@@ -135,7 +145,8 @@ namespace RetroBar.Utilities
             // WasapiLoopbackCapture's own parameterless constructor already picks the default
             // render device, but doing it explicitly lets a device-enumeration failure surface
             // here (and be caught by Start's own try/catch) instead of inside NAudio's constructor.
-            return new WasapiLoopbackCapture(enumerator.GetDefaultAudioEndpoint(DataFlow.Render, Role.Multimedia));
+            outputDevice = enumerator.GetDefaultAudioEndpoint(DataFlow.Render, Role.Multimedia);
+            return new WasapiLoopbackCapture(outputDevice);
         }
 
         private void OnRecordingStopped(object sender, StoppedEventArgs e)
@@ -184,6 +195,31 @@ namespace RetroBar.Utilities
             return isFloat32 ? BitConverter.ToSingle(buffer, offset) : BitConverter.ToInt16(buffer, offset) / 32768f;
         }
 
+        private float GetOutputVolume()
+        {
+            if (_outputDevice == null)
+            {
+                return 1;
+            }
+
+            if (DateTime.Now - _outputVolumeRead > TimeSpan.FromMilliseconds(250))
+            {
+                _outputVolumeRead = DateTime.Now;
+
+                try
+                {
+                    AudioEndpointVolume endpoint = _outputDevice.AudioEndpointVolume;
+                    _outputVolume = endpoint.Mute ? 0 : endpoint.MasterVolumeLevelScalar;
+                }
+                catch (Exception)
+                {
+                    _outputVolume = 1;
+                }
+            }
+
+            return _outputVolume;
+        }
+
         private void ProcessLevels()
         {
             if (DateTime.Now - _lastUpdate < UpdateInterval || _levelSampleCount == 0)
@@ -192,8 +228,10 @@ namespace RetroBar.Utilities
             }
             _lastUpdate = DateTime.Now;
 
-            double rmsLeft = Math.Sqrt(_levelSumSquaresLeft / _levelSampleCount);
-            double rmsRight = Math.Sqrt(_levelSumSquaresRight / _levelSampleCount);
+            // As loud as it is heard: scaled by the output device's volume (and silent while it is muted).
+            double volume = GetOutputVolume();
+            double rmsLeft = Math.Sqrt(_levelSumSquaresLeft / _levelSampleCount) * volume;
+            double rmsRight = Math.Sqrt(_levelSumSquaresRight / _levelSampleCount) * volume;
             _levelSumSquaresLeft = 0;
             _levelSumSquaresRight = 0;
             _levelSampleCount = 0;
