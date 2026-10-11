@@ -463,6 +463,16 @@ namespace RetroBar.Controls
 
             var menu = new ContextMenu { PlacementTarget = AppButton, Placement = System.Windows.Controls.Primitives.PlacementMode.MousePoint, StaysOpen = false };
             _windowMenu = menu;
+
+            // Once the menu is gone (a click elsewhere, an item chosen, Escape) the preview goes too - unless the pointer is
+            // on the preview or the tab, which deal with their own clicks.
+            menu.Closed += (s, args) =>
+            {
+                if (AppButton.ToolTip is ToolTip tip && tip.IsOpen && !IsPointerOverPopup(tip) && !IsPointerOverTab())
+                {
+                    ClosePreview();
+                }
+            };
             menu.SetBinding(System.Windows.Media.TextOptions.TextRenderingModeProperty, new System.Windows.Data.Binding("AllowFontSmoothingMenu")
             {
                 Source = Settings.Instance,
