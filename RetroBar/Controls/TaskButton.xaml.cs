@@ -330,7 +330,16 @@ namespace RetroBar.Controls
             // The program's name and icon: a click starts another instance of it.
             ProgramMenuItem.Header = GetProgramDisplayName();
             ImageSource programIcon = GetProgramIcon();
-            ProgramMenuItem.Icon = programIcon == null ? null : new Image { Source = programIcon, Width = 16, Height = 16 };
+            // As big as the icon on the tab is drawn (its size, and a per-monitor scale on it).
+            Rect tabIcon = TaskIconImage.TransformToVisual(AppButton).TransformBounds(new Rect(0, 0, TaskIconImage.ActualWidth, TaskIconImage.ActualHeight));
+            double iconSize = tabIcon.Width > 0 ? tabIcon.Width : 16;
+            var menuIcon = programIcon == null ? null : new Image { Source = programIcon, Width = iconSize, Height = iconSize, SnapsToDevicePixels = true };
+            if (menuIcon != null)
+            {
+                RenderOptions.SetBitmapScalingMode(menuIcon, BitmapScalingMode.HighQuality);
+            }
+
+            ProgramMenuItem.Icon = menuIcon;
             ProgramMenuItem.Visibility = GetProgramLaunchTarget() == null ? Visibility.Collapsed : Visibility.Visible;
 
             PinMenuItem.Visibility = Window.IsUWP || string.IsNullOrEmpty(Window.WinFileName) ? Visibility.Collapsed : Visibility.Visible;
