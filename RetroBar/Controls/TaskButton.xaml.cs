@@ -461,7 +461,7 @@ namespace RetroBar.Controls
             // The preview stays up while the menu is open (see PreviewPollTimer_Tick), and a click anywhere else closes the menu.
             var menu = new ContextMenu { PlacementTarget = AppButton, Placement = System.Windows.Controls.Primitives.PlacementMode.MousePoint, StaysOpen = false };
             _windowMenu = menu;
-            menu.SetBinding(System.Windows.Media.TextOptions.TextRenderingModeProperty, new System.Windows.Data.Binding("AllowFontSmoothing")
+            menu.SetBinding(System.Windows.Media.TextOptions.TextRenderingModeProperty, new System.Windows.Data.Binding("AllowFontSmoothingMenu")
             {
                 Source = Settings.Instance,
                 Converter = (System.Windows.Data.IValueConverter)FindResource("menuTextRenderingModeConverter"),

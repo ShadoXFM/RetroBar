@@ -110,7 +110,7 @@
             <ContextMenu Opened="ContextMenu_OpenedOrClosed"
                          Closed="ContextMenu_OpenedOrClosed">
                 <TextOptions.TextRenderingMode>
-                    <Binding Source="{x:Static utilities:Settings.Instance}" Path="AllowFontSmoothing" Converter="{StaticResource menuTextRenderingModeConverter}" />
+                    <Binding Source="{x:Static utilities:Settings.Instance}" Path="AllowFontSmoothingMenu" Converter="{StaticResource menuTextRenderingModeConverter}" />
                 </TextOptions.TextRenderingMode>
                 <!-- Starts another instance of the program (see ProgramMenuItem_OnClick); the window's own operations
                      (restore, move, ...) are on the context menu of its preview. -->
