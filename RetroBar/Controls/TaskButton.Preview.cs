@@ -829,17 +829,27 @@ namespace RetroBar.Controls
         // The tab's menus slide in like the preview does, and the window menu slides back out with it. A context menu's popup
         // takes its position once, when it opens (changing the menu's own offsets afterwards does nothing), so the popup
         // window itself is moved, a few milliseconds at a time, between its resting place and a little toward the taskbar.
+        // Before the menu opens: invisible, so it isn't seen at its resting place for a moment before SlideMenu moves it.
+        private static void PrepareMenuSlide(ContextMenu menu)
+        {
+            menu.BeginAnimation(UIElement.OpacityProperty, null);
+            menu.Opacity = 0;
+        }
+
         private static void SlideMenu(ContextMenu menu, bool opening)
         {
             if (PresentationSource.FromVisual(menu) is not HwndSource source || !GetWindowRect(source.Handle, out RECT rect))
             {
+                // Nothing to slide: just be shown (a menu that is about to slide in starts out invisible, see PrepareMenuSlide).
+                menu.BeginAnimation(UIElement.OpacityProperty, null);
+                menu.Opacity = 1;
                 return;
             }
 
             ManagedShell.AppBar.AppBarEdge edge = Settings.Instance.Edge;
             bool horizontal = edge is ManagedShell.AppBar.AppBarEdge.Left or ManagedShell.AppBar.AppBarEdge.Right;
             double sign = edge is ManagedShell.AppBar.AppBarEdge.Left or ManagedShell.AppBar.AppBarEdge.Top ? -1 : 1;
-            double distance = sign * PreviewSlideDistance * source.CompositionTarget.TransformToDevice.M11;
+            double distance = sign * (PreviewSlideDistance + PreviewShadowRoom) * source.CompositionTarget.TransformToDevice.M11;
             TimeSpan duration = opening ? PreviewSlideIn : PreviewFadeOut;
             var ease = new CubicEase { EasingMode = opening ? EasingMode.EaseOut : EasingMode.EaseIn };
             IntPtr handle = source.Handle;
@@ -854,10 +864,14 @@ namespace RetroBar.Controls
             if (opening)
             {
                 Place(0);
+                menu.BeginAnimation(UIElement.OpacityProperty, new DoubleAnimation(0, 1, PreviewFadeIn)
+                {
+                    EasingFunction = new QuadraticEase { EasingMode = EasingMode.EaseOut },
+                });
             }
 
             var clock = System.Diagnostics.Stopwatch.StartNew();
-            var timer = new DispatcherTimer(DispatcherPriority.Render) { Interval = TimeSpan.FromMilliseconds(8) };
+            var timer = new DispatcherTimer(DispatcherPriority.Normal) { Interval = TimeSpan.FromMilliseconds(8) };
             timer.Tick += (s, e) =>
             {
                 double progress = Math.Min(1, clock.Elapsed.TotalMilliseconds / duration.TotalMilliseconds);

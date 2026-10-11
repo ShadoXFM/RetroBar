@@ -327,6 +327,8 @@ namespace RetroBar.Controls
                 return;
             }
 
+            PrepareMenuSlide(AppButton.ContextMenu);
+
             // The program's name and icon: a click starts another instance of it.
             ProgramMenuItem.Header = GetProgramDisplayName();
             ImageSource programIcon = GetProgramIcon();
@@ -501,6 +503,7 @@ namespace RetroBar.Controls
             menu.Items.Add(WindowMenuItem("maximize", "1", maximizeEnabled, () => window.Maximize()));
             menu.Items.Add(new Separator());
             menu.Items.Add(close);
+            PrepareMenuSlide(menu);
             menu.Opened += (s, args) => SlideMenu(menu, true);
             menu.IsOpen = true;
         }
