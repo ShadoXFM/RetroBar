@@ -29,7 +29,7 @@
                                     <ColumnDefinition Width="*" />
                                 </Grid.ColumnDefinitions>
                                 <ContentPresenter ContentSource="Icon" Width="16" Margin="2,0,3,0" VerticalAlignment="Center" HorizontalAlignment="Center" SnapsToDevicePixels="True" />
-                                <ContentPresenter Grid.Column="1" ContentSource="Header" Margin="0,4,10,4" VerticalAlignment="Center" RecognizesAccessKey="True" SnapsToDevicePixels="True" />
+                                <ContentPresenter Grid.Column="1" ContentSource="Header" Margin="0,3,10,3" VerticalAlignment="Center" RecognizesAccessKey="True" SnapsToDevicePixels="True" />
                             </Grid>
                         </Border>
                         <ControlTemplate.Triggers>
