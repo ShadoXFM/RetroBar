@@ -40,14 +40,10 @@ namespace RetroBar.Utilities
 
             Styled.Add(item, null);
 
-            if (item.ReadLocalValue(FrameworkElement.StyleProperty) is Style own)
-            {
-                item.Style = Derive(own);
-            }
-            else
-            {
-                item.Style = Style;
-            }
+            // A style the item was given of its own - literally or as a resource ({DynamicResource TaskManMenuItem}) - is
+            // the one in effect now; the look is added to it.
+            Style own = item.ReadLocalValue(FrameworkElement.StyleProperty) != DependencyProperty.UnsetValue ? item.Style : null;
+            item.Style = own != null ? Derive(own) : Style;
         }
 
         private static Style Derive(Style own)

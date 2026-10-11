@@ -71,8 +71,12 @@ namespace RetroBar
         {
             if (sender is System.Windows.Controls.ContextMenu menu)
             {
+                MenuSeparator.Apply(menu);
                 MenuItemStyle.Apply(menu);
                 MenuSeparator.Tidy(menu);
+
+                // Again once the menu's own code has had its say (it shows and hides items as the menu opens).
+                menu.Dispatcher.BeginInvoke(new Action(() => MenuSeparator.Tidy(menu)), System.Windows.Threading.DispatcherPriority.Loaded);
             }
         }
 

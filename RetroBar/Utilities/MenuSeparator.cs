@@ -21,6 +21,16 @@ namespace RetroBar.Utilities
             {
                 menu.Resources[typeof(Separator)] = Style;
             }
+
+            // A separator that has already been given its style (a menu written in XAML has them by now) is not restyled by the
+            // resource above, so each is given the style itself.
+            foreach (object child in menu.Items)
+            {
+                if (child is Separator separator && !ReferenceEquals(separator.Style, Style))
+                {
+                    separator.Style = Style;
+                }
+            }
         }
 
         /// <summary>
@@ -69,20 +79,34 @@ namespace RetroBar.Utilities
 
         private static Style Create()
         {
-            var line = new FrameworkElementFactory(typeof(StackPanel));
-            line.SetValue(FrameworkElement.MarginProperty, new Thickness(4, 1, 2.5, 1));
-
-            foreach (string brush in new[] { "ButtonShadow", "ButtonHighlight" })
-            {
-                var rect = new FrameworkElementFactory(typeof(System.Windows.Shapes.Rectangle));
-                rect.SetValue(FrameworkElement.HeightProperty, 1.0);
-                rect.SetResourceReference(System.Windows.Shapes.Shape.FillProperty, brush);
-                line.AppendChild(rect);
-            }
+            var line = new FrameworkElementFactory(typeof(MenuSeparatorLine));
+            line.SetValue(FrameworkElement.MarginProperty, new Thickness(4, 0, 2.5, 0));
 
             var style = new Style(typeof(Separator));
             style.Setters.Add(new Setter(Control.TemplateProperty, new ControlTemplate(typeof(Separator)) { VisualTree = line }));
             return style;
+        }
+    }
+
+    /// <summary>
+    /// The line itself: two lines each exactly one device pixel thick - the shadow over the highlight - with a pixel of room
+    /// above and below, whatever the monitor's scale. Two 1 DIP rectangles came out one pixel thick in one menu and two in another at 125%, depending on where in the
+    /// menu the separator fell.
+    /// </summary>
+    public class MenuSeparatorLine : FrameworkElement
+    {
+        private double PixelSize => 1 / System.Windows.Media.VisualTreeHelper.GetDpi(this).DpiScaleY;
+
+        protected override Size MeasureOverride(Size availableSize)
+        {
+            return new Size(0, 4 * PixelSize);
+        }
+
+        protected override void OnRender(System.Windows.Media.DrawingContext drawingContext)
+        {
+            double pixel = PixelSize;
+            drawingContext.DrawRectangle(TryFindResource("ButtonShadow") as System.Windows.Media.Brush, null, new Rect(0, pixel, ActualWidth, pixel));
+            drawingContext.DrawRectangle(TryFindResource("ButtonHighlight") as System.Windows.Media.Brush, null, new Rect(0, 2 * pixel, ActualWidth, pixel));
         }
     }
 }
