@@ -22,16 +22,11 @@ namespace RetroBar.Utilities
         /// multiplier.</summary>
         public event Action<float, float> LevelUpdated;
 
-        // Re-tuned for LevelCurveExponent below (a square-root curve saturates at a much smaller
-        // input than a log curve would at the same scale).
-        private const double LevelScale = 28;
-
-        // A log curve compresses dynamic range hard once its input crosses roughly 1 - most of a
-        // track's actual loudness swings ended up crammed into the flat, near-1.0 tail, reading
-        // as "barely any difference between quiet and loud parts". A square-root curve compresses
-        // far more gently, so more of the meter's own range actually reflects the track's real
-        // loudness swings instead of pinning to the top.
-        private const double LevelCurveExponent = 0.5;
+        // The meter reads loudness in decibels, as a VU meter does: the bottom of the bar is this level (silence and anything
+        // quieter), the top is full scale (0 dB), and a sound in between fills the bar by how many dB it is from the bottom. A
+        // plain multiplier of the signal pinned the bar at the top for any ordinary music: the loudness of music sits within a
+        // few dB of full scale on a digital bus, which a gain can't spread over the bar - decibels do.
+        private const double FloorDb = -48;
 
         // Throttles how often LevelUpdated fires, independent of the capture callback's own
         // (format/buffer-size dependent) cadence - the meter only needs to look smooth, not
@@ -195,6 +190,12 @@ namespace RetroBar.Utilities
             return isFloat32 ? BitConverter.ToSingle(buffer, offset) : BitConverter.ToInt16(buffer, offset) / 32768f;
         }
 
+        private static float ToLevel(double rms)
+        {
+            double db = 20 * Math.Log10(Math.Max(rms, 1e-6));
+            return (float)Math.Clamp((db - FloorDb) / -FloorDb, 0, 1);
+        }
+
         private float GetOutputVolume()
         {
             if (_outputDevice == null)
@@ -235,8 +236,8 @@ namespace RetroBar.Utilities
             _levelSumSquaresLeft = 0;
             _levelSumSquaresRight = 0;
             _levelSampleCount = 0;
-            float levelLeft = (float)Math.Min(1, Math.Pow(rmsLeft * LevelScale, LevelCurveExponent));
-            float levelRight = (float)Math.Min(1, Math.Pow(rmsRight * LevelScale, LevelCurveExponent));
+            float levelLeft = ToLevel(rmsLeft);
+            float levelRight = ToLevel(rmsRight);
             LevelUpdated?.Invoke(levelLeft, levelRight);
         }
 
