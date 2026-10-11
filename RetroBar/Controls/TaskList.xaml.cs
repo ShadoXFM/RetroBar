@@ -403,6 +403,13 @@ namespace RetroBar.Controls
             if (e.Action == System.Collections.Specialized.NotifyCollectionChangedAction.Add)
             {
                 ScheduleStartupSort();
+
+                // A window opened after startup goes to its place at once (before the next frame is drawn), instead of
+                // showing up on the right and jumping there when the debounce above ends.
+                if (!TaskOpenOrderComparer.InStartupGrace)
+                {
+                    Dispatcher.BeginInvoke(new Action(() => TaskOpenOrderComparer.SortSource(startupSortSource)), DispatcherPriority.Normal);
+                }
             }
         }
 
