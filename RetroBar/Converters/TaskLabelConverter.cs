@@ -33,6 +33,11 @@ namespace RetroBar.Converters
             {
                 title = ProgramName.Get(explorer) ?? title;
             }
+            else if (values.Length > 5 && values[5] is ApplicationWindow lone && TaskIconConverter.IsFileExplorerWindow(lone))
+            {
+                // Explorer set to show the full path in its title bar: the tab only needs the folder's name.
+                title = FolderName(title);
+            }
 
             // A tab standing for several windows leads with how many: "(3) Title".
             if (values.Length > 3 && values[3] is int windowCount && windowCount > 1)
@@ -54,6 +59,18 @@ namespace RetroBar.Converters
             }
 
             return $"[{Math.Floor(progressValue / 65534.0 * 100)}%] {title}";
+        }
+
+        private static string FolderName(string title)
+        {
+            bool isPath = title.Length >= 3 && (title[1] == ':' && (title[2] == '\\' || title[2] == '/') || title.StartsWith(@"\\"));
+            if (!isPath)
+            {
+                return title;
+            }
+
+            string name = System.IO.Path.GetFileName(title.TrimEnd('\\', '/'));
+            return string.IsNullOrEmpty(name) ? title : name;
         }
 
         public object[] ConvertBack(object value, Type[] targetTypes, object parameter, System.Globalization.CultureInfo culture)
