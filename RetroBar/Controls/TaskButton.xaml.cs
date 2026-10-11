@@ -461,6 +461,9 @@ namespace RetroBar.Controls
             // The preview stays up while the menu is open (see PreviewPollTimer_Tick), and a click anywhere else closes the menu.
             CloseWindowMenu();
 
+            // No peek at the window while its menu is open (and a peek already on stops).
+            StopPeek();
+
             var menu = new ContextMenu { PlacementTarget = AppButton, Placement = System.Windows.Controls.Primitives.PlacementMode.MousePoint, StaysOpen = false };
             _windowMenu = menu;
 
@@ -468,6 +471,7 @@ namespace RetroBar.Controls
             // on the preview or the tab, which deal with their own clicks.
             menu.Closed += (s, args) =>
             {
+                _previewHoverSince = DateTime.UtcNow;
                 if (AppButton.ToolTip is ToolTip tip && tip.IsOpen && !IsPointerOverPopup(tip) && !IsPointerOverTab())
                 {
                     ClosePreview();

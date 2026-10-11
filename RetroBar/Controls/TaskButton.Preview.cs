@@ -304,7 +304,7 @@ namespace RetroBar.Controls
                     _previewHoverTarget = target;
                     _previewHoverSince = DateTime.UtcNow;
                 }
-                else if (!_isPeekingAtWindow && _previewHoverSince.HasValue && DateTime.UtcNow - _previewHoverSince.Value >= PeekDelay)
+                else if (!_isPeekingAtWindow && _windowMenu?.IsOpen != true && _previewHoverSince.HasValue && DateTime.UtcNow - _previewHoverSince.Value >= PeekDelay)
                 {
                     StartPeek(target);
                 }
@@ -596,6 +596,7 @@ namespace RetroBar.Controls
                 case WM_RBUTTONUP:
                     // The window's own menu (restore, move, size, ...).
                     ApplicationWindow menuWindow = item?.Window ?? Window;
+                    StopPeek();
                     Dispatcher.BeginInvoke(new Action(() => ShowWindowMenu(menuWindow)));
                     break;
 
