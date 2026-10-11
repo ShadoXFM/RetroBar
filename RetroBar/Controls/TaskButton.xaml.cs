@@ -459,6 +459,8 @@ namespace RetroBar.Controls
             (restoreEnabled && maximizeEnabled ? restore : close).FontWeight = FontWeights.Bold;
 
             // The preview stays up while the menu is open (see PreviewPollTimer_Tick), and a click anywhere else closes the menu.
+            CloseWindowMenu();
+
             var menu = new ContextMenu { PlacementTarget = AppButton, Placement = System.Windows.Controls.Primitives.PlacementMode.MousePoint, StaysOpen = false };
             _windowMenu = menu;
             menu.SetBinding(System.Windows.Media.TextOptions.TextRenderingModeProperty, new System.Windows.Data.Binding("AllowFontSmoothingMenu")

@@ -282,6 +282,8 @@ namespace RetroBar.Controls
                 return;
             }
 
+            CloseWindowMenuOnOutsideClick();
+
             bool overPreview = IsPointerOverPopup(tip);
             List<PreviewItem> items = GetPreviewItems(tip);
             (PreviewItem hovered, PreviewHit hit) = overPreview ? HitTestPointer(tip, items) : (null, PreviewHit.Body);
@@ -333,6 +335,7 @@ namespace RetroBar.Controls
         // animate: fade out (the normal case); false closes at once (tab unloaded, thumbnails turned off).
         private void ClosePreview(bool animate = true)
         {
+            CloseWindowMenu();
             _previewShowTimer?.Stop();
             _previewPollTimer?.Stop();
             _previewOutsideSince = null;
@@ -822,6 +825,45 @@ namespace RetroBar.Controls
         // Compared against the popup window's screen rectangle rather than ToolTip.IsMouseOver: the
         // thumbnail itself is drawn by DWM over the window, and WPF's own hit-testing doesn't see the
         // pointer over parts of the popup that have no background brush.
+        private void CloseWindowMenu()
+        {
+            if (_windowMenu?.IsOpen == true)
+            {
+                _windowMenu.IsOpen = false;
+            }
+        }
+
+        // A click anywhere but on the window menu (another window, the desktop, the preview) closes it - checked by the
+        // mouse buttons' state, since a click in another program never reaches the menu's own input handling.
+        private void CloseWindowMenuOnOutsideClick()
+        {
+            if (_windowMenu?.IsOpen != true)
+            {
+                return;
+            }
+
+            bool pressed = ((GetAsyncKeyState(VK_LBUTTON) | GetAsyncKeyState(VK_RBUTTON) | GetAsyncKeyState(VK_MBUTTON)) & 0x8000) != 0;
+            if (!pressed)
+            {
+                return;
+            }
+
+            bool overMenu = PresentationSource.FromVisual(_windowMenu) is HwndSource source && GetCursorPos(out POINT cursor) &&
+                            GetWindowRect(source.Handle, out RECT rect) &&
+                            cursor.X >= rect.Left && cursor.X < rect.Right && cursor.Y >= rect.Top && cursor.Y < rect.Bottom;
+            if (!overMenu)
+            {
+                _windowMenu.IsOpen = false;
+            }
+        }
+
+        private const int VK_LBUTTON = 0x01;
+        private const int VK_RBUTTON = 0x02;
+        private const int VK_MBUTTON = 0x04;
+
+        [DllImport("user32.dll")]
+        private static extern short GetAsyncKeyState(int key);
+
         private static bool IsPointerOverPopup(ToolTip tip)
         {
             if (PresentationSource.FromVisual(tip) is not HwndSource source ||
