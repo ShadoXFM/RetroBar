@@ -823,21 +823,24 @@ namespace RetroBar.Controls
             return cursor.X >= topLeft.X && cursor.X < bottomRight.X && cursor.Y >= topLeft.Y && cursor.Y < bottomRight.Y + extra;
         }
 
-        // Compared against the popup window's screen rectangle rather than ToolTip.IsMouseOver: the
-        // thumbnail itself is drawn by DWM over the window, and WPF's own hit-testing doesn't see the
-        // pointer over parts of the popup that have no background brush.
         // The tab's menus slide in like the preview does, and the window menu slides back out with it. A context menu's popup
         // takes its position once, when it opens (changing the menu's own offsets afterwards does nothing), so the popup
         // window itself is moved, a few milliseconds at a time, between its resting place and a little toward the taskbar.
-        // Before the menu opens: invisible, so it isn't seen at its resting place for a moment before SlideMenu moves it.
+        // Before the menu opens: shown in full again (a menu that was faded out when it closed is reused).
         private static void PrepareMenuSlide(ContextMenu menu)
         {
             menu.BeginAnimation(UIElement.OpacityProperty, null);
-            menu.Opacity = 0;
+            menu.Opacity = 1;
         }
 
         private static void SlideMenu(ContextMenu menu, bool opening)
         {
+            // The system's own menu animation is off (as for the preview): this slide (and, on closing, a fade) takes its place.
+            if (menu.Parent is System.Windows.Controls.Primitives.Popup nativePopup)
+            {
+                nativePopup.PopupAnimation = System.Windows.Controls.Primitives.PopupAnimation.None;
+            }
+
             if (PresentationSource.FromVisual(menu) is not HwndSource source || !GetWindowRect(source.Handle, out RECT rect))
             {
                 // Nothing to slide: just be shown (a menu that is about to slide in starts out invisible, see PrepareMenuSlide).
@@ -864,17 +867,17 @@ namespace RetroBar.Controls
             if (opening)
             {
                 Place(0);
-                menu.BeginAnimation(UIElement.OpacityProperty, new DoubleAnimation(0, 1, PreviewFadeIn)
-                {
-                    EasingFunction = new QuadraticEase { EasingMode = EasingMode.EaseOut },
-                });
             }
 
+            // With software rendering the first frame of a new popup reaches the screen only a moment after it opens, so the
+            // slide waits that long (the menu sits at its starting place until then) - otherwise it is over
+            // before the menu can be seen.
+            double startDelay = opening && Settings.Instance.UseSoftwareRendering ? 70 : 0;
             var clock = System.Diagnostics.Stopwatch.StartNew();
             var timer = new DispatcherTimer(DispatcherPriority.Normal) { Interval = TimeSpan.FromMilliseconds(8) };
             timer.Tick += (s, e) =>
             {
-                double progress = Math.Min(1, clock.Elapsed.TotalMilliseconds / duration.TotalMilliseconds);
+                double progress = Math.Clamp((clock.Elapsed.TotalMilliseconds - startDelay) / duration.TotalMilliseconds, 0, 1);
                 Place(progress);
                 if (progress >= 1)
                 {
@@ -974,6 +977,9 @@ namespace RetroBar.Controls
         [DllImport("user32.dll")]
         private static extern short GetAsyncKeyState(int key);
 
+        // Compared against the popup window's screen rectangle rather than ToolTip.IsMouseOver: the
+        // thumbnail itself is drawn by DWM over the window, and WPF's own hit-testing doesn't see the
+        // pointer over parts of the popup that have no background brush.
         private static bool IsPointerOverPopup(ToolTip tip)
         {
             if (PresentationSource.FromVisual(tip) is not HwndSource source ||
