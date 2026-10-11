@@ -329,14 +329,15 @@ namespace RetroBar.Controls
 
             // The program's name and icon: a click starts another instance of it.
             ProgramMenuItem.Header = GetProgramDisplayName();
-            ImageSource programIcon = GetProgramIcon();
-            // As big as the icon on the tab is drawn (its size, and a per-monitor scale on it).
-            Rect tabIcon = TaskIconImage.TransformToVisual(AppButton).TransformBounds(new Rect(0, 0, TaskIconImage.ActualWidth, TaskIconImage.ActualHeight));
-            double iconSize = tabIcon.Width > 0 ? tabIcon.Width : 16;
-            var menuIcon = programIcon == null ? null : new Image { Source = programIcon, Width = iconSize, Height = iconSize, SnapsToDevicePixels = true };
+            // Made the way the preview's title icon is (the same icon, asked for the same way, the same 16 DIP image and per-monitor
+            // adjustments - "PreviewTitleIcon" in the monitor file), so it is as sharp as that one.
+            ImageSource programIcon = ((System.Windows.Data.IMultiValueConverter)FindResource("taskIconConverter")).Convert(new object[] { Window, Window.Icon }, typeof(ImageSource), "window", System.Globalization.CultureInfo.CurrentCulture) as ImageSource
+                                      ?? GetProgramIcon();
+            var menuIcon = programIcon == null ? null : new Image { Source = programIcon, Width = 16, Height = 16, UseLayoutRounding = true, SnapsToDevicePixels = true };
             if (menuIcon != null)
             {
                 RenderOptions.SetBitmapScalingMode(menuIcon, BitmapScalingMode.HighQuality);
+                MonitorOffset.SetTag(menuIcon, "PreviewTitleIcon");
             }
 
             ProgramMenuItem.Icon = menuIcon;
@@ -438,7 +439,12 @@ namespace RetroBar.Controls
         private MenuItem WindowMenuItem(string resourceKey, string marlett, bool enabled, Action action)
         {
             var item = new MenuItem { Header = Application.Current.FindResource(resourceKey), IsEnabled = enabled, Style = MenuItemStyle.Style };
-            if (marlett != null)
+            if (marlett == "r")
+            {
+                // The X is drawn in whole pixels, like the preview's close button's.
+                item.Icon = new PixelGlyph { Rows = PixelGlyph.Close };
+            }
+            else if (marlett != null)
             {
                 item.Icon = new TextBlock { FontFamily = new System.Windows.Media.FontFamily("Marlett"), Text = marlett, HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Center };
             }

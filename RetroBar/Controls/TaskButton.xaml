@@ -98,10 +98,7 @@
                           Click="CloseMenuItem_OnClick"
                           Name="CloseMenuItem">
                     <MenuItem.Icon>
-                        <TextBlock FontFamily="Marlett"
-                                   Text="&#x72;"
-                                   HorizontalAlignment="Center"
-                                   VerticalAlignment="Center" />
+                        <utilities:PixelGlyph Rows="XX....XX|.XX..XX.|..XXXX..|...XX...|..XXXX..|.XX..XX.|XX....XX" />
                     </MenuItem.Icon>
                 </MenuItem>
             </ContextMenu>

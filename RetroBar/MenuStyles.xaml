@@ -1,8 +1,7 @@
 <ResourceDictionary xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
                     xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
                     xmlns:controls="clr-namespace:RetroBar.Controls"
-                    xmlns:converters="clr-namespace:RetroBar.Converters">
-    <converters:ScaleConverter x:Key="menuScaleConverter" />
+                    xmlns:utilities="clr-namespace:RetroBar.Utilities">
     <!-- The one look of every item of every context menu (see MenuItemStyle.cs, which gives it to them): the taskbar's font,
          a check mark or an icon in a narrow first column, a highlight bar, and a frame of the theme's own for the items that
          open a menu of their own. Row heights are those of WPF's default items. -->
@@ -23,17 +22,10 @@
                                 </Grid.ColumnDefinitions>
                                 <!-- 20 DIP is a whole number of pixels at the usual scales (25 at 125%), so the text starts on the same pixel in every menu. -->
                                 <ContentPresenter ContentSource="Icon" MinWidth="20" VerticalAlignment="Center" HorizontalAlignment="Center" SnapsToDevicePixels="True" />
-                                <!-- Marlett's check, made as big as the X of Close (the check is the smaller glyph of the two), centered in the same column. -->
-                                <TextBlock x:Name="CheckMark"
-                                           FontFamily="Marlett"
-                                           FontSize="{Binding FontSize, RelativeSource={RelativeSource TemplatedParent}, Converter={StaticResource menuScaleConverter}, ConverterParameter=1.7}"
-                                           Text="a"
-                                           Width="20"
-                                           Padding="3,0,0,0"
-                                           TextAlignment="Center"
-                                           Foreground="{TemplateBinding Foreground}"
-                                           VerticalAlignment="Center"
-                                           Visibility="Collapsed" />
+                                <!-- A check of whole pixels, the same size as the close glyph of the Close item. -->
+                                <utilities:PixelGlyph x:Name="CheckMark"
+                                                      Rows=".......X|......XX|.....XX.|X...XX..|XX.XX...|.XXX....|..X....."
+                                                      Visibility="Collapsed" />
                                 <ContentPresenter Grid.Column="1" ContentSource="Header" Margin="0,2,10,2" VerticalAlignment="Center" RecognizesAccessKey="True" SnapsToDevicePixels="True" />
                                 <Path x:Name="SubmenuArrow"
                                       Grid.Column="2"
