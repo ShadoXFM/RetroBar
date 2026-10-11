@@ -23,6 +23,50 @@ namespace RetroBar.Utilities
             }
         }
 
+        /// <summary>
+        /// Hides the separators that would stand alone now that the separator is a visible line: one at the top or the bottom
+        /// of the menu, or next to another - the items between them are hidden, which used to leave only empty space.
+        /// </summary>
+        public static void Tidy(ContextMenu menu)
+        {
+            Separator pending = null;
+            bool anyItem = false;
+
+            foreach (object child in menu.Items)
+            {
+                if (child is not UIElement element)
+                {
+                    continue;
+                }
+
+                if (child is Separator separator)
+                {
+                    // Shown only if an item has come before it, and none of the separators since then has been shown.
+                    separator.Visibility = Visibility.Collapsed;
+
+                    if (anyItem && pending == null)
+                    {
+                        pending = separator;
+                    }
+
+                    continue;
+                }
+
+                if (element.Visibility != Visibility.Visible)
+                {
+                    continue;
+                }
+
+                anyItem = true;
+
+                if (pending != null)
+                {
+                    pending.Visibility = Visibility.Visible;
+                    pending = null;
+                }
+            }
+        }
+
         private static Style Create()
         {
             var line = new FrameworkElementFactory(typeof(StackPanel));

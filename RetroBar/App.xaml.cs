@@ -72,6 +72,7 @@ namespace RetroBar
             if (sender is System.Windows.Controls.ContextMenu menu)
             {
                 MenuItemStyle.Apply(menu);
+                MenuSeparator.Tidy(menu);
             }
         }
 
@@ -81,6 +82,7 @@ namespace RetroBar
             {
                 MenuSeparator.Apply(separated);
                 MenuItemStyle.Apply(separated);
+                MenuSeparator.Tidy(separated);
             }
 
             if (sender is System.Windows.Controls.ContextMenu menu && menu.ReadLocalValue(TextOptions.TextRenderingModeProperty) == DependencyProperty.UnsetValue)
