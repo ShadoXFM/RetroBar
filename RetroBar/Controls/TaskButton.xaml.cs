@@ -9,7 +9,9 @@ using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Data;
 using System.Windows.Input;
+using System.Windows.Media;
 using System.Windows.Media.Animation;
+using System.Windows.Media.Imaging;
 using ManagedShell.Common.Helpers;
 using ManagedShell.Interop;
 using ManagedShell.WindowsTasks;
@@ -327,12 +329,58 @@ namespace RetroBar.Controls
 
             // The program's name and icon: a click starts another instance of it.
             ProgramMenuItem.Header = GetProgramDisplayName();
-            ProgramMenuItem.Icon = TaskIconImage.Source == null ? null : new Image { Source = TaskIconImage.Source, Width = 16, Height = 16 };
+            ImageSource programIcon = GetProgramIcon();
+            ProgramMenuItem.Icon = programIcon == null ? null : new Image { Source = programIcon, Width = 16, Height = 16 };
             ProgramMenuItem.Visibility = GetProgramLaunchTarget() == null ? Visibility.Collapsed : Visibility.Visible;
 
             PinMenuItem.Visibility = Window.IsUWP || string.IsNullOrEmpty(Window.WinFileName) ? Visibility.Collapsed : Visibility.Visible;
             PinMenuItem.Header = FindResource(PinnedApps.FindLink(Window) != null ? "unpin_from_taskbar" : "pin_to_taskbar");
             CloseMenuItem.FontWeight = FontWeights.Bold;
+        }
+
+        private static readonly Dictionary<string, ImageSource> ProgramIcons = new(StringComparer.OrdinalIgnoreCase);
+
+        // The icon of the program itself (its executable's), not the one the tab is showing at the moment (a folder's, a
+        // document's, ...). A packaged app has no executable of its own to ask, so it keeps the tab's.
+        private ImageSource GetProgramIcon()
+        {
+            string path = Window.IsUWP ? null : Window.WinFileName;
+            if (string.IsNullOrEmpty(path))
+            {
+                return TaskIconImage.Source;
+            }
+
+            lock (ProgramIcons)
+            {
+                if (ProgramIcons.TryGetValue(path, out ImageSource cached))
+                {
+                    return cached;
+                }
+            }
+
+            ImageSource icon = null;
+            try
+            {
+                using System.Drawing.Icon extracted = System.Drawing.Icon.ExtractAssociatedIcon(path);
+                if (extracted != null)
+                {
+                    BitmapSource bitmap = System.Windows.Interop.Imaging.CreateBitmapSourceFromHIcon(extracted.Handle, Int32Rect.Empty, BitmapSizeOptions.FromEmptyOptions());
+                    bitmap.Freeze();
+                    icon = bitmap;
+                }
+            }
+            catch (Exception)
+            {
+            }
+
+            icon ??= TaskIconImage.Source;
+
+            lock (ProgramIcons)
+            {
+                ProgramIcons[path] = icon;
+            }
+
+            return icon;
         }
 
         private string GetProgramDisplayName()
@@ -351,6 +399,8 @@ namespace RetroBar.Controls
 
             return string.IsNullOrEmpty(Window.WinFileName) ? null : Window.WinFileName;
         }
+
+        private ContextMenu _windowMenu;
 
         private void ProgramMenuItem_OnClick(object sender, RoutedEventArgs e)
         {
@@ -376,9 +426,9 @@ namespace RetroBar.Controls
             }
         }
 
-        private static MenuItem WindowMenuItem(string resourceKey, string marlett, bool enabled, Action action)
+        private MenuItem WindowMenuItem(string resourceKey, string marlett, bool enabled, Action action)
         {
-            var item = new MenuItem { Header = Application.Current.FindResource(resourceKey), IsEnabled = enabled };
+            var item = new MenuItem { Header = Application.Current.FindResource(resourceKey), IsEnabled = enabled, Style = (Style)FindResource("TaskMenuItemStyle") };
             if (marlett != null)
             {
                 item.Icon = new TextBlock { FontFamily = new System.Windows.Media.FontFamily("Marlett"), Text = marlett, HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Center };
@@ -397,8 +447,6 @@ namespace RetroBar.Controls
                 return;
             }
 
-            ClosePreview();
-
             NativeMethods.WindowShowStyle wss = window.ShowStyle;
             bool canMaximize = (window.WindowStyles & (int)NativeMethods.WindowStyles.WS_MAXIMIZEBOX) != 0;
             bool restoreEnabled = wss != NativeMethods.WindowShowStyle.ShowNormal;
@@ -410,8 +458,10 @@ namespace RetroBar.Controls
             // The bold one is the window's default action: restore while it can be restored and maximized, close otherwise.
             (restoreEnabled && maximizeEnabled ? restore : close).FontWeight = FontWeights.Bold;
 
-            var menu = new ContextMenu { PlacementTarget = AppButton, Placement = System.Windows.Controls.Primitives.PlacementMode.MousePoint };
-            menu.SetBinding(System.Windows.Media.TextOptions.TextRenderingModeProperty, new System.Windows.Data.Binding("AllowFontSmoothingMenu")
+            // The preview stays up while the menu is open (see PreviewPollTimer_Tick), and a click anywhere else closes the menu.
+            var menu = new ContextMenu { PlacementTarget = AppButton, Placement = System.Windows.Controls.Primitives.PlacementMode.MousePoint, StaysOpen = false };
+            _windowMenu = menu;
+            menu.SetBinding(System.Windows.Media.TextOptions.TextRenderingModeProperty, new System.Windows.Data.Binding("AllowFontSmoothing")
             {
                 Source = Settings.Instance,
                 Converter = (System.Windows.Data.IValueConverter)FindResource("menuTextRenderingModeConverter"),

@@ -316,7 +316,7 @@ namespace RetroBar.Controls
                 StopPeek();
             }
 
-            if (IsPointerOverTab() || overPreview)
+            if (IsPointerOverTab() || overPreview || _windowMenu?.IsOpen == true)
             {
                 _previewOutsideSince = null;
                 return;
