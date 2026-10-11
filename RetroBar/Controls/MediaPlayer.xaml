@@ -143,7 +143,7 @@
             </Canvas>
             <!-- Own dedicated clip for the marquee text, now that TrackTextHost itself is no
                  longer clipped (see VuMeterContainer's own remarks above). -->
-            <Border ClipToBounds="True">
+            <Border x:Name="TrackTextClip" SizeChanged="TrackTextClip_OnSizeChanged">
                 <!-- A Canvas measures and arranges its children at their full natural
                      size, so the track text is never squeezed down to the visible
                      width. The Border above clips it and the marquee slides it. -->

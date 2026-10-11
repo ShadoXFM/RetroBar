@@ -870,6 +870,15 @@ namespace RetroBar.Controls
 
         #region Marquee
 
+        // The font's line height can be shorter than its tallest glyphs (g, j, p, y hang below it), so the
+        // clip that keeps the marquee inside the row leaves room under the text for them.
+        private const double TrackTextDescenderRoom = 4;
+
+        private void TrackTextClip_OnSizeChanged(object sender, SizeChangedEventArgs e)
+        {
+            TrackTextClip.Clip = new RectangleGeometry(new Rect(0, 0, TrackTextClip.ActualWidth, TrackTextClip.ActualHeight + TrackTextDescenderRoom));
+        }
+
         private void TrackText_SizeChanged(object sender, SizeChangedEventArgs e)
         {
             if (e.WidthChanged)
