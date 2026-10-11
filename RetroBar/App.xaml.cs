@@ -59,10 +59,20 @@ namespace RetroBar
 
             // Every context menu draws its text the way "Allow font smoothing in menus" says (some menus bind it themselves).
             EventManager.RegisterClassHandler(typeof(System.Windows.Controls.ContextMenu), FrameworkElement.LoadedEvent, new RoutedEventHandler(ContextMenu_OnLoaded));
+            EventManager.RegisterClassHandler(typeof(System.Windows.Controls.ContextMenu), System.Windows.Controls.ContextMenu.OpenedEvent, new RoutedEventHandler(ContextMenu_OnOpened));
 
             _dictionaryManager.SetLanguageFromSettings();
             loadTheme();
             _windowManager = new WindowManager(_dictionaryManager, _explorerMonitor, _shellManager, _startMenuMonitor, _updater, _hotkeyManager);
+        }
+
+        // As the menu opens, before its first frame is drawn.
+        private static void ContextMenu_OnOpened(object sender, RoutedEventArgs e)
+        {
+            if (sender is System.Windows.Controls.ContextMenu menu)
+            {
+                MenuItemStyle.Apply(menu);
+            }
         }
 
         private static void ContextMenu_OnLoaded(object sender, RoutedEventArgs e)
@@ -70,6 +80,7 @@ namespace RetroBar
             if (sender is System.Windows.Controls.ContextMenu separated)
             {
                 MenuSeparator.Apply(separated);
+                MenuItemStyle.Apply(separated);
             }
 
             if (sender is System.Windows.Controls.ContextMenu menu && menu.ReadLocalValue(TextOptions.TextRenderingModeProperty) == DependencyProperty.UnsetValue)

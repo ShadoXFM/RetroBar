@@ -1,0 +1,88 @@
+<ResourceDictionary xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+                    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+                    xmlns:controls="clr-namespace:RetroBar.Controls">
+    <!-- The one look of every item of every context menu (see MenuItemStyle.cs, which gives it to them): the taskbar's font,
+         a check mark or an icon in a narrow first column, a highlight bar, and a frame of the theme's own for the items that
+         open a menu of their own. Row heights are those of WPF's default items. -->
+    <Style x:Key="RetroBarMenuItemStyle" TargetType="MenuItem">
+        <Setter Property="FontFamily" Value="{DynamicResource GlobalFontFamily}" />
+        <Setter Property="FontSize" Value="{DynamicResource GlobalFontSize}" />
+        <Setter Property="Foreground" Value="{DynamicResource {x:Static SystemColors.MenuTextBrushKey}}" />
+        <Setter Property="Template">
+            <Setter.Value>
+                <ControlTemplate TargetType="MenuItem">
+                    <Grid SnapsToDevicePixels="True">
+                        <Border x:Name="ItemBorder" Background="Transparent">
+                            <Grid>
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="Auto" SharedSizeGroup="RetroBarMenuItemIcon" />
+                                    <ColumnDefinition Width="*" />
+                                    <ColumnDefinition Width="Auto" />
+                                </Grid.ColumnDefinitions>
+                                <ContentPresenter ContentSource="Icon" Width="16" Margin="1,0,1,0" VerticalAlignment="Center" HorizontalAlignment="Center" SnapsToDevicePixels="True" />
+                                <Path x:Name="CheckMark"
+                                      Data="M 0,3 L 2,5 L 6,1 L 6,3 L 2,7 L 0,5 Z"
+                                      Margin="4,0,6,0"
+                                      Fill="{TemplateBinding Foreground}"
+                                      VerticalAlignment="Center"
+                                      Visibility="Collapsed" />
+                                <ContentPresenter Grid.Column="1" ContentSource="Header" Margin="0,2,10,2" VerticalAlignment="Center" RecognizesAccessKey="True" SnapsToDevicePixels="True" />
+                                <Path x:Name="SubmenuArrow"
+                                      Grid.Column="2"
+                                      Data="M 0,0 L 4,4 L 0,8 Z"
+                                      Margin="0,0,6,0"
+                                      Fill="{TemplateBinding Foreground}"
+                                      VerticalAlignment="Center"
+                                      Visibility="Collapsed" />
+                            </Grid>
+                        </Border>
+                        <Popup x:Name="PART_Popup"
+                               AllowsTransparency="True"
+                               Focusable="False"
+                               IsOpen="{Binding Path=IsSubmenuOpen, RelativeSource={RelativeSource TemplatedParent}}"
+                               Placement="Right"
+                               HorizontalOffset="-2"
+                               VerticalOffset="-3"
+                               PopupAnimation="{DynamicResource {x:Static SystemParameters.MenuPopupAnimationKey}}">
+                            <Grid Margin="0,0,10,10" UseLayoutRounding="True" SnapsToDevicePixels="True">
+                                <controls:PopupShadow Margin="0,0,-10,-10" Room="0,0,10,10" Strength="0.67" />
+                                <Border BorderThickness="0,0,1,1" BorderBrush="{DynamicResource ButtonDarkShadow}" SnapsToDevicePixels="True">
+                                    <Border BorderThickness="1,1,0,0" BorderBrush="{DynamicResource ButtonHighlight}">
+                                        <Border BorderThickness="0,0,1,1" BorderBrush="{DynamicResource ButtonShadow}">
+                                            <Border BorderThickness="1,1,0,0" BorderBrush="{DynamicResource ButtonLight}" Background="{DynamicResource ButtonFace}">
+                                                <Grid RenderOptions.ClearTypeHint="Enabled" Margin="1,0">
+                                                    <ItemsPresenter Grid.IsSharedSizeScope="True"
+                                                                    KeyboardNavigation.DirectionalNavigation="Cycle"
+                                                                    SnapsToDevicePixels="{TemplateBinding SnapsToDevicePixels}" />
+                                                </Grid>
+                                            </Border>
+                                        </Border>
+                                    </Border>
+                                </Border>
+                            </Grid>
+                        </Popup>
+                    </Grid>
+                    <ControlTemplate.Triggers>
+                        <Trigger Property="IsChecked" Value="True">
+                            <Setter TargetName="CheckMark" Property="Visibility" Value="Visible" />
+                        </Trigger>
+                        <Trigger Property="HasItems" Value="True">
+                            <Setter TargetName="SubmenuArrow" Property="Visibility" Value="Visible" />
+                        </Trigger>
+                        <Trigger Property="IsHighlighted" Value="True">
+                            <Setter TargetName="ItemBorder" Property="Background" Value="{DynamicResource {x:Static SystemColors.HighlightBrushKey}}" />
+                            <Setter Property="Foreground" Value="{DynamicResource {x:Static SystemColors.HighlightTextBrushKey}}" />
+                        </Trigger>
+                        <Trigger Property="IsSubmenuOpen" Value="True">
+                            <Setter TargetName="ItemBorder" Property="Background" Value="{DynamicResource {x:Static SystemColors.HighlightBrushKey}}" />
+                            <Setter Property="Foreground" Value="{DynamicResource {x:Static SystemColors.HighlightTextBrushKey}}" />
+                        </Trigger>
+                        <Trigger Property="IsEnabled" Value="False">
+                            <Setter Property="Foreground" Value="{DynamicResource {x:Static SystemColors.GrayTextBrushKey}}" />
+                        </Trigger>
+                    </ControlTemplate.Triggers>
+                </ControlTemplate>
+            </Setter.Value>
+        </Setter>
+    </Style>
+</ResourceDictionary>

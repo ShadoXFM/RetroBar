@@ -14,37 +14,6 @@
         <converters:TaskLabelConverter x:Key="taskLabelConverter" />
         <converters:TaskIconConverter x:Key="taskIconConverter" />
         <converters:TaskStateToMonitorTagConverter x:Key="taskStateToMonitorTagConverter" />
-        <!-- The items of the tab's menus: like the default ones, with less room around the icon, and in the taskbar's font. -->
-        <Style x:Key="TaskMenuItemStyle" TargetType="MenuItem">
-            <Setter Property="FontFamily" Value="{DynamicResource GlobalFontFamily}" />
-            <Setter Property="FontSize" Value="{DynamicResource GlobalFontSize}" />
-            <Setter Property="Foreground" Value="{DynamicResource {x:Static SystemColors.MenuTextBrushKey}}" />
-            <Setter Property="Template">
-                <Setter.Value>
-                    <ControlTemplate TargetType="MenuItem">
-                        <Border x:Name="ItemBorder" Background="Transparent" SnapsToDevicePixels="True">
-                            <Grid>
-                                <Grid.ColumnDefinitions>
-                                    <ColumnDefinition Width="Auto" SharedSizeGroup="TaskMenuItemIcon" />
-                                    <ColumnDefinition Width="*" />
-                                </Grid.ColumnDefinitions>
-                                <ContentPresenter ContentSource="Icon" Width="16" Margin="1,0,1,0" VerticalAlignment="Center" HorizontalAlignment="Center" SnapsToDevicePixels="True" />
-                                <ContentPresenter Grid.Column="1" ContentSource="Header" Margin="0,2,10,2" VerticalAlignment="Center" RecognizesAccessKey="True" SnapsToDevicePixels="True" />
-                            </Grid>
-                        </Border>
-                        <ControlTemplate.Triggers>
-                            <Trigger Property="IsHighlighted" Value="True">
-                                <Setter TargetName="ItemBorder" Property="Background" Value="{DynamicResource {x:Static SystemColors.HighlightBrushKey}}" />
-                                <Setter Property="Foreground" Value="{DynamicResource {x:Static SystemColors.HighlightTextBrushKey}}" />
-                            </Trigger>
-                            <Trigger Property="IsEnabled" Value="False">
-                                <Setter Property="Foreground" Value="{DynamicResource {x:Static SystemColors.GrayTextBrushKey}}" />
-                            </Trigger>
-                        </ControlTemplate.Triggers>
-                    </ControlTemplate>
-                </Setter.Value>
-            </Setter>
-        </Style>
     </UserControl.Resources>
     <!-- MonitorOffset.Tag is TaskButton normally, TaskButtonActive while State==Active (or the
          context menu is open) - same conditional-tag pattern as TaskIcon/TaskLabel below, so the
@@ -115,21 +84,17 @@
                 <!-- Starts another instance of the program (see ProgramMenuItem_OnClick); the window's own operations
                      (restore, move, ...) are on the context menu of its preview. -->
                 <MenuItem Name="ProgramMenuItem"
-                          Style="{StaticResource TaskMenuItemStyle}"
                           Click="ProgramMenuItem_OnClick" />
                 <MenuItem Header="{DynamicResource pin_to_taskbar}"
-                          Style="{StaticResource TaskMenuItemStyle}"
                           Click="PinMenuItem_OnClick"
                           Name="PinMenuItem" />
                 <Separator />
                 <MenuItem Header="{DynamicResource end_task}"
-                          Style="{StaticResource TaskMenuItemStyle}"
                           Click="EndTaskMenuItem_OnClick"
                           Name="EndTaskMenuItem"
                           Visibility="{Binding Source={x:Static utilities:Settings.Instance}, Path=ShowEndTaskButton, UpdateSourceTrigger=PropertyChanged, Converter={StaticResource boolToVisibilityConverter}}">
                 </MenuItem>
                 <MenuItem Header="{DynamicResource close}"
-                          Style="{StaticResource TaskMenuItemStyle}"
                           Click="CloseMenuItem_OnClick"
                           Name="CloseMenuItem">
                     <MenuItem.Icon>

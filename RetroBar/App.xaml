@@ -12,6 +12,7 @@
             <ResourceDictionary.MergedDictionaries>
                 <ResourceDictionary Source="Languages/English.xaml" />
                 <ResourceDictionary Source="Themes/System.xaml" />
+                <ResourceDictionary Source="MenuStyles.xaml" />
             </ResourceDictionary.MergedDictionaries>
             <converters:BoolToTextRenderingModeConverter x:Key="menuTextRenderingModeConverter" />
 
