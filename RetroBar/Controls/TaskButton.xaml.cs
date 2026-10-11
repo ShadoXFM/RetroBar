@@ -469,8 +469,18 @@ namespace RetroBar.Controls
 
             // Once the menu is gone (a click elsewhere, an item chosen, Escape) the preview goes too - unless the pointer is
             // on the preview or the tab, which deal with their own clicks.
-            menu.Closed += (s, args) =>
+            // Reacts to IsOpen going false, not to Closed: WPF fades a menu out before it raises Closed, so the preview would
+            // start fading a moment after the menu already had.
+            var isOpen = System.ComponentModel.DependencyPropertyDescriptor.FromProperty(ContextMenu.IsOpenProperty, typeof(ContextMenu));
+            EventHandler onIsOpenChanged = null;
+            onIsOpenChanged = (s, args) =>
             {
+                if (menu.IsOpen)
+                {
+                    return;
+                }
+
+                isOpen.RemoveValueChanged(menu, onIsOpenChanged);
                 _previewHoverSince = DateTime.UtcNow;
                 _windowMenuFading = false;
                 if (AppButton.ToolTip is ToolTip tip && tip.IsOpen && !_previewFadingOut && !IsPointerOverPopup(tip) && !IsPointerOverTab())
@@ -478,6 +488,7 @@ namespace RetroBar.Controls
                     ClosePreview();
                 }
             };
+            isOpen.AddValueChanged(menu, onIsOpenChanged);
             menu.SetBinding(System.Windows.Media.TextOptions.TextRenderingModeProperty, new System.Windows.Data.Binding("AllowFontSmoothingMenu")
             {
                 Source = Settings.Instance,
