@@ -28,7 +28,7 @@
                                     <ColumnDefinition Width="Auto" SharedSizeGroup="TaskMenuItemIcon" />
                                     <ColumnDefinition Width="*" />
                                 </Grid.ColumnDefinitions>
-                                <ContentPresenter ContentSource="Icon" Width="16" Margin="2,0,3,0" VerticalAlignment="Center" HorizontalAlignment="Center" SnapsToDevicePixels="True" />
+                                <ContentPresenter ContentSource="Icon" Width="16" Margin="1,0,1,0" VerticalAlignment="Center" HorizontalAlignment="Center" SnapsToDevicePixels="True" />
                                 <ContentPresenter Grid.Column="1" ContentSource="Header" Margin="0,2,10,2" VerticalAlignment="Center" RecognizesAccessKey="True" SnapsToDevicePixels="True" />
                             </Grid>
                         </Border>
