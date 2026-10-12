@@ -56,13 +56,14 @@ namespace RetroBar.Utilities
             return Math.Max(1, (int)Math.Ceiling(width * (1 - distance / (height / 2.0))));
         }
 
-        /// <summary>A play triangle, height rows tall (odd) and as wide as it is tall.</summary>
+        /// <summary>A play triangle, height rows tall (odd) and as wide as it is tall: 1, 3, 5 ... cells in a row, as the taskbar's own is
+        /// drawn, with its point a single cell.</summary>
         public static string[] Play(int height)
         {
             var rows = new string[height];
             for (int y = 0; y < height; y++)
             {
-                rows[y] = new string('X', TriangleWidth(y, height, height)).PadRight(height, '.');
+                rows[y] = new string('X', Math.Min(height, 2 * Math.Min(y, height - 1 - y) + 1)).PadRight(height, '.');
             }
 
             return rows;
