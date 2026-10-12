@@ -73,7 +73,7 @@ namespace RetroBar.Utilities
         // The Margin an element had in its XAML, kept while a monitor's Margin is applied over it: clearing the value when that monitor's
         // entry goes away (the media popup dragged from one monitor to another) would otherwise leave no margin at all.
         private static readonly DependencyProperty XamlMarginProperty = DependencyProperty.RegisterAttached(
-            "XamlMargin", typeof(object), typeof(MonitorOffset), new PropertyMetadata(DependencyProperty.UnsetValue));
+            "XamlMargin", typeof(object), typeof(MonitorOffset), new PropertyMetadata(null));
         private static readonly DependencyProperty AppliedPaddingProperty = DependencyProperty.RegisterAttached(
             "AppliedPadding", typeof(bool), typeof(MonitorOffset), new PropertyMetadata(false));
         private static readonly DependencyProperty AppliedBackgroundProperty = DependencyProperty.RegisterAttached(
@@ -472,7 +472,7 @@ namespace RetroBar.Utilities
                     if (!(bool)element.GetValue(AppliedMarginProperty))
                     {
                         object local = element.ReadLocalValue(FrameworkElement.MarginProperty);
-                        element.SetValue(XamlMarginProperty, local is Thickness ? local : DependencyProperty.UnsetValue);
+                        element.SetValue(XamlMarginProperty, local is Thickness ? local : null);
                     }
 
                     element.SetValue(FrameworkElement.MarginProperty, thickness);
