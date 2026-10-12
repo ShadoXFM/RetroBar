@@ -818,26 +818,29 @@ namespace RetroBar.Controls
             }
         }
 
-        // The X for a monitor scale (1 = 100%): about 8.8 x 7.2 DIPs, its strokes about 2.4 DIPs across - 10x8 pixels with 3-pixel
+        // The X for a monitor scale (1 = 100%): about 8.8 x 7.2 DIPs, its strokes about 2.4 DIPs across - 9x7 pixels with 3-pixel
         // strokes at 100%, 11x9 with 3 at 125%, and so on. Each row has the two strokes of the X, stepping evenly from the corners
         // to the middle.
         private static string[] CloseGlyphRows(double scale)
         {
-            // At 100% a 10x8 X with 3-pixel strokes (2-pixel ones came out thin, and 11x9 was a little big).
+            // At 100% a 9x7 X with 3-pixel strokes, 2-pixel ones in its first and last rows: 2-pixel strokes came out thin, 3-pixel
+            // ones heavy, and a bigger X too big.
             bool plain = scale < 1.1;
-            int width = plain ? 10 : (int)Math.Round(8.8 * scale);
-            int height = plain ? 8 : (int)Math.Round(7.2 * scale);
+            int width = plain ? 9 : (int)Math.Round(8.8 * scale);
+            int height = plain ? 7 : (int)Math.Round(7.2 * scale);
             int stroke = plain ? 3 : Math.Max(2, (int)Math.Round(2.4 * scale));
             var rows = new string[height];
 
             for (int y = 0; y < height; y++)
             {
-                int left = (int)Math.Round(y * (width - stroke) / (double)(height - 1));
-                int right = width - stroke - left;
+                int across = plain && (y == 0 || y == height - 1) ? stroke - 1 : stroke;
+                // The lighter last row keeps to the corners, as the first does.
+                int left = (int)Math.Round(y * (width - stroke) / (double)(height - 1)) + (y == height - 1 ? stroke - across : 0);
+                int right = width - across - left;
                 var cells = new char[width];
                 Array.Fill(cells, '.');
 
-                for (int k = 0; k < stroke; k++)
+                for (int k = 0; k < across; k++)
                 {
                     cells[left + k] = 'X';
                     cells[right + k] = 'X';
