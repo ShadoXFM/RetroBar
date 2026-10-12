@@ -1479,6 +1479,13 @@ namespace RetroBar.Controls
         [DllImport("user32.dll", CharSet = CharSet.Unicode)]
         private static extern bool GetMonitorInfo(IntPtr monitor, ref MONITORINFOEX info);
 
+        [DllImport("user32.dll", EntryPoint = "SetWindowLongPtrW")]
+        private static extern IntPtr SetWindowLongPtr(IntPtr hWnd, int index, IntPtr value);
+
+        [DllImport("user32.dll", EntryPoint = "SetWindowLongW")]
+        private static extern int SetWindowLong(IntPtr hWnd, int index, int value);
+
+        private const int GWLP_HWNDPARENT = -8;
         private static readonly IntPtr HWND_TOPMOST = new(-1);
         private static readonly IntPtr HWND_NOTOPMOST = new(-2);
         private const uint SWP_NOMOVE = 0x0002;
@@ -1535,6 +1542,20 @@ namespace RetroBar.Controls
         {
             if (PresentationSource.FromVisual(SeekPopupRoot) is HwndSource source)
             {
+                // The popup is owned by the taskbar's window, which is itself always on top, and a window owned by a topmost one is
+                // topmost whatever it asks for: without the owner it can be an ordinary window.
+                if (!_seekPopupPinned)
+                {
+                    if (IntPtr.Size == 8)
+                    {
+                        SetWindowLongPtr(source.Handle, GWLP_HWNDPARENT, IntPtr.Zero);
+                    }
+                    else
+                    {
+                        SetWindowLong(source.Handle, GWLP_HWNDPARENT, 0);
+                    }
+                }
+
                 SetWindowPos(source.Handle, _seekPopupPinned ? HWND_TOPMOST : HWND_NOTOPMOST, 0, 0, 0, 0, SWP_NOMOVE | SWP_NOSIZE | SWP_NOACTIVATE);
             }
         }
