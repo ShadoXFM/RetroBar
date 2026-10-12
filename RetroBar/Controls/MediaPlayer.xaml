@@ -24,7 +24,16 @@
     <utilities:UnclippedStackPanel x:Name="MediaPlayerRoot"
                 Orientation="Horizontal"
                 Style="{DynamicResource MediaPlayerPanelStyle}">
-        <!-- The transport buttons come first, before the album art and the track text. -->
+        <!-- A layout/position anchor only - always Hidden (never actually painted) when
+             there's art. The visible copy lives in an Adorner (see UpdateAlbumArtAdorner
+             in the code-behind) so a per-monitor MonitorAdjustments offset can push it
+             outside this control's own layout bounds without the Tray GroupBox's
+             Padding/BorderThickness clipping it - see Utilities/UIElementAdorner.cs. -->
+        <Image x:Name="AlbumArtImage"
+               Style="{DynamicResource MediaPlayerAlbumArtStyle}"
+               Visibility="Collapsed"
+               utilities:MonitorOffset.Tag="MediaAlbumArt" />
+        <!-- The album art comes first, then the transport buttons, then the track text. -->
         <!-- Real, interactive buttons live in code (see InitializeTransportButtonAdorners in
              MediaPlayer.xaml.cs), each hosted in its own Adorner anchored to one of these
              spacers. A spacer only reserves this Grid column's layout space (same Style, so it
@@ -81,15 +90,6 @@
             </Button>
         </Grid>
 
-        <!-- A layout/position anchor only - always Hidden (never actually painted) when
-             there's art. The visible copy lives in an Adorner (see UpdateAlbumArtAdorner
-             in the code-behind) so a per-monitor MonitorAdjustments offset can push it
-             outside this control's own layout bounds without the Tray GroupBox's
-             Padding/BorderThickness clipping it - see Utilities/UIElementAdorner.cs. -->
-        <Image x:Name="AlbumArtImage"
-               Style="{DynamicResource MediaPlayerAlbumArtStyle}"
-               Visibility="Collapsed"
-               utilities:MonitorOffset.Tag="MediaAlbumArt" />
         <Grid x:Name="TrackTextHost"
               Style="{DynamicResource MediaPlayerTrackTextHostStyle}">
             <!-- The VU-meter visualizer - two stacked translucent bars (one per stereo channel)
