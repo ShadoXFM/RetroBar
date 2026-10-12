@@ -719,6 +719,22 @@ namespace RetroBar.Controls
                     {
                         _reopenPreviewApp = TaskOpenOrderComparer.AppKey(target);
                         _reopenPreviewUntil = DateTime.UtcNow + TimeSpan.FromSeconds(3);
+                        // Its thumbnail has gone grey (the window's icon on a plain box) in the moments before the window is
+                        // gone from the list, so it is hidden - kept in its place, so the others don't move yet - at once. If the
+                        // window is still there a little later (it asked to save something, say), it is shown again.
+                        FrameworkElement closing = item?.Root;
+                        if (closing != null)
+                        {
+                            closing.Visibility = Visibility.Hidden;
+                            var restore = new DispatcherTimer { Interval = TimeSpan.FromSeconds(2) };
+                            restore.Tick += (t, a) =>
+                            {
+                                restore.Stop();
+                                closing.Visibility = Visibility.Visible;
+                            };
+                            restore.Start();
+                        }
+
                         Dispatcher.BeginInvoke(new Action(() => target.Close()));
                         break;
                     }
