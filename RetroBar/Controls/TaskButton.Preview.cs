@@ -810,8 +810,8 @@ namespace RetroBar.Controls
 
                 Matrix fromDevice = source.CompositionTarget.TransformFromDevice;
 
-                // On a monitor scaled to 125% or more the 8x7 X is small in the larger button: a 10x9 one takes its place.
-                Geometry data = fromDevice.M11 <= 1 / 1.2 ? BuildGlyph(BigCloseGlyph) : glyph.Data.CloneCurrentValue();
+                // A bigger and heavier X than the theme's 8x7 one, the same number of pixels on every monitor.
+                Geometry data = BuildGlyph(BigCloseGlyph);
                 data.Transform = new ScaleTransform(fromDevice.M11, fromDevice.M22);
                 glyph.Data = data;
             }
@@ -819,15 +819,15 @@ namespace RetroBar.Controls
 
         private static readonly string[] BigCloseGlyph =
         {
-            "XX......XX",
-            ".XX....XX.",
-            "..XX..XX..",
-            "...XXXX...",
-            "....XX....",
-            "...XXXX...",
-            "..XX..XX..",
-            ".XX....XX.",
-            "XX......XX",
+            "XXX.....XXX",
+            ".XXX...XXX.",
+            "..XXX.XXX..",
+            "...XXXXX...",
+            "....XXX....",
+            "...XXXXX...",
+            "..XXX.XXX..",
+            ".XXX...XXX.",
+            "XXX.....XXX",
         };
 
         // One 1x1 cell of the rows' 'X's is one unit of the geometry (a run of cells in a row is one rectangle).
