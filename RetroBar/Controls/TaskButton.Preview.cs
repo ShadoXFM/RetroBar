@@ -812,7 +812,8 @@ namespace RetroBar.Controls
 
                 // A bigger and heavier X than the theme's 8x7 one, the same size (in DIPs) on every monitor and as many whole
                 // pixels as that makes at the monitor's scale.
-                Geometry data = BuildGlyph(CloseGlyphRows(1 / fromDevice.M11));
+                // At 100% the theme's own 8x7 X is kept; a bigger one is built for scaled monitors.
+                Geometry data = fromDevice.M11 >= 1 / 1.1 ? glyph.Data.CloneCurrentValue() : BuildGlyph(CloseGlyphRows(1 / fromDevice.M11));
                 data.Transform = new ScaleTransform(fromDevice.M11, fromDevice.M22);
                 glyph.Data = data;
             }
