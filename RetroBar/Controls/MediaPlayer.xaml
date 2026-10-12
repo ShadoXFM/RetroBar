@@ -239,19 +239,21 @@
                                      renders at the same height but wider, growing this whole
                                      vertical StackPanel (which sizes to its widest child) - and so
                                      the popup itself - to fit. -->
+                                <!-- The frame pads 2 at the sides and 3 at the top, so these margins leave the same 10.4 DIP above the art as to its left
+                                     and right. -->
                                 <Image x:Name="SeekAlbumArtImage"
                                        MaxHeight="280"
                                        MaxWidth="500"
                                        Stretch="Uniform"
                                        HorizontalAlignment="Center"
-                                       Margin="8,7,8,4"
+                                       Margin="8.4,7.4,9.2,4"
                                        Visibility="Collapsed"
                                        SnapsToDevicePixels="True"
                                        UseLayoutRounding="True"
                                        RenderOptions.BitmapScalingMode="HighQuality"
                                        utilities:MonitorOffset.Tag="MediaSeekAlbumArt">
                                     <Image.Height>
-                                        <MultiBinding Converter="{StaticResource sumWidthsConverter}" ConverterParameter="92">
+                                        <MultiBinding Converter="{StaticResource sumWidthsConverter}" ConverterParameter="104.8">
                                             <Binding ElementName="SeekBackButton" Path="ActualWidth" />
                                             <Binding ElementName="SeekPlayPauseButton" Path="ActualWidth" />
                                             <Binding ElementName="SeekForwardButton" Path="ActualWidth" />
@@ -364,7 +366,7 @@
                                             Style="{DynamicResource MediaSeekSliderStyle}"
                                             Height="16"
                                             VerticalAlignment="Center"
-                                            Margin="2,0"
+                                            Margin="6,0"
                                             Minimum="0"
                                             Maximum="1"
                                             IsMoveToPointEnabled="True"
@@ -372,7 +374,7 @@
                                             PreviewMouseUp="SeekSlider_OnPreviewMouseUp"
                                             utilities:MonitorOffset.Tag="MediaSeekSlider">
                                         <Slider.Width>
-                                            <MultiBinding Converter="{StaticResource remainingWidthConverter}" ConverterParameter="22,90">
+                                            <MultiBinding Converter="{StaticResource remainingWidthConverter}" ConverterParameter="30,90">
                                                 <Binding ElementName="SeekAlbumArtImage" Path="ActualWidth" />
                                                 <Binding ElementName="SeekBackButton" Path="ActualWidth" />
                                                 <Binding ElementName="SeekPlayPauseButton" Path="ActualWidth" />
