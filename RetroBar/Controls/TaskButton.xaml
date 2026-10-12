@@ -296,6 +296,7 @@
                                                                             <Button x:Name="PreviewCloseButton"
                                                                                     Grid.Column="1"
                                                                                     Style="{DynamicResource TaskPreviewCloseButton}"
+                                                                                    utilities:MonitorOffset.Tag="PreviewCloseButton"
                                                                                     HorizontalAlignment="Right"
                                                                                     VerticalAlignment="Center" />
                                                                         </Grid>
