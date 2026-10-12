@@ -303,7 +303,7 @@
                                             Click="SeekBackButton_OnClick"
                                             ToolTip="-10s"
                                             VerticalAlignment="Center"
-                                            Margin="1,0,1,0"
+                                            Margin="5,0,1,0"
                                             utilities:MonitorOffset.Tag="MediaSeekButtonBack">
                                         <!-- Own dedicated tag, deliberately NOT shared with the
                                              main taskbar row's own "MediaGlyphPrevious" (see
@@ -372,7 +372,7 @@
                                             PreviewMouseUp="SeekSlider_OnPreviewMouseUp"
                                             utilities:MonitorOffset.Tag="MediaSeekSlider">
                                         <Slider.Width>
-                                            <MultiBinding Converter="{StaticResource remainingWidthConverter}" ConverterParameter="18,90">
+                                            <MultiBinding Converter="{StaticResource remainingWidthConverter}" ConverterParameter="22,90">
                                                 <Binding ElementName="SeekAlbumArtImage" Path="ActualWidth" />
                                                 <Binding ElementName="SeekBackButton" Path="ActualWidth" />
                                                 <Binding ElementName="SeekPlayPauseButton" Path="ActualWidth" />
