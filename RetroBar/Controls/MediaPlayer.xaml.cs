@@ -96,6 +96,16 @@ namespace RetroBar.Controls
         public MediaPlayer()
         {
             InitializeComponent();
+
+            // The popup is part of this control's logical tree, so the track text's tooltip (this control's own) would show for
+            // anything the mouse rests on in it, and then stay up when the mouse leaves. The popup shows the same text itself.
+            ToolTipOpening += (s, e) =>
+            {
+                if (SeekPopup.IsOpen && ReferenceEquals(e.OriginalSource, this))
+                {
+                    e.Handled = true;
+                }
+            };
         }
 
         private async void UserControl_Loaded(object sender, RoutedEventArgs e)
@@ -755,10 +765,10 @@ namespace RetroBar.Controls
             }));
         }
 
-        // The spectrum in the seek popup: each bar is 2 device pixels wide with 1 between, as tall as the title and artist together, a
+        // The spectrum in the seek popup: each bar is 3 device pixels wide with 1 between, as tall as the title and artist together plus 4 DIP, a
         // pixel at the least (the bar's baseline). A bar rises at once but sinks gradually, so it doesn't flicker. Only drawn while
         // the popup is open.
-        private const int SeekSpectrumBarWidth = 2;
+        private const int SeekSpectrumBarWidth = 3;
         private const int SeekSpectrumBarGap = 1;
         private readonly float[] _seekSpectrumLevels = new float[AudioSpectrumCapture.SpectrumBands];
 
@@ -785,7 +795,7 @@ namespace RetroBar.Controls
             DpiScale dpi = VisualTreeHelper.GetDpi(this);
             int count = _seekSpectrumLevels.Length;
             int width = count * SeekSpectrumBarWidth + (count - 1) * SeekSpectrumBarGap;
-            int height = Math.Max(2, (int)Math.Round(SeekTextPanel.ActualHeight * dpi.DpiScaleY));
+            int height = Math.Max(2, (int)Math.Round((SeekTextPanel.ActualHeight + 4) * dpi.DpiScaleY));
 
             var geometry = new StreamGeometry();
             using (StreamGeometryContext context = geometry.Open())
@@ -1414,6 +1424,11 @@ namespace RetroBar.Controls
 
         private void SeekPopup_OnOpened(object sender, EventArgs e)
         {
+            // Takes down the track text's tooltip, if it is up from the mouse resting on the text that was clicked.
+            object trackToolTip = ToolTip;
+            ToolTip = null;
+            ToolTip = trackToolTip;
+
             ApplySeekGlyphs();
             Dispatcher.BeginInvoke(new Action(() => UpdateSeekMarquees(true)), System.Windows.Threading.DispatcherPriority.Loaded);
 
