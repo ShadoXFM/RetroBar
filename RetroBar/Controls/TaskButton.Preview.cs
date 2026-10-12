@@ -818,13 +818,13 @@ namespace RetroBar.Controls
             }
         }
 
-        // The X for a monitor scale (1 = 100%): about 8.8 x 7.2 DIPs, its strokes about 2.4 DIPs across - 9x7 pixels with 2-pixel
-        // strokes at 100%, 11x9 with 3 at 125%, and so on. Each row has the two strokes of the X, stepping evenly from the corners
+        // The X for a monitor scale (1 = 100%): about 8.8 DIPs square (the classic 8x7 glyph looked squashed), its strokes about 2.4 DIPs
+        // across - 9x9 pixels with 2-pixel strokes at 100%, 11x11 with 3 at 125%, and so on. Each row has the two strokes of the X, stepping evenly from the corners
         // to the middle.
         private static string[] CloseGlyphRows(double scale)
         {
             int width = (int)Math.Round(8.8 * scale);
-            int height = (int)Math.Round(7.2 * scale);
+            int height = width;
             int stroke = Math.Max(2, (int)Math.Round(2.4 * scale));
             var rows = new string[height];
 
