@@ -19,6 +19,7 @@
     <s:String x:Key="media_source_automatic">Automatic (follow Windows)</s:String>
     <s:String x:Key="media_source_browser">Browser</s:String>
     <s:String x:Key="media_source_none">No media playing</s:String>
+    <s:String x:Key="media_popup_always_on_top">_Always on top</s:String>
     <s:String x:Key="cpu_temp_heading">CPU Temperature</s:String>
     <s:String x:Key="show_cpu_temp">Show _CPU temperature</s:String>
     <s:String x:Key="media_previous">Previous</s:String>

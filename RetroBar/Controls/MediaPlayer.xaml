@@ -186,9 +186,16 @@
                  popup's offsets above are 10 further left / 10 lower to make up for it). -->
             <!-- The shadow is its own element behind the frame, not an Effect on it: an Effect redraws everything
                  inside it into an offscreen bitmap, which blurred the text and buttons. -->
-            <Grid RenderOptions.ClearTypeHint="Enabled"
+            <!-- Dragging anywhere on it that isn't a control moves the popup (see SeekPopupRoot_OnPreviewMouseLeftButtonDown). -->
+            <Grid x:Name="SeekPopupRoot"
+                  RenderOptions.ClearTypeHint="Enabled"
                   UseLayoutRounding="True"
-                  SnapsToDevicePixels="True">
+                  SnapsToDevicePixels="True"
+                  PreviewMouseLeftButtonDown="SeekPopupRoot_OnPreviewMouseLeftButtonDown"
+                  PreviewMouseMove="SeekPopupRoot_OnPreviewMouseMove"
+                  PreviewMouseLeftButtonUp="SeekPopupRoot_OnPreviewMouseLeftButtonUp"
+                  MouseRightButtonUp="SeekPopupRoot_OnMouseRightButtonUp"
+                  LostMouseCapture="SeekPopupRoot_OnLostMouseCapture">
                 <controls:PopupShadow Strength="0.5" />
                 <!-- The outermost line of the bevel (DarkShadow, right and bottom) is the frame's own outer border, not a border inside
                      another one that has a padding: it was not drawn at all that way at 125% (nothing red where it should be, with it
