@@ -1441,6 +1441,36 @@ namespace RetroBar.Controls
         private bool _seekPopupPinned;
         private static MediaPlayer _openSeekPlayer;
 
+        // Where the popup was dragged to. WPF puts a popup back above the track text whenever its content changes size (the track
+        // changing, from the taskbar's buttons), so every move of its window is kept there instead (see SeekPopupHook).
+        private POINT? _seekPopupMovedTo;
+
+        [StructLayout(LayoutKind.Sequential)]
+        private struct WINDOWPOS
+        {
+            public IntPtr Window, InsertAfter;
+            public int X, Y, Width, Height;
+            public uint Flags;
+        }
+
+        private const int WM_WINDOWPOSCHANGING = 0x0046;
+
+        private IntPtr SeekPopupHook(IntPtr hwnd, int msg, IntPtr wParam, IntPtr lParam, ref bool handled)
+        {
+            if (msg == WM_WINDOWPOSCHANGING && _seekPopupMovedTo is POINT moved)
+            {
+                WINDOWPOS position = Marshal.PtrToStructure<WINDOWPOS>(lParam);
+                if ((position.Flags & SWP_NOMOVE) == 0 && (position.X != moved.X || position.Y != moved.Y))
+                {
+                    position.X = moved.X;
+                    position.Y = moved.Y;
+                    Marshal.StructureToPtr(position, lParam, false);
+                }
+            }
+
+            return IntPtr.Zero;
+        }
+
         [StructLayout(LayoutKind.Sequential)]
         private struct POINT
         {
@@ -1524,7 +1554,8 @@ namespace RetroBar.Controls
             }
 
             GetCursorPos(out POINT now);
-            SetWindowPos(source.Handle, IntPtr.Zero, _seekPopupDragWindow.X + now.X - _seekPopupDragStart.X, _seekPopupDragWindow.Y + now.Y - _seekPopupDragStart.Y, 0, 0, SWP_NOSIZE | SWP_NOZORDER | SWP_NOACTIVATE);
+            _seekPopupMovedTo = new POINT { X = _seekPopupDragWindow.X + now.X - _seekPopupDragStart.X, Y = _seekPopupDragWindow.Y + now.Y - _seekPopupDragStart.Y };
+            SetWindowPos(source.Handle, IntPtr.Zero, _seekPopupMovedTo.Value.X, _seekPopupMovedTo.Value.Y, 0, 0, SWP_NOSIZE | SWP_NOZORDER | SWP_NOACTIVATE);
             RefreshSeekPopupMonitor(source);
         }
 
@@ -1646,6 +1677,7 @@ namespace RetroBar.Controls
             if (_seekPopupSource != null)
             {
                 _seekPopupSource.DpiChanged += SeekPopupSource_OnDpiChanged;
+                _seekPopupSource.AddHook(SeekPopupHook);
             }
 
             // Takes down the track text's tooltip, if it is up from the mouse resting on the text that was clicked.
@@ -1676,6 +1708,7 @@ namespace RetroBar.Controls
             if (_seekPopupSource != null)
             {
                 _seekPopupSource.DpiChanged -= SeekPopupSource_OnDpiChanged;
+                _seekPopupSource.RemoveHook(SeekPopupHook);
                 _seekPopupSource = null;
             }
 
@@ -1685,6 +1718,7 @@ namespace RetroBar.Controls
             }
 
             _seekPopupMonitor = null;
+            _seekPopupMovedTo = null;
             SeekPopupRoot.ClearValue(MonitorOffset.DeviceNameOverrideProperty);
 
             // Only suppress the next click if it's plausibly the one that just caused this close
