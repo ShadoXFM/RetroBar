@@ -23,6 +23,7 @@
             <converters:BoolToVisibilityConverter x:Key="boolToVisibilityConverter" />
             <converters:CpuTempShownToMonitorTagConverter x:Key="cpuTempShownToMonitorTagConverter" />
             <converters:MediaPlayingToMonitorTagConverter x:Key="mediaPlayingToMonitorTagConverter" />
+            <converters:TrayAloneToMonitorTagConverter x:Key="trayAloneToMonitorTagConverter" />
             <MenuItem x:Shared="false" x:Key="ToolbarsItem" Header="{DynamicResource toolbars}">
                 <MenuItem Header="{DynamicResource quick_launch}" IsCheckable="true" IsChecked="{Binding Source={x:Static utilities:Settings.Instance}, Path=ShowQuickLaunch, UpdateSourceTrigger=PropertyChanged}" />
                 <Separator />
@@ -139,7 +140,17 @@
                         <controls:WeatherDisplay VerticalAlignment="Center" />
                         <controls:CpuTempDisplay VerticalAlignment="Center" />
                     </StackPanel>
-                    <controls:NotifyIconList NotificationArea="{Binding NotificationArea}" />
+                    <!-- TrayNotifyListAlone (a Margin, say) is for the tray box with no media, weather or CPU temperature in it: the gap
+                         between the tray box's left side and the hide button, which does not touch the others' layouts. -->
+                    <controls:NotifyIconList NotificationArea="{Binding NotificationArea}">
+                        <utilities:MonitorOffset.Tag>
+                            <MultiBinding Converter="{StaticResource trayAloneToMonitorTagConverter}" ConverterParameter="TrayNotifyList">
+                                <Binding Path="IsMediaPlaying" RelativeSource="{RelativeSource Mode=FindAncestor, AncestorType=Window}" />
+                                <Binding Path="IsWeatherShown" RelativeSource="{RelativeSource Mode=FindAncestor, AncestorType=Window}" />
+                                <Binding Path="IsCpuTempShown" RelativeSource="{RelativeSource Mode=FindAncestor, AncestorType=Window}" />
+                            </MultiBinding>
+                        </utilities:MonitorOffset.Tag>
+                    </controls:NotifyIconList>
                     <controls:Clock VerticalAlignment="Center" />
                 </StackPanel>
             </GroupBox>
