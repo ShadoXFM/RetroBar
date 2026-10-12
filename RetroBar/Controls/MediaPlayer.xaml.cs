@@ -1442,7 +1442,20 @@ namespace RetroBar.Controls
             // deduction in the XAML is 2 less to match).
             // At 100% another 4 pixels of it (2 DIP is no more than that there), given back on the other side of the slider.
             double closer = dpi.DpiScaleX < 1.125 ? 4 * pixel : 0;
-            SeekSlider.Margin = new Thickness(4 + 2 * pixel + 4 * pull + shift - closer, 0, 6 + 2 * pixel + closer, 2 * pixel);
+            // The slider reaches 2 pixels further at each end, into what was the gaps (so they are 2 pixels smaller) - it is 4 pixels
+            // longer: its width is the same binding as in the XAML, with that much less deducted.
+            SeekSlider.Margin = new Thickness(4 + 4 * pull + shift - closer, 0, 6 + closer, 2 * pixel);
+
+            var width = new MultiBinding
+            {
+                Converter = (IMultiValueConverter)FindResource("remainingWidthConverter"),
+                ConverterParameter = string.Create(System.Globalization.CultureInfo.InvariantCulture, $"{12.8 - 4 * pixel},30"),
+            };
+            foreach (FrameworkElement source in new FrameworkElement[] { SeekAlbumArtImage, SeekBackButton, SeekPlayPauseButton, SeekForwardButton, SeekPreviousButton, SeekNextButton, SeekTimeText })
+            {
+                width.Bindings.Add(new Binding(nameof(ActualWidth)) { Source = source });
+            }
+            SeekSlider.SetBinding(WidthProperty, width);
 
             // Two pixels higher than the row's center (the slider one, its own margin above), which the digits' shapes leave looking low
             // next to the buttons.
