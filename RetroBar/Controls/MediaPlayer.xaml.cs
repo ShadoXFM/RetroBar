@@ -1439,6 +1439,7 @@ namespace RetroBar.Controls
         private POINT _seekPopupDragWindow;
         private HwndSource _seekPopupSource;
         private bool _seekPopupPinned;
+        private static MediaPlayer _openSeekPlayer;
 
         [StructLayout(LayoutKind.Sequential)]
         private struct POINT
@@ -1528,8 +1529,8 @@ namespace RetroBar.Controls
             }
         }
 
-        // A popup's window is above every other window by default. Without "Always on top" it is an ordinary one (still closed by a
-        // click outside it), which another window can come in front of.
+        // A popup's window is above every other window by default. Without "Always on top" it is an ordinary one, which another window
+        // can come in front of.
         private void ApplySeekPopupTopmost()
         {
             if (PresentationSource.FromVisual(SeekPopupRoot) is HwndSource source)
@@ -1580,8 +1581,7 @@ namespace RetroBar.Controls
             ReapplySeekPopupForMonitor();
         }
 
-        // Right click: keep it on top (it stays open and above the other windows until closed from here or from the track text), or
-        // close it.
+        // Right click: keep it above the other windows, or close it.
         private void SeekPopupRoot_OnMouseRightButtonUp(object sender, MouseButtonEventArgs e)
         {
             e.Handled = true;
@@ -1594,7 +1594,6 @@ namespace RetroBar.Controls
             onTop.Click += (s, args) =>
             {
                 _seekPopupPinned = !_seekPopupPinned;
-                SeekPopup.StaysOpen = _seekPopupPinned;
                 ApplySeekPopupTopmost();
             };
 
@@ -1614,7 +1613,13 @@ namespace RetroBar.Controls
 
         private void SeekPopup_OnOpened(object sender, EventArgs e)
         {
-            SeekPopup.StaysOpen = _seekPopupPinned;
+            // One popup at a time, whichever monitor's player it belongs to.
+            if (_openSeekPlayer != null && _openSeekPlayer != this)
+            {
+                _openSeekPlayer.SeekPopup.IsOpen = false;
+            }
+
+            _openSeekPlayer = this;
             Dispatcher.BeginInvoke(new Action(ApplySeekPopupTopmost), DispatcherPriority.Loaded);
             _seekPopupSource = PresentationSource.FromVisual(SeekPopupRoot) as HwndSource;
             if (_seekPopupSource != null)
@@ -1651,6 +1656,11 @@ namespace RetroBar.Controls
             {
                 _seekPopupSource.DpiChanged -= SeekPopupSource_OnDpiChanged;
                 _seekPopupSource = null;
+            }
+
+            if (_openSeekPlayer == this)
+            {
+                _openSeekPlayer = null;
             }
 
             _seekPopupMonitor = null;
