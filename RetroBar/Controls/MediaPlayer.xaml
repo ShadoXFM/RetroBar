@@ -451,7 +451,7 @@
                                             PreviewMouseUp="SeekSlider_OnPreviewMouseUp"
                                             utilities:MonitorOffset.Tag="MediaSeekSlider">
                                         <Slider.Width>
-                                            <MultiBinding Converter="{StaticResource remainingWidthConverter}" ConverterParameter="14.8,30">
+                                            <MultiBinding Converter="{StaticResource remainingWidthConverter}" ConverterParameter="12.8,30">
                                                 <Binding ElementName="SeekAlbumArtImage" Path="ActualWidth" />
                                                 <Binding ElementName="SeekBackButton" Path="ActualWidth" />
                                                 <Binding ElementName="SeekPlayPauseButton" Path="ActualWidth" />

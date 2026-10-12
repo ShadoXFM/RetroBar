@@ -1438,8 +1438,9 @@ namespace RetroBar.Controls
             SeekNextButton.Margin = new Thickness(-pull, 0, 0, 0);
 
             // The slider takes up the width the buttons' margins gave up (2 pixels each side, and the pulled-in gaps), so the row,
-            // the popup and the art keep their size.
-            SeekSlider.Margin = new Thickness(6 + 2 * pixel + 4 * pull + shift, 0, 6 + 2 * pixel, 2 * pixel);
+            // the popup and the art keep their size. 2 DIP less of gap to the buttons than that, which the slider is longer by (its width
+            // deduction in the XAML is 2 less to match).
+            SeekSlider.Margin = new Thickness(4 + 2 * pixel + 4 * pull + shift, 0, 6 + 2 * pixel, 2 * pixel);
 
             // Two pixels higher than the row's center (the slider one, its own margin above), which the digits' shapes leave looking low
             // next to the buttons.
