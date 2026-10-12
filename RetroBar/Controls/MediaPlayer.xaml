@@ -265,12 +265,23 @@
                                             <Binding ElementName="SeekBackButton" Path="ActualWidth" />
                                             <Binding ElementName="SeekPlayPauseButton" Path="ActualWidth" />
                                             <Binding ElementName="SeekForwardButton" Path="ActualWidth" />
-                                            <Binding ElementName="SeekTimeText" Path="ActualWidth" />
+                                            <Binding ElementName="SeekTimeWidthRef" Path="ActualWidth" />
                                         </MultiBinding>
                                     </Image.Height>
                                 </Image>
                                 <!-- The title and artist on the left, a spectrum (SeekSpectrum, drawn by UpdateSeekSpectrum) on the right, as wide as
                                      the controls row below. The margins give the text room above and below. -->
+                                <!-- The width of "0:00 / 0:00" in the time text's own font (same tag, so the same monitor settings), which the art's
+                                     size is worked out from instead of the live time text: that gets longer for a track of ten minutes or more,
+                                     and the popup grew with it. The slider is what gives up the room then. -->
+                                <Canvas Width="0" Height="0">
+                                    <TextBlock x:Name="SeekTimeWidthRef"
+                                               Style="{DynamicResource MediaPlayerTrackTextStyle}"
+                                               FontWeight="Bold"
+                                               Visibility="Hidden"
+                                               Text="0:00 / 0:00"
+                                               utilities:MonitorOffset.Tag="MediaSeekTimeText" />
+                                </Canvas>
                                 <Grid x:Name="SeekTextRow"
                                       HorizontalAlignment="Center"
                                       Width="{Binding ActualWidth, ElementName=SeekControlsRow}"
@@ -431,7 +442,7 @@
                                                VerticalAlignment="Center"
                                                Margin="2,0,6,0"
                                                TextAlignment="Right"
-                                               SizeChanged="SeekTimeText_OnSizeChanged"
+                                               MinWidth="{Binding ActualWidth, ElementName=SeekTimeWidthRef}"
                                                Text="0:00 / 0:00"
                                                utilities:MonitorOffset.Tag="MediaSeekTimeText" />
                                 </StackPanel>

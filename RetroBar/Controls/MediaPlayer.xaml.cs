@@ -1663,20 +1663,8 @@ namespace RetroBar.Controls
             menu.IsOpen = true;
         }
 
-        // The popup is as wide as its time text makes the art and the row: the text is "0:00 / 0:00" for an instant after a skip or a
-        // seek, and as long as the track's own times otherwise, which made the whole popup shrink and grow. While it is open the text
-        // only ever gets wider (it keeps the widest it has been, with the text at its right end).
-        private void SeekTimeText_OnSizeChanged(object sender, SizeChangedEventArgs e)
-        {
-            if (e.WidthChanged && SeekTimeText.ActualWidth > SeekTimeText.MinWidth + 0.5)
-            {
-                SeekTimeText.MinWidth = SeekTimeText.ActualWidth;
-            }
-        }
-
         private void SeekPopup_OnOpened(object sender, EventArgs e)
         {
-            SeekTimeText.ClearValue(FrameworkElement.MinWidthProperty);
             // One popup at a time, whichever monitor's player it belongs to.
             if (_openSeekPlayer != null && _openSeekPlayer != this)
             {
