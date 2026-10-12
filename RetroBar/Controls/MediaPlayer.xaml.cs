@@ -1556,6 +1556,7 @@ namespace RetroBar.Controls
             GetCursorPos(out _seekPopupDragStart);
             _seekPopupDragWindow = new POINT { X = window.Left, Y = window.Top };
             _seekPopupDragging = true;
+            SeekPopup.StaysOpen = true;
             SeekPopupRoot.CaptureMouse();
             e.Handled = true;
         }
@@ -1608,7 +1609,14 @@ namespace RetroBar.Controls
         private void SeekPopupRoot_OnLostMouseCapture(object sender, MouseEventArgs e)
         {
             _seekPopupDragging = false;
+            UpdateSeekPopupStaysOpen();
             ApplySeekPopupTopmost();
+        }
+
+        // Closed by a click elsewhere, unless it has been moved or is on top: then it is where the user put it, and stays.
+        private void UpdateSeekPopupStaysOpen()
+        {
+            SeekPopup.StaysOpen = _seekPopupPinned || _seekPopupMovedTo != null;
         }
 
         // The monitor the popup is on decides which adjustments of monitor-adjustments.json apply to it, and the pixel art is drawn for
@@ -1660,6 +1668,7 @@ namespace RetroBar.Controls
             onTop.Click += (s, args) =>
             {
                 _seekPopupPinned = !_seekPopupPinned;
+                UpdateSeekPopupStaysOpen();
                 ApplySeekPopupTopmost();
             };
 
@@ -1679,6 +1688,8 @@ namespace RetroBar.Controls
 
         private void SeekPopup_OnOpened(object sender, EventArgs e)
         {
+            UpdateSeekPopupStaysOpen();
+
             // One popup at a time, whichever monitor's player it belongs to.
             if (_openSeekPlayer != null && _openSeekPlayer != this)
             {
