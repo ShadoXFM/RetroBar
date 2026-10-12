@@ -353,6 +353,18 @@
                                          the 5px push grows this row's own reserved height by
                                          exactly 5px, rather than needing a separate Padding
                                          increase to avoid the buttons overflowing past it. -->
+                                    <Button x:Name="SeekPreviousButton"
+                                            Style="{DynamicResource MediaPlayerButtonStyle}"
+                                            Click="PreviousButton_OnClick"
+                                            ToolTip="{DynamicResource media_previous}"
+                                            VerticalAlignment="Center"
+                                            Margin="5,0,1,0"
+                                            utilities:MonitorOffset.Tag="MediaSeekButtonPrevious">
+                                        <Path x:Name="SeekPreviousGlyph"
+                                              Data="{DynamicResource MediaPlayerPreviousGeometry}"
+                                              Style="{DynamicResource MediaPlayerGlyphStyle}"
+                                              utilities:MonitorOffset.Tag="MediaSeekGlyphSkipPrevious" />
+                                    </Button>
                                     <Button x:Name="SeekBackButton"
                                             Style="{DynamicResource MediaPlayerButtonStyle}"
                                             Click="SeekBackButton_OnClick"
@@ -403,6 +415,18 @@
                                               Style="{DynamicResource MediaPlayerGlyphStyle}"
                                               utilities:MonitorOffset.Tag="MediaSeekGlyphNext" />
                                     </Button>
+                                    <Button x:Name="SeekNextButton"
+                                            Style="{DynamicResource MediaPlayerButtonStyle}"
+                                            Click="NextButton_OnClick"
+                                            ToolTip="{DynamicResource media_next}"
+                                            VerticalAlignment="Center"
+                                            Margin="1,0,1,0"
+                                            utilities:MonitorOffset.Tag="MediaSeekButtonNext">
+                                        <Path x:Name="SeekNextGlyph"
+                                              Data="{DynamicResource MediaPlayerNextGeometry}"
+                                              Style="{DynamicResource MediaPlayerGlyphStyle}"
+                                              utilities:MonitorOffset.Tag="MediaSeekGlyphSkipNext" />
+                                    </Button>
                                     <!-- Width fills whatever space is left over after the other
                                          (fixed-width) siblings within the album art's own
                                          rendered width (see RemainingWidthConverter's remarks on
@@ -432,6 +456,8 @@
                                                 <Binding ElementName="SeekBackButton" Path="ActualWidth" />
                                                 <Binding ElementName="SeekPlayPauseButton" Path="ActualWidth" />
                                                 <Binding ElementName="SeekForwardButton" Path="ActualWidth" />
+                                                <Binding ElementName="SeekPreviousButton" Path="ActualWidth" />
+                                                <Binding ElementName="SeekNextButton" Path="ActualWidth" />
                                                 <Binding ElementName="SeekTimeText" Path="ActualWidth" />
                                             </MultiBinding>
                                         </Slider.Width>

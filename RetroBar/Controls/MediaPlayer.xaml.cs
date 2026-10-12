@@ -1408,6 +1408,15 @@ namespace RetroBar.Controls
                 path.Data = PixelShape.FromRows(rows, offsetX, Math.Max(0, (boxHeight - rows.Length) / 2), dpi);
             }
 
+            // The skip glyphs are narrower than the rewind and fast-forward ones, with the bar (as wide as the pause's bars) on the outer
+            // side. They face the next glyph with the point of their triangle, which reads as a wider gap than a bar or a base does,
+            // so each is brought two pixels in towards its neighbor.
+            int bar = Math.Max(2, (int)Math.Round(2.4 * dpi.DpiScaleX));
+            string[] previous = PixelShape.Skip(height, bar, false);
+            string[] next = PixelShape.Skip(height, bar, true);
+
+            Apply(SeekPreviousGlyph, previous, Math.Min(2, boxWidth - previous[0].Length));
+            Apply(SeekNextGlyph, next, Math.Max(0, boxWidth - next[0].Length - 2));
             Apply(SeekBackGlyph, rewind, 0);
             Apply(SeekPlayPauseGlyph, middle, (boxWidth - middle[0].Length) / 2);
             Apply(SeekForwardGlyph, forward, boxWidth - forward[0].Length);
@@ -1418,13 +1427,15 @@ namespace RetroBar.Controls
             // The button style's own padding leaves 7 pixels between one glyph and the next at 100%, a pixel too many next to the
             // 125% layout's proportions: there each of the two gaps is pulled in by a pixel.
             double pull = dpi.DpiScaleX < 1.125 ? pixel : 0;
-            SeekBackButton.Margin = new Thickness(6 * pixel, 0, 0, 0);
+            SeekPreviousButton.Margin = new Thickness(6 * pixel, 0, 0, 0);
+            SeekBackButton.Margin = new Thickness(-pull, 0, 0, 0);
             SeekPlayPauseButton.Margin = new Thickness(-pull, 0, 0, 0);
             SeekForwardButton.Margin = new Thickness(-pull, 0, 0, 0);
+            SeekNextButton.Margin = new Thickness(-pull, 0, 0, 0);
 
             // The slider takes up the width the buttons' margins gave up (2 pixels each side, and the pulled-in gaps), so the row,
             // the popup and the art keep their size.
-            SeekSlider.Margin = new Thickness(6 + 2 * pixel + 2 * pull, 0, 6 + 2 * pixel, 2 * pixel);
+            SeekSlider.Margin = new Thickness(6 + 2 * pixel + 4 * pull, 0, 6 + 2 * pixel, 2 * pixel);
 
             // Two pixels higher than the row's center (the slider one, its own margin above), which the digits' shapes leave looking low
             // next to the buttons.
@@ -1438,7 +1449,8 @@ namespace RetroBar.Controls
         private POINT _seekPopupDragStart;
         private POINT _seekPopupDragWindow;
         private HwndSource _seekPopupSource;
-        private bool _seekPopupPinned;
+        // Shared by every monitor's player (they each have their own popup, one open at a time).
+        private static bool _seekPopupPinned;
         private static MediaPlayer _openSeekPlayer;
 
         // Where the popup was dragged to. WPF puts a popup back above the track text whenever its content changes size (the track

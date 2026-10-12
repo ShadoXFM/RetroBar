@@ -77,6 +77,24 @@ namespace RetroBar.Utilities
             return rows;
         }
 
+        /// <summary>A triangle with a bar at its tip's side ("previous track": pointing left, bar on the left; "next track": pointing
+        /// right, bar on the right), height rows tall (odd), the bar bar pixels wide and a pixel from the triangle.</summary>
+        public static string[] Skip(int height, int bar, bool pointsRight)
+        {
+            int width = (height + 1) / 2;
+            var rows = new string[height];
+
+            for (int y = 0; y < height; y++)
+            {
+                string triangle = new string('X', TriangleWidth(y, height, width));
+                triangle = pointsRight ? triangle.PadRight(width, '.') : triangle.PadLeft(width, '.');
+                string stripe = new string('X', bar);
+                rows[y] = pointsRight ? triangle + "." + stripe : stripe + "." + triangle;
+            }
+
+            return rows;
+        }
+
         /// <summary>Two triangles, one after the other, pointing right ("fast forward") or left ("rewind").</summary>
         public static string[] DoubleTriangle(int height, bool pointsRight)
         {
