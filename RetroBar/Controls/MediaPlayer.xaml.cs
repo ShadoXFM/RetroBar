@@ -1282,6 +1282,7 @@ namespace RetroBar.Controls
         // dismisses it on that click before our handler even runs, so by the time our handler
         // checks IsOpen it already reads false and toggles it back open.
         private bool _ignoreNextTrackTextClick;
+        private DateTime _ignoreTrackTextClickUntil;
 
         // Right-click on the track text: choose which app's media to show when several have a session
         // (a browser tab and a music player, say) - or "Automatic" to follow whichever Windows says is
@@ -1363,15 +1364,19 @@ namespace RetroBar.Controls
 
         private void TrackTextCanvas_OnMouseLeftButtonUp(object sender, MouseButtonEventArgs e)
         {
-            if (_ignoreNextTrackTextClick)
+            // Only the click that closed the popup (its mouse-up arrives right after): a popup closed some other way - by this very click
+            // while it stays open on its own, or from its menu - left the flag set and ate the next, real click.
+            bool ignore = _ignoreNextTrackTextClick && DateTime.UtcNow < _ignoreTrackTextClickUntil;
+            _ignoreNextTrackTextClick = false;
+            if (ignore)
             {
-                _ignoreNextTrackTextClick = false;
                 return;
             }
 
             if (_sessionManager != null && _sessionManager.HasSession)
             {
                 SeekPopup.IsOpen = !SeekPopup.IsOpen;
+                _ignoreNextTrackTextClick = false;
             }
         }
 
@@ -1473,6 +1478,9 @@ namespace RetroBar.Controls
         [DllImport("user32.dll", CharSet = CharSet.Unicode)]
         private static extern bool GetMonitorInfo(IntPtr monitor, ref MONITORINFOEX info);
 
+        private static readonly IntPtr HWND_TOPMOST = new(-1);
+        private static readonly IntPtr HWND_NOTOPMOST = new(-2);
+        private const uint SWP_NOMOVE = 0x0002;
         private const uint SWP_NOSIZE = 0x0001;
         private const uint SWP_NOZORDER = 0x0004;
         private const uint SWP_NOACTIVATE = 0x0010;
@@ -1520,9 +1528,20 @@ namespace RetroBar.Controls
             }
         }
 
+        // A popup's window is above every other window by default. Without "Always on top" it is an ordinary one (still closed by a
+        // click outside it), which another window can come in front of.
+        private void ApplySeekPopupTopmost()
+        {
+            if (PresentationSource.FromVisual(SeekPopupRoot) is HwndSource source)
+            {
+                SetWindowPos(source.Handle, _seekPopupPinned ? HWND_TOPMOST : HWND_NOTOPMOST, 0, 0, 0, 0, SWP_NOMOVE | SWP_NOSIZE | SWP_NOACTIVATE);
+            }
+        }
+
         private void SeekPopupRoot_OnLostMouseCapture(object sender, MouseEventArgs e)
         {
             _seekPopupDragging = false;
+            ApplySeekPopupTopmost();
         }
 
         // The monitor the popup is on decides which adjustments of monitor-adjustments.json apply to it, and the pixel art is drawn for
@@ -1576,6 +1595,7 @@ namespace RetroBar.Controls
             {
                 _seekPopupPinned = !_seekPopupPinned;
                 SeekPopup.StaysOpen = _seekPopupPinned;
+                ApplySeekPopupTopmost();
             };
 
             var close = new MenuItem { Header = TryFindResource("close") as string ?? "_Close" };
@@ -1595,6 +1615,7 @@ namespace RetroBar.Controls
         private void SeekPopup_OnOpened(object sender, EventArgs e)
         {
             SeekPopup.StaysOpen = _seekPopupPinned;
+            Dispatcher.BeginInvoke(new Action(ApplySeekPopupTopmost), DispatcherPriority.Loaded);
             _seekPopupSource = PresentationSource.FromVisual(SeekPopupRoot) as HwndSource;
             if (_seekPopupSource != null)
             {
@@ -1639,6 +1660,7 @@ namespace RetroBar.Controls
             // (the mouse is still over the track text) - a dismissal from clicking elsewhere
             // shouldn't eat a later, unrelated click on the text.
             Point mousePos = Mouse.GetPosition(TrackTextCanvas);
+            _ignoreTrackTextClickUntil = DateTime.UtcNow + TimeSpan.FromMilliseconds(500);
             _ignoreNextTrackTextClick = mousePos.X >= 0 && mousePos.Y >= 0
                 && mousePos.X <= TrackTextCanvas.ActualWidth && mousePos.Y <= TrackTextCanvas.ActualHeight;
         }

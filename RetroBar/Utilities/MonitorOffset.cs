@@ -70,6 +70,10 @@ namespace RetroBar.Utilities
             "AppliedHeight", typeof(bool), typeof(MonitorOffset), new PropertyMetadata(false));
         private static readonly DependencyProperty AppliedMarginProperty = DependencyProperty.RegisterAttached(
             "AppliedMargin", typeof(bool), typeof(MonitorOffset), new PropertyMetadata(false));
+        // The Margin an element had in its XAML, kept while a monitor's Margin is applied over it: clearing the value when that monitor's
+        // entry goes away (the media popup dragged from one monitor to another) would otherwise leave no margin at all.
+        private static readonly DependencyProperty XamlMarginProperty = DependencyProperty.RegisterAttached(
+            "XamlMargin", typeof(object), typeof(MonitorOffset), new PropertyMetadata(DependencyProperty.UnsetValue));
         private static readonly DependencyProperty AppliedPaddingProperty = DependencyProperty.RegisterAttached(
             "AppliedPadding", typeof(bool), typeof(MonitorOffset), new PropertyMetadata(false));
         private static readonly DependencyProperty AppliedBackgroundProperty = DependencyProperty.RegisterAttached(
@@ -465,6 +469,12 @@ namespace RetroBar.Utilities
                     // hand-edited JSON, not locale-sensitive user input, so it should always
                     // parse the same way regardless of the machine it runs on.
                     var thickness = (Thickness)ThicknessConverter.ConvertFromString(null, CultureInfo.InvariantCulture, marginText);
+                    if (!(bool)element.GetValue(AppliedMarginProperty))
+                    {
+                        object local = element.ReadLocalValue(FrameworkElement.MarginProperty);
+                        element.SetValue(XamlMarginProperty, local is Thickness ? local : DependencyProperty.UnsetValue);
+                    }
+
                     element.SetValue(FrameworkElement.MarginProperty, thickness);
                     element.SetValue(AppliedMarginProperty, true);
                 }
@@ -476,7 +486,15 @@ namespace RetroBar.Utilities
             }
             else if ((bool)element.GetValue(AppliedMarginProperty))
             {
-                element.ClearValue(FrameworkElement.MarginProperty);
+                if (element.GetValue(XamlMarginProperty) is Thickness xamlMargin)
+                {
+                    element.SetValue(FrameworkElement.MarginProperty, xamlMargin);
+                }
+                else
+                {
+                    element.ClearValue(FrameworkElement.MarginProperty);
+                }
+
                 element.SetValue(AppliedMarginProperty, false);
             }
         }
