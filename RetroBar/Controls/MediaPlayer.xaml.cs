@@ -1285,9 +1285,13 @@ namespace RetroBar.Controls
             // The buttons' margins are whole pixels too (a DIP at 125% is a pixel and a quarter, which rounded differently from
             // one button to the next and left the gaps between the glyphs uneven).
             double pixel = 1 / dpi.DpiScaleX;
-            SeekBackButton.Margin = new Thickness(6 * pixel, 0, pixel, 0);
-            SeekPlayPauseButton.Margin = new Thickness(pixel, 0, pixel, 0);
-            SeekForwardButton.Margin = new Thickness(pixel, 0, pixel, 0);
+            SeekBackButton.Margin = new Thickness(6 * pixel, 0, 0, 0);
+            SeekPlayPauseButton.Margin = new Thickness(0);
+            SeekForwardButton.Margin = new Thickness(0);
+
+            // The slider takes up the width the buttons' margins gave up (2 pixels each side), so the row, the popup and the
+            // art keep their size.
+            SeekSlider.Margin = new Thickness(6 + 2 * pixel, 0, 6 + 2 * pixel, 0);
 
             // A pixel higher than the row's center, which its digits' shapes leave looking low next to the buttons.
             SeekTimeText.Margin = new Thickness(2, 0, 6, 2 / dpi.DpiScaleY);
