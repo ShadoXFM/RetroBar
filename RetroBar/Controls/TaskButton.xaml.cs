@@ -331,7 +331,12 @@ namespace RetroBar.Controls
             ProgramMenuItem.Header = GetProgramDisplayName();
             // Made the way the preview's title icon is (the same icon, asked for the same way, the same 16 DIP image and per-monitor
             // adjustments - "PreviewTitleIcon" in the monitor file), so it is as sharp as that one.
-            ImageSource programIcon = ((System.Windows.Data.IMultiValueConverter)FindResource("taskIconConverter")).Convert(new object[] { Window, Window.Icon }, typeof(ImageSource), "window", System.Globalization.CultureInfo.CurrentCulture) as ImageSource
+            // For File Explorer that is the program's own icon - the one the tab shows when there are several windows - not the
+            // folder icon in the window's title bar.
+            var iconConverter = (System.Windows.Data.IMultiValueConverter)FindResource("taskIconConverter");
+            ImageSource programIcon = (TaskIconConverter.IsFileExplorerWindow(Window)
+                                          ? iconConverter.Convert(new object[] { Window, Window.Icon, 2 }, typeof(ImageSource), null, System.Globalization.CultureInfo.CurrentCulture)
+                                          : iconConverter.Convert(new object[] { Window, Window.Icon }, typeof(ImageSource), "window", System.Globalization.CultureInfo.CurrentCulture)) as ImageSource
                                       ?? GetProgramIcon();
             var menuIcon = programIcon == null ? null : new Image { Source = programIcon, Width = 16, Height = 16, UseLayoutRounding = true, SnapsToDevicePixels = true };
             if (menuIcon != null)
