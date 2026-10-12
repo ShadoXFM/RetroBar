@@ -141,8 +141,10 @@ namespace RetroBar.Controls
             AppButton.ContextMenuOpening += (s, e) => ClosePreview();
         }
 
+        private static DateTime _previewKeepUntil = DateTime.MinValue;
         private static string _reopenPreviewApp;
         private static DateTime _reopenPreviewUntil = DateTime.MinValue;
+        private static RECT? _reopenPreviewFrom;
 
         // A window was closed from its preview, and the tab that stood for it has been replaced by this one: show the preview again
         // for the windows that are left.
@@ -155,7 +157,19 @@ namespace RetroBar.Controls
             }
 
             _reopenPreviewApp = null;
-            Dispatcher.BeginInvoke(new Action(() => OpenPreview(true)), DispatcherPriority.Loaded);
+            RECT? from = _reopenPreviewFrom;
+            _reopenPreviewFrom = null;
+
+            // Shown at once (not faded in), and slid from where the old tab's preview was.
+            Dispatcher.BeginInvoke(new Action(() =>
+            {
+                OpenPreview(true, true);
+
+                if (from != null)
+                {
+                    Dispatcher.BeginInvoke(new Action(() => SlidePreviewFrom(from.Value, true)), DispatcherPriority.Loaded);
+                }
+            }), DispatcherPriority.Loaded);
         }
 
         private RECT? _previewRectBefore;
@@ -170,8 +184,6 @@ namespace RetroBar.Controls
                 return;
             }
 
-            // The tab is still here, so there is nothing to reopen.
-            _reopenPreviewApp = null;
             _previewRectBefore = before;
             Dispatcher.BeginInvoke(new Action(SlidePreviewToNewPlace), DispatcherPriority.Render);
         }
@@ -181,14 +193,25 @@ namespace RetroBar.Controls
             RECT? before = _previewRectBefore;
             _previewRectBefore = null;
 
-            if (before == null || AppButton.ToolTip is not ToolTip tip || !tip.IsOpen || _previewFadingOut ||
+            if (before != null)
+            {
+                SlidePreviewFrom(before.Value, false);
+            }
+        }
+
+        // Moves the preview from where it was (a screen rectangle) to where it is now, over the preview's slide time. A preview
+        // that has only just opened is slow to reach the screen with software rendering, so its slide waits for that.
+        private void SlidePreviewFrom(RECT before, bool justOpened)
+        {
+            if (AppButton.ToolTip is not ToolTip tip || !tip.IsOpen || _previewFadingOut ||
                 PresentationSource.FromVisual(tip) is not HwndSource source || !GetWindowRect(source.Handle, out RECT now))
             {
                 return;
             }
 
-            int dx = before.Value.Left - now.Left;
-            int dy = before.Value.Top - now.Top;
+            double startDelay = justOpened && Settings.Instance.UseSoftwareRendering ? 70 : 0;
+            int dx = before.Left - now.Left;
+            int dy = before.Top - now.Top;
             if (dx == 0 && dy == 0)
             {
                 return;
@@ -208,7 +231,7 @@ namespace RetroBar.Controls
             Place(0);
             timer.Tick += (s, args) =>
             {
-                double progress = Math.Min(1, clock.Elapsed.TotalMilliseconds / PreviewSlideIn.TotalMilliseconds);
+                double progress = Math.Clamp((clock.Elapsed.TotalMilliseconds - startDelay) / PreviewSlideIn.TotalMilliseconds, 0, 1);
                 Place(progress);
                 if (progress >= 1 || !tip.IsOpen)
                 {
@@ -285,7 +308,7 @@ namespace RetroBar.Controls
             }
         }
 
-        private void OpenPreview(bool force = false)
+        private void OpenPreview(bool force = false, bool instant = false)
         {
             if ((!force && !IsPointerOverTab()) || AppButton.ToolTip is not ToolTip tip || AppButton.ContextMenu?.IsOpen == true)
             {
@@ -313,8 +336,8 @@ namespace RetroBar.Controls
 
             // Start (or resume, if it was still fading out) from the current opacity.
             (DependencyProperty slideAxis, double slideStart) = PreviewSlideAxis();
-            double startOpacity = tip.IsOpen ? tip.Opacity : 0;
-            double startOffset = tip.IsOpen ? (double)tip.GetValue(slideAxis) : slideStart;
+            double startOpacity = instant ? 1 : tip.IsOpen ? tip.Opacity : 0;
+            double startOffset = instant ? 0 : tip.IsOpen ? (double)tip.GetValue(slideAxis) : slideStart;
             _previewFadingOut = false;
             tip.BeginAnimation(UIElement.OpacityProperty, null);
             ClearPreviewSlide(tip);
@@ -384,7 +407,15 @@ namespace RetroBar.Controls
             {
                 ApplicationWindow target = hovered?.Window ?? Window;
 
-                if (!ReferenceEquals(_previewHoverTarget, target))
+                if (hit == PreviewHit.Close)
+                {
+                    // Pointing at a close button is not asking for a look at the window: no peek, and none started when it
+                    // moves off the button until it has rested on the preview again.
+                    StopPeek();
+                    _previewHoverTarget = target;
+                    _previewHoverSince = DateTime.UtcNow;
+                }
+                else if (!ReferenceEquals(_previewHoverTarget, target))
                 {
                     StopPeek();
                     _previewHoverTarget = target;
@@ -404,7 +435,9 @@ namespace RetroBar.Controls
                 StopPeek();
             }
 
-            if (IsPointerOverTab() || overPreview || _windowMenu?.IsOpen == true)
+            // After a window was closed from the preview the others are re-centered, and the pointer is then often off the preview for
+            // a moment: it is given a little longer before the preview goes.
+            if (IsPointerOverTab() || overPreview || _windowMenu?.IsOpen == true || DateTime.UtcNow < _previewKeepUntil)
             {
                 _previewOutsideSince = null;
                 return;
@@ -719,6 +752,8 @@ namespace RetroBar.Controls
                     {
                         _reopenPreviewApp = TaskOpenOrderComparer.AppKey(target);
                         _reopenPreviewUntil = DateTime.UtcNow + TimeSpan.FromSeconds(3);
+                        _previewKeepUntil = DateTime.UtcNow + TimeSpan.FromSeconds(2);
+                        _reopenPreviewFrom = GetWindowRect(hwnd, out RECT here) ? here : null;
                         // Its thumbnail has gone grey (the window's icon on a plain box) in the moments before the window is
                         // gone from the list, so it is hidden - kept in its place, so the others don't move yet - at once. If the
                         // window is still there a little later (it asked to save something, say), it is shown again.
