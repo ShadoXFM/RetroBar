@@ -430,6 +430,8 @@
                                                FontWeight="Bold"
                                                VerticalAlignment="Center"
                                                Margin="2,0,6,0"
+                                               TextAlignment="Right"
+                                               SizeChanged="SeekTimeText_OnSizeChanged"
                                                Text="0:00 / 0:00"
                                                utilities:MonitorOffset.Tag="MediaSeekTimeText" />
                                 </StackPanel>
