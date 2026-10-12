@@ -246,7 +246,7 @@
                                        MaxWidth="500"
                                        Stretch="Uniform"
                                        HorizontalAlignment="Center"
-                                       Margin="8.4,7.4,9.2,4"
+                                       Margin="8.4,7.4,8.4,4"
                                        Visibility="Collapsed"
                                        SnapsToDevicePixels="True"
                                        UseLayoutRounding="True"

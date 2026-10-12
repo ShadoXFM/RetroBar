@@ -68,11 +68,10 @@ namespace RetroBar.Utilities
             return rows;
         }
 
-        /// <summary>Two bars.</summary>
-        public static string[] Pause(int height)
+        /// <summary>Two bars (each bar pixels wide, gap pixels apart).</summary>
+        public static string[] Pause(int height, int bar, int gap)
         {
-            int bar = Math.Max(2, (int)Math.Round(height / 3.5));
-            string row = new string('X', bar) + new string('.', bar) + new string('X', bar);
+            string row = new string('X', bar) + new string('.', gap) + new string('X', bar);
             var rows = new string[height];
             Array.Fill(rows, row);
             return rows;

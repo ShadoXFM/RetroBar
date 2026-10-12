@@ -1252,27 +1252,45 @@ namespace RetroBar.Controls
             }
         }
 
-        // The popup's buttons' glyphs, drawn as whole device pixels (see PixelShape) and as tall as the taskbar's own, centered in
-        // the same 10 x 7 DIP box the glyph style gives them (so the buttons keep their size, and the popup its layout).
+        // The popup's buttons' glyphs, drawn as whole device pixels (see PixelShape) at the height of the taskbar's own, and the
+        // pause glyph with the taskbar's own bars (2.4 DIP wide, 1.6 apart). All three buttons are as wide as the widest glyph
+        // plus a pixel, and the glyphs are set in them so that the gap between one glyph and the next is the same pixel count
+        // either side of the pause: the arrows keep to the outside of their boxes, one to each side, the pause is centered.
         private void ApplySeekGlyphs()
         {
             DpiScale dpi = VisualTreeHelper.GetDpi(this);
-            int boxWidth = (int)Math.Round(10 * dpi.DpiScaleX);
             int boxHeight = (int)Math.Round(7 * dpi.DpiScaleY);
             int height = boxHeight % 2 == 1 ? boxHeight : boxHeight + 1;
             bool playing = _sessionManager?.PlaybackState == MediaPlaybackState.Playing;
 
-            void Apply(System.Windows.Shapes.Path path, string[] rows)
+            string[] rewind = PixelShape.DoubleTriangle(height, false);
+            string[] forward = PixelShape.DoubleTriangle(height, true);
+            string[] middle = playing
+                ? PixelShape.Pause(height, Math.Max(2, (int)Math.Round(2.4 * dpi.DpiScaleX)), Math.Max(2, (int)Math.Round(1.6 * dpi.DpiScaleX)))
+                : PixelShape.Play(height);
+            int boxWidth = Math.Max(rewind[0].Length, middle[0].Length) + 1;
+
+            void Apply(System.Windows.Shapes.Path path, string[] rows, int offsetX)
             {
-                int offsetX = Math.Max(0, (boxWidth - rows[0].Length) / 2);
-                int offsetY = Math.Max(0, (boxHeight - rows.Length) / 2);
                 path.Stretch = Stretch.None;
-                path.Data = PixelShape.FromRows(rows, offsetX, offsetY, dpi);
+                path.Width = boxWidth / dpi.DpiScaleX;
+                path.Height = boxHeight / dpi.DpiScaleY;
+                path.Data = PixelShape.FromRows(rows, offsetX, Math.Max(0, (boxHeight - rows.Length) / 2), dpi);
             }
 
-            Apply(SeekBackGlyph, PixelShape.DoubleTriangle(height, false));
-            Apply(SeekForwardGlyph, PixelShape.DoubleTriangle(height, true));
-            Apply(SeekPlayPauseGlyph, playing ? PixelShape.Pause(height) : PixelShape.Play(height));
+            Apply(SeekBackGlyph, rewind, 0);
+            Apply(SeekPlayPauseGlyph, middle, (boxWidth - middle[0].Length) / 2);
+            Apply(SeekForwardGlyph, forward, boxWidth - forward[0].Length);
+
+            // The buttons' margins are whole pixels too (a DIP at 125% is a pixel and a quarter, which rounded differently from
+            // one button to the next and left the gaps between the glyphs uneven).
+            double pixel = 1 / dpi.DpiScaleX;
+            SeekBackButton.Margin = new Thickness(6 * pixel, 0, pixel, 0);
+            SeekPlayPauseButton.Margin = new Thickness(pixel, 0, pixel, 0);
+            SeekForwardButton.Margin = new Thickness(pixel, 0, pixel, 0);
+
+            // A pixel higher than the row's center, which its digits' shapes leave looking low next to the buttons.
+            SeekTimeText.Margin = new Thickness(2, 0, 6, 2 / dpi.DpiScaleY);
         }
 
         private void SeekPopup_OnOpened(object sender, EventArgs e)
