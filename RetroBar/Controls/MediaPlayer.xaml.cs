@@ -1291,10 +1291,11 @@ namespace RetroBar.Controls
 
             // The slider takes up the width the buttons' margins gave up (2 pixels each side), so the row, the popup and the
             // art keep their size.
-            SeekSlider.Margin = new Thickness(6 + 2 * pixel, 0, 6 + 2 * pixel, 0);
+            SeekSlider.Margin = new Thickness(6 + 2 * pixel, 0, 6 + 2 * pixel, 2 * pixel);
 
-            // A pixel higher than the row's center, which its digits' shapes leave looking low next to the buttons.
-            SeekTimeText.Margin = new Thickness(2, 0, 6, 2 / dpi.DpiScaleY);
+            // Two pixels higher than the row's center (the slider one, its own margin above), which the digits' shapes leave looking low
+            // next to the buttons.
+            SeekTimeText.Margin = new Thickness(2, 0, 6, 4 / dpi.DpiScaleY);
         }
 
         private void SeekPopup_OnOpened(object sender, EventArgs e)
