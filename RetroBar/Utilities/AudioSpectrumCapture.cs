@@ -1,5 +1,6 @@
 using ManagedShell.Common.Logging;
 using NAudio.CoreAudioApi;
+using NAudio.Dsp;
 using NAudio.Wave;
 using System;
 
@@ -21,6 +22,22 @@ namespace RetroBar.Utilities
         /// Hard-clamped to 0-1 - a VU meter's fill fraction has to be usable directly as a Width
         /// multiplier.</summary>
         public event Action<float, float> LevelUpdated;
+
+        /// <summary>Fires on the capture thread like LevelUpdated: the loudness (0-1, in decibels like the VU meter) of each of
+        /// SpectrumBands frequency bands, lowest first, for the spectrum in the media popup.</summary>
+        public event Action<float[]> SpectrumUpdated;
+
+        public const int SpectrumBands = 14;
+        private const int FftSize = 2048;
+        private const int FftLog2 = 11;
+        private const double LowestBandHz = 50;
+        private const double HighestBandHz = 14000;
+
+        private readonly float[] _fftWindow = new float[FftSize];
+        private int _fftFilled;
+        private int _fftWritten;
+        private readonly Complex[] _fftBuffer = new Complex[FftSize];
+        private readonly float[] _spectrumSamples = new float[FftSize];
 
         // The meter reads loudness in decibels, as a VU meter does: the bottom of the bar is this level (silence and anything
         // quieter), the top is full scale (0 dB), and a sound in between fills the bar by how many dB it is from the bottom. A
@@ -180,9 +197,13 @@ namespace RetroBar.Utilities
                 _levelSumSquaresLeft += (double)left * left;
                 _levelSumSquaresRight += (double)right * right;
                 _levelSampleCount++;
+
+                _spectrumSamples[_fftWritten] = (left + right) / 2;
+                _fftWritten = (_fftWritten + 1) % FftSize;
+                _fftFilled = Math.Min(FftSize, _fftFilled + 1);
             }
 
-            ProcessLevels();
+            ProcessLevels(format.SampleRate);
         }
 
         private static float ReadSample(byte[] buffer, int offset, bool isFloat32)
@@ -221,7 +242,7 @@ namespace RetroBar.Utilities
             return _outputVolume;
         }
 
-        private void ProcessLevels()
+        private void ProcessLevels(int sampleRate)
         {
             if (DateTime.Now - _lastUpdate < UpdateInterval || _levelSampleCount == 0)
             {
@@ -239,6 +260,51 @@ namespace RetroBar.Utilities
             float levelLeft = ToLevel(rmsLeft);
             float levelRight = ToLevel(rmsRight);
             LevelUpdated?.Invoke(levelLeft, levelRight);
+
+            if (SpectrumUpdated != null && _fftFilled == FftSize)
+            {
+                SpectrumUpdated(ComputeSpectrum(sampleRate, volume));
+            }
+        }
+
+        // The last FftSize samples through a Hann window and an FFT, the magnitudes of the bins gathered into bands spaced evenly
+        // on a log scale (as the ear hears pitch), each band's loudest bin taken and turned into the 0-1 decibel level.
+        private float[] ComputeSpectrum(int sampleRate, double volume)
+        {
+            for (int i = 0; i < FftSize; i++)
+            {
+                float sample = _spectrumSamples[(_fftWritten + i) % FftSize];
+                double window = 0.5 - 0.5 * Math.Cos(2 * Math.PI * i / (FftSize - 1));
+                _fftBuffer[i].X = (float)(sample * window);
+                _fftBuffer[i].Y = 0;
+            }
+
+            FastFourierTransform.FFT(true, FftLog2, _fftBuffer);
+
+            var bands = new float[SpectrumBands];
+            double binHz = (double)sampleRate / FftSize;
+            double highest = Math.Min(HighestBandHz, sampleRate / 2.0);
+
+            for (int band = 0; band < SpectrumBands; band++)
+            {
+                double fromHz = LowestBandHz * Math.Pow(highest / LowestBandHz, (double)band / SpectrumBands);
+                double toHz = LowestBandHz * Math.Pow(highest / LowestBandHz, (double)(band + 1) / SpectrumBands);
+                int fromBin = Math.Max(1, (int)Math.Floor(fromHz / binHz));
+                int toBin = Math.Max(fromBin, (int)Math.Ceiling(toHz / binHz) - 1);
+
+                double peak = 0;
+                for (int bin = fromBin; bin <= toBin && bin < FftSize / 2; bin++)
+                {
+                    double magnitude = Math.Sqrt(_fftBuffer[bin].X * _fftBuffer[bin].X + _fftBuffer[bin].Y * _fftBuffer[bin].Y);
+                    peak = Math.Max(peak, magnitude);
+                }
+
+                // A full-scale sine through the window reads FftSize / 4 in its bin once the FFT is scaled by 1 / FftSize (NAudio's
+                // forward transform does that): scale back to 1 for a full-scale sine, so 0 dB is full scale as in the VU meter.
+                bands[band] = ToLevel(peak * 4 * volume);
+            }
+
+            return bands;
         }
 
         public void Dispose()

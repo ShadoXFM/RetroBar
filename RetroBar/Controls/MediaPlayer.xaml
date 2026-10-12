@@ -261,23 +261,43 @@
                                         </MultiBinding>
                                     </Image.Height>
                                 </Image>
-                                <TextBlock x:Name="SeekTitleText"
-                                           Style="{DynamicResource MediaPlayerTrackTextStyle}"
-                                           FontWeight="Bold"
-                                           HorizontalAlignment="Center"
-                                           TextTrimming="CharacterEllipsis"
-                                           Width="{Binding ActualWidth, ElementName=SeekControlsRow}"
-                                           TextAlignment="Center"
-                                           Margin="0,0,0,1"
-                                           utilities:MonitorOffset.Tag="MediaSeekTitleText" />
-                                <TextBlock x:Name="SeekArtistText"
-                                           Style="{DynamicResource MediaPlayerTrackTextStyle}"
-                                           HorizontalAlignment="Center"
-                                           TextTrimming="CharacterEllipsis"
-                                           Width="{Binding ActualWidth, ElementName=SeekControlsRow}"
-                                           TextAlignment="Center"
-                                           Margin="0,0,0,4"
-                                           utilities:MonitorOffset.Tag="MediaSeekArtistText" />
+                                <!-- The title and artist on the left, a spectrum (SeekSpectrum, drawn by UpdateSeekSpectrum) on the right, as wide as
+                                     the controls row below. The margins give the text room above and below. -->
+                                <Grid x:Name="SeekTextRow"
+                                      HorizontalAlignment="Center"
+                                      Width="{Binding ActualWidth, ElementName=SeekControlsRow}"
+                                      Margin="0,5,0,5">
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="*" />
+                                        <ColumnDefinition Width="Auto" />
+                                    </Grid.ColumnDefinitions>
+                                    <StackPanel x:Name="SeekTextPanel"
+                                                Grid.Column="0"
+                                                Margin="6,0,6,0"
+                                                VerticalAlignment="Center">
+                                        <TextBlock x:Name="SeekTitleText"
+                                                   Style="{DynamicResource MediaPlayerTrackTextStyle}"
+                                                   FontWeight="Bold"
+                                                   TextTrimming="CharacterEllipsis"
+                                                   TextAlignment="Left"
+                                                   Margin="0,0,0,1"
+                                                   utilities:MonitorOffset.Tag="MediaSeekTitleText" />
+                                        <TextBlock x:Name="SeekArtistText"
+                                                   Style="{DynamicResource MediaPlayerTrackTextStyle}"
+                                                   TextTrimming="CharacterEllipsis"
+                                                   TextAlignment="Left"
+                                                   utilities:MonitorOffset.Tag="MediaSeekArtistText" />
+                                    </StackPanel>
+                                    <Path x:Name="SeekSpectrum"
+                                          Grid.Column="1"
+                                          Margin="0,0,6,0"
+                                          VerticalAlignment="Center"
+                                          Stretch="None"
+                                          SnapsToDevicePixels="True"
+                                          UseLayoutRounding="True"
+                                          Fill="{Binding Foreground, ElementName=SeekTitleText}"
+                                          utilities:MonitorOffset.Tag="MediaSeekSpectrum" />
+                                </Grid>
                                 <!-- HorizontalAlignment="Center" (instead of the StackPanel-child
                                      default of Stretch) matters for more than just centering: the
                                      album art's Height above is bound to this row's own

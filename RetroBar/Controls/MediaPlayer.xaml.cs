@@ -711,6 +711,7 @@ namespace RetroBar.Controls
 
                 _visualizerCapture = new AudioSpectrumCapture();
                 _visualizerCapture.LevelUpdated += VisualizerCapture_OnLevelUpdated;
+                _visualizerCapture.SpectrumUpdated += VisualizerCapture_OnSpectrumUpdated;
                 _visualizerCapture.Start();
             }
             catch (Exception ex)
@@ -727,6 +728,7 @@ namespace RetroBar.Controls
             }
 
             _visualizerCapture.LevelUpdated -= VisualizerCapture_OnLevelUpdated;
+            _visualizerCapture.SpectrumUpdated -= VisualizerCapture_OnSpectrumUpdated;
             _visualizerCapture.Dispose();
             _visualizerCapture = null;
         }
@@ -751,6 +753,59 @@ namespace RetroBar.Controls
                 VuMeterFillLeft.Width = Math.Clamp(left, 0, 1) * _vuMeterMaxWidth;
                 VuMeterFillRight.Width = Math.Clamp(right, 0, 1) * _vuMeterMaxWidth;
             }));
+        }
+
+        // The spectrum in the seek popup: each bar is 2 device pixels wide with 1 between, as tall as the title and artist together, a
+        // pixel at the least (the bar's baseline). A bar rises at once but sinks gradually, so it doesn't flicker. Only drawn while
+        // the popup is open.
+        private const int SeekSpectrumBarWidth = 2;
+        private const int SeekSpectrumBarGap = 1;
+        private readonly float[] _seekSpectrumLevels = new float[AudioSpectrumCapture.SpectrumBands];
+
+        private void VisualizerCapture_OnSpectrumUpdated(float[] bands)
+        {
+            // Fires on the capture thread.
+            Dispatcher.BeginInvoke(new Action(() => UpdateSeekSpectrum(bands)), DispatcherPriority.Background);
+        }
+
+        private void UpdateSeekSpectrum(float[] bands)
+        {
+            if (!SeekPopup.IsOpen)
+            {
+                return;
+            }
+
+            bool playing = _sessionManager?.PlaybackState == MediaPlaybackState.Playing;
+            for (int i = 0; i < _seekSpectrumLevels.Length; i++)
+            {
+                float level = playing && bands != null ? bands[i] : 0;
+                _seekSpectrumLevels[i] = Math.Max(level, _seekSpectrumLevels[i] - 0.08f);
+            }
+
+            DpiScale dpi = VisualTreeHelper.GetDpi(this);
+            int count = _seekSpectrumLevels.Length;
+            int width = count * SeekSpectrumBarWidth + (count - 1) * SeekSpectrumBarGap;
+            int height = Math.Max(2, (int)Math.Round(SeekTextPanel.ActualHeight * dpi.DpiScaleY));
+
+            var geometry = new StreamGeometry();
+            using (StreamGeometryContext context = geometry.Open())
+            {
+                for (int i = 0; i < count; i++)
+                {
+                    int barHeight = Math.Clamp((int)Math.Round(_seekSpectrumLevels[i] * height), 1, height);
+                    int x = i * (SeekSpectrumBarWidth + SeekSpectrumBarGap);
+                    context.BeginFigure(new Point(x, height - barHeight), true, true);
+                    context.LineTo(new Point(x + SeekSpectrumBarWidth, height - barHeight), true, false);
+                    context.LineTo(new Point(x + SeekSpectrumBarWidth, height), true, false);
+                    context.LineTo(new Point(x, height), true, false);
+                }
+            }
+
+            geometry.Transform = new ScaleTransform(1 / dpi.DpiScaleX, 1 / dpi.DpiScaleY);
+            geometry.Freeze();
+            SeekSpectrum.Width = width / dpi.DpiScaleX;
+            SeekSpectrum.Height = height / dpi.DpiScaleY;
+            SeekSpectrum.Data = geometry;
         }
 
         private static Button CreateTransportButton(string buttonTag, string glyphTag, string geometryResourceKey, string tooltipResourceKey, RoutedEventHandler onClick, out Path glyph)
@@ -1318,6 +1373,7 @@ namespace RetroBar.Controls
         private void SeekPopup_OnClosed(object sender, EventArgs e)
         {
             _seekPopupTimer?.Stop();
+            Array.Clear(_seekSpectrumLevels);
 
             // Only suppress the next click if it's plausibly the one that just caused this close
             // (the mouse is still over the track text) - a dismissal from clicking elsewhere
