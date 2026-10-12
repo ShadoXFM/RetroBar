@@ -110,12 +110,14 @@ namespace RetroBar.Controls
             Loaded += (s, e) =>
             {
                 Settings.Instance.PropertyChanged += PreviewSettings_PropertyChanged;
+                GroupWindows.CollectionChanged += PreviewGroup_CollectionChanged;
                 UpdatePreviewToolTipService();
             };
 
             Unloaded += (s, e) =>
             {
                 Settings.Instance.PropertyChanged -= PreviewSettings_PropertyChanged;
+                GroupWindows.CollectionChanged -= PreviewGroup_CollectionChanged;
                 ClosePreview(false);
             };
 
@@ -138,6 +140,90 @@ namespace RetroBar.Controls
             };
             AppButton.ContextMenuOpening += (s, e) => ClosePreview();
         }
+
+        private static string _reopenPreviewApp;
+        private static DateTime _reopenPreviewUntil = DateTime.MinValue;
+
+        // A window was closed from its preview, and the tab that stood for it has been replaced by this one: show the preview again
+        // for the windows that are left.
+        private void ReopenPreviewAfterClose()
+        {
+            if (_reopenPreviewApp == null || DateTime.UtcNow > _reopenPreviewUntil || Window == null ||
+                TaskOpenOrderComparer.AppKey(Window) != _reopenPreviewApp || !Settings.Instance.ShowTaskThumbnails)
+            {
+                return;
+            }
+
+            _reopenPreviewApp = null;
+            Dispatcher.BeginInvoke(new Action(() => OpenPreview(true)), DispatcherPriority.Loaded);
+        }
+
+        private RECT? _previewRectBefore;
+
+        // The windows of the tab change while its preview is open (one was closed): the preview is centered over the tab again, which
+        // moves it - so it slides there from where it was, rather than jumping.
+        private void PreviewGroup_CollectionChanged(object sender, System.Collections.Specialized.NotifyCollectionChangedEventArgs e)
+        {
+            if (AppButton.ToolTip is not ToolTip tip || !tip.IsOpen || _previewFadingOut || _previewRectBefore != null ||
+                PresentationSource.FromVisual(tip) is not HwndSource source || !GetWindowRect(source.Handle, out RECT before))
+            {
+                return;
+            }
+
+            // The tab is still here, so there is nothing to reopen.
+            _reopenPreviewApp = null;
+            _previewRectBefore = before;
+            Dispatcher.BeginInvoke(new Action(SlidePreviewToNewPlace), DispatcherPriority.Render);
+        }
+
+        private void SlidePreviewToNewPlace()
+        {
+            RECT? before = _previewRectBefore;
+            _previewRectBefore = null;
+
+            if (before == null || AppButton.ToolTip is not ToolTip tip || !tip.IsOpen || _previewFadingOut ||
+                PresentationSource.FromVisual(tip) is not HwndSource source || !GetWindowRect(source.Handle, out RECT now))
+            {
+                return;
+            }
+
+            int dx = before.Value.Left - now.Left;
+            int dy = before.Value.Top - now.Top;
+            if (dx == 0 && dy == 0)
+            {
+                return;
+            }
+
+            IntPtr handle = source.Handle;
+            var ease = new CubicEase { EasingMode = EasingMode.EaseOut };
+            var clock = System.Diagnostics.Stopwatch.StartNew();
+            var timer = new DispatcherTimer(DispatcherPriority.Normal) { Interval = TimeSpan.FromMilliseconds(8) };
+
+            void Place(double progress)
+            {
+                double remaining = 1 - ease.Ease(progress);
+                SetWindowPos(handle, IntPtr.Zero, now.Left + (int)Math.Round(dx * remaining), now.Top + (int)Math.Round(dy * remaining), 0, 0, SWP_NOSIZE | SWP_NOZORDER | SWP_NOACTIVATE);
+            }
+
+            Place(0);
+            timer.Tick += (s, args) =>
+            {
+                double progress = Math.Min(1, clock.Elapsed.TotalMilliseconds / PreviewSlideIn.TotalMilliseconds);
+                Place(progress);
+                if (progress >= 1 || !tip.IsOpen)
+                {
+                    timer.Stop();
+                }
+            };
+            timer.Start();
+        }
+
+        private const uint SWP_NOSIZE = 0x0001;
+        private const uint SWP_NOZORDER = 0x0004;
+        private const uint SWP_NOACTIVATE = 0x0010;
+
+        [DllImport("user32.dll")]
+        private static extern bool SetWindowPos(IntPtr hWnd, IntPtr hWndInsertAfter, int x, int y, int cx, int cy, uint flags);
 
         private bool ShowsGroupPreviewOnClick => Settings.Instance.ShowTaskThumbnails && GroupWindows.Count > 1;
 
@@ -199,9 +285,9 @@ namespace RetroBar.Controls
             }
         }
 
-        private void OpenPreview()
+        private void OpenPreview(bool force = false)
         {
-            if (!IsPointerOverTab() || AppButton.ToolTip is not ToolTip tip || AppButton.ContextMenu?.IsOpen == true)
+            if ((!force && !IsPointerOverTab()) || AppButton.ToolTip is not ToolTip tip || AppButton.ContextMenu?.IsOpen == true)
             {
                 return;
             }
@@ -626,6 +712,17 @@ namespace RetroBar.Controls
                     // Clicking a preview anywhere but its close button activates that window; the close
                     // button closes it. Either way the preview is done.
                     bool close = pressedHit == PreviewHit.Close;
+
+                    // Closing one of several windows leaves the preview open for the others. If the tab itself goes with the window
+                    // (it stood for that one), the tab that takes its place opens the preview again (see ReopenPreviewAfterClose).
+                    if (close && items.Count > 1 && target != null)
+                    {
+                        _reopenPreviewApp = TaskOpenOrderComparer.AppKey(target);
+                        _reopenPreviewUntil = DateTime.UtcNow + TimeSpan.FromSeconds(3);
+                        Dispatcher.BeginInvoke(new Action(() => target.Close()));
+                        break;
+                    }
+
                     Dispatcher.BeginInvoke(new Action(() =>
                     {
                         ClosePreview();

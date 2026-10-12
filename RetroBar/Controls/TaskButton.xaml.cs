@@ -274,6 +274,8 @@ namespace RetroBar.Controls
             }
 
             _isLoaded = true;
+
+            ReopenPreviewAfterClose();
         }
 
         private void Window_GetButtonRect(ref NativeMethods.ShortRect rect)
