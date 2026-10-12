@@ -398,11 +398,27 @@ namespace RetroBar.Controls
         {
             SetTaskButtonWidth();
 
+            // A tab that closes: the ones after it slide left into the gap (their containers are still where they were
+            // until the layout pass that follows). A tab removed by a drag-and-drop slides on its own (TaskListDropHandler).
+            if (e.Action == System.Collections.Specialized.NotifyCollectionChangedAction.Remove &&
+                Settings.Instance.SlideTaskbarButtons && Host?.Orientation == Orientation.Horizontal &&
+                DateTime.UtcNow > TaskButton.SuppressSlideInUntilUtc)
+            {
+                ItemSlideAnimation.Play(TasksList, ItemSlideAnimation.Capture(TasksList));
+            }
+
             // Windows trickle in while RetroBar is starting, and new ones appear later: put each where the
             // user's saved arrangement says (or on the right, if its app isn't in it) once they stop arriving.
             if (e.Action == System.Collections.Specialized.NotifyCollectionChangedAction.Add)
             {
                 ScheduleStartupSort();
+
+                // A window opened after startup goes to its place at once (before the next frame is drawn), instead of
+                // showing up on the right and jumping there when the debounce above ends.
+                if (!TaskOpenOrderComparer.InStartupGrace)
+                {
+                    Dispatcher.BeginInvoke(new Action(() => TaskOpenOrderComparer.SortSource(startupSortSource)), DispatcherPriority.Normal);
+                }
             }
         }
 

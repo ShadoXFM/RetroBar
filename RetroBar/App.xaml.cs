@@ -57,9 +57,46 @@ namespace RetroBar
                 RenderOptions.ProcessRenderMode = RenderMode.SoftwareOnly;
             }
 
+            // Every context menu draws its text the way "Allow font smoothing in menus" says (some menus bind it themselves).
+            EventManager.RegisterClassHandler(typeof(System.Windows.Controls.ContextMenu), FrameworkElement.LoadedEvent, new RoutedEventHandler(ContextMenu_OnLoaded));
+            EventManager.RegisterClassHandler(typeof(System.Windows.Controls.ContextMenu), System.Windows.Controls.ContextMenu.OpenedEvent, new RoutedEventHandler(ContextMenu_OnOpened));
+
             _dictionaryManager.SetLanguageFromSettings();
             loadTheme();
             _windowManager = new WindowManager(_dictionaryManager, _explorerMonitor, _shellManager, _startMenuMonitor, _updater, _hotkeyManager);
+        }
+
+        // As the menu opens, before its first frame is drawn.
+        private static void ContextMenu_OnOpened(object sender, RoutedEventArgs e)
+        {
+            if (sender is System.Windows.Controls.ContextMenu menu)
+            {
+                MenuSeparator.Apply(menu);
+                MenuItemStyle.Apply(menu);
+                MenuSeparator.Tidy(menu);
+
+                // Again once the menu's own code has had its say (it shows and hides items as the menu opens).
+                menu.Dispatcher.BeginInvoke(new Action(() => MenuSeparator.Tidy(menu)), System.Windows.Threading.DispatcherPriority.Loaded);
+            }
+        }
+
+        private static void ContextMenu_OnLoaded(object sender, RoutedEventArgs e)
+        {
+            if (sender is System.Windows.Controls.ContextMenu separated)
+            {
+                MenuSeparator.Apply(separated);
+                MenuItemStyle.Apply(separated);
+                MenuSeparator.Tidy(separated);
+            }
+
+            if (sender is System.Windows.Controls.ContextMenu menu && menu.ReadLocalValue(TextOptions.TextRenderingModeProperty) == DependencyProperty.UnsetValue)
+            {
+                menu.SetBinding(TextOptions.TextRenderingModeProperty, new System.Windows.Data.Binding(nameof(Settings.AllowFontSmoothingMenu))
+                {
+                    Source = Settings.Instance,
+                    Converter = new RetroBar.Converters.BoolToTextRenderingModeConverter(),
+                });
+            }
         }
 
         private void App_OnExit(object sender, ExitEventArgs e)

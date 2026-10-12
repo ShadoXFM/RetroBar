@@ -4,10 +4,12 @@ using ManagedShell.WindowsTasks;
 using RetroBar.Converters;
 using RetroBar.Utilities;
 using System;
+using System.Runtime.InteropServices;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Data;
 using System.Windows.Documents;
+using System.Windows.Interop;
 using System.Windows.Input;
 using System.Windows.Media;
 using System.Windows.Media.Animation;
@@ -96,6 +98,16 @@ namespace RetroBar.Controls
         public MediaPlayer()
         {
             InitializeComponent();
+
+            // The popup is part of this control's logical tree, so the track text's tooltip (this control's own) would show for
+            // anything the mouse rests on in it, and then stay up when the mouse leaves. The popup shows the same text itself.
+            ToolTipOpening += (s, e) =>
+            {
+                if (SeekPopup.IsOpen && ReferenceEquals(e.OriginalSource, this))
+                {
+                    e.Handled = true;
+                }
+            };
         }
 
         private async void UserControl_Loaded(object sender, RoutedEventArgs e)
@@ -348,7 +360,7 @@ namespace RetroBar.Controls
 
             SeekTitleText.Text = _sessionManager.Title;
             SeekArtistText.Text = _sessionManager.Artist;
-            SeekArtistText.Visibility = string.IsNullOrEmpty(_sessionManager.Artist)
+            SeekArtistClip.Visibility = string.IsNullOrEmpty(_sessionManager.Artist)
                 ? Visibility.Collapsed
                 : Visibility.Visible;
 
@@ -369,6 +381,7 @@ namespace RetroBar.Controls
                 _playPauseGlyph.Data = playPauseGlyph;
             }
             SeekPlayPauseGlyph.Data = playPauseGlyph;
+            ApplySeekGlyphs();
 
             UpdateAlbumArt();
         }
@@ -580,6 +593,14 @@ namespace RetroBar.Controls
         /// escape the Tray GroupBox's own clip, since it never grows further left than
         /// MediaPlayerRoot's own edge.
         /// </summary>
+        // The most the track text shows before it slides: the style's own MaxWidth, or a monitor's own "MediaTrackTextMax" Width in
+        // monitor-adjustments.json (the same text takes a little different room at another scale, from how the font rounds to pixels).
+        private double GetTrackTextMaxWidth()
+        {
+            string deviceName = (Window.GetWindow(this) as Taskbar)?.Screen.DeviceName;
+            return MonitorAdjustments.Get(deviceName, "MediaTrackTextMax").Width ?? TrackTextHost.MaxWidth;
+        }
+
         private void UpdateVuMeterOffset()
         {
             // Reads the same per-monitor "VuMeterContainer" tag this element is itself tagged
@@ -618,7 +639,7 @@ namespace RetroBar.Controls
             // TrackTextHost's own left edge and behind the album art before it starts covering
             // any of the actual text. offset.Width, when set, overrides this outright, same as
             // every other MonitorOffset-tagged Width.
-            double textWidth = Math.Min(TrackText.ActualWidth, TrackTextHost.MaxWidth);
+            double textWidth = Math.Min(TrackText.ActualWidth, GetTrackTextMaxWidth());
             double naturalWidth = leftOffset + Math.Max(0, textWidth);
             // X nudges the meter's left edge only: the width absorbs it, so the right edge stays on the end of the text.
             _vuMeterMaxWidth = offset.Width ?? Math.Max(0, naturalWidth - offset.X);
@@ -710,6 +731,7 @@ namespace RetroBar.Controls
 
                 _visualizerCapture = new AudioSpectrumCapture();
                 _visualizerCapture.LevelUpdated += VisualizerCapture_OnLevelUpdated;
+                _visualizerCapture.SpectrumUpdated += VisualizerCapture_OnSpectrumUpdated;
                 _visualizerCapture.Start();
             }
             catch (Exception ex)
@@ -726,6 +748,7 @@ namespace RetroBar.Controls
             }
 
             _visualizerCapture.LevelUpdated -= VisualizerCapture_OnLevelUpdated;
+            _visualizerCapture.SpectrumUpdated -= VisualizerCapture_OnSpectrumUpdated;
             _visualizerCapture.Dispose();
             _visualizerCapture = null;
         }
@@ -750,6 +773,59 @@ namespace RetroBar.Controls
                 VuMeterFillLeft.Width = Math.Clamp(left, 0, 1) * _vuMeterMaxWidth;
                 VuMeterFillRight.Width = Math.Clamp(right, 0, 1) * _vuMeterMaxWidth;
             }));
+        }
+
+        // The spectrum in the seek popup: each bar is 3 device pixels wide with 1 between, as tall as the title and artist together plus 4 DIP, a
+        // pixel at the least (the bar's baseline). A bar rises at once but sinks gradually, so it doesn't flicker. Only drawn while
+        // the popup is open.
+        private const int SeekSpectrumBarWidth = 3;
+        private const int SeekSpectrumBarGap = 1;
+        private readonly float[] _seekSpectrumLevels = new float[AudioSpectrumCapture.SpectrumBands];
+
+        private void VisualizerCapture_OnSpectrumUpdated(float[] bands)
+        {
+            // Fires on the capture thread.
+            Dispatcher.BeginInvoke(new Action(() => UpdateSeekSpectrum(bands)), DispatcherPriority.Background);
+        }
+
+        private void UpdateSeekSpectrum(float[] bands)
+        {
+            if (!SeekPopup.IsOpen)
+            {
+                return;
+            }
+
+            bool playing = _sessionManager?.PlaybackState == MediaPlaybackState.Playing;
+            for (int i = 0; i < _seekSpectrumLevels.Length; i++)
+            {
+                float level = playing && bands != null ? bands[i] : 0;
+                _seekSpectrumLevels[i] = Math.Max(level, _seekSpectrumLevels[i] - 0.08f);
+            }
+
+            DpiScale dpi = GetSeekDpi();
+            int count = _seekSpectrumLevels.Length;
+            int width = count * SeekSpectrumBarWidth + (count - 1) * SeekSpectrumBarGap;
+            int height = Math.Max(2, (int)Math.Round((SeekTextPanel.ActualHeight + 4) * dpi.DpiScaleY));
+
+            var geometry = new StreamGeometry();
+            using (StreamGeometryContext context = geometry.Open())
+            {
+                for (int i = 0; i < count; i++)
+                {
+                    int barHeight = Math.Clamp((int)Math.Round(_seekSpectrumLevels[i] * height), 1, height);
+                    int x = i * (SeekSpectrumBarWidth + SeekSpectrumBarGap);
+                    context.BeginFigure(new Point(x, height - barHeight), true, true);
+                    context.LineTo(new Point(x + SeekSpectrumBarWidth, height - barHeight), true, false);
+                    context.LineTo(new Point(x + SeekSpectrumBarWidth, height), true, false);
+                    context.LineTo(new Point(x, height), true, false);
+                }
+            }
+
+            geometry.Transform = new ScaleTransform(1 / dpi.DpiScaleX, 1 / dpi.DpiScaleY);
+            geometry.Freeze();
+            SeekSpectrum.Width = width / dpi.DpiScaleX;
+            SeekSpectrum.Height = height / dpi.DpiScaleY;
+            SeekSpectrum.Data = geometry;
         }
 
         private static Button CreateTransportButton(string buttonTag, string glyphTag, string geometryResourceKey, string tooltipResourceKey, RoutedEventHandler onClick, out Path glyph)
@@ -870,6 +946,15 @@ namespace RetroBar.Controls
 
         #region Marquee
 
+        // The font's line height can be shorter than its tallest glyphs (g, j, p, y hang below it), so the
+        // clip that keeps the marquee inside the row leaves room under the text for them.
+        private const double TrackTextDescenderRoom = 4;
+
+        private void TrackTextClip_OnSizeChanged(object sender, SizeChangedEventArgs e)
+        {
+            TrackTextClip.Clip = new RectangleGeometry(new Rect(0, 0, TrackTextClip.ActualWidth, TrackTextClip.ActualHeight + TrackTextDescenderRoom));
+        }
+
         private void TrackText_SizeChanged(object sender, SizeChangedEventArgs e)
         {
             if (e.WidthChanged)
@@ -902,7 +987,7 @@ namespace RetroBar.Controls
                 return;
             }
 
-            double max = TrackTextHost.MaxWidth;
+            double max = GetTrackTextMaxWidth();
             double visibleWidth = double.IsInfinity(max) || double.IsNaN(max) || max <= 0
                 ? fullWidth
                 : Math.Min(fullWidth, max);
@@ -929,7 +1014,7 @@ namespace RetroBar.Controls
             StartMarquee(overflow);
         }
 
-        private void StartMarquee(double overflow)
+        private static DoubleAnimationUsingKeyFrames CreateMarqueeAnimation(double overflow)
         {
             double travelSeconds = Math.Max(overflow / MarqueePixelsPerSecond, 0.5);
 
@@ -941,7 +1026,7 @@ namespace RetroBar.Controls
             TimeSpan atEndPause = atEnd + pause;
             TimeSpan atFinish = atEndPause + travel;
 
-            DoubleAnimationUsingKeyFrames animation = new DoubleAnimationUsingKeyFrames
+            var animation = new DoubleAnimationUsingKeyFrames
             {
                 Duration = new Duration(atFinish),
                 RepeatBehavior = RepeatBehavior.Forever
@@ -953,10 +1038,66 @@ namespace RetroBar.Controls
             animation.KeyFrames.Add(new LinearDoubleKeyFrame(-overflow, KeyTime.FromTimeSpan(atEndPause)));
             animation.KeyFrames.Add(new LinearDoubleKeyFrame(0, KeyTime.FromTimeSpan(atFinish)));
 
+            return animation;
+        }
+
+        private void StartMarquee(double overflow)
+        {
+            DoubleAnimationUsingKeyFrames animation = CreateMarqueeAnimation(overflow);
+
             TrackTextTransform.BeginAnimation(TranslateTransform.XProperty, animation);
 
             _marqueeRunning = true;
             _marqueeOverflow = overflow;
+        }
+
+        // The seek popup's title and artist slide the same way, along their Canvases (Canvas.Left, so a position set for them in the
+        // monitor file, which is a RenderTransform, is left alone).
+        private readonly System.Collections.Generic.Dictionary<TextBlock, double> _seekMarqueeOverflow = new();
+
+        private void SeekClip_OnSizeChanged(object sender, SizeChangedEventArgs e)
+        {
+            var clip = (Border)sender;
+            clip.Clip = new RectangleGeometry(new Rect(0, 0, clip.ActualWidth, clip.ActualHeight + TrackTextDescenderRoom));
+            Dispatcher.BeginInvoke(new Action(() => UpdateSeekMarquees(false)), System.Windows.Threading.DispatcherPriority.Loaded);
+        }
+
+        private void SeekText_OnSizeChanged(object sender, SizeChangedEventArgs e)
+        {
+            if (e.WidthChanged)
+            {
+                Dispatcher.BeginInvoke(new Action(() => UpdateSeekMarquees(false)), System.Windows.Threading.DispatcherPriority.Loaded);
+            }
+        }
+
+        private void UpdateSeekMarquees(bool restart)
+        {
+            UpdateSeekMarquee(SeekTitleText, SeekTitleClip, restart);
+            UpdateSeekMarquee(SeekArtistText, SeekArtistClip, restart);
+        }
+
+        private void UpdateSeekMarquee(TextBlock text, Border clip, bool restart)
+        {
+            double overflow = Math.Ceiling(Math.Ceiling(text.ActualWidth) - clip.ActualWidth);
+            if (clip.ActualWidth <= 0 || overflow <= MarqueeOverflowThreshold)
+            {
+                overflow = 0;
+            }
+
+            _seekMarqueeOverflow.TryGetValue(text, out double running);
+            if (!restart && Math.Abs(running - overflow) < 0.5)
+            {
+                return;
+            }
+
+            _seekMarqueeOverflow[text] = overflow;
+            text.BeginAnimation(Canvas.LeftProperty, null);
+            Canvas.SetLeft(text, 0);
+
+            if (overflow > 0)
+            {
+                text.BeginAnimation(Canvas.LeftProperty, CreateMarqueeAnimation(overflow));
+            }
         }
 
         private void StopMarquee()
@@ -1149,6 +1290,7 @@ namespace RetroBar.Controls
         // dismisses it on that click before our handler even runs, so by the time our handler
         // checks IsOpen it already reads false and toggles it back open.
         private bool _ignoreNextTrackTextClick;
+        private DateTime _ignoreTrackTextClickUntil;
 
         // Right-click on the track text: choose which app's media to show when several have a session
         // (a browser tab and a music player, say) - or "Automatic" to follow whichever Windows says is
@@ -1222,39 +1364,381 @@ namespace RetroBar.Controls
             menu.IsOpen = true;
         }
 
-        // The theme's menus draw a plain Separator as empty space; this one is a visible bevelled line.
+        // The theme's menus draw a plain Separator as empty space; this one is a visible bevelled line (see MenuSeparator).
         private static Separator MakeMenuSeparator()
         {
-            var line = new FrameworkElementFactory(typeof(StackPanel));
-            line.SetValue(FrameworkElement.MarginProperty, new Thickness(4, 1, 2.5, 1));
-
-            foreach (string brush in new[] { "ButtonShadow", "ButtonHighlight" })
-            {
-                var rect = new FrameworkElementFactory(typeof(System.Windows.Shapes.Rectangle));
-                rect.SetValue(FrameworkElement.HeightProperty, 1.0);
-                rect.SetResourceReference(System.Windows.Shapes.Shape.FillProperty, brush);
-                line.AppendChild(rect);
-            }
-
-            return new Separator { Template = new ControlTemplate(typeof(Separator)) { VisualTree = line } };
+            return new Separator { Style = MenuSeparator.Style };
         }
 
         private void TrackTextCanvas_OnMouseLeftButtonUp(object sender, MouseButtonEventArgs e)
         {
-            if (_ignoreNextTrackTextClick)
+            // Only the click that closed the popup (its mouse-up arrives right after): a popup closed some other way - by this very click
+            // while it stays open on its own, or from its menu - left the flag set and ate the next, real click.
+            bool ignore = _ignoreNextTrackTextClick && DateTime.UtcNow < _ignoreTrackTextClickUntil;
+            _ignoreNextTrackTextClick = false;
+            if (ignore)
             {
-                _ignoreNextTrackTextClick = false;
                 return;
             }
 
             if (_sessionManager != null && _sessionManager.HasSession)
             {
                 SeekPopup.IsOpen = !SeekPopup.IsOpen;
+                _ignoreNextTrackTextClick = false;
             }
+        }
+
+        // The popup's buttons' glyphs, drawn as whole device pixels (see PixelShape) at the height of the taskbar's own, and the
+        // pause glyph with the taskbar's own bars (2.4 DIP wide, 1.6 apart). All three buttons are as wide as the widest glyph
+        // plus a pixel, and the glyphs are set in them so that the gap between one glyph and the next is the same pixel count
+        // either side of the pause: the arrows keep to the outside of their boxes, one to each side, the pause is centered.
+        private DpiScale GetSeekDpi() => VisualTreeHelper.GetDpi(SeekPopupRoot.IsLoaded ? SeekPopupRoot : this);
+
+        private void ApplySeekGlyphs()
+        {
+            DpiScale dpi = GetSeekDpi();
+            int boxHeight = (int)Math.Round(7 * dpi.DpiScaleY);
+            int height = boxHeight % 2 == 1 ? boxHeight : boxHeight + 1;
+            bool playing = _sessionManager?.PlaybackState == MediaPlaybackState.Playing;
+
+            string[] rewind = PixelShape.DoubleTriangle(height, false);
+            string[] forward = PixelShape.DoubleTriangle(height, true);
+            string[] middle = playing
+                ? PixelShape.Pause(height, Math.Max(2, (int)Math.Round(2.4 * dpi.DpiScaleX)), Math.Max(2, (int)Math.Round(1.6 * dpi.DpiScaleX)))
+                : PixelShape.Play(height);
+            int boxWidth = Math.Max(rewind[0].Length, middle[0].Length) + 1;
+
+            void Apply(System.Windows.Shapes.Path path, string[] rows, int offsetX)
+            {
+                path.Stretch = Stretch.None;
+                path.Width = boxWidth / dpi.DpiScaleX;
+                path.Height = boxHeight / dpi.DpiScaleY;
+                path.Data = PixelShape.FromRows(rows, offsetX, Math.Max(0, (boxHeight - rows.Length) / 2), dpi);
+            }
+
+            // The skip glyphs are narrower than the rewind and fast-forward ones, with the bar (as wide as the pause's bars) on the outer
+            // side. They face the next glyph with the point of their triangle, which reads as a wider gap than a bar or a base does,
+            // so each leaves a pixel less to it.
+            int bar = Math.Max(2, (int)Math.Round(1.6 * dpi.DpiScaleX));
+            string[] previous = PixelShape.Skip(height, bar, false);
+            string[] next = PixelShape.Skip(height, bar, true);
+
+            // At 125% each is another pixel out, away from its neighbor.
+            int skipOut = dpi.DpiScaleX < 1.125 ? 0 : 1;
+            Apply(SeekPreviousGlyph, previous, Math.Max(0, boxWidth - previous[0].Length - 1 - skipOut));
+            Apply(SeekNextGlyph, next, Math.Min(1 + skipOut, boxWidth - next[0].Length));
+            Apply(SeekBackGlyph, rewind, 0);
+            Apply(SeekPlayPauseGlyph, middle, (boxWidth - middle[0].Length) / 2);
+            Apply(SeekForwardGlyph, forward, boxWidth - forward[0].Length);
+
+            // The buttons' margins are whole pixels too (a DIP at 125% is a pixel and a quarter, which rounded differently from
+            // one button to the next and left the gaps between the glyphs uneven).
+            double pixel = 1 / dpi.DpiScaleX;
+            // The button style's own padding leaves 7 pixels between one glyph and the next at 100%, a pixel too many next to the
+            // 125% layout's proportions: there each of the two gaps is pulled in by a pixel.
+            double pull = dpi.DpiScaleX < 1.125 ? pixel : 0;
+            // The row starts 6 pixels in, less 1 at 125% and 2 at 100% (the slider takes up what that gives up).
+            double shift = (dpi.DpiScaleX < 1.125 ? 2 : 1) * pixel;
+            SeekPreviousButton.Margin = new Thickness(6 * pixel - shift, 0, 0, 0);
+            SeekBackButton.Margin = new Thickness(-pull, 0, 0, 0);
+            SeekPlayPauseButton.Margin = new Thickness(-pull, 0, 0, 0);
+            SeekForwardButton.Margin = new Thickness(-pull, 0, 0, 0);
+            SeekNextButton.Margin = new Thickness(-pull, 0, 0, 0);
+
+            // The slider takes up the width the buttons' margins gave up (2 pixels each side, and the pulled-in gaps), so the row,
+            // the popup and the art keep their size. 2 DIP less of gap to the buttons than that, which the slider is longer by (its width
+            // deduction in the XAML is 2 less to match).
+            // At 100% another 4 pixels of it (2 DIP is no more than that there), given back on the other side of the slider.
+            double closer = dpi.DpiScaleX < 1.125 ? 4 * pixel : 0;
+            // The slider reaches 2 pixels further at each end, into what was the gaps (so they are 2 pixels smaller) - it is 4 pixels
+            // longer: its width is the same binding as in the XAML, with that much less deducted.
+            SeekSlider.Margin = new Thickness(4 + 4 * pull + shift - closer, 0, 6 + closer, 2 * pixel);
+
+            var width = new MultiBinding
+            {
+                Converter = (IMultiValueConverter)FindResource("remainingWidthConverter"),
+                ConverterParameter = string.Create(System.Globalization.CultureInfo.InvariantCulture, $"{12.8 - 4 * pixel},30"),
+            };
+            foreach (FrameworkElement source in new FrameworkElement[] { SeekAlbumArtImage, SeekBackButton, SeekPlayPauseButton, SeekForwardButton, SeekPreviousButton, SeekNextButton, SeekTimeText })
+            {
+                width.Bindings.Add(new Binding(nameof(ActualWidth)) { Source = source });
+            }
+            SeekSlider.SetBinding(WidthProperty, width);
+
+            // Two pixels higher than the row's center (the slider one, its own margin above), which the digits' shapes leave looking low
+            // next to the buttons.
+            SeekTimeText.Margin = new Thickness(2, 0, 6, 4 / dpi.DpiScaleY);
+        }
+
+        // Dragging the popup: anywhere on it except the buttons and the slider. Its window is moved directly (a Popup's own offsets
+        // keep it on the monitor of the track text), to any monitor; it takes that monitor's DPI and adjustments (see
+        // RefreshSeekPopupMonitor). It goes back above the track text when it opens next.
+        private bool _seekPopupDragging;
+        private POINT _seekPopupDragStart;
+        private POINT _seekPopupDragWindow;
+        private HwndSource _seekPopupSource;
+        // Shared by every monitor's player (they each have their own popup, one open at a time).
+        private static bool _seekPopupPinned;
+        private static MediaPlayer _openSeekPlayer;
+
+        // Where the popup was dragged to. WPF puts a popup back above the track text whenever its content changes size (the track
+        // changing, from the taskbar's buttons), so every move of its window is kept there instead (see SeekPopupHook).
+        private POINT? _seekPopupMovedTo;
+
+        [StructLayout(LayoutKind.Sequential)]
+        private struct WINDOWPOS
+        {
+            public IntPtr Window, InsertAfter;
+            public int X, Y, Width, Height;
+            public uint Flags;
+        }
+
+        private const int WM_WINDOWPOSCHANGING = 0x0046;
+
+        private IntPtr SeekPopupHook(IntPtr hwnd, int msg, IntPtr wParam, IntPtr lParam, ref bool handled)
+        {
+            if (msg == WM_WINDOWPOSCHANGING && _seekPopupMovedTo is POINT moved)
+            {
+                WINDOWPOS position = Marshal.PtrToStructure<WINDOWPOS>(lParam);
+                if ((position.Flags & SWP_NOMOVE) == 0 && (position.X != moved.X || position.Y != moved.Y))
+                {
+                    position.X = moved.X;
+                    position.Y = moved.Y;
+                    Marshal.StructureToPtr(position, lParam, false);
+                }
+            }
+
+            return IntPtr.Zero;
+        }
+
+        [StructLayout(LayoutKind.Sequential)]
+        private struct POINT
+        {
+            public int X;
+            public int Y;
+        }
+
+        [StructLayout(LayoutKind.Sequential)]
+        private struct RECT
+        {
+            public int Left, Top, Right, Bottom;
+        }
+
+        [StructLayout(LayoutKind.Sequential, CharSet = CharSet.Unicode)]
+        private struct MONITORINFOEX
+        {
+            public int Size;
+            public RECT Monitor, Work;
+            public int Flags;
+            [MarshalAs(UnmanagedType.ByValTStr, SizeConst = 32)]
+            public string DeviceName;
+        }
+
+        [DllImport("user32.dll")]
+        private static extern bool GetCursorPos(out POINT point);
+
+        [DllImport("user32.dll")]
+        private static extern bool GetWindowRect(IntPtr hWnd, out RECT rect);
+
+        [DllImport("user32.dll")]
+        private static extern bool SetWindowPos(IntPtr hWnd, IntPtr hWndInsertAfter, int x, int y, int cx, int cy, uint flags);
+
+        [DllImport("user32.dll")]
+        private static extern IntPtr MonitorFromWindow(IntPtr hWnd, uint flags);
+
+        [DllImport("user32.dll", CharSet = CharSet.Unicode)]
+        private static extern bool GetMonitorInfo(IntPtr monitor, ref MONITORINFOEX info);
+
+        [DllImport("user32.dll", EntryPoint = "SetWindowLongPtrW")]
+        private static extern IntPtr SetWindowLongPtr(IntPtr hWnd, int index, IntPtr value);
+
+        [DllImport("user32.dll", EntryPoint = "SetWindowLongW")]
+        private static extern int SetWindowLong(IntPtr hWnd, int index, int value);
+
+        private const int GWLP_HWNDPARENT = -8;
+        private static readonly IntPtr HWND_TOPMOST = new(-1);
+        private static readonly IntPtr HWND_NOTOPMOST = new(-2);
+        private const uint SWP_NOMOVE = 0x0002;
+        private const uint SWP_NOSIZE = 0x0001;
+        private const uint SWP_NOZORDER = 0x0004;
+        private const uint SWP_NOACTIVATE = 0x0010;
+        private const uint MONITOR_DEFAULTTONEAREST = 2;
+
+        private void SeekPopupRoot_OnPreviewMouseLeftButtonDown(object sender, MouseButtonEventArgs e)
+        {
+            for (DependencyObject node = e.OriginalSource as DependencyObject; node != null && node != SeekPopupRoot; node = node is Visual ? VisualTreeHelper.GetParent(node) : LogicalTreeHelper.GetParent(node))
+            {
+                if (node is System.Windows.Controls.Primitives.ButtonBase or System.Windows.Controls.Primitives.RangeBase)
+                {
+                    return;
+                }
+            }
+
+            if (PresentationSource.FromVisual(SeekPopupRoot) is not HwndSource source || !GetWindowRect(source.Handle, out RECT window))
+            {
+                return;
+            }
+
+            GetCursorPos(out _seekPopupDragStart);
+            _seekPopupDragWindow = new POINT { X = window.Left, Y = window.Top };
+            _seekPopupDragging = true;
+            SeekPopup.StaysOpen = true;
+            SeekPopupRoot.CaptureMouse();
+            e.Handled = true;
+        }
+
+        private void SeekPopupRoot_OnPreviewMouseMove(object sender, MouseEventArgs e)
+        {
+            if (!_seekPopupDragging || PresentationSource.FromVisual(SeekPopupRoot) is not HwndSource source)
+            {
+                return;
+            }
+
+            GetCursorPos(out POINT now);
+            _seekPopupMovedTo = new POINT { X = _seekPopupDragWindow.X + now.X - _seekPopupDragStart.X, Y = _seekPopupDragWindow.Y + now.Y - _seekPopupDragStart.Y };
+            SetWindowPos(source.Handle, IntPtr.Zero, _seekPopupMovedTo.Value.X, _seekPopupMovedTo.Value.Y, 0, 0, SWP_NOSIZE | SWP_NOZORDER | SWP_NOACTIVATE);
+            RefreshSeekPopupMonitor(source);
+        }
+
+        private void SeekPopupRoot_OnPreviewMouseLeftButtonUp(object sender, MouseButtonEventArgs e)
+        {
+            if (_seekPopupDragging)
+            {
+                SeekPopupRoot.ReleaseMouseCapture();
+            }
+        }
+
+        // A popup's window is above every other window by default. Without "Always on top" it is an ordinary one, which another window
+        // can come in front of.
+        private void ApplySeekPopupTopmost()
+        {
+            if (PresentationSource.FromVisual(SeekPopupRoot) is HwndSource source)
+            {
+                // The popup is owned by the taskbar's window, which is itself always on top, and a window owned by a topmost one is
+                // topmost whatever it asks for: without the owner it can be an ordinary window.
+                if (!_seekPopupPinned)
+                {
+                    if (IntPtr.Size == 8)
+                    {
+                        SetWindowLongPtr(source.Handle, GWLP_HWNDPARENT, IntPtr.Zero);
+                    }
+                    else
+                    {
+                        SetWindowLong(source.Handle, GWLP_HWNDPARENT, 0);
+                    }
+                }
+
+                SetWindowPos(source.Handle, _seekPopupPinned ? HWND_TOPMOST : HWND_NOTOPMOST, 0, 0, 0, 0, SWP_NOMOVE | SWP_NOSIZE | SWP_NOACTIVATE);
+            }
+        }
+
+        private void SeekPopupRoot_OnLostMouseCapture(object sender, MouseEventArgs e)
+        {
+            _seekPopupDragging = false;
+            UpdateSeekPopupStaysOpen();
+            ApplySeekPopupTopmost();
+        }
+
+        // Closed by a click elsewhere, unless it has been moved: then it is where the user put it, and stays (on top or not).
+        private void UpdateSeekPopupStaysOpen()
+        {
+            SeekPopup.StaysOpen = _seekPopupMovedTo != null;
+        }
+
+        // The monitor the popup is on decides which adjustments of monitor-adjustments.json apply to it, and the pixel art is drawn for
+        // that monitor's DPI (which WPF has already given the popup's window by now, or does when it raises DpiChanged below).
+        private string _seekPopupMonitor;
+
+        private void RefreshSeekPopupMonitor(HwndSource source)
+        {
+            var info = new MONITORINFOEX { Size = Marshal.SizeOf<MONITORINFOEX>() };
+            if (!GetMonitorInfo(MonitorFromWindow(source.Handle, MONITOR_DEFAULTTONEAREST), ref info) || info.DeviceName == _seekPopupMonitor)
+            {
+                return;
+            }
+
+            _seekPopupMonitor = info.DeviceName;
+            MonitorOffset.SetDeviceNameOverride(SeekPopupRoot, info.DeviceName);
+            ReapplySeekPopupForMonitor();
+        }
+
+        private void ReapplySeekPopupForMonitor()
+        {
+            Dispatcher.BeginInvoke(new Action(() =>
+            {
+                if (!SeekPopup.IsOpen)
+                {
+                    return;
+                }
+
+                MonitorOffset.Refresh(SeekPopupRoot);
+                ApplySeekGlyphs();
+            }), DispatcherPriority.Loaded);
+        }
+
+        private void SeekPopupSource_OnDpiChanged(object sender, HwndDpiChangedEventArgs e)
+        {
+            ReapplySeekPopupForMonitor();
+        }
+
+        // Right click: keep it above the other windows, or close it.
+        private void SeekPopupRoot_OnMouseRightButtonUp(object sender, MouseButtonEventArgs e)
+        {
+            e.Handled = true;
+
+            var onTop = new MenuItem
+            {
+                Header = TryFindResource("media_popup_always_on_top") as string ?? "_Always on top",
+                IsChecked = _seekPopupPinned,
+            };
+            onTop.Click += (s, args) =>
+            {
+                _seekPopupPinned = !_seekPopupPinned;
+                UpdateSeekPopupStaysOpen();
+                ApplySeekPopupTopmost();
+            };
+
+            var close = new MenuItem { Header = TryFindResource("close") as string ?? "_Close" };
+            close.Click += (s, args) => SeekPopup.IsOpen = false;
+
+            var menu = new ContextMenu
+            {
+                PlacementTarget = SeekPopupRoot,
+                Placement = System.Windows.Controls.Primitives.PlacementMode.MousePoint,
+            };
+            menu.Items.Add(onTop);
+            menu.Items.Add(MakeMenuSeparator());
+            menu.Items.Add(close);
+            menu.IsOpen = true;
         }
 
         private void SeekPopup_OnOpened(object sender, EventArgs e)
         {
+            UpdateSeekPopupStaysOpen();
+
+            // One popup at a time, whichever monitor's player it belongs to.
+            if (_openSeekPlayer != null && _openSeekPlayer != this)
+            {
+                _openSeekPlayer.SeekPopup.IsOpen = false;
+            }
+
+            _openSeekPlayer = this;
+            Dispatcher.BeginInvoke(new Action(ApplySeekPopupTopmost), DispatcherPriority.Loaded);
+            _seekPopupSource = PresentationSource.FromVisual(SeekPopupRoot) as HwndSource;
+            if (_seekPopupSource != null)
+            {
+                _seekPopupSource.DpiChanged += SeekPopupSource_OnDpiChanged;
+                _seekPopupSource.AddHook(SeekPopupHook);
+            }
+
+            // Takes down the track text's tooltip, if it is up from the mouse resting on the text that was clicked.
+            object trackToolTip = ToolTip;
+            ToolTip = null;
+            ToolTip = trackToolTip;
+
+            ApplySeekGlyphs();
+            Dispatcher.BeginInvoke(new Action(() => UpdateSeekMarquees(true)), System.Windows.Threading.DispatcherPriority.Loaded);
+
             bool canSeek = _sessionManager?.CanSeek ?? false;
             SeekSlider.IsEnabled = canSeek;
             SeekBackButton.IsEnabled = canSeek;
@@ -1271,11 +1755,28 @@ namespace RetroBar.Controls
         private void SeekPopup_OnClosed(object sender, EventArgs e)
         {
             _seekPopupTimer?.Stop();
+            Array.Clear(_seekSpectrumLevels);
+            if (_seekPopupSource != null)
+            {
+                _seekPopupSource.DpiChanged -= SeekPopupSource_OnDpiChanged;
+                _seekPopupSource.RemoveHook(SeekPopupHook);
+                _seekPopupSource = null;
+            }
+
+            if (_openSeekPlayer == this)
+            {
+                _openSeekPlayer = null;
+            }
+
+            _seekPopupMonitor = null;
+            _seekPopupMovedTo = null;
+            SeekPopupRoot.ClearValue(MonitorOffset.DeviceNameOverrideProperty);
 
             // Only suppress the next click if it's plausibly the one that just caused this close
             // (the mouse is still over the track text) - a dismissal from clicking elsewhere
             // shouldn't eat a later, unrelated click on the text.
             Point mousePos = Mouse.GetPosition(TrackTextCanvas);
+            _ignoreTrackTextClickUntil = DateTime.UtcNow + TimeSpan.FromMilliseconds(500);
             _ignoreNextTrackTextClick = mousePos.X >= 0 && mousePos.Y >= 0
                 && mousePos.X <= TrackTextCanvas.ActualWidth && mousePos.Y <= TrackTextCanvas.ActualHeight;
         }
@@ -1415,6 +1916,7 @@ namespace RetroBar.Controls
         {
             // Fires on a background (file-watcher) thread.
             Dispatcher.BeginInvoke(new Action(UpdateAlbumArtAdorner));
+            Dispatcher.BeginInvoke(new Action(UpdateMarquee));
             Dispatcher.BeginInvoke(new Action(UpdateVuMeterOffset));
         }
     }

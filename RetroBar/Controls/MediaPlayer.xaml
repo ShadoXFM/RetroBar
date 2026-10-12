@@ -143,7 +143,7 @@
             </Canvas>
             <!-- Own dedicated clip for the marquee text, now that TrackTextHost itself is no
                  longer clipped (see VuMeterContainer's own remarks above). -->
-            <Border ClipToBounds="True">
+            <Border x:Name="TrackTextClip" SizeChanged="TrackTextClip_OnSizeChanged">
                 <!-- A Canvas measures and arranges its children at their full natural
                      size, so the track text is never squeezed down to the visible
                      width. The Border above clips it and the marquee slides it. -->
@@ -169,7 +169,8 @@
         </Grid>
         <!-- Opens on a click on the track text (see TrackTextCanvas_OnMouseLeftButtonUp) - lets
              seeking within the current track, which doesn't fit as a permanently-visible part of
-             the compact taskbar widget. StaysOpen="False" closes it on any click outside. -->
+             the compact taskbar widget. A click elsewhere closes it, unless it has been dragged (see UpdateSeekPopupStaysOpen); "Always on top" (its menu)
+             only decides whether other windows can cover it. -->
         <Popup x:Name="SeekPopup"
                PlacementTarget="{Binding ElementName=TrackTextCanvas}"
                Placement="Top"
@@ -186,9 +187,16 @@
                  popup's offsets above are 10 further left / 10 lower to make up for it). -->
             <!-- The shadow is its own element behind the frame, not an Effect on it: an Effect redraws everything
                  inside it into an offscreen bitmap, which blurred the text and buttons. -->
-            <Grid RenderOptions.ClearTypeHint="Enabled"
+            <!-- Dragging anywhere on it that isn't a control moves the popup (see SeekPopupRoot_OnPreviewMouseLeftButtonDown). -->
+            <Grid x:Name="SeekPopupRoot"
+                  RenderOptions.ClearTypeHint="Enabled"
                   UseLayoutRounding="True"
-                  SnapsToDevicePixels="True">
+                  SnapsToDevicePixels="True"
+                  PreviewMouseLeftButtonDown="SeekPopupRoot_OnPreviewMouseLeftButtonDown"
+                  PreviewMouseMove="SeekPopupRoot_OnPreviewMouseMove"
+                  PreviewMouseLeftButtonUp="SeekPopupRoot_OnPreviewMouseLeftButtonUp"
+                  MouseRightButtonUp="SeekPopupRoot_OnMouseRightButtonUp"
+                  LostMouseCapture="SeekPopupRoot_OnLostMouseCapture">
                 <controls:PopupShadow Strength="0.5" />
                 <!-- The outermost line of the bevel (DarkShadow, right and bottom) is the frame's own outer border, not a border inside
                      another one that has a padding: it was not drawn at all that way at 125% (nothing red where it should be, with it
@@ -239,43 +247,90 @@
                                      renders at the same height but wider, growing this whole
                                      vertical StackPanel (which sizes to its widest child) - and so
                                      the popup itself - to fit. -->
+                                <!-- The frame pads 2 at the sides and 3 at the top, so these margins leave the same 10.4 DIP above the art as to its left
+                                     and right. -->
                                 <Image x:Name="SeekAlbumArtImage"
                                        MaxHeight="280"
                                        MaxWidth="500"
                                        Stretch="Uniform"
                                        HorizontalAlignment="Center"
-                                       Margin="8,7,8,4"
+                                       Margin="8.4,7.4,8.4,4"
                                        Visibility="Collapsed"
                                        SnapsToDevicePixels="True"
                                        UseLayoutRounding="True"
                                        RenderOptions.BitmapScalingMode="HighQuality"
                                        utilities:MonitorOffset.Tag="MediaSeekAlbumArt">
                                     <Image.Height>
-                                        <MultiBinding Converter="{StaticResource sumWidthsConverter}" ConverterParameter="92">
+                                        <MultiBinding Converter="{StaticResource sumWidthsConverter}" ConverterParameter="104.8">
                                             <Binding ElementName="SeekBackButton" Path="ActualWidth" />
                                             <Binding ElementName="SeekPlayPauseButton" Path="ActualWidth" />
                                             <Binding ElementName="SeekForwardButton" Path="ActualWidth" />
-                                            <Binding ElementName="SeekTimeText" Path="ActualWidth" />
+                                            <Binding ElementName="SeekTimeWidthRef" Path="ActualWidth" />
                                         </MultiBinding>
                                     </Image.Height>
                                 </Image>
-                                <TextBlock x:Name="SeekTitleText"
-                                           Style="{DynamicResource MediaPlayerTrackTextStyle}"
-                                           FontWeight="Bold"
-                                           HorizontalAlignment="Center"
-                                           TextTrimming="CharacterEllipsis"
-                                           Width="{Binding ActualWidth, ElementName=SeekControlsRow}"
-                                           TextAlignment="Center"
-                                           Margin="0,0,0,1"
-                                           utilities:MonitorOffset.Tag="MediaSeekTitleText" />
-                                <TextBlock x:Name="SeekArtistText"
-                                           Style="{DynamicResource MediaPlayerTrackTextStyle}"
-                                           HorizontalAlignment="Center"
-                                           TextTrimming="CharacterEllipsis"
-                                           Width="{Binding ActualWidth, ElementName=SeekControlsRow}"
-                                           TextAlignment="Center"
-                                           Margin="0,0,0,4"
-                                           utilities:MonitorOffset.Tag="MediaSeekArtistText" />
+                                <!-- The title and artist on the left, a spectrum (SeekSpectrum, drawn by UpdateSeekSpectrum) on the right, as wide as
+                                     the controls row below. The margins give the text room above and below. -->
+                                <!-- The width of "0:00 / 0:00" in the time text's own font (same tag, so the same monitor settings), which the art's
+                                     size is worked out from instead of the live time text: that gets longer for a track of ten minutes or more,
+                                     and the popup grew with it. The slider is what gives up the room then. -->
+                                <Canvas Width="0" Height="0">
+                                    <TextBlock x:Name="SeekTimeWidthRef"
+                                               Style="{DynamicResource MediaPlayerTrackTextStyle}"
+                                               FontWeight="Bold"
+                                               Visibility="Hidden"
+                                               Text="0:00 / 0:00"
+                                               utilities:MonitorOffset.Tag="MediaSeekTimeText" />
+                                </Canvas>
+                                <Grid x:Name="SeekTextRow"
+                                      HorizontalAlignment="Center"
+                                      Width="{Binding ActualWidth, ElementName=SeekControlsRow}"
+                                      Margin="0,5,0,5">
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="*" />
+                                        <ColumnDefinition Width="Auto" />
+                                    </Grid.ColumnDefinitions>
+                                    <StackPanel x:Name="SeekTextPanel"
+                                                Grid.Column="0"
+                                                Margin="6,0,12,0"
+                                                VerticalAlignment="Center">
+                                        <!-- Each line sits on a Canvas inside a clipping Border, like the taskbar's own track text, so a line
+                                             too long for the room slides left and right (see UpdateSeekMarquee). -->
+                                        <Border x:Name="SeekTitleClip"
+                                                Margin="0,0,0,1"
+                                                SizeChanged="SeekClip_OnSizeChanged">
+                                            <Canvas Height="{Binding ActualHeight, ElementName=SeekTitleText}">
+                                                <TextBlock x:Name="SeekTitleText"
+                                                           Canvas.Left="0"
+                                                           Canvas.Top="0"
+                                                           Style="{DynamicResource MediaPlayerTrackTextStyle}"
+                                                           FontWeight="Bold"
+                                                           SizeChanged="SeekText_OnSizeChanged"
+                                                           utilities:MonitorOffset.Tag="MediaSeekTitleText" />
+                                            </Canvas>
+                                        </Border>
+                                        <Border x:Name="SeekArtistClip"
+                                                SizeChanged="SeekClip_OnSizeChanged">
+                                            <Canvas Height="{Binding ActualHeight, ElementName=SeekArtistText}">
+                                                <TextBlock x:Name="SeekArtistText"
+                                                           Canvas.Left="0"
+                                                           Canvas.Top="0"
+                                                           Style="{DynamicResource MediaPlayerTrackTextStyle}"
+                                                           SizeChanged="SeekText_OnSizeChanged"
+                                                           utilities:MonitorOffset.Tag="MediaSeekArtistText" />
+                                            </Canvas>
+                                        </Border>
+                                    </StackPanel>
+                                    <Path x:Name="SeekSpectrum"
+                                          Grid.Column="1"
+                                          Margin="0,0,6,0"
+                                          VerticalAlignment="Center"
+                                          Stretch="None"
+                                          SnapsToDevicePixels="True"
+                                          UseLayoutRounding="True"
+                                          Fill="{Binding Foreground, ElementName=SeekTitleText}"
+                                          utilities:MonitorOffset.Tag="MediaSeekSpectrum" />
+                                </Grid>
                                 <!-- HorizontalAlignment="Center" (instead of the StackPanel-child
                                      default of Stretch) matters for more than just centering: the
                                      album art's Height above is bound to this row's own
@@ -298,12 +353,24 @@
                                          the 5px push grows this row's own reserved height by
                                          exactly 5px, rather than needing a separate Padding
                                          increase to avoid the buttons overflowing past it. -->
+                                    <Button x:Name="SeekPreviousButton"
+                                            Style="{DynamicResource MediaPlayerButtonStyle}"
+                                            Click="PreviousButton_OnClick"
+                                            ToolTip="{DynamicResource media_previous}"
+                                            VerticalAlignment="Center"
+                                            Margin="5,0,1,0"
+                                            utilities:MonitorOffset.Tag="MediaSeekButtonPrevious">
+                                        <Path x:Name="SeekPreviousGlyph"
+                                              Data="{DynamicResource MediaPlayerPreviousGeometry}"
+                                              Style="{DynamicResource MediaPlayerGlyphStyle}"
+                                              utilities:MonitorOffset.Tag="MediaSeekGlyphSkipPrevious" />
+                                    </Button>
                                     <Button x:Name="SeekBackButton"
                                             Style="{DynamicResource MediaPlayerButtonStyle}"
                                             Click="SeekBackButton_OnClick"
                                             ToolTip="-10s"
-                                            VerticalAlignment="Top"
-                                            Margin="1,5,1,0"
+                                            VerticalAlignment="Center"
+                                            Margin="5,0,1,0"
                                             utilities:MonitorOffset.Tag="MediaSeekButtonBack">
                                         <!-- Own dedicated tag, deliberately NOT shared with the
                                              main taskbar row's own "MediaGlyphPrevious" (see
@@ -311,7 +378,8 @@
                                              left-pointing triangles ("<<"), same shape as the
                                              original (pre-skip-icon) MediaPlayerPreviousGeometry
                                              in System.xaml. -->
-                                        <Path Data="M 4,0 L 4,7 L 0,3.5 Z M 9,0 L 9,7 L 5,3.5 Z"
+                                        <Path x:Name="SeekBackGlyph"
+                                              Data="M 4,0 L 4,7 L 0,3.5 Z M 9,0 L 9,7 L 5,3.5 Z"
                                               Style="{DynamicResource MediaPlayerGlyphStyle}"
                                               utilities:MonitorOffset.Tag="MediaSeekGlyphPrevious" />
                                     </Button>
@@ -319,20 +387,20 @@
                                             Style="{DynamicResource MediaPlayerButtonStyle}"
                                             Click="PlayPauseButton_OnClick"
                                             ToolTip="{DynamicResource media_play_pause}"
-                                            VerticalAlignment="Top"
-                                            Margin="1,5,1,0"
+                                            VerticalAlignment="Center"
+                                            Margin="1,0,1,0"
                                             utilities:MonitorOffset.Tag="MediaSeekButtonPlayPause">
                                         <Path x:Name="SeekPlayPauseGlyph"
                                               Data="{DynamicResource MediaPlayerPlayGeometry}"
                                               Style="{DynamicResource MediaPlayerGlyphStyle}"
-                                              utilities:MonitorOffset.Tag="MediaGlyphPlayPause" />
+                                              utilities:MonitorOffset.Tag="MediaSeekGlyphPlayPause" />
                                     </Button>
                                     <Button x:Name="SeekForwardButton"
                                             Style="{DynamicResource MediaPlayerButtonStyle}"
                                             Click="SeekForwardButton_OnClick"
                                             ToolTip="+10s"
-                                            VerticalAlignment="Top"
-                                            Margin="1,5,1,0"
+                                            VerticalAlignment="Center"
+                                            Margin="1,0,1,0"
                                             utilities:MonitorOffset.Tag="MediaSeekButtonForward">
                                         <!-- Own dedicated tag, not shared with the main row's
                                              "MediaGlyphNext" - a per-monitor Geometry override
@@ -342,9 +410,22 @@
                                              triangles (">>"), same shape as the original
                                              (pre-skip-icon) MediaPlayerNextGeometry in
                                              System.xaml. -->
-                                        <Path Data="M 0,0 L 4,3.5 L 0,7 Z M 5,0 L 9,3.5 L 5,7 Z"
+                                        <Path x:Name="SeekForwardGlyph"
+                                              Data="M 0,0 L 4,3.5 L 0,7 Z M 5,0 L 9,3.5 L 5,7 Z"
                                               Style="{DynamicResource MediaPlayerGlyphStyle}"
                                               utilities:MonitorOffset.Tag="MediaSeekGlyphNext" />
+                                    </Button>
+                                    <Button x:Name="SeekNextButton"
+                                            Style="{DynamicResource MediaPlayerButtonStyle}"
+                                            Click="NextButton_OnClick"
+                                            ToolTip="{DynamicResource media_next}"
+                                            VerticalAlignment="Center"
+                                            Margin="1,0,1,0"
+                                            utilities:MonitorOffset.Tag="MediaSeekButtonNext">
+                                        <Path x:Name="SeekNextGlyph"
+                                              Data="{DynamicResource MediaPlayerNextGeometry}"
+                                              Style="{DynamicResource MediaPlayerGlyphStyle}"
+                                              utilities:MonitorOffset.Tag="MediaSeekGlyphSkipNext" />
                                     </Button>
                                     <!-- Width fills whatever space is left over after the other
                                          (fixed-width) siblings within the album art's own
@@ -362,7 +443,7 @@
                                             Style="{DynamicResource MediaSeekSliderStyle}"
                                             Height="16"
                                             VerticalAlignment="Center"
-                                            Margin="2,0"
+                                            Margin="6,0"
                                             Minimum="0"
                                             Maximum="1"
                                             IsMoveToPointEnabled="True"
@@ -370,11 +451,13 @@
                                             PreviewMouseUp="SeekSlider_OnPreviewMouseUp"
                                             utilities:MonitorOffset.Tag="MediaSeekSlider">
                                         <Slider.Width>
-                                            <MultiBinding Converter="{StaticResource remainingWidthConverter}" ConverterParameter="18,90">
+                                            <MultiBinding Converter="{StaticResource remainingWidthConverter}" ConverterParameter="12.8,30">
                                                 <Binding ElementName="SeekAlbumArtImage" Path="ActualWidth" />
                                                 <Binding ElementName="SeekBackButton" Path="ActualWidth" />
                                                 <Binding ElementName="SeekPlayPauseButton" Path="ActualWidth" />
                                                 <Binding ElementName="SeekForwardButton" Path="ActualWidth" />
+                                                <Binding ElementName="SeekPreviousButton" Path="ActualWidth" />
+                                                <Binding ElementName="SeekNextButton" Path="ActualWidth" />
                                                 <Binding ElementName="SeekTimeText" Path="ActualWidth" />
                                             </MultiBinding>
                                         </Slider.Width>
@@ -384,6 +467,8 @@
                                                FontWeight="Bold"
                                                VerticalAlignment="Center"
                                                Margin="2,0,6,0"
+                                               TextAlignment="Right"
+                                               MinWidth="{Binding ActualWidth, ElementName=SeekTimeWidthRef}"
                                                Text="0:00 / 0:00"
                                                utilities:MonitorOffset.Tag="MediaSeekTimeText" />
                                 </StackPanel>

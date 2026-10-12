@@ -9,7 +9,9 @@ using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Data;
 using System.Windows.Input;
+using System.Windows.Media;
 using System.Windows.Media.Animation;
+using System.Windows.Media.Imaging;
 using ManagedShell.Common.Helpers;
 using ManagedShell.Interop;
 using ManagedShell.WindowsTasks;
@@ -272,6 +274,8 @@ namespace RetroBar.Controls
             }
 
             _isLoaded = true;
+
+            ReopenPreviewAfterClose();
         }
 
         private void Window_GetButtonRect(ref NativeMethods.ShortRect rect)
@@ -325,24 +329,221 @@ namespace RetroBar.Controls
                 return;
             }
 
-            NativeMethods.WindowShowStyle wss = Window.ShowStyle;
-            int ws = Window.WindowStyles;
+            // The program's name and icon: a click starts another instance of it.
+            ProgramMenuItem.Header = GetProgramDisplayName();
+            // Made the way the preview's title icon is (the same icon, asked for the same way, the same 16 DIP image and per-monitor
+            // adjustments - "PreviewTitleIcon" in the monitor file), so it is as sharp as that one.
+            // For File Explorer that is the program's own icon - the one the tab shows when there are several windows - not the
+            // folder icon in the window's title bar.
+            var iconConverter = (System.Windows.Data.IMultiValueConverter)FindResource("taskIconConverter");
+            ImageSource programIcon = (TaskIconConverter.IsFileExplorerWindow(Window)
+                                          ? iconConverter.Convert(new object[] { Window, Window.Icon, 2 }, typeof(ImageSource), null, System.Globalization.CultureInfo.CurrentCulture)
+                                          : iconConverter.Convert(new object[] { Window, Window.Icon }, typeof(ImageSource), "window", System.Globalization.CultureInfo.CurrentCulture)) as ImageSource
+                                      ?? GetProgramIcon();
+            var menuIcon = programIcon == null ? null : new Image { Source = programIcon, Width = 16, Height = 16, UseLayoutRounding = true, SnapsToDevicePixels = true };
+            if (menuIcon != null)
+            {
+                RenderOptions.SetBitmapScalingMode(menuIcon, BitmapScalingMode.HighQuality);
+                MonitorOffset.SetTag(menuIcon, "PreviewTitleIcon");
+            }
 
-            // disable window operations depending on current window state. originally tried implementing via bindings but found there is no notification we get regarding maximized state
-            MaximizeMenuItem.IsEnabled = wss != NativeMethods.WindowShowStyle.ShowMaximized && (ws & (int)NativeMethods.WindowStyles.WS_MAXIMIZEBOX) != 0;
-            MinimizeMenuItem.IsEnabled = wss != NativeMethods.WindowShowStyle.ShowMinimized && Window.CanMinimize;
-            if (RestoreMenuItem.IsEnabled = wss != NativeMethods.WindowShowStyle.ShowNormal)
+            ProgramMenuItem.Icon = menuIcon;
+            ProgramMenuItem.Visibility = GetProgramLaunchTarget() == null ? Visibility.Collapsed : Visibility.Visible;
+
+            PinMenuItem.Visibility = Window.IsUWP || string.IsNullOrEmpty(Window.WinFileName) ? Visibility.Collapsed : Visibility.Visible;
+            PinMenuItem.Header = FindResource(PinnedApps.FindLink(Window) != null ? "unpin_from_taskbar" : "pin_to_taskbar");
+            CloseMenuItem.FontWeight = FontWeights.Bold;
+        }
+
+        private static readonly Dictionary<string, ImageSource> ProgramIcons = new(StringComparer.OrdinalIgnoreCase);
+
+        // The icon of the program itself (its executable's), not the one the tab is showing at the moment (a folder's, a
+        // document's, ...). A packaged app has no executable of its own to ask, so it keeps the tab's.
+        private ImageSource GetProgramIcon()
+        {
+            string path = Window.IsUWP ? null : Window.WinFileName;
+            if (string.IsNullOrEmpty(path))
             {
-                CloseMenuItem.FontWeight = FontWeights.Normal;
-                RestoreMenuItem.FontWeight = FontWeights.Bold;
+                return TaskIconImage.Source;
             }
-            if (!RestoreMenuItem.IsEnabled || RestoreMenuItem.IsEnabled && !MaximizeMenuItem.IsEnabled)
+
+            lock (ProgramIcons)
             {
-                CloseMenuItem.FontWeight = FontWeights.Bold;
-                RestoreMenuItem.FontWeight = FontWeights.Normal;
+                if (ProgramIcons.TryGetValue(path, out ImageSource cached))
+                {
+                    return cached;
+                }
             }
-            MoveMenuItem.IsEnabled = wss == NativeMethods.WindowShowStyle.ShowNormal;
-            SizeMenuItem.IsEnabled = wss == NativeMethods.WindowShowStyle.ShowNormal && (ws & (int)NativeMethods.WindowStyles.WS_MAXIMIZEBOX) != 0;
+
+            ImageSource icon = null;
+            try
+            {
+                using System.Drawing.Icon extracted = System.Drawing.Icon.ExtractAssociatedIcon(path);
+                if (extracted != null)
+                {
+                    BitmapSource bitmap = System.Windows.Interop.Imaging.CreateBitmapSourceFromHIcon(extracted.Handle, Int32Rect.Empty, BitmapSizeOptions.FromEmptyOptions());
+                    bitmap.Freeze();
+                    icon = bitmap;
+                }
+            }
+            catch (Exception)
+            {
+            }
+
+            icon ??= TaskIconImage.Source;
+
+            lock (ProgramIcons)
+            {
+                ProgramIcons[path] = icon;
+            }
+
+            return icon;
+        }
+
+        private string GetProgramDisplayName()
+        {
+            return ProgramName.Get(Window) ??
+                   (string.IsNullOrEmpty(Window.WinFileName) ? Window.Title : System.IO.Path.GetFileNameWithoutExtension(Window.WinFileName));
+        }
+
+        // What starting another instance runs: the executable, or for a packaged app its entry in the Apps folder.
+        private string GetProgramLaunchTarget()
+        {
+            if (Window.IsUWP)
+            {
+                return string.IsNullOrEmpty(Window.AppUserModelID) ? null : @"shell:AppsFolder\" + Window.AppUserModelID;
+            }
+
+            return string.IsNullOrEmpty(Window.WinFileName) ? null : Window.WinFileName;
+        }
+
+        private ContextMenu _windowMenu;
+
+        private void ProgramMenuItem_OnClick(object sender, RoutedEventArgs e)
+        {
+            string target = GetProgramLaunchTarget();
+            if (target == null)
+            {
+                return;
+            }
+
+            try
+            {
+                var info = new ProcessStartInfo(target) { UseShellExecute = true };
+                if (!Window.IsUWP)
+                {
+                    info.WorkingDirectory = System.IO.Path.GetDirectoryName(target);
+                }
+
+                Process.Start(info);
+            }
+            catch (Exception ex)
+            {
+                ManagedShell.Common.Logging.ShellLogger.Error("TaskButton: Unable to start another instance of the program", ex);
+            }
+        }
+
+        private MenuItem WindowMenuItem(string resourceKey, string marlett, bool enabled, Action action)
+        {
+            var item = new MenuItem { Header = Application.Current.FindResource(resourceKey), IsEnabled = enabled, Style = MenuItemStyle.Style };
+            if (marlett != null)
+            {
+                item.Icon = new TextBlock { FontFamily = new System.Windows.Media.FontFamily("Marlett"), Text = marlett, HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Center };
+            }
+
+            item.Click += (s, args) => action();
+            return item;
+        }
+
+        /// <summary>Opens the menu of one window's own operations (restore, move, size, minimize, maximize, close) -
+        /// what the right-click on a window's preview shows.</summary>
+        private void ShowWindowMenu(ApplicationWindow window)
+        {
+            if (window == null)
+            {
+                return;
+            }
+
+            NativeMethods.WindowShowStyle wss = window.ShowStyle;
+            bool canMaximize = (window.WindowStyles & (int)NativeMethods.WindowStyles.WS_MAXIMIZEBOX) != 0;
+            bool restoreEnabled = wss != NativeMethods.WindowShowStyle.ShowNormal;
+            bool maximizeEnabled = wss != NativeMethods.WindowShowStyle.ShowMaximized && canMaximize;
+
+            MenuItem restore = WindowMenuItem("restore", "2", restoreEnabled, () => window.Restore());
+            MenuItem close = WindowMenuItem("close", "r", true, () => window.Close());
+
+            // The bold one is the window's default action: restore while it can be restored and maximized, close otherwise.
+            (restoreEnabled && maximizeEnabled ? restore : close).FontWeight = FontWeights.Bold;
+
+            // The preview stays up while the menu is open, and a click anywhere else closes both together (see PreviewPollTimer_Tick): WPF does not close the menu itself, so the two can be faded out in step.
+            CloseWindowMenu();
+
+            // No peek at the window while its menu is open (and a peek already on stops).
+            StopPeek();
+
+            var menu = new ContextMenu { PlacementTarget = AppButton, Placement = System.Windows.Controls.Primitives.PlacementMode.MousePoint, StaysOpen = true };
+            _windowMenu = menu;
+
+            // Once the menu is gone (a click elsewhere, an item chosen, Escape) the preview goes too - unless the pointer is
+            // on the preview or the tab, which deal with their own clicks.
+            // Reacts to IsOpen going false, not to Closed: WPF fades a menu out before it raises Closed, so the preview would
+            // start fading a moment after the menu already had.
+            var isOpen = System.ComponentModel.DependencyPropertyDescriptor.FromProperty(ContextMenu.IsOpenProperty, typeof(ContextMenu));
+            EventHandler onIsOpenChanged = null;
+            onIsOpenChanged = (s, args) =>
+            {
+                if (menu.IsOpen)
+                {
+                    return;
+                }
+
+                isOpen.RemoveValueChanged(menu, onIsOpenChanged);
+                _previewHoverSince = DateTime.UtcNow;
+                _windowMenuFading = false;
+                if (AppButton.ToolTip is ToolTip tip && tip.IsOpen && !_previewFadingOut && !IsPointerOverPopup(tip) && !IsPointerOverTab())
+                {
+                    ClosePreview();
+                }
+            };
+            isOpen.AddValueChanged(menu, onIsOpenChanged);
+            menu.SetBinding(System.Windows.Media.TextOptions.TextRenderingModeProperty, new System.Windows.Data.Binding("AllowFontSmoothingMenu")
+            {
+                Source = Settings.Instance,
+                Converter = (System.Windows.Data.IValueConverter)FindResource("menuTextRenderingModeConverter"),
+            });
+            menu.Items.Add(restore);
+            menu.Items.Add(WindowMenuItem("move", null, wss == NativeMethods.WindowShowStyle.ShowNormal, () => window.Move()));
+            menu.Items.Add(WindowMenuItem("size", null, wss == NativeMethods.WindowShowStyle.ShowNormal && canMaximize, () => window.Size()));
+            menu.Items.Add(WindowMenuItem("minimize", "0", wss != NativeMethods.WindowShowStyle.ShowMinimized && window.CanMinimize, () => window.Minimize()));
+            menu.Items.Add(WindowMenuItem("maximize", "1", maximizeEnabled, () => window.Maximize()));
+            menu.Items.Add(new Separator());
+            menu.Items.Add(close);
+            menu.IsOpen = true;
+        }
+
+        private void PinMenuItem_OnClick(object sender, RoutedEventArgs e)
+        {
+            if (Window == null)
+            {
+                return;
+            }
+
+            try
+            {
+                string link = PinnedApps.FindLink(Window);
+                if (link != null)
+                {
+                    System.IO.File.Delete(link);
+                }
+                else
+                {
+                    PinnedApps.Pin(Window);
+                }
+            }
+            catch (Exception ex)
+            {
+                ManagedShell.Common.Logging.ShellLogger.Error("TaskButton: Unable to pin or unpin the program", ex);
+            }
         }
 
         private void CloseMenuItem_OnClick(object sender, RoutedEventArgs e)
@@ -380,31 +581,6 @@ namespace RetroBar.Controls
             {
                 Window?.Close();
             }
-        }
-
-        private void RestoreMenuItem_OnClick(object sender, RoutedEventArgs e)
-        {
-            Window?.Restore();
-        }
-
-        private void MoveMenuItem_OnClick(object sender, RoutedEventArgs e)
-        {
-            Window?.Move();
-        }
-
-        private void SizeMenuItem_OnClick(object sender, RoutedEventArgs e)
-        {
-            Window?.Size();
-        }
-
-        private void MinimizeMenuItem_OnClick(object sender, RoutedEventArgs e)
-        {
-            Window?.Minimize();
-        }
-
-        private void MaximizeMenuItem_OnClick(object sender, RoutedEventArgs e)
-        {
-            Window?.Maximize();
         }
 
         private void AppButton_OnClick(object sender, RoutedEventArgs e)

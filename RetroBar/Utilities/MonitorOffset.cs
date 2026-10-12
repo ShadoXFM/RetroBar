@@ -31,6 +31,29 @@ namespace RetroBar.Utilities
         public static readonly DependencyProperty TagProperty = DependencyProperty.RegisterAttached(
             "Tag", typeof(string), typeof(MonitorOffset), new PropertyMetadata(null, OnTagChanged));
 
+        /// <summary>The monitor (its device name, e.g. \\.\DISPLAY2) whose adjustments apply to everything below this element, for a
+        /// window that has been moved off the monitor of the taskbar it belongs to (the media popup, dragged).</summary>
+        public static readonly DependencyProperty DeviceNameOverrideProperty = DependencyProperty.RegisterAttached(
+            "DeviceNameOverride", typeof(string), typeof(MonitorOffset), new FrameworkPropertyMetadata(null, FrameworkPropertyMetadataOptions.Inherits));
+
+        public static string GetDeviceNameOverride(DependencyObject obj) => (string)obj.GetValue(DeviceNameOverrideProperty);
+        public static void SetDeviceNameOverride(DependencyObject obj, string value) => obj.SetValue(DeviceNameOverrideProperty, value);
+
+        /// <summary>Applies the adjustments again to every tagged element at or below the element.</summary>
+        public static void Refresh(DependencyObject root)
+        {
+            if (root is FrameworkElement element && !string.IsNullOrEmpty(GetTag(element)))
+            {
+                Apply(element);
+            }
+
+            int count = root is Visual or System.Windows.Media.Media3D.Visual3D ? VisualTreeHelper.GetChildrenCount(root) : 0;
+            for (int i = 0; i < count; i++)
+            {
+                Refresh(VisualTreeHelper.GetChild(root, i));
+            }
+        }
+
         public static string GetTag(DependencyObject obj) => (string)obj.GetValue(TagProperty);
         public static void SetTag(DependencyObject obj, string value) => obj.SetValue(TagProperty, value);
 
@@ -47,6 +70,10 @@ namespace RetroBar.Utilities
             "AppliedHeight", typeof(bool), typeof(MonitorOffset), new PropertyMetadata(false));
         private static readonly DependencyProperty AppliedMarginProperty = DependencyProperty.RegisterAttached(
             "AppliedMargin", typeof(bool), typeof(MonitorOffset), new PropertyMetadata(false));
+        // The Margin an element had in its XAML, kept while a monitor's Margin is applied over it: clearing the value when that monitor's
+        // entry goes away (the media popup dragged from one monitor to another) would otherwise leave no margin at all.
+        private static readonly DependencyProperty XamlMarginProperty = DependencyProperty.RegisterAttached(
+            "XamlMargin", typeof(object), typeof(MonitorOffset), new PropertyMetadata(null));
         private static readonly DependencyProperty AppliedPaddingProperty = DependencyProperty.RegisterAttached(
             "AppliedPadding", typeof(bool), typeof(MonitorOffset), new PropertyMetadata(false));
         private static readonly DependencyProperty AppliedBackgroundProperty = DependencyProperty.RegisterAttached(
@@ -442,6 +469,12 @@ namespace RetroBar.Utilities
                     // hand-edited JSON, not locale-sensitive user input, so it should always
                     // parse the same way regardless of the machine it runs on.
                     var thickness = (Thickness)ThicknessConverter.ConvertFromString(null, CultureInfo.InvariantCulture, marginText);
+                    if (!(bool)element.GetValue(AppliedMarginProperty))
+                    {
+                        object local = element.ReadLocalValue(FrameworkElement.MarginProperty);
+                        element.SetValue(XamlMarginProperty, local is Thickness ? local : null);
+                    }
+
                     element.SetValue(FrameworkElement.MarginProperty, thickness);
                     element.SetValue(AppliedMarginProperty, true);
                 }
@@ -453,7 +486,15 @@ namespace RetroBar.Utilities
             }
             else if ((bool)element.GetValue(AppliedMarginProperty))
             {
-                element.ClearValue(FrameworkElement.MarginProperty);
+                if (element.GetValue(XamlMarginProperty) is Thickness xamlMargin)
+                {
+                    element.SetValue(FrameworkElement.MarginProperty, xamlMargin);
+                }
+                else
+                {
+                    element.ClearValue(FrameworkElement.MarginProperty);
+                }
+
                 element.SetValue(AppliedMarginProperty, false);
             }
         }
@@ -563,6 +604,11 @@ namespace RetroBar.Utilities
             if (element is not Visual visual)
             {
                 return null;
+            }
+
+            if (GetDeviceNameOverride(element) is { Length: > 0 } overridden)
+            {
+                return overridden;
             }
 
             if (Window.GetWindow(visual) is Taskbar taskbar)

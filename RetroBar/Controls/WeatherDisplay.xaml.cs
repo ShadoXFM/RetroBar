@@ -76,6 +76,7 @@ namespace RetroBar.Controls
             if (Settings.Instance.ShowWeather)
             {
                 Visibility = Visibility.Visible;
+                SetIsWeatherShown(true);
                 _ = _viewModel.UpdateWeatherAsync();
                 _timer.Start();
             }
@@ -88,6 +89,15 @@ namespace RetroBar.Controls
                 ClearForecastAnimations();
                 ForecastPopup.IsOpen = false;
                 Visibility = Visibility.Collapsed;
+                SetIsWeatherShown(false);
+            }
+        }
+
+        private void SetIsWeatherShown(bool isShown)
+        {
+            if (Window.GetWindow(this) is Taskbar taskbar)
+            {
+                taskbar.IsWeatherShown = isShown;
             }
         }
 

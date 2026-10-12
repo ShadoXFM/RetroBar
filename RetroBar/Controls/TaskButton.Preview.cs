@@ -110,12 +110,14 @@ namespace RetroBar.Controls
             Loaded += (s, e) =>
             {
                 Settings.Instance.PropertyChanged += PreviewSettings_PropertyChanged;
+                GroupWindows.CollectionChanged += PreviewGroup_CollectionChanged;
                 UpdatePreviewToolTipService();
             };
 
             Unloaded += (s, e) =>
             {
                 Settings.Instance.PropertyChanged -= PreviewSettings_PropertyChanged;
+                GroupWindows.CollectionChanged -= PreviewGroup_CollectionChanged;
                 ClosePreview(false);
             };
 
@@ -138,6 +140,113 @@ namespace RetroBar.Controls
             };
             AppButton.ContextMenuOpening += (s, e) => ClosePreview();
         }
+
+        private static DateTime _previewKeepUntil = DateTime.MinValue;
+        private static string _reopenPreviewApp;
+        private static DateTime _reopenPreviewUntil = DateTime.MinValue;
+        private static RECT? _reopenPreviewFrom;
+
+        // A window was closed from its preview, and the tab that stood for it has been replaced by this one: show the preview again
+        // for the windows that are left.
+        private void ReopenPreviewAfterClose()
+        {
+            if (_reopenPreviewApp == null || DateTime.UtcNow > _reopenPreviewUntil || Window == null ||
+                TaskOpenOrderComparer.AppKey(Window) != _reopenPreviewApp || !Settings.Instance.ShowTaskThumbnails)
+            {
+                return;
+            }
+
+            _reopenPreviewApp = null;
+            RECT? from = _reopenPreviewFrom;
+            _reopenPreviewFrom = null;
+
+            // Shown at once (not faded in), and slid from where the old tab's preview was.
+            Dispatcher.BeginInvoke(new Action(() =>
+            {
+                OpenPreview(true, true);
+
+                if (from != null)
+                {
+                    Dispatcher.BeginInvoke(new Action(() => SlidePreviewFrom(from.Value, true)), DispatcherPriority.Loaded);
+                }
+            }), DispatcherPriority.Loaded);
+        }
+
+        private RECT? _previewRectBefore;
+
+        // The windows of the tab change while its preview is open (one was closed): the preview is centered over the tab again, which
+        // moves it - so it slides there from where it was, rather than jumping.
+        private void PreviewGroup_CollectionChanged(object sender, System.Collections.Specialized.NotifyCollectionChangedEventArgs e)
+        {
+            if (AppButton.ToolTip is not ToolTip tip || !tip.IsOpen || _previewFadingOut || _previewRectBefore != null ||
+                PresentationSource.FromVisual(tip) is not HwndSource source || !GetWindowRect(source.Handle, out RECT before))
+            {
+                return;
+            }
+
+            _previewRectBefore = before;
+            Dispatcher.BeginInvoke(new Action(SlidePreviewToNewPlace), DispatcherPriority.Render);
+        }
+
+        private void SlidePreviewToNewPlace()
+        {
+            RECT? before = _previewRectBefore;
+            _previewRectBefore = null;
+
+            if (before != null)
+            {
+                SlidePreviewFrom(before.Value, false);
+            }
+        }
+
+        // Moves the preview from where it was (a screen rectangle) to where it is now, over the preview's slide time. A preview
+        // that has only just opened is slow to reach the screen with software rendering, so its slide waits for that.
+        private void SlidePreviewFrom(RECT before, bool justOpened)
+        {
+            if (AppButton.ToolTip is not ToolTip tip || !tip.IsOpen || _previewFadingOut ||
+                PresentationSource.FromVisual(tip) is not HwndSource source || !GetWindowRect(source.Handle, out RECT now))
+            {
+                return;
+            }
+
+            double startDelay = justOpened && Settings.Instance.UseSoftwareRendering ? 70 : 0;
+            int dx = before.Left - now.Left;
+            int dy = before.Top - now.Top;
+            if (dx == 0 && dy == 0)
+            {
+                return;
+            }
+
+            IntPtr handle = source.Handle;
+            var ease = new CubicEase { EasingMode = EasingMode.EaseOut };
+            var clock = System.Diagnostics.Stopwatch.StartNew();
+            var timer = new DispatcherTimer(DispatcherPriority.Normal) { Interval = TimeSpan.FromMilliseconds(8) };
+
+            void Place(double progress)
+            {
+                double remaining = 1 - ease.Ease(progress);
+                SetWindowPos(handle, IntPtr.Zero, now.Left + (int)Math.Round(dx * remaining), now.Top + (int)Math.Round(dy * remaining), 0, 0, SWP_NOSIZE | SWP_NOZORDER | SWP_NOACTIVATE);
+            }
+
+            Place(0);
+            timer.Tick += (s, args) =>
+            {
+                double progress = Math.Clamp((clock.Elapsed.TotalMilliseconds - startDelay) / PreviewSlideIn.TotalMilliseconds, 0, 1);
+                Place(progress);
+                if (progress >= 1 || !tip.IsOpen)
+                {
+                    timer.Stop();
+                }
+            };
+            timer.Start();
+        }
+
+        private const uint SWP_NOSIZE = 0x0001;
+        private const uint SWP_NOZORDER = 0x0004;
+        private const uint SWP_NOACTIVATE = 0x0010;
+
+        [DllImport("user32.dll")]
+        private static extern bool SetWindowPos(IntPtr hWnd, IntPtr hWndInsertAfter, int x, int y, int cx, int cy, uint flags);
 
         private bool ShowsGroupPreviewOnClick => Settings.Instance.ShowTaskThumbnails && GroupWindows.Count > 1;
 
@@ -199,9 +308,9 @@ namespace RetroBar.Controls
             }
         }
 
-        private void OpenPreview()
+        private void OpenPreview(bool force = false, bool instant = false)
         {
-            if (!IsPointerOverTab() || AppButton.ToolTip is not ToolTip tip || AppButton.ContextMenu?.IsOpen == true)
+            if ((!force && !IsPointerOverTab()) || AppButton.ToolTip is not ToolTip tip || AppButton.ContextMenu?.IsOpen == true)
             {
                 return;
             }
@@ -227,8 +336,8 @@ namespace RetroBar.Controls
 
             // Start (or resume, if it was still fading out) from the current opacity.
             (DependencyProperty slideAxis, double slideStart) = PreviewSlideAxis();
-            double startOpacity = tip.IsOpen ? tip.Opacity : 0;
-            double startOffset = tip.IsOpen ? (double)tip.GetValue(slideAxis) : slideStart;
+            double startOpacity = instant ? 1 : tip.IsOpen ? tip.Opacity : 0;
+            double startOffset = instant ? 0 : tip.IsOpen ? (double)tip.GetValue(slideAxis) : slideStart;
             _previewFadingOut = false;
             tip.BeginAnimation(UIElement.OpacityProperty, null);
             ClearPreviewSlide(tip);
@@ -282,6 +391,8 @@ namespace RetroBar.Controls
                 return;
             }
 
+            CloseWindowMenuOnOutsideClick();
+
             bool overPreview = IsPointerOverPopup(tip);
             List<PreviewItem> items = GetPreviewItems(tip);
             (PreviewItem hovered, PreviewHit hit) = overPreview ? HitTestPointer(tip, items) : (null, PreviewHit.Body);
@@ -296,13 +407,21 @@ namespace RetroBar.Controls
             {
                 ApplicationWindow target = hovered?.Window ?? Window;
 
-                if (!ReferenceEquals(_previewHoverTarget, target))
+                if (hit == PreviewHit.Close)
+                {
+                    // Pointing at a close button is not asking for a look at the window: no peek, and none started when it
+                    // moves off the button until it has rested on the preview again.
+                    StopPeek();
+                    _previewHoverTarget = target;
+                    _previewHoverSince = DateTime.UtcNow;
+                }
+                else if (!ReferenceEquals(_previewHoverTarget, target))
                 {
                     StopPeek();
                     _previewHoverTarget = target;
                     _previewHoverSince = DateTime.UtcNow;
                 }
-                else if (!_isPeekingAtWindow && _previewHoverSince.HasValue && DateTime.UtcNow - _previewHoverSince.Value >= PeekDelay)
+                else if (!_isPeekingAtWindow && _windowMenu?.IsOpen != true && _previewHoverSince.HasValue && DateTime.UtcNow - _previewHoverSince.Value >= PeekDelay)
                 {
                     StartPeek(target);
                 }
@@ -316,7 +435,9 @@ namespace RetroBar.Controls
                 StopPeek();
             }
 
-            if (IsPointerOverTab() || overPreview)
+            // After a window was closed from the preview the others are re-centered, and the pointer is then often off the preview for
+            // a moment: it is given a little longer before the preview goes.
+            if (IsPointerOverTab() || overPreview || _windowMenu?.IsOpen == true || DateTime.UtcNow < _previewKeepUntil)
             {
                 _previewOutsideSince = null;
                 return;
@@ -333,6 +454,7 @@ namespace RetroBar.Controls
         // animate: fade out (the normal case); false closes at once (tab unloaded, thumbnails turned off).
         private void ClosePreview(bool animate = true)
         {
+            CloseWindowMenu(animate);
             _previewShowTimer?.Stop();
             _previewPollTimer?.Stop();
             _previewOutsideSince = null;
@@ -408,6 +530,7 @@ namespace RetroBar.Controls
         private const int WM_MOUSEMOVE = 0x0200;
         private const int WM_LBUTTONDOWN = 0x0201;
         private const int WM_LBUTTONUP = 0x0202;
+        private const int WM_RBUTTONUP = 0x0205;
 
         private enum CloseButtonState
         {
@@ -572,7 +695,7 @@ namespace RetroBar.Controls
 
         private IntPtr PreviewWndProc(IntPtr hwnd, int msg, IntPtr wParam, IntPtr lParam, ref bool handled)
         {
-            if (msg is not (WM_MOUSEMOVE or WM_LBUTTONDOWN or WM_LBUTTONUP) || AppButton.ToolTip is not ToolTip tip)
+            if (msg is not (WM_MOUSEMOVE or WM_LBUTTONDOWN or WM_LBUTTONUP or WM_RBUTTONUP) || AppButton.ToolTip is not ToolTip tip)
             {
                 return IntPtr.Zero;
             }
@@ -587,6 +710,13 @@ namespace RetroBar.Controls
             {
                 case WM_MOUSEMOVE:
                     UpdatePreviewItemStates(items, item, hit);
+                    break;
+
+                case WM_RBUTTONUP:
+                    // The window's own menu (restore, move, size, ...).
+                    ApplicationWindow menuWindow = item?.Window ?? Window;
+                    StopPeek();
+                    Dispatcher.BeginInvoke(new Action(() => ShowWindowMenu(menuWindow)));
                     break;
 
                 case WM_LBUTTONDOWN:
@@ -615,6 +745,35 @@ namespace RetroBar.Controls
                     // Clicking a preview anywhere but its close button activates that window; the close
                     // button closes it. Either way the preview is done.
                     bool close = pressedHit == PreviewHit.Close;
+
+                    // Closing one of several windows leaves the preview open for the others. If the tab itself goes with the window
+                    // (it stood for that one), the tab that takes its place opens the preview again (see ReopenPreviewAfterClose).
+                    if (close && items.Count > 1 && target != null)
+                    {
+                        _reopenPreviewApp = TaskOpenOrderComparer.AppKey(target);
+                        _reopenPreviewUntil = DateTime.UtcNow + TimeSpan.FromSeconds(3);
+                        _previewKeepUntil = DateTime.UtcNow + TimeSpan.FromSeconds(2);
+                        _reopenPreviewFrom = GetWindowRect(hwnd, out RECT here) ? here : null;
+                        // Its thumbnail has gone grey (the window's icon on a plain box) in the moments before the window is
+                        // gone from the list, so it is hidden - kept in its place, so the others don't move yet - at once. If the
+                        // window is still there a little later (it asked to save something, say), it is shown again.
+                        FrameworkElement closing = item?.Root;
+                        if (closing != null)
+                        {
+                            closing.Visibility = Visibility.Hidden;
+                            var restore = new DispatcherTimer { Interval = TimeSpan.FromSeconds(2) };
+                            restore.Tick += (t, a) =>
+                            {
+                                restore.Stop();
+                                closing.Visibility = Visibility.Visible;
+                            };
+                            restore.Start();
+                        }
+
+                        Dispatcher.BeginInvoke(new Action(() => target.Close()));
+                        break;
+                    }
+
                     Dispatcher.BeginInvoke(new Action(() =>
                     {
                         ClosePreview();
@@ -650,10 +809,78 @@ namespace RetroBar.Controls
                 }
 
                 Matrix fromDevice = source.CompositionTarget.TransformFromDevice;
-                Geometry data = glyph.Data.CloneCurrentValue();
+
+                // A bigger and heavier X than the theme's 8x7 one, the same size (in DIPs) on every monitor and as many whole
+                // pixels as that makes at the monitor's scale.
+                // At 100% the theme's own 8x7 X is kept; a bigger one is built for scaled monitors.
+                Geometry data = fromDevice.M11 >= 1 / 1.1 ? glyph.Data.CloneCurrentValue() : BuildGlyph(CloseGlyphRows(1 / fromDevice.M11));
                 data.Transform = new ScaleTransform(fromDevice.M11, fromDevice.M22);
                 glyph.Data = data;
             }
+        }
+
+        // The X for a monitor scale (1 = 100%): about 8.8 x 7.2 DIPs, its strokes about 2.4 DIPs across - 9x7 pixels with 2-pixel
+        // strokes at 100%, 11x9 with 3 at 125%, and so on. Each row has the two strokes of the X, stepping evenly from the corners
+        // to the middle.
+        private static string[] CloseGlyphRows(double scale)
+        {
+            int width = (int)Math.Round(8.8 * scale);
+            int height = (int)Math.Round(7.2 * scale);
+            int stroke = Math.Max(2, (int)Math.Round(2.4 * scale));
+            var rows = new string[height];
+
+            for (int y = 0; y < height; y++)
+            {
+                int left = (int)Math.Round(y * (width - stroke) / (double)(height - 1));
+                int right = width - stroke - left;
+                var cells = new char[width];
+                Array.Fill(cells, '.');
+
+                for (int k = 0; k < stroke; k++)
+                {
+                    cells[left + k] = 'X';
+                    cells[right + k] = 'X';
+                }
+
+                rows[y] = new string(cells);
+            }
+
+            return rows;
+        }
+
+        // One 1x1 cell of the rows' 'X's is one unit of the geometry (a run of cells in a row is one rectangle).
+        private static Geometry BuildGlyph(string[] rows)
+        {
+            var geometry = new StreamGeometry { FillRule = FillRule.Nonzero };
+
+            using (StreamGeometryContext context = geometry.Open())
+            {
+                for (int y = 0; y < rows.Length; y++)
+                {
+                    int x = 0;
+                    while (x < rows[y].Length)
+                    {
+                        if (rows[y][x] != 'X')
+                        {
+                            x++;
+                            continue;
+                        }
+
+                        int start = x;
+                        while (x < rows[y].Length && rows[y][x] == 'X')
+                        {
+                            x++;
+                        }
+
+                        context.BeginFigure(new Point(start, y), true, true);
+                        context.LineTo(new Point(x, y), true, false);
+                        context.LineTo(new Point(x, y + 1), true, false);
+                        context.LineTo(new Point(start, y + 1), true, false);
+                    }
+                }
+            }
+
+            return geometry;
         }
 
         // The hover fill reaches out over the padding between the previews and the frame's inner edge. That
@@ -700,6 +927,16 @@ namespace RetroBar.Controls
                     bool onClose = isHovered && hit == PreviewHit.Close;
                     bool closePressed = isPressed && _previewPressedHit == PreviewHit.Close;
                     item.CloseButton.Tag = closePressed ? "pressed" : (onClose ? "hot" : null);
+
+                    // The theme moves the X when pressed with a margin of 1 on a centered element, which is half a DIP: a whole
+                    // pixel at 125%, nothing at 100%. It is moved here by exactly one device pixel (right and down) instead.
+                    if (item.CloseButton.Template?.FindName("Glyph", item.CloseButton) is System.Windows.Shapes.Path pressedGlyph &&
+                        (pressedGlyph.RenderTransform is TranslateTransform) != closePressed)
+                    {
+                        DpiScale dpi = VisualTreeHelper.GetDpi(pressedGlyph);
+                        pressedGlyph.Margin = new Thickness(0);
+                        pressedGlyph.RenderTransform = closePressed ? new TranslateTransform(1 / dpi.DpiScaleX, 1 / dpi.DpiScaleY) : null;
+                    }
                 }
 
             }
@@ -811,6 +1048,87 @@ namespace RetroBar.Controls
 
             return cursor.X >= topLeft.X && cursor.X < bottomRight.X && cursor.Y >= topLeft.Y && cursor.Y < bottomRight.Y + extra;
         }
+
+        private bool _windowMenuFading;
+
+        // The window menu goes along with the preview: faded out over the same time as the preview's own fade when that is
+        // animated, so the two vanish together.
+        private void CloseWindowMenu(bool animate = false)
+        {
+            ContextMenu menu = _windowMenu;
+            if (menu?.IsOpen != true)
+            {
+                return;
+            }
+
+            if (!animate)
+            {
+                _windowMenuFading = false;
+                menu.IsOpen = false;
+                return;
+            }
+
+            if (_windowMenuFading)
+            {
+                return;
+            }
+
+            _windowMenuFading = true;
+            var fade = new DoubleAnimation(1, 0, PreviewFadeOut)
+            {
+                EasingFunction = new QuadraticEase { EasingMode = EasingMode.EaseIn },
+            };
+            fade.Completed += (sender, args) =>
+            {
+                if (_windowMenuFading)
+                {
+                    _windowMenuFading = false;
+                    menu.IsOpen = false;
+                }
+            };
+            menu.BeginAnimation(UIElement.OpacityProperty, fade);
+        }
+
+        // A click anywhere but on the window menu (another window, the desktop, the preview) closes it - checked by the
+        // mouse buttons' state, since a click in another program never reaches the menu's own input handling.
+        private void CloseWindowMenuOnOutsideClick()
+        {
+            if (_windowMenu?.IsOpen != true)
+            {
+                return;
+            }
+
+            bool pressed = ((GetAsyncKeyState(VK_LBUTTON) | GetAsyncKeyState(VK_RBUTTON) | GetAsyncKeyState(VK_MBUTTON)) & 0x8000) != 0;
+            if (!pressed)
+            {
+                return;
+            }
+
+            bool overMenu = PresentationSource.FromVisual(_windowMenu) is HwndSource source && GetCursorPos(out POINT cursor) &&
+                            GetWindowRect(source.Handle, out RECT rect) &&
+                            cursor.X >= rect.Left && cursor.X < rect.Right && cursor.Y >= rect.Top && cursor.Y < rect.Bottom;
+            if (overMenu || _windowMenuFading)
+            {
+                return;
+            }
+
+            if (AppButton.ToolTip is ToolTip tip && tip.IsOpen && !IsPointerOverPopup(tip) && !IsPointerOverTab())
+            {
+                // Away from the preview too: preview and menu fade out together.
+                ClosePreview();
+            }
+            else
+            {
+                _windowMenu.IsOpen = false;
+            }
+        }
+
+        private const int VK_LBUTTON = 0x01;
+        private const int VK_RBUTTON = 0x02;
+        private const int VK_MBUTTON = 0x04;
+
+        [DllImport("user32.dll")]
+        private static extern short GetAsyncKeyState(int key);
 
         // Compared against the popup window's screen rectangle rather than ToolTip.IsMouseOver: the
         // thumbnail itself is drawn by DWM over the window, and WPF's own hit-testing doesn't see the

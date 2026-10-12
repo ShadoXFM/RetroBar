@@ -58,6 +58,19 @@ namespace RetroBar
             set => SetValue(IsCpuTempShownProperty, value);
         }
 
+        public static readonly DependencyProperty IsWeatherShownProperty = DependencyProperty.Register(
+            nameof(IsWeatherShown), typeof(bool), typeof(Taskbar), new PropertyMetadata(false));
+
+        /// <summary>
+        /// Set by WeatherDisplay whenever it shows/hides itself (Settings.ShowWeather) - with IsMediaPlaying and IsCpuTempShown, what
+        /// decides whether the tray box holds anything but the tray icons and the clock (see TrayAloneToMonitorTagConverter).
+        /// </summary>
+        public bool IsWeatherShown
+        {
+            get => (bool)GetValue(IsWeatherShownProperty);
+            set => SetValue(IsWeatherShownProperty, value);
+        }
+
         private double _unlockedMargin;
         public double DesiredRowHeight { get; private set; }
 
