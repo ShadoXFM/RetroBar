@@ -302,8 +302,8 @@
                                             Style="{DynamicResource MediaPlayerButtonStyle}"
                                             Click="SeekBackButton_OnClick"
                                             ToolTip="-10s"
-                                            VerticalAlignment="Top"
-                                            Margin="1,5,1,0"
+                                            VerticalAlignment="Center"
+                                            Margin="1,0,1,0"
                                             utilities:MonitorOffset.Tag="MediaSeekButtonBack">
                                         <!-- Own dedicated tag, deliberately NOT shared with the
                                              main taskbar row's own "MediaGlyphPrevious" (see
@@ -311,7 +311,8 @@
                                              left-pointing triangles ("<<"), same shape as the
                                              original (pre-skip-icon) MediaPlayerPreviousGeometry
                                              in System.xaml. -->
-                                        <Path Data="M 4,0 L 4,7 L 0,3.5 Z M 9,0 L 9,7 L 5,3.5 Z"
+                                        <Path x:Name="SeekBackGlyph"
+                                              Data="M 4,0 L 4,7 L 0,3.5 Z M 9,0 L 9,7 L 5,3.5 Z"
                                               Style="{DynamicResource MediaPlayerGlyphStyle}"
                                               utilities:MonitorOffset.Tag="MediaSeekGlyphPrevious" />
                                     </Button>
@@ -319,20 +320,20 @@
                                             Style="{DynamicResource MediaPlayerButtonStyle}"
                                             Click="PlayPauseButton_OnClick"
                                             ToolTip="{DynamicResource media_play_pause}"
-                                            VerticalAlignment="Top"
-                                            Margin="1,5,1,0"
+                                            VerticalAlignment="Center"
+                                            Margin="1,0,1,0"
                                             utilities:MonitorOffset.Tag="MediaSeekButtonPlayPause">
                                         <Path x:Name="SeekPlayPauseGlyph"
                                               Data="{DynamicResource MediaPlayerPlayGeometry}"
                                               Style="{DynamicResource MediaPlayerGlyphStyle}"
-                                              utilities:MonitorOffset.Tag="MediaGlyphPlayPause" />
+                                              utilities:MonitorOffset.Tag="MediaSeekGlyphPlayPause" />
                                     </Button>
                                     <Button x:Name="SeekForwardButton"
                                             Style="{DynamicResource MediaPlayerButtonStyle}"
                                             Click="SeekForwardButton_OnClick"
                                             ToolTip="+10s"
-                                            VerticalAlignment="Top"
-                                            Margin="1,5,1,0"
+                                            VerticalAlignment="Center"
+                                            Margin="1,0,1,0"
                                             utilities:MonitorOffset.Tag="MediaSeekButtonForward">
                                         <!-- Own dedicated tag, not shared with the main row's
                                              "MediaGlyphNext" - a per-monitor Geometry override
@@ -342,7 +343,8 @@
                                              triangles (">>"), same shape as the original
                                              (pre-skip-icon) MediaPlayerNextGeometry in
                                              System.xaml. -->
-                                        <Path Data="M 0,0 L 4,3.5 L 0,7 Z M 5,0 L 9,3.5 L 5,7 Z"
+                                        <Path x:Name="SeekForwardGlyph"
+                                              Data="M 0,0 L 4,3.5 L 0,7 Z M 5,0 L 9,3.5 L 5,7 Z"
                                               Style="{DynamicResource MediaPlayerGlyphStyle}"
                                               utilities:MonitorOffset.Tag="MediaSeekGlyphNext" />
                                     </Button>

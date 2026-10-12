@@ -369,6 +369,7 @@ namespace RetroBar.Controls
                 _playPauseGlyph.Data = playPauseGlyph;
             }
             SeekPlayPauseGlyph.Data = playPauseGlyph;
+            ApplySeekGlyphs();
 
             UpdateAlbumArt();
         }
@@ -1251,8 +1252,33 @@ namespace RetroBar.Controls
             }
         }
 
+        // The popup's buttons' glyphs, drawn as whole device pixels (see PixelShape) and as tall as the taskbar's own, centered in
+        // the same 10 x 7 DIP box the glyph style gives them (so the buttons keep their size, and the popup its layout).
+        private void ApplySeekGlyphs()
+        {
+            DpiScale dpi = VisualTreeHelper.GetDpi(this);
+            int boxWidth = (int)Math.Round(10 * dpi.DpiScaleX);
+            int boxHeight = (int)Math.Round(7 * dpi.DpiScaleY);
+            int height = boxHeight % 2 == 1 ? boxHeight : boxHeight + 1;
+            bool playing = _sessionManager?.PlaybackState == MediaPlaybackState.Playing;
+
+            void Apply(System.Windows.Shapes.Path path, string[] rows)
+            {
+                int offsetX = Math.Max(0, (boxWidth - rows[0].Length) / 2);
+                int offsetY = Math.Max(0, (boxHeight - rows.Length) / 2);
+                path.Stretch = Stretch.None;
+                path.Data = PixelShape.FromRows(rows, offsetX, offsetY, dpi);
+            }
+
+            Apply(SeekBackGlyph, PixelShape.DoubleTriangle(height, false));
+            Apply(SeekForwardGlyph, PixelShape.DoubleTriangle(height, true));
+            Apply(SeekPlayPauseGlyph, playing ? PixelShape.Pause(height) : PixelShape.Play(height));
+        }
+
         private void SeekPopup_OnOpened(object sender, EventArgs e)
         {
+            ApplySeekGlyphs();
+
             bool canSeek = _sessionManager?.CanSeek ?? false;
             SeekSlider.IsEnabled = canSeek;
             SeekBackButton.IsEnabled = canSeek;
