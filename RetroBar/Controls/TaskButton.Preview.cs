@@ -810,25 +810,42 @@ namespace RetroBar.Controls
 
                 Matrix fromDevice = source.CompositionTarget.TransformFromDevice;
 
-                // A bigger and heavier X than the theme's 8x7 one, the same number of pixels on every monitor.
-                Geometry data = BuildGlyph(BigCloseGlyph);
+                // A bigger and heavier X than the theme's 8x7 one, the same size (in DIPs) on every monitor and as many whole
+                // pixels as that makes at the monitor's scale.
+                Geometry data = BuildGlyph(CloseGlyphRows(1 / fromDevice.M11));
                 data.Transform = new ScaleTransform(fromDevice.M11, fromDevice.M22);
                 glyph.Data = data;
             }
         }
 
-        private static readonly string[] BigCloseGlyph =
+        // The X for a monitor scale (1 = 100%): about 8.8 x 7.2 DIPs, its strokes about 2.4 DIPs across - 9x7 pixels with 2-pixel
+        // strokes at 100%, 11x9 with 3 at 125%, and so on. Each row has the two strokes of the X, stepping evenly from the corners
+        // to the middle.
+        private static string[] CloseGlyphRows(double scale)
         {
-            "XXX.....XXX",
-            ".XXX...XXX.",
-            "..XXX.XXX..",
-            "...XXXXX...",
-            "....XXX....",
-            "...XXXXX...",
-            "..XXX.XXX..",
-            ".XXX...XXX.",
-            "XXX.....XXX",
-        };
+            int width = (int)Math.Round(8.8 * scale);
+            int height = (int)Math.Round(7.2 * scale);
+            int stroke = Math.Max(2, (int)Math.Round(2.4 * scale));
+            var rows = new string[height];
+
+            for (int y = 0; y < height; y++)
+            {
+                int left = (int)Math.Round(y * (width - stroke) / (double)(height - 1));
+                int right = width - stroke - left;
+                var cells = new char[width];
+                Array.Fill(cells, '.');
+
+                for (int k = 0; k < stroke; k++)
+                {
+                    cells[left + k] = 'X';
+                    cells[right + k] = 'X';
+                }
+
+                rows[y] = new string(cells);
+            }
+
+            return rows;
+        }
 
         // One 1x1 cell of the rows' 'X's is one unit of the geometry (a run of cells in a row is one rectangle).
         private static Geometry BuildGlyph(string[] rows)
