@@ -348,7 +348,7 @@ namespace RetroBar.Controls
 
             SeekTitleText.Text = _sessionManager.Title;
             SeekArtistText.Text = _sessionManager.Artist;
-            SeekArtistText.Visibility = string.IsNullOrEmpty(_sessionManager.Artist)
+            SeekArtistClip.Visibility = string.IsNullOrEmpty(_sessionManager.Artist)
                 ? Visibility.Collapsed
                 : Visibility.Visible;
 
@@ -994,7 +994,7 @@ namespace RetroBar.Controls
             StartMarquee(overflow);
         }
 
-        private void StartMarquee(double overflow)
+        private static DoubleAnimationUsingKeyFrames CreateMarqueeAnimation(double overflow)
         {
             double travelSeconds = Math.Max(overflow / MarqueePixelsPerSecond, 0.5);
 
@@ -1006,7 +1006,7 @@ namespace RetroBar.Controls
             TimeSpan atEndPause = atEnd + pause;
             TimeSpan atFinish = atEndPause + travel;
 
-            DoubleAnimationUsingKeyFrames animation = new DoubleAnimationUsingKeyFrames
+            var animation = new DoubleAnimationUsingKeyFrames
             {
                 Duration = new Duration(atFinish),
                 RepeatBehavior = RepeatBehavior.Forever
@@ -1018,10 +1018,66 @@ namespace RetroBar.Controls
             animation.KeyFrames.Add(new LinearDoubleKeyFrame(-overflow, KeyTime.FromTimeSpan(atEndPause)));
             animation.KeyFrames.Add(new LinearDoubleKeyFrame(0, KeyTime.FromTimeSpan(atFinish)));
 
+            return animation;
+        }
+
+        private void StartMarquee(double overflow)
+        {
+            DoubleAnimationUsingKeyFrames animation = CreateMarqueeAnimation(overflow);
+
             TrackTextTransform.BeginAnimation(TranslateTransform.XProperty, animation);
 
             _marqueeRunning = true;
             _marqueeOverflow = overflow;
+        }
+
+        // The seek popup's title and artist slide the same way, along their Canvases (Canvas.Left, so a position set for them in the
+        // monitor file, which is a RenderTransform, is left alone).
+        private readonly System.Collections.Generic.Dictionary<TextBlock, double> _seekMarqueeOverflow = new();
+
+        private void SeekClip_OnSizeChanged(object sender, SizeChangedEventArgs e)
+        {
+            var clip = (Border)sender;
+            clip.Clip = new RectangleGeometry(new Rect(0, 0, clip.ActualWidth, clip.ActualHeight + TrackTextDescenderRoom));
+            Dispatcher.BeginInvoke(new Action(() => UpdateSeekMarquees(false)), System.Windows.Threading.DispatcherPriority.Loaded);
+        }
+
+        private void SeekText_OnSizeChanged(object sender, SizeChangedEventArgs e)
+        {
+            if (e.WidthChanged)
+            {
+                Dispatcher.BeginInvoke(new Action(() => UpdateSeekMarquees(false)), System.Windows.Threading.DispatcherPriority.Loaded);
+            }
+        }
+
+        private void UpdateSeekMarquees(bool restart)
+        {
+            UpdateSeekMarquee(SeekTitleText, SeekTitleClip, restart);
+            UpdateSeekMarquee(SeekArtistText, SeekArtistClip, restart);
+        }
+
+        private void UpdateSeekMarquee(TextBlock text, Border clip, bool restart)
+        {
+            double overflow = Math.Ceiling(Math.Ceiling(text.ActualWidth) - clip.ActualWidth);
+            if (clip.ActualWidth <= 0 || overflow <= MarqueeOverflowThreshold)
+            {
+                overflow = 0;
+            }
+
+            _seekMarqueeOverflow.TryGetValue(text, out double running);
+            if (!restart && Math.Abs(running - overflow) < 0.5)
+            {
+                return;
+            }
+
+            _seekMarqueeOverflow[text] = overflow;
+            text.BeginAnimation(Canvas.LeftProperty, null);
+            Canvas.SetLeft(text, 0);
+
+            if (overflow > 0)
+            {
+                text.BeginAnimation(Canvas.LeftProperty, CreateMarqueeAnimation(overflow));
+            }
         }
 
         private void StopMarquee()
@@ -1356,6 +1412,7 @@ namespace RetroBar.Controls
         private void SeekPopup_OnOpened(object sender, EventArgs e)
         {
             ApplySeekGlyphs();
+            Dispatcher.BeginInvoke(new Action(() => UpdateSeekMarquees(true)), System.Windows.Threading.DispatcherPriority.Loaded);
 
             bool canSeek = _sessionManager?.CanSeek ?? false;
             SeekSlider.IsEnabled = canSeek;

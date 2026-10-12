@@ -275,18 +275,32 @@
                                                 Grid.Column="0"
                                                 Margin="6,0,6,0"
                                                 VerticalAlignment="Center">
-                                        <TextBlock x:Name="SeekTitleText"
-                                                   Style="{DynamicResource MediaPlayerTrackTextStyle}"
-                                                   FontWeight="Bold"
-                                                   TextTrimming="CharacterEllipsis"
-                                                   TextAlignment="Left"
-                                                   Margin="0,0,0,1"
-                                                   utilities:MonitorOffset.Tag="MediaSeekTitleText" />
-                                        <TextBlock x:Name="SeekArtistText"
-                                                   Style="{DynamicResource MediaPlayerTrackTextStyle}"
-                                                   TextTrimming="CharacterEllipsis"
-                                                   TextAlignment="Left"
-                                                   utilities:MonitorOffset.Tag="MediaSeekArtistText" />
+                                        <!-- Each line sits on a Canvas inside a clipping Border, like the taskbar's own track text, so a line
+                                             too long for the room slides left and right (see UpdateSeekMarquee). -->
+                                        <Border x:Name="SeekTitleClip"
+                                                Margin="0,0,0,1"
+                                                SizeChanged="SeekClip_OnSizeChanged">
+                                            <Canvas Height="{Binding ActualHeight, ElementName=SeekTitleText}">
+                                                <TextBlock x:Name="SeekTitleText"
+                                                           Canvas.Left="0"
+                                                           Canvas.Top="0"
+                                                           Style="{DynamicResource MediaPlayerTrackTextStyle}"
+                                                           FontWeight="Bold"
+                                                           SizeChanged="SeekText_OnSizeChanged"
+                                                           utilities:MonitorOffset.Tag="MediaSeekTitleText" />
+                                            </Canvas>
+                                        </Border>
+                                        <Border x:Name="SeekArtistClip"
+                                                SizeChanged="SeekClip_OnSizeChanged">
+                                            <Canvas Height="{Binding ActualHeight, ElementName=SeekArtistText}">
+                                                <TextBlock x:Name="SeekArtistText"
+                                                           Canvas.Left="0"
+                                                           Canvas.Top="0"
+                                                           Style="{DynamicResource MediaPlayerTrackTextStyle}"
+                                                           SizeChanged="SeekText_OnSizeChanged"
+                                                           utilities:MonitorOffset.Tag="MediaSeekArtistText" />
+                                            </Canvas>
+                                        </Border>
                                     </StackPanel>
                                     <Path x:Name="SeekSpectrum"
                                           Grid.Column="1"
