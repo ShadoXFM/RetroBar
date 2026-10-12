@@ -6,8 +6,11 @@
              xmlns:controls="clr-namespace:RetroBar.Controls">
     <UserControl.Resources>
         <converters:CpuTempShownToMonitorTagConverter x:Key="cpuTempShownToMonitorTagConverter" />
+        <converters:MediaPlayingToMonitorTagConverter x:Key="mediaPlayingToMonitorTagConverter" />
     </UserControl.Resources>
-    <Grid>
+    <!-- WeatherDisplay / WeatherDisplayPlaying (while media plays) position the weather alone: the group around it (WeatherGroup)
+         also holds the CPU temperature, which stays where it is when the weather is turned off. -->
+    <Grid utilities:MonitorOffset.Tag="{Binding Path=IsMediaPlaying, RelativeSource={RelativeSource Mode=FindAncestor, AncestorType={x:Type Window}}, Converter={StaticResource mediaPlayingToMonitorTagConverter}, ConverterParameter=WeatherDisplay}">
     <!-- Transparent background so the whole widget (not just its icon and text) takes the click that
          opens the forecast. -->
     <StackPanel x:Name="WeatherPanel" Orientation="Horizontal" VerticalAlignment="Center" HorizontalAlignment="Center" Margin="4,0"
