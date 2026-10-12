@@ -1415,8 +1415,10 @@ namespace RetroBar.Controls
             string[] previous = PixelShape.Skip(height, bar, false);
             string[] next = PixelShape.Skip(height, bar, true);
 
-            Apply(SeekPreviousGlyph, previous, Math.Max(0, boxWidth - previous[0].Length - 1));
-            Apply(SeekNextGlyph, next, Math.Min(1, boxWidth - next[0].Length));
+            // At 125% each is another pixel out, away from its neighbor.
+            int skipOut = dpi.DpiScaleX < 1.125 ? 0 : 1;
+            Apply(SeekPreviousGlyph, previous, Math.Max(0, boxWidth - previous[0].Length - 1 - skipOut));
+            Apply(SeekNextGlyph, next, Math.Min(1 + skipOut, boxWidth - next[0].Length));
             Apply(SeekBackGlyph, rewind, 0);
             Apply(SeekPlayPauseGlyph, middle, (boxWidth - middle[0].Length) / 2);
             Apply(SeekForwardGlyph, forward, boxWidth - forward[0].Length);
