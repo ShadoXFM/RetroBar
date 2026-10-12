@@ -292,7 +292,7 @@
                                     </Grid.ColumnDefinitions>
                                     <StackPanel x:Name="SeekTextPanel"
                                                 Grid.Column="0"
-                                                Margin="6,0,6,0"
+                                                Margin="6,0,12,0"
                                                 VerticalAlignment="Center">
                                         <!-- Each line sits on a Canvas inside a clipping Border, like the taskbar's own track text, so a line
                                              too long for the room slides left and right (see UpdateSeekMarquee). -->
