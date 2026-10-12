@@ -818,25 +818,26 @@ namespace RetroBar.Controls
             }
         }
 
-        // The X for a monitor scale (1 = 100%): about 8.8 x 7.2 DIPs, its strokes about 2.4 DIPs across - 9x7 pixels with 3-pixel
-        // strokes at 100%, 11x9 with 3 at 125%, and so on. Each row has the two strokes of the X, stepping evenly from the corners
-        // to the middle.
+        // The X for a monitor scale (1 = 100%): about 8.8 x 7.2 DIPs, its strokes about 2.4 DIPs across - 9x7 pixels at 100%, 11x9
+        // at 125%, and so on. Each row has the two strokes of the X, stepping evenly from the corners to the middle. At 100% the
+        // strokes are 2 and 3 pixels in alternate rows (2 looked thin, 3 heavy); at 125% they are 3 in every row.
         private static string[] CloseGlyphRows(double scale)
         {
             int width = (int)Math.Round(8.8 * scale);
             int height = (int)Math.Round(7.2 * scale);
-            // 3 pixels across at 100% too: the 2-pixel X looked thin there.
-            int stroke = Math.Max(scale < 1.1 ? 3 : 2, (int)Math.Round(2.4 * scale));
+            double stroke = scale < 1.1 ? 2.5 : Math.Max(2, Math.Round(2.4 * scale));
+            int widest = (int)Math.Ceiling(stroke);
             var rows = new string[height];
 
             for (int y = 0; y < height; y++)
             {
-                int left = (int)Math.Round(y * (width - stroke) / (double)(height - 1));
-                int right = width - stroke - left;
+                int across = (int)Math.Round(stroke + (y % 2 == 0 ? 0.25 : -0.25), MidpointRounding.AwayFromZero);
+                int left = (int)Math.Round(y * (width - widest) / (double)(height - 1));
+                int right = width - across - left;
                 var cells = new char[width];
                 Array.Fill(cells, '.');
 
-                for (int k = 0; k < stroke; k++)
+                for (int k = 0; k < across; k++)
                 {
                     cells[left + k] = 'X';
                     cells[right + k] = 'X';
