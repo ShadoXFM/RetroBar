@@ -927,6 +927,16 @@ namespace RetroBar.Controls
                     bool onClose = isHovered && hit == PreviewHit.Close;
                     bool closePressed = isPressed && _previewPressedHit == PreviewHit.Close;
                     item.CloseButton.Tag = closePressed ? "pressed" : (onClose ? "hot" : null);
+
+                    // The theme moves the X when pressed with a margin of 1 on a centered element, which is half a DIP: a whole
+                    // pixel at 125%, nothing at 100%. It is moved here by exactly one device pixel (right and down) instead.
+                    if (item.CloseButton.Template?.FindName("Glyph", item.CloseButton) is System.Windows.Shapes.Path pressedGlyph &&
+                        (pressedGlyph.RenderTransform is TranslateTransform) != closePressed)
+                    {
+                        DpiScale dpi = VisualTreeHelper.GetDpi(pressedGlyph);
+                        pressedGlyph.Margin = new Thickness(0);
+                        pressedGlyph.RenderTransform = closePressed ? new TranslateTransform(1 / dpi.DpiScaleX, 1 / dpi.DpiScaleY) : null;
+                    }
                 }
 
             }
