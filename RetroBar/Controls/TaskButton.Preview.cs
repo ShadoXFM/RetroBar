@@ -809,10 +809,60 @@ namespace RetroBar.Controls
                 }
 
                 Matrix fromDevice = source.CompositionTarget.TransformFromDevice;
-                Geometry data = glyph.Data.CloneCurrentValue();
+
+                // On a monitor scaled to 125% or more the 8x7 X is small in the larger button: a 10x9 one takes its place.
+                Geometry data = fromDevice.M11 <= 1 / 1.2 ? BuildGlyph(BigCloseGlyph) : glyph.Data.CloneCurrentValue();
                 data.Transform = new ScaleTransform(fromDevice.M11, fromDevice.M22);
                 glyph.Data = data;
             }
+        }
+
+        private static readonly string[] BigCloseGlyph =
+        {
+            "XX......XX",
+            ".XX....XX.",
+            "..XX..XX..",
+            "...XXXX...",
+            "....XX....",
+            "...XXXX...",
+            "..XX..XX..",
+            ".XX....XX.",
+            "XX......XX",
+        };
+
+        // One 1x1 cell of the rows' 'X's is one unit of the geometry (a run of cells in a row is one rectangle).
+        private static Geometry BuildGlyph(string[] rows)
+        {
+            var geometry = new StreamGeometry { FillRule = FillRule.Nonzero };
+
+            using (StreamGeometryContext context = geometry.Open())
+            {
+                for (int y = 0; y < rows.Length; y++)
+                {
+                    int x = 0;
+                    while (x < rows[y].Length)
+                    {
+                        if (rows[y][x] != 'X')
+                        {
+                            x++;
+                            continue;
+                        }
+
+                        int start = x;
+                        while (x < rows[y].Length && rows[y][x] == 'X')
+                        {
+                            x++;
+                        }
+
+                        context.BeginFigure(new Point(start, y), true, true);
+                        context.LineTo(new Point(x, y), true, false);
+                        context.LineTo(new Point(x, y + 1), true, false);
+                        context.LineTo(new Point(start, y + 1), true, false);
+                    }
+                }
+            }
+
+            return geometry;
         }
 
         // The hover fill reaches out over the padding between the previews and the frame's inner edge. That
