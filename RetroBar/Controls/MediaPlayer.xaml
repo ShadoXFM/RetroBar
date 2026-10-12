@@ -169,8 +169,8 @@
         </Grid>
         <!-- Opens on a click on the track text (see TrackTextCanvas_OnMouseLeftButtonUp) - lets
              seeking within the current track, which doesn't fit as a permanently-visible part of
-             the compact taskbar widget. A click elsewhere closes it, unless it has been dragged or has "Always on top" (its menu)
-             checked (see UpdateSeekPopupStaysOpen); that one also keeps it above other windows. -->
+             the compact taskbar widget. A click elsewhere closes it, unless it has been dragged (see UpdateSeekPopupStaysOpen); "Always on top" (its menu)
+             only decides whether other windows can cover it. -->
         <Popup x:Name="SeekPopup"
                PlacementTarget="{Binding ElementName=TrackTextCanvas}"
                Placement="Top"

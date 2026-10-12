@@ -1615,10 +1615,10 @@ namespace RetroBar.Controls
             ApplySeekPopupTopmost();
         }
 
-        // Closed by a click elsewhere, unless it has been moved or is on top: then it is where the user put it, and stays.
+        // Closed by a click elsewhere, unless it has been moved: then it is where the user put it, and stays (on top or not).
         private void UpdateSeekPopupStaysOpen()
         {
-            SeekPopup.StaysOpen = _seekPopupPinned || _seekPopupMovedTo != null;
+            SeekPopup.StaysOpen = _seekPopupMovedTo != null;
         }
 
         // The monitor the popup is on decides which adjustments of monitor-adjustments.json apply to it, and the pixel art is drawn for
