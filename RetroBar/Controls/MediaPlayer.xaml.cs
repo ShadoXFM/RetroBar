@@ -593,6 +593,14 @@ namespace RetroBar.Controls
         /// escape the Tray GroupBox's own clip, since it never grows further left than
         /// MediaPlayerRoot's own edge.
         /// </summary>
+        // The most the track text shows before it slides: the style's own MaxWidth, or a monitor's own "MediaTrackTextMax" Width in
+        // monitor-adjustments.json (the same text takes a little different room at another scale, from how the font rounds to pixels).
+        private double GetTrackTextMaxWidth()
+        {
+            string deviceName = (Window.GetWindow(this) as Taskbar)?.Screen.DeviceName;
+            return MonitorAdjustments.Get(deviceName, "MediaTrackTextMax").Width ?? TrackTextHost.MaxWidth;
+        }
+
         private void UpdateVuMeterOffset()
         {
             // Reads the same per-monitor "VuMeterContainer" tag this element is itself tagged
@@ -631,7 +639,7 @@ namespace RetroBar.Controls
             // TrackTextHost's own left edge and behind the album art before it starts covering
             // any of the actual text. offset.Width, when set, overrides this outright, same as
             // every other MonitorOffset-tagged Width.
-            double textWidth = Math.Min(TrackText.ActualWidth, TrackTextHost.MaxWidth);
+            double textWidth = Math.Min(TrackText.ActualWidth, GetTrackTextMaxWidth());
             double naturalWidth = leftOffset + Math.Max(0, textWidth);
             // X nudges the meter's left edge only: the width absorbs it, so the right edge stays on the end of the text.
             _vuMeterMaxWidth = offset.Width ?? Math.Max(0, naturalWidth - offset.X);
@@ -979,7 +987,7 @@ namespace RetroBar.Controls
                 return;
             }
 
-            double max = TrackTextHost.MaxWidth;
+            double max = GetTrackTextMaxWidth();
             double visibleWidth = double.IsInfinity(max) || double.IsNaN(max) || max <= 0
                 ? fullWidth
                 : Math.Min(fullWidth, max);
@@ -1908,6 +1916,7 @@ namespace RetroBar.Controls
         {
             // Fires on a background (file-watcher) thread.
             Dispatcher.BeginInvoke(new Action(UpdateAlbumArtAdorner));
+            Dispatcher.BeginInvoke(new Action(UpdateMarquee));
             Dispatcher.BeginInvoke(new Action(UpdateVuMeterOffset));
         }
     }
