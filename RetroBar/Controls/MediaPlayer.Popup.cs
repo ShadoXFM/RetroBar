@@ -293,6 +293,7 @@ namespace RetroBar.Controls
             _lastSeekSpectrumUpdate = DateTime.UtcNow;
             SeekSpectrum.Data = null;
             _seekSpectrumHidden = true;
+            _seekSpectrumSkipAppear = _sessionManager?.PlaybackState == MediaPlaybackState.Playing;
 
             StartSeekWatching();
             ApplyMediaPopupSettings();

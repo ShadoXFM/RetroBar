@@ -235,6 +235,9 @@ namespace RetroBar.Controls
 
         private bool _seekSpectrumHidden = true;
 
+        // Set when the popup opens on a track that is playing: the bars are simply there then, they do not appear one by one.
+        private bool _seekSpectrumSkipAppear;
+
         private DateTime _seekSpectrumAppearSince = DateTime.MinValue;
 
         private void VisualizerCapture_OnSpectrumUpdated(float[] bands)
@@ -314,7 +317,8 @@ namespace RetroBar.Controls
             else if (sound && _seekSpectrumHidden)
             {
                 _seekSpectrumHidden = false;
-                _seekSpectrumAppearSince = DateTime.UtcNow;
+                _seekSpectrumAppearSince = _seekSpectrumSkipAppear ? DateTime.MinValue : DateTime.UtcNow;
+                _seekSpectrumSkipAppear = false;
             }
 
             double appearMs = (DateTime.UtcNow - _seekSpectrumAppearSince).TotalMilliseconds;
