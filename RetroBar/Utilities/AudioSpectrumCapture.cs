@@ -43,16 +43,16 @@ namespace RetroBar.Utilities
         // quieter), the top is full scale (0 dB), and a sound in between fills the bar by how many dB it is from the bottom. A
         // plain multiplier of the signal pinned the bar at the top for any ordinary music: the loudness of music sits within a
         // few dB of full scale on a digital bus, which a gain can't spread over the bar - decibels do.
-        private const double FloorDb = -48;
+        // The spectrum's bars are foobar2000's too: decibels, from SpectrumFloorDb (no bar) to SpectrumCeilingDb (a full bar), of each band's
+        // mean level - not its loudest bin, so the bass is stronger than the treble as it is in the music, and the bars fall away to the right.
+        private const double SpectrumFloorDb = -60;
+        private const double SpectrumCeilingDb = -20;
 
         // The VU meter is foobar2000's: the bar is the loudest sample of the last 40 ms, in decibels from VuFloorDb (empty) to full scale
         // (full), of the sound as it is sent to the device, before the device's volume. It rises at once and falls smoothly, by VuFallTime:
         // after that long a bar that has gone quiet is a third of what it was.
         private const double VuFloorDb = -60;
         private static readonly double VuFallTime = 0.25;
-
-        // The popup's spectrum is louder than the signal by this (2 is 6 dB: every bar an eighth of the bar further up).
-        private const double SpectrumGain = 2;
 
         // Throttles how often LevelUpdated fires, independent of the capture callback's own
         // (format/buffer-size dependent) cadence - the meter only needs to look smooth, not
@@ -226,10 +226,10 @@ namespace RetroBar.Utilities
             return (float)Math.Clamp(1 - db / VuFloorDb, 0, 1);
         }
 
-        private static float ToLevel(double rms)
+        private static float ToLevel(double magnitude)
         {
-            double db = 20 * Math.Log10(Math.Max(rms, 1e-6));
-            return (float)Math.Clamp((db - FloorDb) / -FloorDb, 0, 1);
+            double db = 20 * Math.Log10(Math.Max(magnitude, 1e-6));
+            return (float)Math.Clamp((db - SpectrumFloorDb) / (SpectrumCeilingDb - SpectrumFloorDb), 0, 1);
         }
 
         private void ProcessLevels(int sampleRate)
@@ -257,7 +257,7 @@ namespace RetroBar.Utilities
         }
 
         // The last FftSize samples through a Hann window and an FFT, the magnitudes of the bins gathered into bands spaced evenly
-        // on a log scale (as the ear hears pitch), each band's loudest bin taken and turned into the 0-1 decibel level.
+        // on a log scale (as the ear hears pitch), each band's mean level turned into the 0-1 decibel level.
         private float[] ComputeSpectrum(int sampleRate)
         {
             for (int i = 0; i < FftSize; i++)
@@ -281,16 +281,19 @@ namespace RetroBar.Utilities
                 int fromBin = Math.Max(1, (int)Math.Floor(fromHz / binHz));
                 int toBin = Math.Max(fromBin, (int)Math.Ceiling(toHz / binHz) - 1);
 
-                double peak = 0;
+                double power = 0;
+                int bins = 0;
                 for (int bin = fromBin; bin <= toBin && bin < FftSize / 2; bin++)
                 {
-                    double magnitude = Math.Sqrt(_fftBuffer[bin].X * _fftBuffer[bin].X + _fftBuffer[bin].Y * _fftBuffer[bin].Y);
-                    peak = Math.Max(peak, magnitude);
+                    power += _fftBuffer[bin].X * _fftBuffer[bin].X + _fftBuffer[bin].Y * _fftBuffer[bin].Y;
+                    bins++;
                 }
+
+                double mean = bins > 0 ? Math.Sqrt(power / bins) : 0;
 
                 // A full-scale sine through the window reads FftSize / 4 in its bin once the FFT is scaled by 1 / FftSize (NAudio's
                 // forward transform does that): scale back to 1 for a full-scale sine, so 0 dB is full scale as in the VU meter.
-                bands[band] = ToLevel(peak * 4 * SpectrumGain);
+                bands[band] = ToLevel(mean * 4);
             }
 
             return bands;

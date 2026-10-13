@@ -222,6 +222,9 @@ namespace RetroBar.Controls
 
         private DateTime? _seekSpectrumQuietSince;
 
+        // A bar rises at once and falls by this much of its height per second (the whole bar in a second and a half).
+        private const double SeekSpectrumFallPerSecond = 0.65;
+
         private const double SeekSpectrumDashLife = 500;
 
         private const double SeekSpectrumDashStagger = 60;
@@ -268,6 +271,9 @@ namespace RetroBar.Controls
                 return;
             }
 
+            // The bars fall by the same amount per second however often this is called.
+            double elapsed = Math.Min((DateTime.UtcNow - _lastSeekSpectrumUpdate).TotalSeconds, 0.2);
+            float fall = (float)(SeekSpectrumFallPerSecond * elapsed);
             _lastSeekSpectrumUpdate = DateTime.UtcNow;
 
             bool playing = _sessionManager?.PlaybackState == MediaPlaybackState.Playing;
@@ -277,7 +283,7 @@ namespace RetroBar.Controls
             {
                 float level = playing && bands != null ? bands[i] : 0;
                 sound |= level > 0.05f;
-                _seekSpectrumLevels[i] = Math.Max(level, _seekSpectrumLevels[i] - 0.08f);
+                _seekSpectrumLevels[i] = Math.Max(level, _seekSpectrumLevels[i] - fall);
                 _seekSpectrumPeaks[i] = Math.Max(_seekSpectrumLevels[i], _seekSpectrumPeaks[i] - (sound ? 0.02f : 0.05f));
             }
 
