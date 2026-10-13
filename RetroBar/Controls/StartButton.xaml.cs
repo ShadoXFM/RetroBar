@@ -1,11 +1,17 @@
 ﻿#nullable enable
 using System;
+using System.Diagnostics;
+using System.IO;
+using System.Linq;
+using System.Runtime.InteropServices;
+using System.Text;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Input;
 using System.Windows.Media;
 using System.Windows.Threading;
 using ManagedShell.Common.Helpers;
+using ManagedShell.Common.Logging;
 using ManagedShell.Interop;
 using RetroBar.Utilities;
 
@@ -86,7 +92,14 @@ namespace RetroBar.Controls
 
         private void OpenStartMenu()
         {
-            Host?.SetTrayHost();
+            // Open Shell positions its menu using the shell tray position. Moving the tray host to this
+            // taskbar first makes it place and animate the menu differently than it does for the Windows
+            // key, so leave the tray host alone while Open Shell is running
+            if (NativeMethods.FindWindowEx(IntPtr.Zero, IntPtr.Zero, "OpenShell.COwnerWindow", IntPtr.Zero) == IntPtr.Zero)
+            {
+                Host?.SetTrayHost();
+            }
+
             Host?.SetStartMenuOpen(true);
             pendingOpenTimer.Start();
             if (Host != null && StartMenuMonitor != null && Settings.Instance.ShowMultiMon && Settings.Instance.ShowStartButtonMultiMon)
@@ -116,11 +129,122 @@ namespace RetroBar.Controls
 
         private void Start_OnMouseRightButtonUp(object sender, MouseButtonEventArgs e)
         {
+            // Open Shell adds its own right-click menu to the Windows Start button, which doesn't exist here.
+            // Like Open Shell, show its menu on a plain right-click and the Windows menu on Shift+right-click
+            ShellLogger.Info($"StartButton: right-click, shift held = {(Keyboard.Modifiers & ModifierKeys.Shift) != 0}");
+            if ((Keyboard.Modifiers & ModifierKeys.Shift) == 0 && TryShowOpenShellMenu())
+            {
+                e.Handled = true;
+                return;
+            }
+
             if (EnvironmentHelper.IsWindows10OrBetter)
             {
                 ShellHelper.ShowStartContextMenu();
                 e.Handled = true;
             }
+        }
+
+        [DllImport("kernel32.dll", SetLastError = true)]
+        private static extern IntPtr OpenProcess(uint desiredAccess, bool inheritHandle, int processId);
+
+        [DllImport("kernel32.dll", SetLastError = true)]
+        private static extern bool CloseHandle(IntPtr handle);
+
+        [DllImport("kernel32.dll", CharSet = CharSet.Unicode, SetLastError = true)]
+        private static extern bool QueryFullProcessImageName(IntPtr process, uint flags, StringBuilder path, ref uint size);
+
+        private static string? GetProcessImagePath(int processId)
+        {
+            const uint PROCESS_QUERY_LIMITED_INFORMATION = 0x1000;
+            IntPtr handle = OpenProcess(PROCESS_QUERY_LIMITED_INFORMATION, false, processId);
+            if (handle == IntPtr.Zero)
+            {
+                return null;
+            }
+
+            try
+            {
+                StringBuilder path = new StringBuilder(1024);
+                uint size = (uint)path.Capacity;
+                return QueryFullProcessImageName(handle, 0, path, ref size) ? path.ToString() : null;
+            }
+            finally
+            {
+                CloseHandle(handle);
+            }
+        }
+
+        private bool TryShowOpenShellMenu()
+        {
+            string? openShellPath;
+            try
+            {
+                Process[] running = Process.GetProcessesByName("StartMenu");
+                if (running.Length == 0)
+                {
+                    ShellLogger.Info("StartButton: right-click - no StartMenu process is running, showing the Windows menu");
+                    return false;
+                }
+
+                // Process.MainModule is denied for a process started from another session or privilege level,
+                // so ask for just the image path, which is allowed for processes of the same user
+                openShellPath = running
+                    .Select(p => GetProcessImagePath(p.Id))
+                    .FirstOrDefault(path => !string.IsNullOrEmpty(path));
+
+                // it is running but can't be inspected: fall back to the places it is normally installed
+                openShellPath ??= new[]
+                {
+                    Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.UserProfile), "OpenShellFork", "StartMenu.exe"),
+                    Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ProgramFiles), "Open-Shell", "StartMenu.exe")
+                }.FirstOrDefault(File.Exists);
+
+                ShellLogger.Info($"StartButton: right-click - {running.Length} StartMenu process(es), path = {openShellPath ?? "(not found)"}");
+            }
+            catch (Exception ex)
+            {
+                ShellLogger.Warning($"StartButton: right-click - looking for Open Shell failed: {ex.Message}");
+                return false;
+            }
+
+            if (openShellPath == null)
+            {
+                return false;
+            }
+
+            void Run(string argument)
+            {
+                try
+                {
+                    Process.Start(new ProcessStartInfo(openShellPath, argument) { UseShellExecute = false });
+                }
+                catch
+                {
+                    // nothing else to do if it can't be started
+                }
+            }
+
+            ContextMenu menu = new ContextMenu();
+
+            MenuItem settings = new MenuItem { Header = "Open-Shell Settings" };
+            settings.Click += (s, args) => Run("-settings");
+            menu.Items.Add(settings);
+
+            MenuItem windowsMenu = new MenuItem { Header = "Windows tools menu" };
+            windowsMenu.Click += (s, args) => ShellHelper.ShowStartContextMenu();
+            menu.Items.Add(windowsMenu);
+
+            menu.Items.Add(new Separator());
+
+            MenuItem exit = new MenuItem { Header = "Exit Open-Shell" };
+            exit.Click += (s, args) => Run("-exit");
+            menu.Items.Add(exit);
+
+            menu.PlacementTarget = Start;
+            menu.Placement = System.Windows.Controls.Primitives.PlacementMode.Top;
+            menu.IsOpen = true;
+            return true;
         }
 
         private void UserControl_Loaded(object sender, RoutedEventArgs e)
