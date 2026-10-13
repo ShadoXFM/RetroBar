@@ -1128,30 +1128,115 @@ namespace RetroBar.Controls
         private void TrackTextClip_OnSizeChanged(object sender, SizeChangedEventArgs e)
         {
             TrackTextClip.Clip = new RectangleGeometry(new Rect(0, 0, TrackTextClip.ActualWidth, TrackTextClip.ActualHeight + TrackTextDescenderRoom));
-            UpdateTrackTextFade();
+            UpdateTrackTextFadeOffsets();
         }
 
-        // A track text too long for its room fades out over its last few DIPs (the slide goes on that much further, so its end is clear of
-        // the fade). A mask on the text only: the VU meter behind it is not faded.
-        private const double TrackTextFadeWidth = 14;
+        // A line too long for its room fades out at the end it is sliding away from or towards (not at the end that is showing all of it), so
+        // the text neither starts nor ends in a faded edge. The fades follow the slide: this is the table of how much of each there is
+        // when (see FadeKeys), used by the taskbar's text (a mask on the text only: the VU meter behind it is not faded) and by the
+        // popup's lines.
+        private const double MarqueeFadeWidth = 14;
 
-        private void UpdateTrackTextFade()
+        private static (double Time, double Left, double Right)[] FadeKeys(double overflow, out double total)
+        {
+            double travel = Math.Max(overflow / MarqueePixelsPerSecond, 0.5);
+            double pause = MarqueeEndPauseSeconds;
+            double fade = Math.Min(MarqueeFadeWidth / MarqueePixelsPerSecond, travel / 2);
+            total = 2 * pause + 2 * travel;
+
+            return new[]
+            {
+                (0d, 0d, 1d),
+                (pause, 0d, 1d),
+                (pause + fade, 1d, 1d),
+                (pause + travel - fade, 1d, 1d),
+                (pause + travel, 1d, 0d),
+                (2 * pause + travel, 1d, 0d),
+                (2 * pause + travel + fade, 1d, 1d),
+                (total - fade, 1d, 1d),
+                (total, 0d, 1d),
+            };
+        }
+
+        private static DoubleAnimationUsingKeyFrames FadeOpacityAnimation(double overflow, bool left)
+        {
+            var keys = FadeKeys(overflow, out double total);
+            var animation = new DoubleAnimationUsingKeyFrames
+            {
+                Duration = new Duration(TimeSpan.FromSeconds(total)),
+                RepeatBehavior = RepeatBehavior.Forever,
+            };
+
+            foreach (var key in keys)
+            {
+                animation.KeyFrames.Add(new LinearDoubleKeyFrame(left ? key.Left : key.Right, KeyTime.FromTimeSpan(TimeSpan.FromSeconds(key.Time))));
+            }
+
+            return animation;
+        }
+
+        private LinearGradientBrush _trackTextMask;
+
+        private void StartTrackTextFade(double overflow)
         {
             double width = TrackTextClip.ActualWidth;
-            if (!_marqueeRunning || width <= TrackTextFadeWidth * 2)
+            if (width <= MarqueeFadeWidth * 2)
             {
-                TrackTextClip.ClearValue(UIElement.OpacityMaskProperty);
+                StopTrackTextFade();
                 return;
             }
 
-            var mask = new LinearGradientBrush(new GradientStopCollection
+            var left = new GradientStop(Colors.Black, 0);
+            var right = new GradientStop(Colors.Black, 1);
+            _trackTextMask = new LinearGradientBrush(new GradientStopCollection
             {
-                new GradientStop(Colors.Black, 0),
-                new GradientStop(Colors.Black, 1 - TrackTextFadeWidth / width),
-                new GradientStop(Colors.Transparent, 1),
+                left,
+                new GradientStop(Colors.Black, MarqueeFadeWidth / width),
+                new GradientStop(Colors.Black, 1 - MarqueeFadeWidth / width),
+                right,
             }, new Point(0, 0), new Point(1, 0));
-            mask.Freeze();
-            TrackTextClip.OpacityMask = mask;
+
+            // The edges' colour goes from opaque (no fade) to transparent (faded) as the slide moves.
+            ColorAnimationUsingKeyFrames Animation(bool isLeft)
+            {
+                var keys = FadeKeys(overflow, out double total);
+                var animation = new ColorAnimationUsingKeyFrames
+                {
+                    Duration = new Duration(TimeSpan.FromSeconds(total)),
+                    RepeatBehavior = RepeatBehavior.Forever,
+                };
+
+                foreach (var key in keys)
+                {
+                    double faded = isLeft ? key.Left : key.Right;
+                    animation.KeyFrames.Add(new LinearColorKeyFrame(Color.FromArgb((byte)Math.Round(255 * (1 - faded)), 0, 0, 0), KeyTime.FromTimeSpan(TimeSpan.FromSeconds(key.Time))));
+                }
+
+                return animation;
+            }
+
+            left.BeginAnimation(GradientStop.ColorProperty, Animation(true));
+            right.BeginAnimation(GradientStop.ColorProperty, Animation(false));
+            TrackTextClip.OpacityMask = _trackTextMask;
+        }
+
+        private void StopTrackTextFade()
+        {
+            _trackTextMask = null;
+            TrackTextClip.ClearValue(UIElement.OpacityMaskProperty);
+        }
+
+        // The fades keep their width in DIPs when the clip's width changes.
+        private void UpdateTrackTextFadeOffsets()
+        {
+            double width = TrackTextClip.ActualWidth;
+            if (_trackTextMask == null || width <= MarqueeFadeWidth * 2)
+            {
+                return;
+            }
+
+            _trackTextMask.GradientStops[1].Offset = MarqueeFadeWidth / width;
+            _trackTextMask.GradientStops[2].Offset = 1 - MarqueeFadeWidth / width;
         }
 
         private void TrackText_SizeChanged(object sender, SizeChangedEventArgs e)
@@ -1204,8 +1289,6 @@ namespace RetroBar.Controls
                 return;
             }
 
-            overflow += TrackTextFadeWidth;
-
             // Don't restart an identical animation on every tick of the session.
             if (_marqueeRunning && Math.Abs(_marqueeOverflow - overflow) < 0.5)
             {
@@ -1213,7 +1296,6 @@ namespace RetroBar.Controls
             }
 
             StartMarquee(overflow);
-            UpdateTrackTextFade();
         }
 
         private static DoubleAnimationUsingKeyFrames CreateMarqueeAnimation(double overflow)
@@ -1251,6 +1333,7 @@ namespace RetroBar.Controls
 
             _marqueeRunning = true;
             _marqueeOverflow = overflow;
+            StartTrackTextFade(overflow);
         }
 
         // The seek popup's title and artist slide the same way, along their Canvases (Canvas.Left, so a position set for them in the
@@ -1278,8 +1361,6 @@ namespace RetroBar.Controls
             UpdateSeekMarquee(SeekArtistText, SeekArtistClip, restart);
         }
 
-        private const double SeekFadeWidth = 16;
-
         private void UpdateSeekMarquee(TextBlock text, Border clip, bool restart)
         {
             double overflow = Math.Ceiling(Math.Ceiling(text.ActualWidth) - clip.ActualWidth);
@@ -1287,18 +1368,18 @@ namespace RetroBar.Controls
             {
                 overflow = 0;
             }
-            else
-            {
-                // The slide ends with the end of the text clear of the fade.
-                overflow += SeekFadeWidth;
-            }
 
-            Rectangle fade = text == SeekTitleText ? SeekTitleFade : SeekArtistFade;
-            fade.Visibility = overflow > 0 ? Visibility.Visible : Visibility.Collapsed;
+            Rectangle fadeRight = text == SeekTitleText ? SeekTitleFade : SeekArtistFade;
+            Rectangle fadeLeft = text == SeekTitleText ? SeekTitleFadeLeft : SeekArtistFadeLeft;
+            Visibility fadeVisibility = overflow > 0 ? Visibility.Visible : Visibility.Collapsed;
+            fadeRight.Visibility = fadeVisibility;
+            fadeLeft.Visibility = fadeVisibility;
             if (overflow > 0 && TryFindResource("ButtonFace") is SolidColorBrush face)
             {
                 Color color = face.Color;
-                fade.Fill = new LinearGradientBrush(Color.FromArgb(0, color.R, color.G, color.B), color, new Point(0, 0), new Point(1, 0));
+                Color clear = Color.FromArgb(0, color.R, color.G, color.B);
+                fadeRight.Fill = new LinearGradientBrush(clear, color, new Point(0, 0), new Point(1, 0));
+                fadeLeft.Fill = new LinearGradientBrush(color, clear, new Point(0, 0), new Point(1, 0));
             }
 
             _seekMarqueeOverflow.TryGetValue(text, out double running);
@@ -1310,10 +1391,16 @@ namespace RetroBar.Controls
             _seekMarqueeOverflow[text] = overflow;
             text.BeginAnimation(Canvas.LeftProperty, null);
             Canvas.SetLeft(text, 0);
+            fadeLeft.BeginAnimation(UIElement.OpacityProperty, null);
+            fadeRight.BeginAnimation(UIElement.OpacityProperty, null);
+            fadeLeft.Opacity = 0;
+            fadeRight.Opacity = 1;
 
             if (overflow > 0)
             {
                 text.BeginAnimation(Canvas.LeftProperty, CreateMarqueeAnimation(overflow));
+                fadeLeft.BeginAnimation(UIElement.OpacityProperty, FadeOpacityAnimation(overflow, true));
+                fadeRight.BeginAnimation(UIElement.OpacityProperty, FadeOpacityAnimation(overflow, false));
             }
         }
 
@@ -1327,7 +1414,7 @@ namespace RetroBar.Controls
             }
 
             TrackTextTransform.X = 0;
-            TrackTextClip.ClearValue(UIElement.OpacityMaskProperty);
+            StopTrackTextFade();
         }
 
         #endregion

@@ -313,11 +313,17 @@
                                                            SizeChanged="SeekText_OnSizeChanged"
                                                            utilities:MonitorOffset.Tag="MediaSeekTitleText" />
                                             </Canvas>
-                                            <!-- A line too long for its room fades out at the right end (the slide goes on a little further, so its end is
-                                                 clear of the fade): filled with the popup's colour in code, see UpdateSeekMarquee. -->
+                                            <!-- A line too long for its room fades out at the end it is sliding away from or towards: filled with the popup's
+                                                 colour, and their opacity animated along with the slide, in code (see UpdateSeekMarquee). -->
+                                            <Rectangle x:Name="SeekTitleFadeLeft"
+                                                       HorizontalAlignment="Left"
+                                                       Width="14"
+                                                       Opacity="0"
+                                                       IsHitTestVisible="False"
+                                                       Visibility="Collapsed" />
                                             <Rectangle x:Name="SeekTitleFade"
                                                        HorizontalAlignment="Right"
-                                                       Width="16"
+                                                       Width="14"
                                                        IsHitTestVisible="False"
                                                        Visibility="Collapsed" />
                                             </Grid>
@@ -333,11 +339,17 @@
                                                            SizeChanged="SeekText_OnSizeChanged"
                                                            utilities:MonitorOffset.Tag="MediaSeekArtistText" />
                                             </Canvas>
-                                            <!-- A line too long for its room fades out at the right end (the slide goes on a little further, so its end is
-                                                 clear of the fade): filled with the popup's colour in code, see UpdateSeekMarquee. -->
+                                            <!-- A line too long for its room fades out at the end it is sliding away from or towards: filled with the popup's
+                                                 colour, and their opacity animated along with the slide, in code (see UpdateSeekMarquee). -->
+                                            <Rectangle x:Name="SeekArtistFadeLeft"
+                                                       HorizontalAlignment="Left"
+                                                       Width="14"
+                                                       Opacity="0"
+                                                       IsHitTestVisible="False"
+                                                       Visibility="Collapsed" />
                                             <Rectangle x:Name="SeekArtistFade"
                                                        HorizontalAlignment="Right"
-                                                       Width="16"
+                                                       Width="14"
                                                        IsHitTestVisible="False"
                                                        Visibility="Collapsed" />
                                             </Grid>
