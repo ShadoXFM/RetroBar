@@ -285,6 +285,14 @@ namespace RetroBar.Controls
 
         private void SeekPopup_OnOpened(object sender, EventArgs e)
         {
+            // The spectrum starts as it is when nothing has been heard for a while: no bars, no dashes (not the last popup's bars sinking
+            // and its dashes going again). Sound brings the bars up from there.
+            Array.Clear(_seekSpectrumLevels);
+            Array.Clear(_seekSpectrumPeaks);
+            _seekSpectrumQuietSince = DateTime.UtcNow - TimeSpan.FromHours(1);
+            _lastSeekSpectrumUpdate = DateTime.UtcNow;
+            SeekSpectrum.Data = null;
+
             StartSeekWatching();
             ApplyMediaPopupSettings();
             UpdateVisualizerCapture(_sessionManager?.PlaybackState == MediaPlaybackState.Playing);
