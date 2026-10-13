@@ -142,6 +142,7 @@
     <s:String x:Key="minimize">Pienennä</s:String>
     <s:String x:Key="maximize">Suurenna</s:String>
     <s:String x:Key="close">Sulje</s:String>
+    <s:String x:Key="media_popup_always_on_top">Aina _päällimmäisenä</s:String>
     <s:String x:Key="end_task">_Lopeta tehtävä</s:String>
 
     <s:String x:Key="show_hidden">Näytä piilotetut kuvakkeet</s:String>

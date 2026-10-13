@@ -136,6 +136,7 @@
     <s:String x:Key="minimize">최소화(_N)</s:String>
     <s:String x:Key="maximize">최대화(_X)</s:String>
     <s:String x:Key="close">닫기(_C)</s:String>
+    <s:String x:Key="media_popup_always_on_top">항상 위에(_T)</s:String>
     <s:String x:Key="end_task">작업 종료(_E)</s:String>
 
     <s:String x:Key="show_desktop_tip_95">바탕 화면 표시/복원</s:String>

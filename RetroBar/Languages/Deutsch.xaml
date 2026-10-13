@@ -142,6 +142,7 @@
     <s:String x:Key="minimize">Mi_nimieren</s:String>
     <s:String x:Key="maximize">Ma_ximieren</s:String>
     <s:String x:Key="close">_Schließen</s:String>
+    <s:String x:Key="media_popup_always_on_top">Immer im _Vordergrund</s:String>
     <s:String x:Key="end_task">Task b_eenden</s:String>
 
     <s:String x:Key="show_hidden">Versteckte Symbole anzeigen</s:String>

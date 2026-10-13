@@ -64,6 +64,7 @@
     <s:String x:Key="minimize">Mi_nimalizovat</s:String>
     <s:String x:Key="maximize">Ma_ximalizovat</s:String>
     <s:String x:Key="close">_Zavřít</s:String>
+    <s:String x:Key="media_popup_always_on_top">Vždy _nahoře</s:String>
 
     <s:String x:Key="show_hidden">Zobrazit skryté upozornění</s:String>
     <s:String x:Key="hide">Skrýt</s:String>

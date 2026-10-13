@@ -142,6 +142,7 @@
     <s:String x:Key="minimize">Mi_nimere</s:String>
     <s:String x:Key="maximize">Ma_ksimere</s:String>
     <s:String x:Key="close">_Lukk</s:String>
+    <s:String x:Key="media_popup_always_on_top">Alltid _øverst</s:String>
     <s:String x:Key="end_task">_Avslutt oppgave</s:String>
 
     <s:String x:Key="show_hidden">Vis skjulte ikoner</s:String>

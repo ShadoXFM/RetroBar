@@ -156,6 +156,7 @@
     <s:String x:Key="minimize">最小化(_N)</s:String>
     <s:String x:Key="maximize">最大化(_X)</s:String>
     <s:String x:Key="close">关闭(_C)</s:String>
+    <s:String x:Key="media_popup_always_on_top">总在最前(_T)</s:String>
     <s:String x:Key="end_task">结束任务(_E)</s:String>
 
     <s:String x:Key="show_hidden">显示隐藏的图标</s:String>

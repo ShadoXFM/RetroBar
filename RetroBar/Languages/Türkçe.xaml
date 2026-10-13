@@ -142,6 +142,7 @@
     <s:String x:Key="minimize">_Simge durumuna küçült</s:String>
     <s:String x:Key="maximize">_Ekranı kapla</s:String>
     <s:String x:Key="close">_Kapat</s:String>
+    <s:String x:Key="media_popup_always_on_top">Her zaman _üstte</s:String>
     <s:String x:Key="end_task">_Görevi sonlandır</s:String>
 
     <s:String x:Key="show_hidden">Gizli simgeleri göster</s:String>

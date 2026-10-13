@@ -88,6 +88,7 @@
     <s:String x:Key="minimize">最小化(_N)</s:String>
     <s:String x:Key="maximize">最大化(_X)</s:String>
     <s:String x:Key="close">關閉(_C)</s:String>
+    <s:String x:Key="media_popup_always_on_top">永遠在最上層(_T)</s:String>
 
     <s:String x:Key="show_hidden">顯示隱藏的圖示</s:String>
     <s:String x:Key="hide">隱藏</s:String>
