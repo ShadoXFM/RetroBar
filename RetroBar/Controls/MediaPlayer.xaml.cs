@@ -98,6 +98,8 @@ namespace RetroBar.Controls
         public MediaPlayer()
         {
             InitializeComponent();
+            SeekSlider.MouseMove += SeekSlider_OnMouseMove;
+            SeekSlider.MouseLeave += SeekSlider_OnMouseLeave;
             SeekPopupRoot.SizeChanged += (s, e) => UpdateSeekSlideClip();
 
             // The popup is part of this control's logical tree, so the track text's tooltip (this control's own) would show for
@@ -782,6 +784,22 @@ namespace RetroBar.Controls
         private const int SeekSpectrumBarGap = 1;
         private readonly float[] _seekSpectrumLevels = new float[AudioSpectrumCapture.SpectrumBands];
 
+        // A cap a pixel high stays where each bar peaked and falls slowly; with nothing playing for a moment the whole thing fades out.
+        private readonly float[] _seekSpectrumPeaks = new float[AudioSpectrumCapture.SpectrumBands];
+        private DateTime? _seekSpectrumQuietSince;
+        private bool _seekSpectrumShown = true;
+
+        private void SetSeekSpectrumShown(bool shown)
+        {
+            if (_seekSpectrumShown == shown)
+            {
+                return;
+            }
+
+            _seekSpectrumShown = shown;
+            SeekSpectrum.BeginAnimation(UIElement.OpacityProperty, new DoubleAnimation(shown ? 1 : 0, TimeSpan.FromMilliseconds(250)));
+        }
+
         private void VisualizerCapture_OnSpectrumUpdated(float[] bands)
         {
             // Fires on the capture thread.
@@ -796,10 +814,27 @@ namespace RetroBar.Controls
             }
 
             bool playing = _sessionManager?.PlaybackState == MediaPlaybackState.Playing;
+            bool sound = false;
             for (int i = 0; i < _seekSpectrumLevels.Length; i++)
             {
                 float level = playing && bands != null ? bands[i] : 0;
+                sound |= level > 0.05f;
                 _seekSpectrumLevels[i] = Math.Max(level, _seekSpectrumLevels[i] - 0.08f);
+                _seekSpectrumPeaks[i] = Math.Max(_seekSpectrumLevels[i], _seekSpectrumPeaks[i] - 0.02f);
+            }
+
+            if (sound)
+            {
+                _seekSpectrumQuietSince = null;
+                SetSeekSpectrumShown(true);
+            }
+            else
+            {
+                _seekSpectrumQuietSince ??= DateTime.UtcNow;
+                if (DateTime.UtcNow - _seekSpectrumQuietSince > TimeSpan.FromMilliseconds(700))
+                {
+                    SetSeekSpectrumShown(false);
+                }
             }
 
             DpiScale dpi = GetSeekDpi();
@@ -818,6 +853,16 @@ namespace RetroBar.Controls
                     context.LineTo(new Point(x + SeekSpectrumBarWidth, height - barHeight), true, false);
                     context.LineTo(new Point(x + SeekSpectrumBarWidth, height), true, false);
                     context.LineTo(new Point(x, height), true, false);
+
+                    // The cap, a pixel high, when the bar has fallen a couple of pixels below where it peaked.
+                    int capTop = height - Math.Clamp((int)Math.Round(_seekSpectrumPeaks[i] * height), 1, height);
+                    if (capTop + 2 <= height - barHeight)
+                    {
+                        context.BeginFigure(new Point(x, capTop), true, true);
+                        context.LineTo(new Point(x + SeekSpectrumBarWidth, capTop), true, false);
+                        context.LineTo(new Point(x + SeekSpectrumBarWidth, capTop + 1), true, false);
+                        context.LineTo(new Point(x, capTop + 1), true, false);
+                    }
                 }
             }
 
@@ -1076,12 +1121,27 @@ namespace RetroBar.Controls
             UpdateSeekMarquee(SeekArtistText, SeekArtistClip, restart);
         }
 
+        private const double SeekFadeWidth = 16;
+
         private void UpdateSeekMarquee(TextBlock text, Border clip, bool restart)
         {
             double overflow = Math.Ceiling(Math.Ceiling(text.ActualWidth) - clip.ActualWidth);
             if (clip.ActualWidth <= 0 || overflow <= MarqueeOverflowThreshold)
             {
                 overflow = 0;
+            }
+            else
+            {
+                // The slide ends with the end of the text clear of the fade.
+                overflow += SeekFadeWidth;
+            }
+
+            Rectangle fade = text == SeekTitleText ? SeekTitleFade : SeekArtistFade;
+            fade.Visibility = overflow > 0 ? Visibility.Visible : Visibility.Collapsed;
+            if (overflow > 0 && TryFindResource("ButtonFace") is SolidColorBrush face)
+            {
+                Color color = face.Color;
+                fade.Fill = new LinearGradientBrush(Color.FromArgb(0, color.R, color.G, color.B), color, new Point(0, 0), new Point(1, 0));
             }
 
             _seekMarqueeOverflow.TryGetValue(text, out double running);
@@ -1597,6 +1657,17 @@ namespace RetroBar.Controls
         private const int DragThreshold = 4;
         private DispatcherTimer _seekPopupDragTimer;
 
+        // The wheel over the popup seeks 5 seconds a notch (up forward).
+        private void SeekPopupRoot_OnPreviewMouseWheel(object sender, MouseWheelEventArgs e)
+        {
+            if (e.Delta != 0 && _sessionManager?.CanSeek == true)
+            {
+                _ = SeekRelativeAsync(TimeSpan.FromSeconds(5 * Math.Sign(e.Delta)));
+            }
+
+            e.Handled = true;
+        }
+
         private static readonly IntPtr HWND_TOP = IntPtr.Zero;
 
         // A popup's window is never activated by a click, so an ordinary window (moved, not on top) would stay behind the others
@@ -1820,6 +1891,10 @@ namespace RetroBar.Controls
         private DispatcherTimer _seekClickAwayTimer;
         private bool _seekClickAwayWasDown;
         private bool _seekMenuOpen;
+        private bool _seekEscapeWasDown;
+
+        [DllImport("user32.dll")]
+        private static extern IntPtr GetForegroundWindow();
 
         private static bool IsAnyMouseButtonDown() => ((GetAsyncKeyState(0x01) | GetAsyncKeyState(0x02) | GetAsyncKeyState(0x04)) & 0x8000) != 0;
 
@@ -1864,6 +1939,17 @@ namespace RetroBar.Controls
             }
 
             EnsureSeekPopupIsOrdinary();
+
+            bool escape = (GetAsyncKeyState(0x1B) & 0x8000) != 0;
+            if (escape && !_seekEscapeWasDown && !_seekPopupClosing && PresentationSource.FromVisual(SeekPopupRoot) is HwndSource escapeSource &&
+                GetWindowRect(escapeSource.Handle, out RECT escapeWindow) && GetCursorPos(out POINT escapeCursor) &&
+                ((escapeCursor.X >= escapeWindow.Left && escapeCursor.X < escapeWindow.Right && escapeCursor.Y >= escapeWindow.Top && escapeCursor.Y < escapeWindow.Bottom) ||
+                 GetForegroundWindow() == escapeSource.Handle))
+            {
+                CloseSeekPopupAnimated();
+            }
+
+            _seekEscapeWasDown = escape;
 
             bool down = IsAnyMouseButtonDown();
             bool pressed = down && !_seekClickAwayWasDown;
@@ -2018,7 +2104,17 @@ namespace RetroBar.Controls
         private void SeekPopup_OnClosed(object sender, EventArgs e)
         {
             _seekPopupTimer?.Stop();
+            if (_seekSliderTip != null)
+            {
+                _seekSliderTip.IsOpen = false;
+            }
+
             Array.Clear(_seekSpectrumLevels);
+            Array.Clear(_seekSpectrumPeaks);
+            _seekSpectrumQuietSince = null;
+            _seekSpectrumShown = true;
+            SeekSpectrum.BeginAnimation(UIElement.OpacityProperty, null);
+            SeekSpectrum.Opacity = 1;
             if (_seekPopupSource != null)
             {
                 _seekPopupSource.DpiChanged -= SeekPopupSource_OnDpiChanged;
@@ -2071,11 +2167,62 @@ namespace RetroBar.Controls
         // still reflects the OLD position for a moment, which would otherwise make the bar look
         // like it ignored the click until the next 500ms poll happens to land after the source
         // updates.
+        // The time passed or the time left (a click on the timer switches), for as long as the app runs.
+        private static bool _seekShowRemaining;
+        private TimeSpan _lastSeekPosition;
+        private TimeSpan _lastSeekDuration;
+
         private void SetSeekDisplay(TimeSpan position, TimeSpan duration)
         {
+            _lastSeekPosition = position;
+            _lastSeekDuration = duration;
             SeekSlider.Maximum = duration.TotalSeconds > 0 ? duration.TotalSeconds : 1;
             SeekSlider.Value = position.TotalSeconds;
-            SeekTimeText.Text = $"{FormatTime(position)} / {FormatTime(duration)}";
+
+            string first = _seekShowRemaining && duration > position ? "-" + FormatTime(duration - position) : FormatTime(position);
+            SeekTimeText.Text = $"{first} / {FormatTime(duration)}";
+        }
+
+        private void SeekTimeText_OnMouseLeftButtonUp(object sender, MouseButtonEventArgs e)
+        {
+            _seekShowRemaining = !_seekShowRemaining;
+            SetSeekDisplay(_lastSeekPosition, _lastSeekDuration);
+            e.Handled = true;
+        }
+
+        // The time under the pointer, in a small tooltip above it, while the pointer is on the slider.
+        private ToolTip _seekSliderTip;
+
+        private void SeekSlider_OnMouseMove(object sender, MouseEventArgs e)
+        {
+            if (SeekSlider.Template?.FindName("PART_Track", SeekSlider) is not System.Windows.Controls.Primitives.Track track)
+            {
+                return;
+            }
+
+            Point position = e.GetPosition(SeekSlider);
+            double value = Math.Clamp(track.ValueFromPoint(e.GetPosition(track)), SeekSlider.Minimum, SeekSlider.Maximum);
+
+            _seekSliderTip ??= new ToolTip
+            {
+                Placement = System.Windows.Controls.Primitives.PlacementMode.Relative,
+                PlacementTarget = SeekSlider,
+                StaysOpen = true,
+                Focusable = false,
+                IsHitTestVisible = false,
+            };
+            _seekSliderTip.Content = FormatTime(TimeSpan.FromSeconds(value));
+            _seekSliderTip.HorizontalOffset = position.X - 14;
+            _seekSliderTip.VerticalOffset = -26;
+            _seekSliderTip.IsOpen = true;
+        }
+
+        private void SeekSlider_OnMouseLeave(object sender, MouseEventArgs e)
+        {
+            if (_seekSliderTip != null)
+            {
+                _seekSliderTip.IsOpen = false;
+            }
         }
 
         private static string FormatTime(TimeSpan time)

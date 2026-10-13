@@ -194,6 +194,7 @@
                   UseLayoutRounding="True"
                   SnapsToDevicePixels="True"
                   ClipToBounds="True"
+                  PreviewMouseWheel="SeekPopupRoot_OnPreviewMouseWheel"
                   PreviewMouseDown="SeekPopupRoot_OnPreviewMouseDown"
                   PreviewMouseLeftButtonDown="SeekPopupRoot_OnPreviewMouseLeftButtonDown"
                   MouseRightButtonUp="SeekPopupRoot_OnMouseRightButtonUp">
@@ -302,6 +303,7 @@
                                         <Border x:Name="SeekTitleClip"
                                                 Margin="0,0,0,1"
                                                 SizeChanged="SeekClip_OnSizeChanged">
+                                            <Grid>
                                             <Canvas Height="{Binding ActualHeight, ElementName=SeekTitleText}">
                                                 <TextBlock x:Name="SeekTitleText"
                                                            Canvas.Left="0"
@@ -311,9 +313,18 @@
                                                            SizeChanged="SeekText_OnSizeChanged"
                                                            utilities:MonitorOffset.Tag="MediaSeekTitleText" />
                                             </Canvas>
+                                            <!-- A line too long for its room fades out at the right end (the slide goes on a little further, so its end is
+                                                 clear of the fade): filled with the popup's colour in code, see UpdateSeekMarquee. -->
+                                            <Rectangle x:Name="SeekTitleFade"
+                                                       HorizontalAlignment="Right"
+                                                       Width="16"
+                                                       IsHitTestVisible="False"
+                                                       Visibility="Collapsed" />
+                                            </Grid>
                                         </Border>
                                         <Border x:Name="SeekArtistClip"
                                                 SizeChanged="SeekClip_OnSizeChanged">
+                                            <Grid>
                                             <Canvas Height="{Binding ActualHeight, ElementName=SeekArtistText}">
                                                 <TextBlock x:Name="SeekArtistText"
                                                            Canvas.Left="0"
@@ -322,6 +333,14 @@
                                                            SizeChanged="SeekText_OnSizeChanged"
                                                            utilities:MonitorOffset.Tag="MediaSeekArtistText" />
                                             </Canvas>
+                                            <!-- A line too long for its room fades out at the right end (the slide goes on a little further, so its end is
+                                                 clear of the fade): filled with the popup's colour in code, see UpdateSeekMarquee. -->
+                                            <Rectangle x:Name="SeekArtistFade"
+                                                       HorizontalAlignment="Right"
+                                                       Width="16"
+                                                       IsHitTestVisible="False"
+                                                       Visibility="Collapsed" />
+                                            </Grid>
                                         </Border>
                                     </StackPanel>
                                     <Path x:Name="SeekSpectrum"
@@ -471,6 +490,9 @@
                                                VerticalAlignment="Center"
                                                Margin="2,0,6,0"
                                                TextAlignment="Right"
+                                               Background="Transparent"
+                                               Cursor="Hand"
+                                               MouseLeftButtonUp="SeekTimeText_OnMouseLeftButtonUp"
                                                MinWidth="{Binding ActualWidth, ElementName=SeekTimeWidthRef}"
                                                Text="0:00 / 0:00"
                                                utilities:MonitorOffset.Tag="MediaSeekTimeText" />
