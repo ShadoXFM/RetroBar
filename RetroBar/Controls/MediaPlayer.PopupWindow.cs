@@ -266,21 +266,17 @@ namespace RetroBar.Controls
             }
         }
 
-        // A click elsewhere closes the popup, sliding down, unless it is a window of its own (it has been moved, or is set to be on top).
-        // The popup itself never closes on a click (StaysOpen), since WPF would close it at once, with no slide: this timer watches the
-        // mouse buttons instead.
-        private DispatcherTimer _seekClickAwayTimer;
+        // A click elsewhere closes the popup, sliding down, and so does Escape, unless it is a window of its own (it has been moved, or is
+        // set to be on top) - the popup itself never closes on a click (StaysOpen), since WPF would close it at once, with no slide. While it
+        // is open an InputWatcher (low-level hooks: no polling) tells of the clicks and the keys, and a slow timer does the rest.
+        private InputWatcher _seekInput;
 
-        private bool _seekClickAwayWasDown;
+        private DispatcherTimer _seekWatchTimer;
 
         private bool _seekMenuOpen;
 
-        private bool _seekEscapeWasDown;
-
         [DllImport("user32.dll")]
         private static extern IntPtr GetForegroundWindow();
-
-        private static bool IsAnyMouseButtonDown() => ((GetAsyncKeyState(0x01) | GetAsyncKeyState(0x02) | GetAsyncKeyState(0x04)) & 0x8000) != 0;
 
         [DllImport("user32.dll", EntryPoint = "GetWindowLongW")]
         private static extern int GetWindowLong(IntPtr hWnd, int index);
@@ -305,20 +301,34 @@ namespace RetroBar.Controls
             }
         }
 
-        private void StartSeekClickAwayTimer()
+        private void StartSeekWatching()
         {
-            _seekClickAwayWasDown = IsAnyMouseButtonDown();
-            _seekClickAwayTimer ??= new DispatcherTimer(DispatcherPriority.Normal) { Interval = TimeSpan.FromMilliseconds(16) };
-            _seekClickAwayTimer.Tick -= SeekClickAwayTimer_OnTick;
-            _seekClickAwayTimer.Tick += SeekClickAwayTimer_OnTick;
-            _seekClickAwayTimer.Start();
+            _seekInput ??= new InputWatcher();
+            _seekInput.MouseDown -= SeekInput_OnMouseDown;
+            _seekInput.MouseDown += SeekInput_OnMouseDown;
+            _seekInput.KeyDown -= SeekInput_OnKeyDown;
+            _seekInput.KeyDown += SeekInput_OnKeyDown;
+            _seekInput.Start();
+
+            // Ten times a second is all the rest needs: the window's flags are kept by its message hook, and the spectrum only has to be told when
+            // nothing comes (see SeekWatchTimer_OnTick).
+            _seekWatchTimer ??= new DispatcherTimer(DispatcherPriority.Background) { Interval = TimeSpan.FromMilliseconds(100) };
+            _seekWatchTimer.Tick -= SeekWatchTimer_OnTick;
+            _seekWatchTimer.Tick += SeekWatchTimer_OnTick;
+            _seekWatchTimer.Start();
         }
 
-        private void SeekClickAwayTimer_OnTick(object sender, EventArgs e)
+        private void StopSeekWatching()
+        {
+            _seekInput?.Stop();
+            _seekWatchTimer?.Stop();
+        }
+
+        private void SeekWatchTimer_OnTick(object sender, EventArgs e)
         {
             if (!SeekPopup.IsOpen)
             {
-                _seekClickAwayTimer.Stop();
+                StopSeekWatching();
                 return;
             }
 
@@ -329,12 +339,30 @@ namespace RetroBar.Controls
             {
                 UpdateSeekSpectrum(null);
             }
+        }
 
-            bool escape = (GetAsyncKeyState(0x1B) & 0x8000) != 0;
-            if (escape && !_seekEscapeWasDown && !_seekSlide.Closing && PresentationSource.FromVisual(SeekPopupRoot) is HwndSource escapeSource &&
-                GetWindowRect(escapeSource.Handle, out RECT escapeWindow) && GetCursorPos(out POINT escapeCursor) &&
-                ((escapeCursor.X >= escapeWindow.Left && escapeCursor.X < escapeWindow.Right && escapeCursor.Y >= escapeWindow.Top && escapeCursor.Y < escapeWindow.Bottom) ||
-                 GetForegroundWindow() == escapeSource.Handle))
+        private bool CursorIsOnSeekPopup(int x, int y)
+        {
+            return PresentationSource.FromVisual(SeekPopupRoot) is HwndSource source && GetWindowRect(source.Handle, out RECT window) &&
+                   x >= window.Left && x < window.Right && y >= window.Top && y < window.Bottom;
+        }
+
+        // Escape closes the popup while the pointer is on it or it is the window in front (Escape in other apps is not ours).
+        private void SeekInput_OnKeyDown(int virtualKey)
+        {
+            if (virtualKey != 0x1B || !SeekPopup.IsOpen || _seekSlide.Closing)
+            {
+                return;
+            }
+
+            GetCursorPos(out POINT cursor);
+            bool inFront = PresentationSource.FromVisual(SeekPopupRoot) is HwndSource source && GetForegroundWindow() == source.Handle;
+            if (!CursorIsOnSeekPopup(cursor.X, cursor.Y) && !inFront)
+            {
+                return;
+            }
+
+            Dispatcher.BeginInvoke(new Action(() =>
             {
                 // A popup that is a window of its own (moved, or on top) just goes; the other one slides down.
                 if (_seekPopupMovedTo != null || _seekPopupPinned)
@@ -345,35 +373,31 @@ namespace RetroBar.Controls
                 {
                     CloseSeekPopupAnimated();
                 }
-            }
+            }), DispatcherPriority.Send);
+        }
 
-            _seekEscapeWasDown = escape;
-
-            bool down = IsAnyMouseButtonDown();
-            bool pressed = down && !_seekClickAwayWasDown;
-            _seekClickAwayWasDown = down;
-
-            if (!pressed || _seekSlide.Closing || _seekMenuOpen || _seekPopupMovedTo != null || _seekPopupPinned ||
-                PresentationSource.FromVisual(SeekPopupRoot) is not HwndSource source || !GetWindowRect(source.Handle, out RECT window) ||
-                !GetCursorPos(out POINT cursor))
-            {
-                return;
-            }
-
-            if (cursor.X >= window.Left && cursor.X < window.Right && cursor.Y >= window.Top && cursor.Y < window.Bottom)
+        private void SeekInput_OnMouseDown(int x, int y)
+        {
+            if (!SeekPopup.IsOpen || _seekSlide.Closing || _seekMenuOpen || _seekPopupMovedTo != null || _seekPopupPinned || CursorIsOnSeekPopup(x, y))
             {
                 return;
             }
 
             // The click on the track text that closes it must not open it again when the button comes up.
-            Point onText = TrackTextCanvas.PointFromScreen(new Point(cursor.X, cursor.Y));
-            if (onText.X >= 0 && onText.Y >= 0 && onText.X <= TrackTextCanvas.ActualWidth && onText.Y <= TrackTextCanvas.ActualHeight)
+            try
             {
-                _ignoreNextTrackTextClick = true;
-                _ignoreTrackTextClickUntil = DateTime.UtcNow + TimeSpan.FromMilliseconds(600);
+                Point onText = TrackTextCanvas.PointFromScreen(new Point(x, y));
+                if (onText.X >= 0 && onText.Y >= 0 && onText.X <= TrackTextCanvas.ActualWidth && onText.Y <= TrackTextCanvas.ActualHeight)
+                {
+                    _ignoreNextTrackTextClick = true;
+                    _ignoreTrackTextClickUntil = DateTime.UtcNow + TimeSpan.FromMilliseconds(600);
+                }
+            }
+            catch (InvalidOperationException)
+            {
             }
 
-            CloseSeekPopupAnimated();
+            Dispatcher.BeginInvoke(new Action(CloseSeekPopupAnimated), DispatcherPriority.Send);
         }
 
         // The monitor the popup is on decides which adjustments of monitor-adjustments.json apply to it, and the pixel art is drawn for

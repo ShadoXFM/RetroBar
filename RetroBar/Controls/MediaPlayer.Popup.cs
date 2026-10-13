@@ -275,7 +275,7 @@ namespace RetroBar.Controls
 
         private void SeekPopup_OnOpened(object sender, EventArgs e)
         {
-            StartSeekClickAwayTimer();
+            StartSeekWatching();
 
             // One popup at a time, whichever monitor's player it belongs to.
             if (_openSeekPlayer != null && _openSeekPlayer != this)
@@ -314,6 +314,8 @@ namespace RetroBar.Controls
         private void SeekPopup_OnClosed(object sender, EventArgs e)
         {
             _seekPopupTimer?.Stop();
+            StopSeekWatching();
+
             if (_seekSliderTip != null)
             {
                 _seekSliderTip.IsOpen = false;

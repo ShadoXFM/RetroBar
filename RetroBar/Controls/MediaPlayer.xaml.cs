@@ -336,14 +336,23 @@ namespace RetroBar.Controls
 
             Visibility = Visibility.Visible;
             SetIsMediaPlaying(true);
-            UpdateVisualizerActiveState(_sessionManager.PlaybackState == MediaPlaybackState.Playing);
+            bool isPlaying = _sessionManager.PlaybackState == MediaPlaybackState.Playing;
+            UpdateVisualizerActiveState(isPlaying);
 
             if (_previousButton == null)
             {
                 Dispatcher.BeginInvoke(new Action(InitializeTransportButtonAdorners), DispatcherPriority.Loaded);
             }
 
-            StartVisualizer();
+            // The audio is only captured (and analysed) while something plays: a paused track has nothing to show.
+            if (isPlaying)
+            {
+                StartVisualizer();
+            }
+            else
+            {
+                StopVisualizer();
+            }
 
             string currentAumid = _sessionManager.SourceAppUserModelId;
             if (!string.Equals(currentAumid, _lastSourceAumid, StringComparison.OrdinalIgnoreCase))

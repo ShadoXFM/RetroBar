@@ -106,11 +106,19 @@ namespace RetroBar.Controls
         {
             UpdateFades();
 
-            if (_trackTextMask == null && !SeekPopup.IsOpen)
+            // Only while a line slides: every frame of an idle taskbar is a frame it would not have to draw.
+            if (_trackTextMask == null && !AnySeekLineSliding())
             {
                 CompositionTarget.Rendering -= FadeRendering;
                 _fadeRenderingHooked = false;
             }
+        }
+
+        private bool AnySeekLineSliding()
+        {
+            return SeekPopup.IsOpen &&
+                   ((_seekMarqueeOverflow.TryGetValue(SeekTitleText, out double title) && title > 0) ||
+                    (_seekMarqueeOverflow.TryGetValue(SeekArtistText, out double artist) && artist > 0));
         }
 
         private void UpdateFades()
