@@ -58,7 +58,7 @@ namespace RetroBar.Controls
             else if (!ReferenceEquals(art, _seekAccentSource))
             {
                 _seekAccentSource = art;
-                _seekAccentColor = CoverColor.MostCommon(art);
+                _seekAccentColor = CoverColor.Vibrant(art);
             }
 
             ApplySeekSpectrumFill();
