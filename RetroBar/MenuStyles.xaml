@@ -3,13 +3,13 @@
                     xmlns:controls="clr-namespace:RetroBar.Controls"
                     xmlns:converters="clr-namespace:RetroBar.Converters">
     <converters:ScaleConverter x:Key="menuScaleConverter" />
-    <!-- The one look of every item of every context menu (see MenuItemStyle.cs, which gives it to them): the taskbar's font,
+    <!-- The one look of every item of every context menu (see MenuItemStyle.cs, which gives it to them): the taskbar's font and text color,
          a check mark or an icon in a narrow first column, a highlight bar, and a frame of the theme's own for the items that
          open a menu of their own. Row heights are those of WPF's default items. -->
     <Style x:Key="RetroBarMenuItemStyle" TargetType="MenuItem">
         <Setter Property="FontFamily" Value="{DynamicResource GlobalFontFamily}" />
         <Setter Property="FontSize" Value="{DynamicResource GlobalFontSize}" />
-        <Setter Property="Foreground" Value="{DynamicResource {x:Static SystemColors.MenuTextBrushKey}}" />
+        <Setter Property="Foreground" Value="{DynamicResource ButtonForeground}" />
         <Setter Property="Template">
             <Setter.Value>
                 <ControlTemplate TargetType="MenuItem">
