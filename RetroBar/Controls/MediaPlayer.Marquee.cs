@@ -211,6 +211,17 @@ namespace RetroBar.Controls
             _trackTextMask.GradientStops[2].Offset = 1 - TrackTextFadeWidth / width;
         }
 
+        private double _trackTextMarginWidth;
+
+        // The text's Margin changed (its file was saved): the host's width has to follow.
+        private void TrackTextCanvas_OnSizeChanged(object sender, SizeChangedEventArgs e)
+        {
+            if (Math.Abs(TrackTextCanvas.Margin.Left + TrackTextCanvas.Margin.Right - _trackTextMarginWidth) > 0.01)
+            {
+                Dispatcher.BeginInvoke(new Action(UpdateMarquee), System.Windows.Threading.DispatcherPriority.Loaded);
+            }
+        }
+
         private void TrackText_SizeChanged(object sender, SizeChangedEventArgs e)
         {
             if (e.WidthChanged)
@@ -250,9 +261,12 @@ namespace RetroBar.Controls
                 ? fullWidth
                 : Math.Min(fullWidth, max);
 
-            if (double.IsNaN(TrackTextHost.Width) || Math.Abs(TrackTextHost.Width - visibleWidth) > 0.5)
+            // A Margin on the text (monitor-adjustments.json, MediaTrackText) is room around it, not a cut into it: the host is wider by it.
+            _trackTextMarginWidth = TrackTextCanvas.Margin.Left + TrackTextCanvas.Margin.Right;
+            double hostWidth = Math.Max(1, visibleWidth + _trackTextMarginWidth);
+            if (double.IsNaN(TrackTextHost.Width) || Math.Abs(TrackTextHost.Width - hostWidth) > 0.5)
             {
-                TrackTextHost.Width = visibleWidth;
+                TrackTextHost.Width = hostWidth;
             }
 
             double overflow = Math.Ceiling(fullWidth - visibleWidth);

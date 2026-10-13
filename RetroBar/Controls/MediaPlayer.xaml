@@ -154,6 +154,7 @@
                         Cursor="Hand"
                         MouseLeftButtonUp="TrackTextCanvas_OnMouseLeftButtonUp"
                         MouseWheel="TrackTextCanvas_OnMouseWheel"
+                        SizeChanged="TrackTextCanvas_OnSizeChanged"
                         MouseRightButtonUp="TrackTextCanvas_OnMouseRightButtonUp">
                     <TextBlock x:Name="TrackText"
                                Canvas.Left="0"
