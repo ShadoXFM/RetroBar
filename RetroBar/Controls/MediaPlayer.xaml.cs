@@ -1484,7 +1484,8 @@ namespace RetroBar.Controls
         private POINT _seekPopupDragStart;
         private POINT _seekPopupDragWindow;
         private HwndSource _seekPopupSource;
-        // Shared by every monitor's player (they each have their own popup, one open at a time).
+        // "Always on top" for the popup that is open now; shared by every monitor's player (they each have their own popup, one open at
+        // a time), and off again when it closes.
         private static bool _seekPopupPinned;
         private static MediaPlayer _openSeekPlayer;
 
@@ -1984,6 +1985,9 @@ namespace RetroBar.Controls
 
             _seekPopupMonitor = null;
             _seekPopupMovedTo = null;
+
+            // Moved or on top is for the one opening: the next one starts as an ordinary popup again.
+            _seekPopupPinned = false;
             SeekPopupRoot.ClearValue(MonitorOffset.DeviceNameOverrideProperty);
 
             // Only suppress the next click if it's plausibly the one that just caused this close
