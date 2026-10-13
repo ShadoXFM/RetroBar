@@ -1711,6 +1711,27 @@ namespace RetroBar.Controls
         private readonly TranslateTransform _seekSlide = new();
         private bool _seekPopupClosing;
 
+        // Where the bottom of the popup's frame is, in DIPs from the top of the element given (the taskbar's window): the 10 is the frame's
+        // margin for the shadow, which is part of the popup's window. The weather forecast puts its own frame's bottom here too.
+        private const double SeekFrameShadowRoom = 10;
+        private double? _lastSeekFrameBottom;
+
+        public double? GetSeekFrameBottom(Visual relativeTo)
+        {
+            try
+            {
+                if (IsVisible && TrackTextCanvas.ActualWidth > 0)
+                {
+                    _lastSeekFrameBottom = TrackTextCanvas.TransformToAncestor(relativeTo).Transform(new Point(0, 0)).Y + SeekPopup.VerticalOffset - SeekFrameShadowRoom;
+                }
+            }
+            catch (InvalidOperationException)
+            {
+            }
+
+            return _lastSeekFrameBottom;
+        }
+
         private double SeekSlideDistance() => SeekSlideHost.ActualHeight > 0 ? SeekSlideHost.ActualHeight : 400;
 
         // At rest the popup has no transform at all: any render transform switches off pixel snapping, which blurs the frame's lines.
@@ -1910,7 +1931,13 @@ namespace RetroBar.Controls
             };
 
             var close = new MenuItem { Header = TryFindResource("close") as string ?? "_Close" };
-            close.Click += (s, args) => CloseSeekPopupAnimated();
+            close.Click += (s, args) =>
+            {
+                // From its own menu it just goes: no slide.
+                _seekPopupClosing = false;
+                SeekPopup.IsOpen = false;
+                ClearSeekPopupAnimations();
+            };
 
             var menu = new ContextMenu
             {

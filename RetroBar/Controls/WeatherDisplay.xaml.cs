@@ -281,8 +281,22 @@ namespace RetroBar.Controls
         // The margin (DIPs) the forecast frame has all round for its shadow - see WeatherDisplay.xaml.
         private const double ShadowRoom = 6;
 
-        private static CustomPopupPlacement[] PlaceForecast(Size popupSize, Size targetSize, Point offset)
+        private CustomPopupPlacement[] PlaceForecast(Size popupSize, Size targetSize, Point offset)
         {
+            // On a taskbar at the bottom the frame's bottom is where the media popup's is (the media popup is placed from the track text,
+            // which is not at the same height as this widget).
+            double sameAsMedia = 0;
+            if (Window.GetWindow(this) is Taskbar taskbar && taskbar.MediaPlayerControl.GetSeekFrameBottom(taskbar) is double mediaBottom)
+            {
+                try
+                {
+                    sameAsMedia = mediaBottom - WeatherPanel.TransformToAncestor(taskbar).Transform(new Point(0, 0)).Y;
+                }
+                catch (InvalidOperationException)
+                {
+                }
+            }
+
             double centeredX = (targetSize.Width - popupSize.Width) / 2;
             double centeredY = (targetSize.Height - popupSize.Height) / 2;
 
@@ -294,7 +308,7 @@ namespace RetroBar.Controls
                 ManagedShell.AppBar.AppBarEdge.Left => new[] { new CustomPopupPlacement(new Point(targetSize.Width + offset.X - ShadowRoom, centeredY), PopupPrimaryAxis.Vertical) },
                 ManagedShell.AppBar.AppBarEdge.Right => new[] { new CustomPopupPlacement(new Point(-popupSize.Width + offset.X + ShadowRoom, centeredY), PopupPrimaryAxis.Vertical) },
                 ManagedShell.AppBar.AppBarEdge.Top => new[] { new CustomPopupPlacement(new Point(centeredX, targetSize.Height + offset.Y - ShadowRoom), PopupPrimaryAxis.Horizontal) },
-                _ => new[] { new CustomPopupPlacement(new Point(centeredX, -popupSize.Height + offset.Y + ShadowRoom), PopupPrimaryAxis.Horizontal) },
+                _ => new[] { new CustomPopupPlacement(new Point(centeredX, -popupSize.Height + offset.Y + ShadowRoom + sameAsMedia), PopupPrimaryAxis.Horizontal) },
             };
         }
 
