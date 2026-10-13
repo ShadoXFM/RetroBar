@@ -193,6 +193,7 @@
                   RenderOptions.ClearTypeHint="Enabled"
                   UseLayoutRounding="True"
                   SnapsToDevicePixels="True"
+                  PreviewMouseDown="SeekPopupRoot_OnPreviewMouseDown"
                   PreviewMouseLeftButtonDown="SeekPopupRoot_OnPreviewMouseLeftButtonDown"
                   MouseRightButtonUp="SeekPopupRoot_OnMouseRightButtonUp">
                 <controls:PopupShadow Strength="0.5" />

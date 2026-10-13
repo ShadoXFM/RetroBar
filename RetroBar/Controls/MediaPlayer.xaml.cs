@@ -1578,6 +1578,18 @@ namespace RetroBar.Controls
         private const int DragThreshold = 4;
         private DispatcherTimer _seekPopupDragTimer;
 
+        private static readonly IntPtr HWND_TOP = IntPtr.Zero;
+
+        // A popup's window is never activated by a click, so an ordinary window (moved, not on top) would stay behind the others
+        // however often it is clicked: a click brings it in front of them.
+        private void SeekPopupRoot_OnPreviewMouseDown(object sender, MouseButtonEventArgs e)
+        {
+            if ((_seekPopupMovedTo != null || _seekPopupPinned) && PresentationSource.FromVisual(SeekPopupRoot) is HwndSource source)
+            {
+                SetWindowPos(source.Handle, _seekPopupPinned ? HWND_TOPMOST : HWND_TOP, 0, 0, 0, 0, SWP_NOMOVE | SWP_NOSIZE | SWP_NOACTIVATE);
+            }
+        }
+
         private void SeekPopupRoot_OnPreviewMouseLeftButtonDown(object sender, MouseButtonEventArgs e)
         {
             for (DependencyObject node = e.OriginalSource as DependencyObject; node != null && node != SeekPopupRoot; node = node is Visual ? VisualTreeHelper.GetParent(node) : LogicalTreeHelper.GetParent(node))
