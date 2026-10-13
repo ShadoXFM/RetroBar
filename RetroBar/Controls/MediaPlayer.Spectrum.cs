@@ -85,8 +85,16 @@ namespace RetroBar.Controls
             }
         }
 
+        // The capture is opened and closed on a pool thread (opening an audio device takes a good part of a second, which on the UI thread
+        // stopped everything that moves, the sliding text included, for that long) and, once paused, kept open for a while: pausing and
+        // playing again does not open it again each time.
+        private static readonly TimeSpan VisualizerPausedGrace = TimeSpan.FromSeconds(15);
+        private DispatcherTimer _visualizerStopTimer;
+
         private void StartVisualizer()
         {
+            _visualizerStopTimer?.Stop();
+
             try
             {
                 if (_visualizerCapture != null)
@@ -94,10 +102,21 @@ namespace RetroBar.Controls
                     return;
                 }
 
-                _visualizerCapture = new AudioSpectrumCapture();
-                _visualizerCapture.LevelUpdated += VisualizerCapture_OnLevelUpdated;
-                _visualizerCapture.SpectrumUpdated += VisualizerCapture_OnSpectrumUpdated;
-                _visualizerCapture.Start();
+                var capture = new AudioSpectrumCapture();
+                capture.LevelUpdated += VisualizerCapture_OnLevelUpdated;
+                capture.SpectrumUpdated += VisualizerCapture_OnSpectrumUpdated;
+                _visualizerCapture = capture;
+                System.Threading.Tasks.Task.Run(() =>
+                {
+                    try
+                    {
+                        capture.Start();
+                    }
+                    catch (Exception ex)
+                    {
+                        ShellLogger.Error($"MediaPlayer: starting the audio capture threw: {ex}");
+                    }
+                });
             }
             catch (Exception ex)
             {
@@ -105,17 +124,41 @@ namespace RetroBar.Controls
             }
         }
 
-        private void StopVisualizer()
+        // Paused: the capture goes after a while, if nothing plays again by then.
+        private void ScheduleVisualizerStop()
         {
             if (_visualizerCapture == null)
             {
                 return;
             }
 
-            _visualizerCapture.LevelUpdated -= VisualizerCapture_OnLevelUpdated;
-            _visualizerCapture.SpectrumUpdated -= VisualizerCapture_OnSpectrumUpdated;
-            _visualizerCapture.Dispose();
+            _visualizerStopTimer ??= new DispatcherTimer(DispatcherPriority.Background) { Interval = VisualizerPausedGrace };
+            _visualizerStopTimer.Tick -= VisualizerStopTimer_OnTick;
+            _visualizerStopTimer.Tick += VisualizerStopTimer_OnTick;
+            _visualizerStopTimer.Stop();
+            _visualizerStopTimer.Start();
+        }
+
+        private void VisualizerStopTimer_OnTick(object sender, EventArgs e)
+        {
+            _visualizerStopTimer.Stop();
+            StopVisualizer();
+        }
+
+        private void StopVisualizer()
+        {
+            _visualizerStopTimer?.Stop();
+
+            AudioSpectrumCapture capture = _visualizerCapture;
+            if (capture == null)
+            {
+                return;
+            }
+
+            capture.LevelUpdated -= VisualizerCapture_OnLevelUpdated;
+            capture.SpectrumUpdated -= VisualizerCapture_OnSpectrumUpdated;
             _visualizerCapture = null;
+            System.Threading.Tasks.Task.Run(capture.Dispose);
         }
 
         // Fires on AudioSpectrumCapture's own capture thread, not the UI thread. Only actually

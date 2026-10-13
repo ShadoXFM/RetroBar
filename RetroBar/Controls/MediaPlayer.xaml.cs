@@ -350,14 +350,15 @@ namespace RetroBar.Controls
                 Dispatcher.BeginInvoke(new Action(InitializeTransportButtonAdorners), DispatcherPriority.Loaded);
             }
 
-            // The audio is only captured (and analysed) while something plays: a paused track has nothing to show.
+            // The audio is only captured (and analysed) while something plays (and a little after it stops): a paused track has nothing
+            // to show.
             if (isPlaying)
             {
                 StartVisualizer();
             }
             else
             {
-                StopVisualizer();
+                ScheduleVisualizerStop();
             }
 
             string currentAumid = _sessionManager.SourceAppUserModelId;
