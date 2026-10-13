@@ -112,6 +112,16 @@ namespace RetroBar.Controls
             return new Separator { Style = MenuSeparator.Style };
         }
 
+        // The wheel over the track text on the taskbar seeks 5 seconds a notch (up forward), as it does over the popup.
+        private void TrackTextCanvas_OnMouseWheel(object sender, MouseWheelEventArgs e)
+        {
+            if (e.Delta != 0 && _sessionManager?.CanSeek == true)
+            {
+                _ = SeekRelativeAsync(TimeSpan.FromSeconds(5 * Math.Sign(e.Delta)));
+                e.Handled = true;
+            }
+        }
+
         private void TrackTextCanvas_OnMouseLeftButtonUp(object sender, MouseButtonEventArgs e)
         {
             // Only the click that closed the popup (its mouse-up arrives right after): a popup closed some other way - by this very click
