@@ -193,10 +193,7 @@
                   UseLayoutRounding="True"
                   SnapsToDevicePixels="True"
                   PreviewMouseLeftButtonDown="SeekPopupRoot_OnPreviewMouseLeftButtonDown"
-                  PreviewMouseMove="SeekPopupRoot_OnPreviewMouseMove"
-                  PreviewMouseLeftButtonUp="SeekPopupRoot_OnPreviewMouseLeftButtonUp"
-                  MouseRightButtonUp="SeekPopupRoot_OnMouseRightButtonUp"
-                  LostMouseCapture="SeekPopupRoot_OnLostMouseCapture">
+                  MouseRightButtonUp="SeekPopupRoot_OnMouseRightButtonUp">
                 <controls:PopupShadow Strength="0.5" />
                 <!-- The outermost line of the bevel (DarkShadow, right and bottom) is the frame's own outer border, not a border inside
                      another one that has a padding: it was not drawn at all that way at 125% (nothing red where it should be, with it

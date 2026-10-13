@@ -1382,7 +1382,15 @@ namespace RetroBar.Controls
 
             if (_sessionManager != null && _sessionManager.HasSession)
             {
-                SeekPopup.IsOpen = !SeekPopup.IsOpen;
+                if (SeekPopup.IsOpen)
+                {
+                    CloseSeekPopupAnimated();
+                }
+                else
+                {
+                    OpenSeekPopupAnimated();
+                }
+
                 _ignoreNextTrackTextClick = false;
             }
         }
@@ -1563,6 +1571,13 @@ namespace RetroBar.Controls
         private const uint SWP_NOACTIVATE = 0x0010;
         private const uint MONITOR_DEFAULTTONEAREST = 2;
 
+        [DllImport("user32.dll")]
+        private static extern short GetAsyncKeyState(int key);
+
+        private const int VK_LBUTTON = 0x01;
+        private const int DragThreshold = 4;
+        private DispatcherTimer _seekPopupDragTimer;
+
         private void SeekPopupRoot_OnPreviewMouseLeftButtonDown(object sender, MouseButtonEventArgs e)
         {
             for (DependencyObject node = e.OriginalSource as DependencyObject; node != null && node != SeekPopupRoot; node = node is Visual ? VisualTreeHelper.GetParent(node) : LogicalTreeHelper.GetParent(node))
@@ -1578,33 +1593,49 @@ namespace RetroBar.Controls
                 return;
             }
 
+            // Nothing about the popup changes for a click: it only starts to be dragged once the pointer has gone a few pixels with the
+            // button held down (mouse capture is left alone, which is what keeps the popup closing when a click lands elsewhere).
             GetCursorPos(out _seekPopupDragStart);
             _seekPopupDragWindow = new POINT { X = window.Left, Y = window.Top };
-            _seekPopupDragging = true;
-            SeekPopup.StaysOpen = true;
-            SeekPopupRoot.CaptureMouse();
-            e.Handled = true;
+            _seekPopupDragging = false;
+
+            _seekPopupDragTimer ??= new DispatcherTimer(DispatcherPriority.Normal) { Interval = TimeSpan.FromMilliseconds(8) };
+            _seekPopupDragTimer.Tick -= SeekPopupDragTimer_OnTick;
+            _seekPopupDragTimer.Tick += SeekPopupDragTimer_OnTick;
+            _seekPopupDragTimer.Start();
         }
 
-        private void SeekPopupRoot_OnPreviewMouseMove(object sender, MouseEventArgs e)
+        private void SeekPopupDragTimer_OnTick(object sender, EventArgs e)
         {
-            if (!_seekPopupDragging || PresentationSource.FromVisual(SeekPopupRoot) is not HwndSource source)
+            if ((GetAsyncKeyState(VK_LBUTTON) & 0x8000) == 0 || !SeekPopup.IsOpen ||
+                PresentationSource.FromVisual(SeekPopupRoot) is not HwndSource source)
             {
+                _seekPopupDragTimer.Stop();
+                _seekPopupDragging = false;
                 return;
             }
 
             GetCursorPos(out POINT now);
-            _seekPopupMovedTo = new POINT { X = _seekPopupDragWindow.X + now.X - _seekPopupDragStart.X, Y = _seekPopupDragWindow.Y + now.Y - _seekPopupDragStart.Y };
+            int dx = now.X - _seekPopupDragStart.X;
+            int dy = now.Y - _seekPopupDragStart.Y;
+
+            if (!_seekPopupDragging)
+            {
+                if (Math.Abs(dx) + Math.Abs(dy) < DragThreshold)
+                {
+                    return;
+                }
+
+                // Moved: from here the popup is a window of its own that stays where it is put.
+                _seekPopupDragging = true;
+                _seekPopupMovedTo = _seekPopupDragWindow;
+                UpdateSeekPopupStaysOpen();
+                ApplySeekPopupTopmost();
+            }
+
+            _seekPopupMovedTo = new POINT { X = _seekPopupDragWindow.X + dx, Y = _seekPopupDragWindow.Y + dy };
             SetWindowPos(source.Handle, IntPtr.Zero, _seekPopupMovedTo.Value.X, _seekPopupMovedTo.Value.Y, 0, 0, SWP_NOSIZE | SWP_NOZORDER | SWP_NOACTIVATE);
             RefreshSeekPopupMonitor(source);
-        }
-
-        private void SeekPopupRoot_OnPreviewMouseLeftButtonUp(object sender, MouseButtonEventArgs e)
-        {
-            if (_seekPopupDragging)
-            {
-                SeekPopupRoot.ReleaseMouseCapture();
-            }
         }
 
         // A popup's window is above every other window by default. Once it has been moved or set to be on top it is a window of its own
@@ -1637,11 +1668,73 @@ namespace RetroBar.Controls
             }
         }
 
-        private void SeekPopupRoot_OnLostMouseCapture(object sender, MouseEventArgs e)
+        // The popup slides up from the taskbar while fading in, and back down the same way, as the weather forecast does (its offset
+        // is what slides; the frame's opacity fades). A click elsewhere closes it at once, as WPF does.
+        private const double SeekSlideDistance = 12;
+        private static readonly Duration SeekShowDuration = new(TimeSpan.FromMilliseconds(180));
+        private static readonly Duration SeekHideDuration = new(TimeSpan.FromMilliseconds(130));
+        private bool _seekPopupClosing;
+
+        private void ClearSeekPopupAnimations()
         {
-            _seekPopupDragging = false;
-            UpdateSeekPopupStaysOpen();
-            ApplySeekPopupTopmost();
+            SeekPopup.BeginAnimation(System.Windows.Controls.Primitives.Popup.VerticalOffsetProperty, null);
+            SeekPopupRoot.BeginAnimation(UIElement.OpacityProperty, null);
+        }
+
+        private void OpenSeekPopupAnimated()
+        {
+            _seekPopupClosing = false;
+            ClearSeekPopupAnimations();
+            SeekPopupRoot.Opacity = 0;
+            SeekPopup.IsOpen = true;
+
+            // No To: it ends at the popup's own offset.
+            SeekPopup.BeginAnimation(System.Windows.Controls.Primitives.Popup.VerticalOffsetProperty, new DoubleAnimation
+            {
+                From = SeekPopup.VerticalOffset + SeekSlideDistance,
+                Duration = SeekShowDuration,
+                EasingFunction = new CubicEase { EasingMode = EasingMode.EaseOut },
+            });
+            SeekPopupRoot.BeginAnimation(UIElement.OpacityProperty, new DoubleAnimation(0, 1, SeekShowDuration)
+            {
+                EasingFunction = new QuadraticEase { EasingMode = EasingMode.EaseOut },
+            });
+        }
+
+        private void CloseSeekPopupAnimated()
+        {
+            if (!SeekPopup.IsOpen || _seekPopupClosing)
+            {
+                return;
+            }
+
+            // A popup that has been moved is not placed by its offset: it only fades.
+            _seekPopupClosing = true;
+            if (_seekPopupMovedTo == null)
+            {
+                SeekPopup.BeginAnimation(System.Windows.Controls.Primitives.Popup.VerticalOffsetProperty, new DoubleAnimation
+                {
+                    From = SeekPopup.VerticalOffset,
+                    To = SeekPopup.VerticalOffset + SeekSlideDistance,
+                    Duration = SeekHideDuration,
+                    EasingFunction = new CubicEase { EasingMode = EasingMode.EaseIn },
+                });
+            }
+
+            var fade = new DoubleAnimation(SeekPopupRoot.Opacity, 0, SeekHideDuration)
+            {
+                EasingFunction = new QuadraticEase { EasingMode = EasingMode.EaseIn },
+            };
+            fade.Completed += (s, e) =>
+            {
+                if (_seekPopupClosing)
+                {
+                    _seekPopupClosing = false;
+                    SeekPopup.IsOpen = false;
+                    ClearSeekPopupAnimations();
+                }
+            };
+            SeekPopupRoot.BeginAnimation(UIElement.OpacityProperty, fade);
         }
 
         // Closed by a click elsewhere, unless it has been moved: then it is where the user put it, and stays (on top or not).
@@ -1704,7 +1797,7 @@ namespace RetroBar.Controls
             };
 
             var close = new MenuItem { Header = TryFindResource("close") as string ?? "_Close" };
-            close.Click += (s, args) => SeekPopup.IsOpen = false;
+            close.Click += (s, args) => CloseSeekPopupAnimated();
 
             var menu = new ContextMenu
             {
