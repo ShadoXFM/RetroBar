@@ -1966,7 +1966,7 @@ namespace RetroBar.Controls
             SeekTimeText.Margin = new Thickness(2, 0, 6, 4 / dpi.DpiScaleY);
         }
 
-        // Dragging the popup: anywhere on it except the buttons and the slider. Its window is moved directly (a Popup's own offsets
+        // Dragging the popup: by the album art only. Its window is moved directly (a Popup's own offsets
         // keep it on the monitor of the track text), to any monitor; it takes that monitor's DPI and adjustments (see
         // RefreshSeekPopupMonitor). It goes back above the track text when it opens next.
         private bool _seekPopupDragging;
@@ -2114,12 +2114,10 @@ namespace RetroBar.Controls
 
         private void SeekPopupRoot_OnPreviewMouseLeftButtonDown(object sender, MouseButtonEventArgs e)
         {
-            for (DependencyObject node = e.OriginalSource as DependencyObject; node != null && node != SeekPopupRoot; node = node is Visual ? VisualTreeHelper.GetParent(node) : LogicalTreeHelper.GetParent(node))
+            // Only the album art drags the popup: a press anywhere else is for what is there, and can not move it by mistake.
+            if (e.OriginalSource != SeekAlbumArtImage)
             {
-                if (node is System.Windows.Controls.Primitives.ButtonBase or System.Windows.Controls.Primitives.RangeBase)
-                {
-                    return;
-                }
+                return;
             }
 
             if (PresentationSource.FromVisual(SeekPopupRoot) is not HwndSource source || !GetWindowRect(source.Handle, out RECT window))
