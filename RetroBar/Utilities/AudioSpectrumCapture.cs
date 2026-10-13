@@ -45,11 +45,10 @@ namespace RetroBar.Utilities
         // few dB of full scale on a digital bus, which a gain can't spread over the bar - decibels do.
         private const double FloorDb = -48;
 
-        // The VU meter does not use all of that: music sits within a few dB of one level (about -27 dB on a bus), which on a bar over 48 dB
-        // stays in the same stretch. Over the 24 dB from VuFloorDb to VuCeilingDb it moves twice as far for the same change in loudness, and
-        // that level is a little further up the bar. Anything louder than the ceiling fills it.
-        private const double VuFloorDb = -42;
-        private const double VuCeilingDb = -18;
+        // The VU meter is foobar2000's: the bar is the loudest sample of the last 40 ms, as a fraction of full scale (0 is silence, 1 is
+        // the loudest the signal can be), of the sound as it is sent to the device, before the device's volume. It rises at once and falls
+        // smoothly, by VuFallTime: after that long a bar that has gone quiet is a third of what it was.
+        private static readonly double VuFallTime = 0.25;
 
         // The popup's spectrum is louder than the signal by this (2 is 6 dB: every bar an eighth of the bar further up).
         private const double SpectrumGain = 2;
@@ -60,9 +59,11 @@ namespace RetroBar.Utilities
         private static readonly TimeSpan UpdateInterval = TimeSpan.FromMilliseconds(40);
         private DateTime _lastUpdate = DateTime.MinValue;
 
-        private double _levelSumSquaresLeft;
-        private double _levelSumSquaresRight;
+        private double _levelPeakLeft;
+        private double _levelPeakRight;
         private int _levelSampleCount;
+        private double _vuLeft;
+        private double _vuRight;
 
         // A WasapiLoopbackCapture (a playback device's own output) or a plain WasapiCapture (a
         // recording device, e.g. a virtual cable/bus), depending on Settings.VuMeterCaptureDevice.
@@ -203,8 +204,8 @@ namespace RetroBar.Utilities
                 float left = ReadSample(e.Buffer, frameOffset, isFloat32);
                 float right = channels >= 2 ? ReadSample(e.Buffer, frameOffset + bytesPerSample, isFloat32) : left;
 
-                _levelSumSquaresLeft += (double)left * left;
-                _levelSumSquaresRight += (double)right * right;
+                _levelPeakLeft = Math.Max(_levelPeakLeft, Math.Abs(left));
+                _levelPeakRight = Math.Max(_levelPeakRight, Math.Abs(right));
                 _levelSampleCount++;
 
                 _spectrumSamples[_fftWritten] = (left + right) / 2;
@@ -218,12 +219,6 @@ namespace RetroBar.Utilities
         private static float ReadSample(byte[] buffer, int offset, bool isFloat32)
         {
             return isFloat32 ? BitConverter.ToSingle(buffer, offset) : BitConverter.ToInt16(buffer, offset) / 32768f;
-        }
-
-        private static float ToVuLevel(double rms)
-        {
-            double db = 20 * Math.Log10(Math.Max(rms, 1e-6));
-            return (float)Math.Clamp((db - VuFloorDb) / (VuCeilingDb - VuFloorDb), 0, 1);
         }
 
         private static float ToLevel(double rms)
@@ -263,18 +258,20 @@ namespace RetroBar.Utilities
             {
                 return;
             }
+            double elapsed = Math.Min((DateTime.Now - _lastUpdate).TotalSeconds, 0.5);
             _lastUpdate = DateTime.Now;
 
-            // As loud as it is heard: scaled by the output device's volume (and silent while it is muted).
+            // The spectrum is as loud as it is heard: scaled by the output device's volume (and silent while it is muted).
             double volume = GetOutputVolume();
-            double rmsLeft = Math.Sqrt(_levelSumSquaresLeft / _levelSampleCount) * volume;
-            double rmsRight = Math.Sqrt(_levelSumSquaresRight / _levelSampleCount) * volume;
-            _levelSumSquaresLeft = 0;
-            _levelSumSquaresRight = 0;
+
+            // The VU meter: up at once, down by a fixed fraction per second.
+            double fall = Math.Exp(-elapsed / VuFallTime);
+            _vuLeft = Math.Max(_levelPeakLeft, _vuLeft * fall);
+            _vuRight = Math.Max(_levelPeakRight, _vuRight * fall);
+            _levelPeakLeft = 0;
+            _levelPeakRight = 0;
             _levelSampleCount = 0;
-            float levelLeft = ToVuLevel(rmsLeft);
-            float levelRight = ToVuLevel(rmsRight);
-            LevelUpdated?.Invoke(levelLeft, levelRight);
+            LevelUpdated?.Invoke((float)Math.Min(_vuLeft, 1), (float)Math.Min(_vuRight, 1));
 
             if (SpectrumUpdated != null && _fftFilled == FftSize)
             {
