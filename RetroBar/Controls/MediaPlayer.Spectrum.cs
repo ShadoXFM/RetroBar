@@ -94,9 +94,9 @@ namespace RetroBar.Controls
             if (_seekAccentColor is Color accent && TryFindResource("ClockForeground") is SolidColorBrush foreground)
             {
                 double opacity = (TryFindResource("VuMeterAccentBrush") as Brush)?.Opacity ?? 0.2;
-                // The tip is the text's colour at half its strength; both ends at 60% of theirs (the same, so neither stands out).
+                // The tip is the text's colour at half its strength, at 60% of that; the cover's colour at the left is at its full strength.
                 Color tip = Color.FromArgb(153, (byte)(foreground.Color.R / 2), (byte)(foreground.Color.G / 2), (byte)(foreground.Color.B / 2));
-                Color left = Color.FromArgb(153, accent.R, accent.G, accent.B);
+                Color left = Color.FromArgb(255, accent.R, accent.G, accent.B);
                 var brush = new LinearGradientBrush(left, tip, new Point(0, 0), new Point(1, 0)) { Opacity = opacity };
                 brush.Freeze();
                 VuMeterFillLeft.Fill = brush;
