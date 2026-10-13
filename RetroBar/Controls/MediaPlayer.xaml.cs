@@ -1703,36 +1703,35 @@ namespace RetroBar.Controls
             }
         }
 
-        // The popup slides up from the taskbar while fading in, and back down the same way, as the weather forecast does (its offset
-        // is what slides; the frame's opacity fades). A click elsewhere closes it at once, as WPF does.
-        private const double SeekSlideDistance = 12;
-        private static readonly Duration SeekShowDuration = new(TimeSpan.FromMilliseconds(180));
-        private static readonly Duration SeekHideDuration = new(TimeSpan.FromMilliseconds(130));
+        // The popup slides up out of the taskbar's edge, and back down into it: its content moves inside its window (which stays where
+        // it is, and clips what is outside it), from a window's height below, so it comes from the bottom and does not fade. A click
+        // elsewhere closes it the same way (see the click-away timer below).
+        private static readonly Duration SeekShowDuration = new(TimeSpan.FromMilliseconds(200));
+        private static readonly Duration SeekHideDuration = new(TimeSpan.FromMilliseconds(150));
+        private readonly TranslateTransform _seekSlide = new();
         private bool _seekPopupClosing;
+
+        private double SeekSlideDistance() => SeekPopupRoot.ActualHeight > 0 ? SeekPopupRoot.ActualHeight : 400;
 
         private void ClearSeekPopupAnimations()
         {
-            SeekPopup.BeginAnimation(System.Windows.Controls.Primitives.Popup.VerticalOffsetProperty, null);
-            SeekPopupRoot.BeginAnimation(UIElement.OpacityProperty, null);
+            _seekSlide.BeginAnimation(TranslateTransform.YProperty, null);
+            _seekSlide.Y = 0;
         }
 
         private void OpenSeekPopupAnimated()
         {
             _seekPopupClosing = false;
             ClearSeekPopupAnimations();
-            SeekPopupRoot.Opacity = 0;
+            SeekPopupRoot.RenderTransform = _seekSlide;
+
+            double distance = SeekSlideDistance();
+            _seekSlide.Y = distance;
             SeekPopup.IsOpen = true;
 
-            // No To: it ends at the popup's own offset.
-            SeekPopup.BeginAnimation(System.Windows.Controls.Primitives.Popup.VerticalOffsetProperty, new DoubleAnimation
+            _seekSlide.BeginAnimation(TranslateTransform.YProperty, new DoubleAnimation(distance, 0, SeekShowDuration)
             {
-                From = SeekPopup.VerticalOffset + SeekSlideDistance,
-                Duration = SeekShowDuration,
                 EasingFunction = new CubicEase { EasingMode = EasingMode.EaseOut },
-            });
-            SeekPopupRoot.BeginAnimation(UIElement.OpacityProperty, new DoubleAnimation(0, 1, SeekShowDuration)
-            {
-                EasingFunction = new QuadraticEase { EasingMode = EasingMode.EaseOut },
             });
         }
 
@@ -1743,24 +1742,12 @@ namespace RetroBar.Controls
                 return;
             }
 
-            // A popup that has been moved is not placed by its offset: it only fades.
             _seekPopupClosing = true;
-            if (_seekPopupMovedTo == null)
+            var slide = new DoubleAnimation(_seekSlide.Y, SeekSlideDistance(), SeekHideDuration)
             {
-                SeekPopup.BeginAnimation(System.Windows.Controls.Primitives.Popup.VerticalOffsetProperty, new DoubleAnimation
-                {
-                    From = SeekPopup.VerticalOffset,
-                    To = SeekPopup.VerticalOffset + SeekSlideDistance,
-                    Duration = SeekHideDuration,
-                    EasingFunction = new CubicEase { EasingMode = EasingMode.EaseIn },
-                });
-            }
-
-            var fade = new DoubleAnimation(SeekPopupRoot.Opacity, 0, SeekHideDuration)
-            {
-                EasingFunction = new QuadraticEase { EasingMode = EasingMode.EaseIn },
+                EasingFunction = new CubicEase { EasingMode = EasingMode.EaseIn },
             };
-            fade.Completed += (s, e) =>
+            slide.Completed += (s, e) =>
             {
                 if (_seekPopupClosing)
                 {
@@ -1769,7 +1756,7 @@ namespace RetroBar.Controls
                     ClearSeekPopupAnimations();
                 }
             };
-            SeekPopupRoot.BeginAnimation(UIElement.OpacityProperty, fade);
+            _seekSlide.BeginAnimation(TranslateTransform.YProperty, slide);
         }
 
         // A click elsewhere closes the popup, sliding down, unless it is a window of its own (it has been moved, or is set to be on top).
