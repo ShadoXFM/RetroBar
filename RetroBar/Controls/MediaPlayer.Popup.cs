@@ -292,6 +292,7 @@ namespace RetroBar.Controls
             _seekSpectrumQuietSince = DateTime.UtcNow - TimeSpan.FromHours(1);
             _lastSeekSpectrumUpdate = DateTime.UtcNow;
             SeekSpectrum.Data = null;
+            _seekSpectrumHidden = true;
 
             StartSeekWatching();
             ApplyMediaPopupSettings();

@@ -229,6 +229,14 @@ namespace RetroBar.Controls
 
         private const double SeekSpectrumDashStagger = 60;
 
+        // When sound comes back after the dashes have all gone, the bars come back one after the other from the left (each a little after the
+        // one on its left), as they went.
+        private const double SeekSpectrumAppearStagger = 45;
+
+        private bool _seekSpectrumHidden = true;
+
+        private DateTime _seekSpectrumAppearSince = DateTime.MinValue;
+
         private void VisualizerCapture_OnSpectrumUpdated(float[] bands)
         {
             // Fires on the capture thread.
@@ -298,8 +306,20 @@ namespace RetroBar.Controls
                 quietMs = (DateTime.UtcNow - _seekSpectrumQuietSince.Value).TotalMilliseconds;
             }
 
-            DpiScale dpi = GetSeekDpi();
             int count = _seekSpectrumLevels.Length;
+            if (quietMs > SeekSpectrumDashLife + (count - 1) * SeekSpectrumDashStagger)
+            {
+                _seekSpectrumHidden = true;
+            }
+            else if (sound && _seekSpectrumHidden)
+            {
+                _seekSpectrumHidden = false;
+                _seekSpectrumAppearSince = DateTime.UtcNow;
+            }
+
+            double appearMs = (DateTime.UtcNow - _seekSpectrumAppearSince).TotalMilliseconds;
+
+            DpiScale dpi = GetSeekDpi();
             int width = count * SeekSpectrumBarWidth + (count - 1) * SeekSpectrumBarGap;
             int height = Math.Max(2, (int)Math.Round((SeekTextPanel.ActualHeight + 4) * dpi.DpiScaleY));
 
@@ -315,7 +335,7 @@ namespace RetroBar.Controls
                 for (int i = 0; i < count; i++)
                 {
                     // Once it has been quiet for a while a bar's dash goes too, each a little after the one on its left.
-                    if (quietMs > SeekSpectrumDashLife + i * SeekSpectrumDashStagger)
+                    if (quietMs > SeekSpectrumDashLife + i * SeekSpectrumDashStagger || appearMs < i * SeekSpectrumAppearStagger)
                     {
                         continue;
                     }
