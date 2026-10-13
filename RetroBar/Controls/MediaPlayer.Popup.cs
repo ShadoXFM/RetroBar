@@ -292,7 +292,7 @@ namespace RetroBar.Controls
             _seekSpectrumQuietSince = DateTime.UtcNow - TimeSpan.FromHours(1);
             _lastSeekSpectrumUpdate = DateTime.UtcNow;
             SeekSpectrum.Data = null;
-            _seekSpectrumHidden = true;
+            Array.Fill(_seekBarGone, true);
             _seekSpectrumSkipAppear = _sessionManager?.PlaybackState == MediaPlaybackState.Playing;
 
             StartSeekWatching();

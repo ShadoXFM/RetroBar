@@ -229,16 +229,16 @@ namespace RetroBar.Controls
 
         private const double SeekSpectrumDashStagger = 60;
 
-        // When sound comes back after the dashes have all gone, the bars come back one after the other from the left (each a little after the
-        // one on its left), as they went.
+        // When sound comes back the bars that have gone (their dash too) come back one after the other from the left, each a little after the
+        // one on its left, as they went; the ones that have not gone yet are just there.
         private const double SeekSpectrumAppearStagger = 22;
 
-        private bool _seekSpectrumHidden = true;
+        private readonly bool[] _seekBarGone = new bool[AudioSpectrumCapture.SpectrumBands];
+
+        private readonly DateTime[] _seekBarAppearAt = new DateTime[AudioSpectrumCapture.SpectrumBands];
 
         // Set when the popup opens on a track that is playing: the bars are simply there then, they do not appear one by one.
         private bool _seekSpectrumSkipAppear;
-
-        private DateTime _seekSpectrumAppearSince = DateTime.MinValue;
 
         private void VisualizerCapture_OnSpectrumUpdated(float[] bands)
         {
@@ -310,18 +310,26 @@ namespace RetroBar.Controls
             }
 
             int count = _seekSpectrumLevels.Length;
-            if (quietMs > SeekSpectrumDashLife + (count - 1) * SeekSpectrumDashStagger)
+            DateTime now = DateTime.UtcNow;
+            int appearing = 0;
+            for (int i = 0; i < count; i++)
             {
-                _seekSpectrumHidden = true;
-            }
-            else if (sound && _seekSpectrumHidden)
-            {
-                _seekSpectrumHidden = false;
-                _seekSpectrumAppearSince = _seekSpectrumSkipAppear ? DateTime.MinValue : DateTime.UtcNow;
-                _seekSpectrumSkipAppear = false;
+                if (quietMs > SeekSpectrumDashLife + i * SeekSpectrumDashStagger)
+                {
+                    _seekBarGone[i] = true;
+                }
+                else if (sound && _seekBarGone[i])
+                {
+                    _seekBarGone[i] = false;
+                    _seekBarAppearAt[i] = _seekSpectrumSkipAppear ? DateTime.MinValue : now.AddMilliseconds(appearing * SeekSpectrumAppearStagger);
+                    appearing++;
+                }
             }
 
-            double appearMs = (DateTime.UtcNow - _seekSpectrumAppearSince).TotalMilliseconds;
+            if (sound)
+            {
+                _seekSpectrumSkipAppear = false;
+            }
 
             DpiScale dpi = GetSeekDpi();
             int width = count * SeekSpectrumBarWidth + (count - 1) * SeekSpectrumBarGap;
@@ -339,7 +347,7 @@ namespace RetroBar.Controls
                 for (int i = 0; i < count; i++)
                 {
                     // Once it has been quiet for a while a bar's dash goes too, each a little after the one on its left.
-                    if (quietMs > SeekSpectrumDashLife + i * SeekSpectrumDashStagger || appearMs < i * SeekSpectrumAppearStagger)
+                    if (_seekBarGone[i] || now < _seekBarAppearAt[i])
                     {
                         continue;
                     }
