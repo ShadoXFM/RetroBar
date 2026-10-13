@@ -371,9 +371,11 @@ namespace RetroBar.Controls
                 _sourceAppShown = false;
             }
 
-            string trackText = string.IsNullOrEmpty(_sessionManager.Artist)
+            // The taskbar shows the title only; the artist is in the popup and in the tooltip.
+            string tooltipText = string.IsNullOrEmpty(_sessionManager.Artist)
                 ? _sessionManager.Title
                 : $"{_sessionManager.Title} \u2014 {_sessionManager.Artist}";
+            string trackText = _sessionManager.Title;
 
             if (TrackText.Text != trackText)
             {
@@ -393,7 +395,7 @@ namespace RetroBar.Controls
             // Same reasoning - needs post-layout ActualWidth/TransformToVisual reads.
             Dispatcher.BeginInvoke(new Action(UpdateVuMeterOffset), System.Windows.Threading.DispatcherPriority.Loaded);
 
-            ToolTip = trackText;
+            ToolTip = tooltipText;
 
             Geometry playPauseGlyph = GetGlyph(_sessionManager.PlaybackState == MediaPlaybackState.Playing
                 ? "MediaPlayerPauseGeometry"
@@ -1168,7 +1170,7 @@ namespace RetroBar.Controls
         // the text neither starts nor ends in a faded edge. How much of each fade there is follows where the slide is (read on every frame,
         // so it can not be out of step with it): the taskbar's text has a mask on the text only (the VU meter behind it is not faded), and
         // the popup's lines have a gradient over each end in the popup's colour.
-        private const double MarqueeFadeWidth = 20;
+        private const double MarqueeFadeWidth = 32;
 
         private LinearGradientBrush _trackTextMask;
         private GradientStop _trackTextMaskLeft;

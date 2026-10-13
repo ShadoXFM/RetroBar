@@ -317,13 +317,13 @@
                                                  colour, and their opacity animated along with the slide, in code (see UpdateSeekMarquee). -->
                                             <Rectangle x:Name="SeekTitleFadeLeft"
                                                        HorizontalAlignment="Left"
-                                                       Width="20"
+                                                       Width="32"
                                                        Opacity="0"
                                                        IsHitTestVisible="False"
                                                        Visibility="Collapsed" />
                                             <Rectangle x:Name="SeekTitleFade"
                                                        HorizontalAlignment="Right"
-                                                       Width="20"
+                                                       Width="32"
                                                        IsHitTestVisible="False"
                                                        Visibility="Collapsed" />
                                             </Grid>
@@ -343,13 +343,13 @@
                                                  colour, and their opacity animated along with the slide, in code (see UpdateSeekMarquee). -->
                                             <Rectangle x:Name="SeekArtistFadeLeft"
                                                        HorizontalAlignment="Left"
-                                                       Width="20"
+                                                       Width="32"
                                                        Opacity="0"
                                                        IsHitTestVisible="False"
                                                        Visibility="Collapsed" />
                                             <Rectangle x:Name="SeekArtistFade"
                                                        HorizontalAlignment="Right"
-                                                       Width="20"
+                                                       Width="32"
                                                        IsHitTestVisible="False"
                                                        Visibility="Collapsed" />
                                             </Grid>
