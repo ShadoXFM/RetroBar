@@ -1504,13 +1504,28 @@ namespace RetroBar.Controls
 
         private IntPtr SeekPopupHook(IntPtr hwnd, int msg, IntPtr wParam, IntPtr lParam, ref bool handled)
         {
-            if (msg == WM_WINDOWPOSCHANGING && _seekPopupMovedTo is POINT moved)
+            if (msg == WM_WINDOWPOSCHANGING && (_seekPopupMovedTo != null || _seekPopupPinned))
             {
                 WINDOWPOS position = Marshal.PtrToStructure<WINDOWPOS>(lParam);
-                if ((position.Flags & SWP_NOMOVE) == 0 && (position.X != moved.X || position.Y != moved.Y))
+                bool changed = false;
+
+                if (_seekPopupMovedTo is POINT moved && (position.Flags & SWP_NOMOVE) == 0 && (position.X != moved.X || position.Y != moved.Y))
                 {
                     position.X = moved.X;
                     position.Y = moved.Y;
+                    changed = true;
+                }
+
+                // WPF puts its popups' windows at the top of the topmost ones whenever it places them again: one that is not on top
+                // is left where it is among the ordinary windows.
+                if (!_seekPopupPinned && (position.Flags & SWP_NOZORDER) == 0 && position.InsertAfter == HWND_TOPMOST)
+                {
+                    position.InsertAfter = HWND_NOTOPMOST;
+                    changed = true;
+                }
+
+                if (changed)
+                {
                     Marshal.StructureToPtr(position, lParam, false);
                 }
             }
@@ -1754,6 +1769,26 @@ namespace RetroBar.Controls
 
         private static bool IsAnyMouseButtonDown() => ((GetAsyncKeyState(0x01) | GetAsyncKeyState(0x02) | GetAsyncKeyState(0x04)) & 0x8000) != 0;
 
+        [DllImport("user32.dll", EntryPoint = "GetWindowLongW")]
+        private static extern int GetWindowLong(IntPtr hWnd, int index);
+
+        [DllImport("user32.dll")]
+        private static extern IntPtr GetWindow(IntPtr hWnd, uint command);
+
+        // Whatever WPF does to the popup's window, one that has been moved and is not on top is an ordinary window without an owner.
+        private void EnsureSeekPopupIsOrdinary()
+        {
+            if ((_seekPopupMovedTo == null && !_seekPopupPinned) || PresentationSource.FromVisual(SeekPopupRoot) is not HwndSource source)
+            {
+                return;
+            }
+
+            if (GetWindow(source.Handle, 4 /* GW_OWNER */) != IntPtr.Zero || (!_seekPopupPinned && (GetWindowLong(source.Handle, -20 /* GWL_EXSTYLE */) & 0x8 /* WS_EX_TOPMOST */) != 0))
+            {
+                ApplySeekPopupTopmost();
+            }
+        }
+
         private void StartSeekClickAwayTimer()
         {
             _seekClickAwayWasDown = IsAnyMouseButtonDown();
@@ -1770,6 +1805,8 @@ namespace RetroBar.Controls
                 _seekClickAwayTimer.Stop();
                 return;
             }
+
+            EnsureSeekPopupIsOrdinary();
 
             bool down = IsAnyMouseButtonDown();
             bool pressed = down && !_seekClickAwayWasDown;
