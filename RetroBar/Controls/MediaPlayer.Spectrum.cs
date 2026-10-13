@@ -96,7 +96,10 @@ namespace RetroBar.Controls
                 double opacity = (TryFindResource("VuMeterAccentBrush") as Brush)?.Opacity ?? 0.2;
                 // The tip is the text's colour at a quarter of its strength: the bars were a light grey there.
                 Color tip = Color.FromRgb((byte)(foreground.Color.R / 4), (byte)(foreground.Color.G / 4), (byte)(foreground.Color.B / 4));
-                var brush = new LinearGradientBrush(accent, tip, new Point(0, 0), new Point(1, 0)) { Opacity = opacity };
+
+                // The cover's colour at 60% of its strength: it was the strongest part of the bar.
+                Color left = Color.FromArgb(153, accent.R, accent.G, accent.B);
+                var brush = new LinearGradientBrush(left, tip, new Point(0, 0), new Point(1, 0)) { Opacity = opacity };
                 brush.Freeze();
                 VuMeterFillLeft.Fill = brush;
                 VuMeterFillRight.Fill = brush;
