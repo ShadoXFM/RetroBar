@@ -43,7 +43,11 @@ namespace RetroBar.Utilities
         // quieter), the top is full scale (0 dB), and a sound in between fills the bar by how many dB it is from the bottom. A
         // plain multiplier of the signal pinned the bar at the top for any ordinary music: the loudness of music sits within a
         // few dB of full scale on a digital bus, which a gain can't spread over the bar - decibels do.
-        private const double FloorDb = -48;
+        private const double FloorDb = -90;
+
+        /// <summary>The span of decibels the levels (0-1) cover: 0 is this far below full scale, 1 is full scale. MediaPlayer normalises
+        /// them against the loudest lately, which makes any volume above the floor look the same.</summary>
+        public const double LevelRangeDb = -FloorDb;
 
         // Throttles how often LevelUpdated fires, independent of the capture callback's own
         // (format/buffer-size dependent) cadence - the meter only needs to look smooth, not
