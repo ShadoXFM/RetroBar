@@ -30,6 +30,24 @@ namespace RetroBar.Controls
         // Marquee tuning.
         private const double MarqueePixelsPerSecond = 30d;
         private const double MarqueeEndPauseSeconds = 2d;
+
+        // The speed and the pause at each end in use: this monitor's ("ScrollSpeed" and "ScrollPause" of the "MediaTrackText" tag in
+        // monitor-adjustments.json), the defaults above if it has none. The taskbar's text and the popup's lines slide at the same ones.
+        private double _marqueeSpeed = MarqueePixelsPerSecond;
+        private double _marqueePause = MarqueeEndPauseSeconds;
+
+        // True when they changed.
+        private bool LoadMarqueeSettings()
+        {
+            string deviceName = (Window.GetWindow(this) as Taskbar)?.Screen.DeviceName;
+            MonitorOffsetValue value = MonitorAdjustments.Get(deviceName, "MediaTrackText");
+            double speed = value.ScrollSpeed is > 0 ? value.ScrollSpeed.Value : MarqueePixelsPerSecond;
+            double pause = value.ScrollPause is >= 0 ? value.ScrollPause.Value : MarqueeEndPauseSeconds;
+            bool changed = speed != _marqueeSpeed || pause != _marqueePause;
+            _marqueeSpeed = speed;
+            _marqueePause = pause;
+            return changed;
+        }
         // Ignore sub-pixel overflow so we don't animate text that already fits.
         private const double MarqueeOverflowThreshold = 1d;
 
@@ -1137,11 +1155,11 @@ namespace RetroBar.Controls
         // popup's lines.
         private const double MarqueeFadeWidth = 14;
 
-        private static (double Time, double Left, double Right)[] FadeKeys(double overflow, out double total)
+        private (double Time, double Left, double Right)[] FadeKeys(double overflow, out double total)
         {
-            double travel = Math.Max(overflow / MarqueePixelsPerSecond, 0.5);
-            double pause = MarqueeEndPauseSeconds;
-            double fade = Math.Min(MarqueeFadeWidth / MarqueePixelsPerSecond, travel / 2);
+            double travel = Math.Max(overflow / _marqueeSpeed, 0.5);
+            double pause = _marqueePause;
+            double fade = Math.Min(MarqueeFadeWidth / _marqueeSpeed, travel / 2);
             total = 2 * pause + 2 * travel;
 
             return new[]
@@ -1158,7 +1176,7 @@ namespace RetroBar.Controls
             };
         }
 
-        private static DoubleAnimationUsingKeyFrames FadeOpacityAnimation(double overflow, bool left)
+        private DoubleAnimationUsingKeyFrames FadeOpacityAnimation(double overflow, bool left)
         {
             var keys = FadeKeys(overflow, out double total);
             var animation = new DoubleAnimationUsingKeyFrames
@@ -1230,6 +1248,13 @@ namespace RetroBar.Controls
         private void UpdateTrackTextFadeOffsets()
         {
             double width = TrackTextClip.ActualWidth;
+            if (_trackTextMask == null && _marqueeRunning && width > MarqueeFadeWidth * 2)
+            {
+                // The slide began before the clip had a width, so it started without a mask: start both again.
+                StartMarquee(_marqueeOverflow);
+                return;
+            }
+
             if (_trackTextMask == null || width <= MarqueeFadeWidth * 2)
             {
                 return;
@@ -1255,6 +1280,8 @@ namespace RetroBar.Controls
         /// </summary>
         private void UpdateMarquee()
         {
+            LoadMarqueeSettings();
+
             if (Visibility != Visibility.Visible || string.IsNullOrEmpty(TrackText.Text))
             {
                 StopMarquee();
@@ -1298,11 +1325,11 @@ namespace RetroBar.Controls
             StartMarquee(overflow);
         }
 
-        private static DoubleAnimationUsingKeyFrames CreateMarqueeAnimation(double overflow)
+        private DoubleAnimationUsingKeyFrames CreateMarqueeAnimation(double overflow)
         {
-            double travelSeconds = Math.Max(overflow / MarqueePixelsPerSecond, 0.5);
+            double travelSeconds = Math.Max(overflow / _marqueeSpeed, 0.5);
 
-            TimeSpan pause = TimeSpan.FromSeconds(MarqueeEndPauseSeconds);
+            TimeSpan pause = TimeSpan.FromSeconds(_marqueePause);
             TimeSpan travel = TimeSpan.FromSeconds(travelSeconds);
 
             TimeSpan atStartEnd = pause;
@@ -1355,8 +1382,21 @@ namespace RetroBar.Controls
             }
         }
 
+        // The taskbar's text and the popup's lines start their slides at the same moment (each waiting at its start for the same time,
+        // and sliding at the same speed), so they move together.
+        private void SyncMarquees()
+        {
+            if (_marqueeRunning)
+            {
+                StartMarquee(_marqueeOverflow);
+            }
+
+            UpdateSeekMarquees(true);
+        }
+
         private void UpdateSeekMarquees(bool restart)
         {
+            LoadMarqueeSettings();
             UpdateSeekMarquee(SeekTitleText, SeekTitleClip, restart);
             UpdateSeekMarquee(SeekArtistText, SeekArtistClip, restart);
         }
@@ -2337,7 +2377,7 @@ namespace RetroBar.Controls
             ToolTip = trackToolTip;
 
             ApplySeekGlyphs();
-            Dispatcher.BeginInvoke(new Action(() => UpdateSeekMarquees(true)), System.Windows.Threading.DispatcherPriority.Loaded);
+            Dispatcher.BeginInvoke(new Action(SyncMarquees), System.Windows.Threading.DispatcherPriority.Loaded);
 
             bool canSeek = _sessionManager?.CanSeek ?? false;
             SeekSlider.IsEnabled = canSeek;
@@ -2577,6 +2617,13 @@ namespace RetroBar.Controls
         {
             // Fires on a background (file-watcher) thread.
             Dispatcher.BeginInvoke(new Action(UpdateAlbumArtAdorner));
+            Dispatcher.BeginInvoke(new Action(() =>
+            {
+                if (LoadMarqueeSettings())
+                {
+                    SyncMarquees();
+                }
+            }));
             Dispatcher.BeginInvoke(new Action(UpdateMarquee));
             Dispatcher.BeginInvoke(new Action(UpdateVuMeterOffset));
         }

@@ -25,6 +25,13 @@ namespace RetroBar.Utilities
         public double? Width { get; set; }
         public double? Height { get; set; }
 
+        /// <summary>For the "MediaTrackText" tag only: how fast a media text too long for its room slides, in DIPs a second (30 if
+        /// omitted), on this monitor's taskbar and in its popup.</summary>
+        public double? ScrollSpeed { get; set; }
+
+        /// <summary>For the "MediaTrackText" tag only: how long the slide waits at each end, in seconds (2 if omitted).</summary>
+        public double? ScrollPause { get; set; }
+
         /// <summary>Uniform render-time scale multiplier (1 = no change), applied around the element's center.</summary>
         public double? Scale { get; set; }
 
