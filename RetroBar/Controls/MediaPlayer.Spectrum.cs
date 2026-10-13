@@ -94,10 +94,8 @@ namespace RetroBar.Controls
             if (_seekAccentColor is Color accent && TryFindResource("ClockForeground") is SolidColorBrush foreground)
             {
                 double opacity = (TryFindResource("VuMeterAccentBrush") as Brush)?.Opacity ?? 0.2;
-                // The tip is the text's colour at a quarter of its strength: the bars were a light grey there.
-                Color tip = Color.FromRgb((byte)(foreground.Color.R / 4), (byte)(foreground.Color.G / 4), (byte)(foreground.Color.B / 4));
-
-                // The cover's colour at 60% of its strength: it was the strongest part of the bar.
+                // The tip is the text's colour at half its strength; both ends at 60% of theirs (the same, so neither stands out).
+                Color tip = Color.FromArgb(153, (byte)(foreground.Color.R / 2), (byte)(foreground.Color.G / 2), (byte)(foreground.Color.B / 2));
                 Color left = Color.FromArgb(153, accent.R, accent.G, accent.B);
                 var brush = new LinearGradientBrush(left, tip, new Point(0, 0), new Point(1, 0)) { Opacity = opacity };
                 brush.Freeze();
