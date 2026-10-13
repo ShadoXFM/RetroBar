@@ -45,9 +45,10 @@ namespace RetroBar.Utilities
         // few dB of full scale on a digital bus, which a gain can't spread over the bar - decibels do.
         private const double FloorDb = -48;
 
-        // The VU meter is foobar2000's: the bar is the loudest sample of the last 40 ms, as a fraction of full scale (0 is silence, 1 is
-        // the loudest the signal can be), of the sound as it is sent to the device, before the device's volume. It rises at once and falls
-        // smoothly, by VuFallTime: after that long a bar that has gone quiet is a third of what it was.
+        // The VU meter is foobar2000's: the bar is the loudest sample of the last 40 ms, in decibels from VuFloorDb (empty) to full scale
+        // (full), of the sound as it is sent to the device, before the device's volume. It rises at once and falls smoothly, by VuFallTime:
+        // after that long a bar that has gone quiet is a third of what it was.
+        private const double VuFloorDb = -60;
         private static readonly double VuFallTime = 0.25;
 
         // The popup's spectrum is louder than the signal by this (2 is 6 dB: every bar an eighth of the bar further up).
@@ -221,6 +222,12 @@ namespace RetroBar.Utilities
             return isFloat32 ? BitConverter.ToSingle(buffer, offset) : BitConverter.ToInt16(buffer, offset) / 32768f;
         }
 
+        private static float ToVuLevel(double peak)
+        {
+            double db = 20 * Math.Log10(Math.Max(peak, 1e-6));
+            return (float)Math.Clamp(1 - db / VuFloorDb, 0, 1);
+        }
+
         private static float ToLevel(double rms)
         {
             double db = 20 * Math.Log10(Math.Max(rms, 1e-6));
@@ -271,7 +278,7 @@ namespace RetroBar.Utilities
             _levelPeakLeft = 0;
             _levelPeakRight = 0;
             _levelSampleCount = 0;
-            LevelUpdated?.Invoke((float)Math.Min(_vuLeft, 1), (float)Math.Min(_vuRight, 1));
+            LevelUpdated?.Invoke(ToVuLevel(_vuLeft), ToVuLevel(_vuRight));
 
             if (SpectrumUpdated != null && _fftFilled == FftSize)
             {
