@@ -28,7 +28,7 @@ namespace RetroBar.Controls
         public WeatherDisplay()
         {
             InitializeComponent();
-            ForecastFrame.SizeChanged += (s, e) => UpdateForecastSlideClip();
+            InitializeForecastSlide();
 
             // Wait until the control is fully loaded before starting the timer
             this.Loaded += WeatherDisplay_Loaded;
@@ -86,8 +86,7 @@ namespace RetroBar.Controls
                 _timer.Stop();
                 _forecastOpenTimer?.Stop();
                 _forecastCloseTimer?.Stop();
-                _forecastClosing = false;
-                ClearForecastAnimations();
+                    ClearForecastAnimations();
                 ForecastPopup.IsOpen = false;
                 Visibility = Visibility.Collapsed;
                 SetIsWeatherShown(false);
@@ -184,49 +183,33 @@ namespace RetroBar.Controls
             ShowForecast();
         }
 
-        // The popup slides out of the taskbar's edge, and back into it: the frame moves inside the popup's window (which stays where it
-        // is, and clips what is outside it), from a frame's size away on the side of the taskbar, so it comes from the edge and does
-        // not fade.
-        private static readonly Duration ForecastShowDuration = new(TimeSpan.FromMilliseconds(200));
-        private static readonly Duration ForecastHideDuration = new(TimeSpan.FromMilliseconds(150));
-        private readonly TranslateTransform _forecastSlide = new();
+        // The popup slides out of the taskbar's edge, and back into it (see PopupSlide).
+        private PopupSlide _slide;
 
-        private bool _forecastClosing;
-
-        // The transform property to slide, the way "away from the taskbar" points on it, and how far the frame is from its place
-        // when hidden.
-        private (DependencyProperty Property, double Start) ForecastSlideAxis()
+        private void InitializeForecastSlide()
         {
-            bool sideways = Settings.Instance.Edge is ManagedShell.AppBar.AppBarEdge.Left or ManagedShell.AppBar.AppBarEdge.Right;
-            double size = sideways ? ForecastSlideHost.ActualWidth : ForecastSlideHost.ActualHeight;
-            if (size <= 0)
-            {
-                size = 300;
-            }
-
-            return Settings.Instance.Edge switch
-            {
-                ManagedShell.AppBar.AppBarEdge.Left => (TranslateTransform.XProperty, -size),
-                ManagedShell.AppBar.AppBarEdge.Right => (TranslateTransform.XProperty, size),
-                ManagedShell.AppBar.AppBarEdge.Top => (TranslateTransform.YProperty, -size),
-                _ => (TranslateTransform.YProperty, size),
-            };
+            _slide = new PopupSlide(ForecastPopup, ForecastFrame, ForecastSlideHost,
+                () => Settings.Instance.Edge switch
+                {
+                    ManagedShell.AppBar.AppBarEdge.Left => SlideDirection.Left,
+                    ManagedShell.AppBar.AppBarEdge.Right => SlideDirection.Right,
+                    ManagedShell.AppBar.AppBarEdge.Top => SlideDirection.Up,
+                    _ => SlideDirection.Down,
+                },
+                ForecastWindowOverlap);
         }
 
-        // While it slides (on a taskbar at the bottom), the forecast shows only what is above the taskbar: its window reaches a little way down
-        // over the taskbar (the shadow's room under the frame), and what slid there showed on the taskbar. At rest there is no clip.
-        private bool _forecastSliding;
-
-        private void UpdateForecastSlideClip()
+        // On a taskbar at the bottom: how far the popup's window reaches below the taskbar's top (the shadow's room under the frame); the
+        // forecast shows only what is above the taskbar while it slides.
+        private double? ForecastWindowOverlap()
         {
-            if (!_forecastSliding || ForecastFrame.ActualHeight <= 0 || Window.GetWindow(this) is not Taskbar taskbar ||
+            if (Window.GetWindow(this) is not Taskbar taskbar ||
                 Settings.Instance.Edge is ManagedShell.AppBar.AppBarEdge.Left or ManagedShell.AppBar.AppBarEdge.Right or ManagedShell.AppBar.AppBarEdge.Top)
             {
-                ForecastFrame.ClearValue(UIElement.ClipProperty);
-                return;
+                return null;
             }
 
-            // The frame's bottom (see PlaceForecast) and, from it, how far the window reaches below the taskbar's top.
+            // The frame's bottom (see PlaceForecast).
             double? frameBottom = taskbar.MediaPlayerControl.GetSeekFrameBottom(taskbar);
             if (frameBottom == null)
             {
@@ -240,81 +223,16 @@ namespace RetroBar.Controls
                 }
             }
 
-            double overlap = Math.Max(0, frameBottom.Value + ShadowRoom);
-            ForecastFrame.Clip = new RectangleGeometry(new Rect(0, 0, ForecastFrame.ActualWidth, Math.Max(0, ForecastFrame.ActualHeight - overlap)));
+            return Math.Max(0, frameBottom.Value + ShadowRoom);
         }
 
-        // At rest the frame has no transform at all: any render transform switches off pixel snapping, which blurs its lines.
-        private void ClearForecastAnimations()
-        {
-            _forecastSlide.BeginAnimation(TranslateTransform.XProperty, null);
-            _forecastSlide.BeginAnimation(TranslateTransform.YProperty, null);
-            _forecastSlide.X = 0;
-            _forecastSlide.Y = 0;
-            ForecastSlideHost.RenderTransform = null;
-            _forecastSliding = false;
-            UpdateForecastSlideClip();
-        }
+        private bool _forecastClosing => _slide.Closing;
 
-        private void ShowForecast()
-        {
-            (DependencyProperty axis, double start) = ForecastSlideAxis();
+        private void ClearForecastAnimations() => _slide.Reset();
 
-            // Still on screen (sliding away): carry on from where it is.
-            bool resuming = ForecastPopup.IsOpen;
-            double fromOffset = resuming ? (double)_forecastSlide.GetValue(axis) : start;
+        private void ShowForecast() => _slide.Show();
 
-            _forecastClosing = false;
-            ClearForecastAnimations();
-            ForecastSlideHost.RenderTransform = _forecastSlide;
-            _forecastSlide.SetValue(axis, fromOffset);
-            _forecastSliding = true;
-            UpdateForecastSlideClip();
-            ForecastPopup.IsOpen = true;
-
-            var slideIn = new DoubleAnimation(fromOffset, 0, ForecastShowDuration)
-            {
-                EasingFunction = new CubicEase { EasingMode = EasingMode.EaseOut },
-            };
-            slideIn.Completed += (s, e) =>
-            {
-                if (!_forecastClosing)
-                {
-                    ClearForecastAnimations();
-                }
-            };
-            _forecastSlide.BeginAnimation(axis, slideIn);
-        }
-
-        private void HideForecast()
-        {
-            if (!ForecastPopup.IsOpen || _forecastClosing)
-            {
-                return;
-            }
-
-            _forecastClosing = true;
-            (DependencyProperty axis, double start) = ForecastSlideAxis();
-            ForecastSlideHost.RenderTransform = _forecastSlide;
-            _forecastSliding = true;
-            UpdateForecastSlideClip();
-
-            var slide = new DoubleAnimation((double)_forecastSlide.GetValue(axis), start, ForecastHideDuration)
-            {
-                EasingFunction = new CubicEase { EasingMode = EasingMode.EaseIn },
-            };
-            slide.Completed += (s, e) =>
-            {
-                // Only if it wasn't brought back (or closed some other way) while sliding away.
-                if (_forecastClosing)
-                {
-                    _forecastClosing = false;
-                    ClearForecastAnimations();
-                    ForecastPopup.IsOpen = false;
-                }
-            };
-            _forecastSlide.BeginAnimation(axis, slide);
-        }
+        private void HideForecast() => _slide.Hide();
 
         // The margin (DIPs) the forecast frame has all round for its shadow - see WeatherDisplay.xaml.
         private const double ShadowRoom = 6;
@@ -354,7 +272,6 @@ namespace RetroBar.Controls
         {
             _forecastOpenTimer?.Stop();
             _forecastCloseTimer?.Stop();
-            _forecastClosing = false;
             ClearForecastAnimations();
             ForecastPopup.IsOpen = false;
             Settings.Instance.PropertyChanged -= Settings_OnPropertyChanged;

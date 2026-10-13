@@ -229,16 +229,9 @@ namespace RetroBar.Controls
             e.Handled = true;
         }
 
-        // The popup slides up out of the taskbar's edge, and back down into it: its content moves inside its window (which stays where
-        // it is, and clips what is outside it), from a window's height below, so it comes from the bottom and does not fade. A click
-        // elsewhere closes it the same way (see the click-away timer below).
-        private static readonly Duration SeekShowDuration = new(TimeSpan.FromMilliseconds(200));
-
-        private static readonly Duration SeekHideDuration = new(TimeSpan.FromMilliseconds(150));
-
-        private readonly TranslateTransform _seekSlide = new();
-
-        private bool _seekPopupClosing;
+        // The popup slides up out of the taskbar's edge, and back down into it (see PopupSlide): a click elsewhere closes it the same way
+        // (see the click-away watching in MediaPlayer.PopupWindow.cs).
+        private PopupSlide _seekSlide;
 
         // Where the bottom of the popup's frame is, in DIPs from the top of the element given (the taskbar's window): the 10 is the frame's
         // margin for the shadow, which is part of the popup's window. The weather forecast puts its own frame's bottom here too.
@@ -262,94 +255,23 @@ namespace RetroBar.Controls
             return _lastSeekFrameBottom;
         }
 
-        // While it slides, the popup shows only what is above the taskbar: its window reaches a little way down over the taskbar (the shadow's
-        // room under the frame), and what slid there showed on the taskbar. At rest there is no clip.
-        private bool _seekSliding;
-
-        private void UpdateSeekSlideClip()
+        private void InitializeSeekSlide()
         {
-            if (!_seekSliding || SeekPopupRoot.ActualHeight <= 0 || Window.GetWindow(this) is not Taskbar taskbar)
+            _seekSlide = new PopupSlide(SeekPopup, SeekPopupRoot, SeekSlideHost, () => SlideDirection.Down, () =>
             {
-                SeekPopupRoot.ClearValue(UIElement.ClipProperty);
-                return;
-            }
-
-            double overlap = Math.Max(0, (GetSeekFrameBottom(taskbar) ?? 0) + SeekFrameShadowRoom);
-            SeekPopupRoot.Clip = new RectangleGeometry(new Rect(0, 0, SeekPopupRoot.ActualWidth, Math.Max(0, SeekPopupRoot.ActualHeight - overlap)));
+                // How far the popup's window reaches below the taskbar's top (the shadow's room under the frame).
+                return Window.GetWindow(this) is Taskbar taskbar
+                    ? Math.Max(0, (GetSeekFrameBottom(taskbar) ?? 0) + SeekFrameShadowRoom)
+                    : null;
+            });
         }
 
-        private double SeekSlideDistance() => SeekSlideHost.ActualHeight > 0 ? SeekSlideHost.ActualHeight : 400;
-
-        // At rest the popup has no transform at all: any render transform switches off pixel snapping, which blurs the frame's lines.
-        private void ClearSeekPopupAnimations()
-        {
-            _seekSlide.BeginAnimation(TranslateTransform.YProperty, null);
-            _seekSlide.Y = 0;
-            SeekSlideHost.RenderTransform = null;
-            _seekSliding = false;
-            UpdateSeekSlideClip();
-        }
-
-        private void OpenSeekPopupAnimated()
-        {
-            _seekPopupClosing = false;
-            ClearSeekPopupAnimations();
-            SeekSlideHost.RenderTransform = _seekSlide;
-
-            double distance = SeekSlideDistance();
-            _seekSlide.Y = distance;
-            _seekSliding = true;
-            UpdateSeekSlideClip();
-            SeekPopup.IsOpen = true;
-
-            var slide = new DoubleAnimation(distance, 0, SeekShowDuration)
-            {
-                EasingFunction = new CubicEase { EasingMode = EasingMode.EaseOut },
-            };
-            slide.Completed += (s, e) =>
-            {
-                if (!_seekPopupClosing)
-                {
-                    ClearSeekPopupAnimations();
-                }
-            };
-            _seekSlide.BeginAnimation(TranslateTransform.YProperty, slide);
-        }
+        private void OpenSeekPopupAnimated() => _seekSlide.Show();
 
         // Gone at once, with no slide.
-        private void CloseSeekPopupNow()
-        {
-            _seekPopupClosing = false;
-            SeekPopup.IsOpen = false;
-            ClearSeekPopupAnimations();
-        }
+        private void CloseSeekPopupNow() => _seekSlide.CloseNow();
 
-        private void CloseSeekPopupAnimated()
-        {
-            if (!SeekPopup.IsOpen || _seekPopupClosing)
-            {
-                return;
-            }
-
-            _seekPopupClosing = true;
-            SeekSlideHost.RenderTransform = _seekSlide;
-            _seekSliding = true;
-            UpdateSeekSlideClip();
-            var slide = new DoubleAnimation(_seekSlide.Y, SeekSlideDistance(), SeekHideDuration)
-            {
-                EasingFunction = new CubicEase { EasingMode = EasingMode.EaseIn },
-            };
-            slide.Completed += (s, e) =>
-            {
-                if (_seekPopupClosing)
-                {
-                    _seekPopupClosing = false;
-                    SeekPopup.IsOpen = false;
-                    ClearSeekPopupAnimations();
-                }
-            };
-            _seekSlide.BeginAnimation(TranslateTransform.YProperty, slide);
-        }
+        private void CloseSeekPopupAnimated() => _seekSlide.Hide();
 
         private void SeekPopup_OnOpened(object sender, EventArgs e)
         {

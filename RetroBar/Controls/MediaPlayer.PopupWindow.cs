@@ -331,7 +331,7 @@ namespace RetroBar.Controls
             }
 
             bool escape = (GetAsyncKeyState(0x1B) & 0x8000) != 0;
-            if (escape && !_seekEscapeWasDown && !_seekPopupClosing && PresentationSource.FromVisual(SeekPopupRoot) is HwndSource escapeSource &&
+            if (escape && !_seekEscapeWasDown && !_seekSlide.Closing && PresentationSource.FromVisual(SeekPopupRoot) is HwndSource escapeSource &&
                 GetWindowRect(escapeSource.Handle, out RECT escapeWindow) && GetCursorPos(out POINT escapeCursor) &&
                 ((escapeCursor.X >= escapeWindow.Left && escapeCursor.X < escapeWindow.Right && escapeCursor.Y >= escapeWindow.Top && escapeCursor.Y < escapeWindow.Bottom) ||
                  GetForegroundWindow() == escapeSource.Handle))
@@ -353,7 +353,7 @@ namespace RetroBar.Controls
             bool pressed = down && !_seekClickAwayWasDown;
             _seekClickAwayWasDown = down;
 
-            if (!pressed || _seekPopupClosing || _seekMenuOpen || _seekPopupMovedTo != null || _seekPopupPinned ||
+            if (!pressed || _seekSlide.Closing || _seekMenuOpen || _seekPopupMovedTo != null || _seekPopupPinned ||
                 PresentationSource.FromVisual(SeekPopupRoot) is not HwndSource source || !GetWindowRect(source.Handle, out RECT window) ||
                 !GetCursorPos(out POINT cursor))
             {
