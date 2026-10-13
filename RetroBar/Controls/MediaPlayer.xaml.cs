@@ -923,50 +923,21 @@ namespace RetroBar.Controls
         private const int SeekSpectrumBarGap = 1;
         private readonly float[] _seekSpectrumLevels = new float[AudioSpectrumCapture.SpectrumBands];
 
-        // A cap a pixel high stays where each bar peaked and falls slowly; with nothing playing for a moment the whole thing fades out.
+        // A cap a pixel high stays where each bar peaked and falls slowly. With nothing playing the bars sink to a dash each, and the dashes
+        // go one after the other from the left (see SeekSpectrumDashLife), which is all that is left of the spectrum when it is still.
         private readonly float[] _seekSpectrumPeaks = new float[AudioSpectrumCapture.SpectrumBands];
         private DateTime? _seekSpectrumQuietSince;
-        private bool _seekSpectrumShown = true;
 
-        private readonly TranslateTransform _seekSpectrumSlide = new();
-
-        // Out of sight it is below the row (which clips it); no transform at all while it is showing, which keeps its pixels snapped.
-        private void SetSeekSpectrumShown(bool shown)
-        {
-            if (_seekSpectrumShown == shown)
-            {
-                return;
-            }
-
-            _seekSpectrumShown = shown;
-            SeekSpectrumHost.RenderTransform = _seekSpectrumSlide;
-
-            double hidden = SeekSpectrumHost.ActualHeight + 4;
-            var slide = new DoubleAnimation(shown ? 0 : hidden, TimeSpan.FromMilliseconds(shown ? 220 : 260))
-            {
-                EasingFunction = new CubicEase { EasingMode = shown ? EasingMode.EaseOut : EasingMode.EaseIn },
-            };
-            if (shown)
-            {
-                slide.Completed += (s, e) =>
-                {
-                    if (_seekSpectrumShown)
-                    {
-                        _seekSpectrumSlide.BeginAnimation(TranslateTransform.YProperty, null);
-                        _seekSpectrumSlide.Y = 0;
-                        SeekSpectrumHost.RenderTransform = null;
-                    }
-                };
-            }
-
-            _seekSpectrumSlide.BeginAnimation(TranslateTransform.YProperty, slide);
-        }
+        private const double SeekSpectrumDashLife = 500;
+        private const double SeekSpectrumDashStagger = 60;
 
         private void VisualizerCapture_OnSpectrumUpdated(float[] bands)
         {
             // Fires on the capture thread.
             Dispatcher.BeginInvoke(new Action(() => UpdateSeekSpectrum(bands)), DispatcherPriority.Background);
         }
+
+        private DateTime _lastSeekSpectrumUpdate = DateTime.MinValue;
 
         private void UpdateSeekSpectrum(float[] bands)
         {
@@ -975,6 +946,8 @@ namespace RetroBar.Controls
                 return;
             }
 
+            _lastSeekSpectrumUpdate = DateTime.UtcNow;
+
             bool playing = _sessionManager?.PlaybackState == MediaPlaybackState.Playing;
             bool sound = false;
             for (int i = 0; i < _seekSpectrumLevels.Length; i++)
@@ -982,21 +955,18 @@ namespace RetroBar.Controls
                 float level = playing && bands != null ? bands[i] : 0;
                 sound |= level > 0.05f;
                 _seekSpectrumLevels[i] = Math.Max(level, _seekSpectrumLevels[i] - 0.08f);
-                _seekSpectrumPeaks[i] = Math.Max(_seekSpectrumLevels[i], _seekSpectrumPeaks[i] - 0.02f);
+                _seekSpectrumPeaks[i] = Math.Max(_seekSpectrumLevels[i], _seekSpectrumPeaks[i] - (sound ? 0.02f : 0.05f));
             }
 
+            double quietMs = 0;
             if (sound)
             {
                 _seekSpectrumQuietSince = null;
-                SetSeekSpectrumShown(true);
             }
             else
             {
                 _seekSpectrumQuietSince ??= DateTime.UtcNow;
-                if (DateTime.UtcNow - _seekSpectrumQuietSince > TimeSpan.FromMilliseconds(700))
-                {
-                    SetSeekSpectrumShown(false);
-                }
+                quietMs = (DateTime.UtcNow - _seekSpectrumQuietSince.Value).TotalMilliseconds;
             }
 
             DpiScale dpi = GetSeekDpi();
@@ -1015,6 +985,12 @@ namespace RetroBar.Controls
 
                 for (int i = 0; i < count; i++)
                 {
+                    // Once it has been quiet for a while a bar's dash goes too, each a little after the one on its left.
+                    if (quietMs > SeekSpectrumDashLife + i * SeekSpectrumDashStagger)
+                    {
+                        continue;
+                    }
+
                     int barHeight = Math.Clamp((int)Math.Round(_seekSpectrumLevels[i] * height), 1, height);
                     int x = i * (SeekSpectrumBarWidth + SeekSpectrumBarGap);
                     context.BeginFigure(new Point(x, height - barHeight), true, true);
@@ -2136,6 +2112,12 @@ namespace RetroBar.Controls
 
             EnsureSeekPopupIsOrdinary();
 
+            // A loopback capture delivers nothing while nothing is heard: the bars still have to sink, and the dashes go.
+            if (DateTime.UtcNow - _lastSeekSpectrumUpdate > TimeSpan.FromMilliseconds(80))
+            {
+                UpdateSeekSpectrum(null);
+            }
+
             bool escape = (GetAsyncKeyState(0x1B) & 0x8000) != 0;
             if (escape && !_seekEscapeWasDown && !_seekPopupClosing && PresentationSource.FromVisual(SeekPopupRoot) is HwndSource escapeSource &&
                 GetWindowRect(escapeSource.Handle, out RECT escapeWindow) && GetCursorPos(out POINT escapeCursor) &&
@@ -2308,10 +2290,6 @@ namespace RetroBar.Controls
             Array.Clear(_seekSpectrumLevels);
             Array.Clear(_seekSpectrumPeaks);
             _seekSpectrumQuietSince = null;
-            _seekSpectrumShown = true;
-            _seekSpectrumSlide.BeginAnimation(TranslateTransform.YProperty, null);
-            _seekSpectrumSlide.Y = 0;
-            SeekSpectrumHost.RenderTransform = null;
             if (_seekPopupSource != null)
             {
                 _seekPopupSource.DpiChanged -= SeekPopupSource_OnDpiChanged;
