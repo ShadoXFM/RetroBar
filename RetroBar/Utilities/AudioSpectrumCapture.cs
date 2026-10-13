@@ -45,6 +45,12 @@ namespace RetroBar.Utilities
         // few dB of full scale on a digital bus, which a gain can't spread over the bar - decibels do.
         private const double FloorDb = -48;
 
+        // The VU meter does not use all of that: music sits within a few dB of one level (about -27 dB on a bus), which on a bar over 48 dB
+        // stays in the same stretch. Over the 24 dB from VuFloorDb to VuCeilingDb it moves twice as far for the same change in loudness, and
+        // that level is a little further up the bar. Anything louder than the ceiling fills it.
+        private const double VuFloorDb = -42;
+        private const double VuCeilingDb = -18;
+
         // Throttles how often LevelUpdated fires, independent of the capture callback's own
         // (format/buffer-size dependent) cadence - the meter only needs to look smooth, not
         // update as fast as the raw audio buffers arrive.
@@ -211,6 +217,12 @@ namespace RetroBar.Utilities
             return isFloat32 ? BitConverter.ToSingle(buffer, offset) : BitConverter.ToInt16(buffer, offset) / 32768f;
         }
 
+        private static float ToVuLevel(double rms)
+        {
+            double db = 20 * Math.Log10(Math.Max(rms, 1e-6));
+            return (float)Math.Clamp((db - VuFloorDb) / (VuCeilingDb - VuFloorDb), 0, 1);
+        }
+
         private static float ToLevel(double rms)
         {
             double db = 20 * Math.Log10(Math.Max(rms, 1e-6));
@@ -257,8 +269,8 @@ namespace RetroBar.Utilities
             _levelSumSquaresLeft = 0;
             _levelSumSquaresRight = 0;
             _levelSampleCount = 0;
-            float levelLeft = ToLevel(rmsLeft);
-            float levelRight = ToLevel(rmsRight);
+            float levelLeft = ToVuLevel(rmsLeft);
+            float levelRight = ToVuLevel(rmsRight);
             LevelUpdated?.Invoke(levelLeft, levelRight);
 
             if (SpectrumUpdated != null && _fftFilled == FftSize)
