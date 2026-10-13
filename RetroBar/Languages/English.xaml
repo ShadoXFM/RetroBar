@@ -9,6 +9,14 @@
     <s:String x:Key="notification_area">Notification area</s:String>
     <s:String x:Key="general_heading">General</s:String>
     <s:String x:Key="media_player_heading">Media Player</s:String>
+    <s:String x:Key="show_media_popup_spectrum">Show a _spectrum in the media popup</s:String>
+    <s:String x:Key="media_popup_spectrum_cover_color">Color the spectrum from the Spotify album art</s:String>
+    <s:String x:Key="fade_media_text">_Fade the ends of media text that slides</s:String>
+    <s:String x:Key="monitor_adjustments_heading">Per-monitor adjustments</s:String>
+    <s:String x:Key="open_monitor_adjustments">_Open the file</s:String>
+    <s:String x:Key="reset_monitor_adjustments">_Reset (keeps a copy)</s:String>
+    <s:String x:Key="reset_monitor_adjustments_question">Remove every per-monitor adjustment? What is in the file now is kept beside it.</s:String>
+    <s:String x:Key="monitor_adjustments_problems">{0} problem(s) in monitor-adjustments.json, the first: {1}</s:String>
     <s:String x:Key="show_media_player">Show media player _controls</s:String>
     <s:String x:Key="show_media_player_album_art">Show album _art</s:String>
     <s:String x:Key="weather_heading">Weather</s:String>

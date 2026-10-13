@@ -9,6 +9,14 @@
     <s:String x:Key="notification_area">Zone de notifications</s:String>
     <s:String x:Key="general_heading">Généralités</s:String>
     <s:String x:Key="media_player_heading">Media Player</s:String>
+    <s:String x:Key="show_media_popup_spectrum">Afficher un _spectre dans la fenêtre du lecteur</s:String>
+    <s:String x:Key="media_popup_spectrum_cover_color">Colorer le spectre avec la pochette Spotify</s:String>
+    <s:String x:Key="fade_media_text">_Estomper les bords du texte multimédia qui défile</s:String>
+    <s:String x:Key="monitor_adjustments_heading">Réglages par écran</s:String>
+    <s:String x:Key="open_monitor_adjustments">_Ouvrir le fichier</s:String>
+    <s:String x:Key="reset_monitor_adjustments">_Réinitialiser (garde une copie)</s:String>
+    <s:String x:Key="reset_monitor_adjustments_question">Supprimer tous les réglages par écran ? Le contenu actuel du fichier est conservé à côté.</s:String>
+    <s:String x:Key="monitor_adjustments_problems">{0} problème(s) dans monitor-adjustments.json, le premier : {1}</s:String>
     <s:String x:Key="show_media_player">Montrer les contrôles du lecteur media</s:String>
     <s:String x:Key="show_media_player_album_art">Afficher la p_ochette de l'album</s:String>
     <s:String x:Key="weather_heading">Météo</s:String>

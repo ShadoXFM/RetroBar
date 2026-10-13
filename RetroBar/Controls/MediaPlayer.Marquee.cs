@@ -154,7 +154,7 @@ namespace RetroBar.Controls
         private void StartTrackTextFade()
         {
             double width = TrackTextClip.ActualWidth;
-            if (width <= TrackTextFadeWidth * 2)
+            if (!Settings.Instance.FadeMediaText || width <= TrackTextFadeWidth * 2)
             {
                 StopTrackTextFade();
                 return;
@@ -364,7 +364,7 @@ namespace RetroBar.Controls
 
             Rectangle fadeRight = text == SeekTitleText ? SeekTitleFade : SeekArtistFade;
             Rectangle fadeLeft = text == SeekTitleText ? SeekTitleFadeLeft : SeekArtistFadeLeft;
-            Visibility fadeVisibility = overflow > 0 ? Visibility.Visible : Visibility.Collapsed;
+            Visibility fadeVisibility = overflow > 0 && Settings.Instance.FadeMediaText ? Visibility.Visible : Visibility.Collapsed;
             fadeRight.Visibility = fadeVisibility;
             fadeLeft.Visibility = fadeVisibility;
             if (overflow > 0 && TryFindResource("ButtonFace") is SolidColorBrush face)

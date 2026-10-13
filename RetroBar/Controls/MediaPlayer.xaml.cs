@@ -271,6 +271,12 @@ namespace RetroBar.Controls
                 return;
             }
 
+            if (e.PropertyName is nameof(Settings.ShowMediaPopupSpectrum) or nameof(Settings.MediaPopupSpectrumCoverColor) or nameof(Settings.FadeMediaText))
+            {
+                Dispatcher.BeginInvoke(new Action(ApplyMediaPopupSettings));
+                return;
+            }
+
             if (e.PropertyName == nameof(Settings.VuMeterCaptureDevice))
             {
                 // Settings can change on a non-UI thread; only restart capture if it was running

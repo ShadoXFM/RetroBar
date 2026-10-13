@@ -50,7 +50,7 @@ namespace RetroBar.Controls
 
         private void UpdateSeekAccent(ImageSource art)
         {
-            if (!IsSpotify(_sessionManager?.SourceAppUserModelId) || art == null)
+            if (!Settings.Instance.MediaPopupSpectrumCoverColor || !IsSpotify(_sessionManager?.SourceAppUserModelId) || art == null)
             {
                 _seekAccentSource = null;
                 _seekAccentColor = null;
@@ -167,9 +167,25 @@ namespace RetroBar.Controls
 
         private DateTime _lastSeekSpectrumUpdate = DateTime.MinValue;
 
+        // The popup's settings (Properties window): the spectrum, its colour from the cover, and the fades of sliding text.
+        private void ApplyMediaPopupSettings()
+        {
+            SeekSpectrumHost.Visibility = Settings.Instance.ShowMediaPopupSpectrum ? Visibility.Visible : Visibility.Collapsed;
+
+            _seekAccentSource = null;
+            UpdateSeekAccent(SeekAlbumArtImage.Source);
+
+            if (_marqueeRunning)
+            {
+                StartMarquee(_marqueeOverflow);
+            }
+
+            UpdateSeekMarquees(true);
+        }
+
         private void UpdateSeekSpectrum(float[] bands)
         {
-            if (!SeekPopup.IsOpen)
+            if (!SeekPopup.IsOpen || !Settings.Instance.ShowMediaPopupSpectrum)
             {
                 return;
             }

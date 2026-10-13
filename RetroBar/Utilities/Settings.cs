@@ -119,6 +119,27 @@ namespace RetroBar.Utilities
             set => Set(ref _showMediaPlayerAlbumArt, value);
         }
 
+        private bool _showMediaPopupSpectrum = true;
+        public bool ShowMediaPopupSpectrum
+        {
+            get => _showMediaPopupSpectrum;
+            set => Set(ref _showMediaPopupSpectrum, value);
+        }
+
+        private bool _mediaPopupSpectrumCoverColor = true;
+        public bool MediaPopupSpectrumCoverColor
+        {
+            get => _mediaPopupSpectrumCoverColor;
+            set => Set(ref _mediaPopupSpectrumCoverColor, value);
+        }
+
+        private bool _fadeMediaText = true;
+        public bool FadeMediaText
+        {
+            get => _fadeMediaText;
+            set => Set(ref _fadeMediaText, value);
+        }
+
         private bool _showWeather = true;
         public bool ShowWeather
         {

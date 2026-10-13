@@ -276,6 +276,7 @@ namespace RetroBar.Controls
         private void SeekPopup_OnOpened(object sender, EventArgs e)
         {
             StartSeekWatching();
+            ApplyMediaPopupSettings();
 
             // One popup at a time, whichever monitor's player it belongs to.
             if (_openSeekPlayer != null && _openSeekPlayer != this)

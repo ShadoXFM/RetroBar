@@ -19,10 +19,16 @@ namespace RetroBar.Utilities
     /// </summary>
     public class MonitorOffsetValue
     {
+        /// <summary>Horizontal nudge in DIPs (a render transform: the layout is not changed, so nothing else moves).</summary>
         public double X { get; set; }
+
+        /// <summary>Vertical nudge in DIPs (a render transform: the layout is not changed, so nothing else moves).</summary>
         public double Y { get; set; }
 
+        /// <summary>A width in DIPs, as if set in the XAML (layout: what is next to the element moves).</summary>
         public double? Width { get; set; }
+
+        /// <summary>A height in DIPs, as if set in the XAML (layout: what is next to the element moves).</summary>
         public double? Height { get; set; }
 
         /// <summary>For the "MediaTrackText" tag only: how fast a media text too long for its room slides, in DIPs a second (30 if
