@@ -48,7 +48,11 @@
              an offscreen bitmap and made the text and icons blurry); the frame has 6 of margin plus its style's
              4 all round, and 6 of that is the room the shadow spreads into (see PlaceForecast). -->
         <Grid x:Name="ForecastFrame"
+              ClipToBounds="True"
               RenderOptions.ClearTypeHint="Enabled">
+            <!-- What slides (see ShowForecast): the frame clips to its own bounds so that the popup's window is the size of the popup at
+                 rest, not of it and the distance it has slid. -->
+            <Grid x:Name="ForecastSlideHost">
             <controls:PopupShadow />
             <ContentControl Margin="6"
                             Style="{DynamicResource TaskButtonThumbnail}"
@@ -146,6 +150,7 @@
                     </ItemsControl>
                 </StackPanel>
             </ContentControl>
+            </Grid>
         </Grid>
     </Popup>
     </Grid>

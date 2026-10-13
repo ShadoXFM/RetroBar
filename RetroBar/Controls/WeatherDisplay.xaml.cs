@@ -197,7 +197,7 @@ namespace RetroBar.Controls
         private (DependencyProperty Property, double Start) ForecastSlideAxis()
         {
             bool sideways = Settings.Instance.Edge is ManagedShell.AppBar.AppBarEdge.Left or ManagedShell.AppBar.AppBarEdge.Right;
-            double size = sideways ? ForecastFrame.ActualWidth : ForecastFrame.ActualHeight;
+            double size = sideways ? ForecastSlideHost.ActualWidth : ForecastSlideHost.ActualHeight;
             if (size <= 0)
             {
                 size = 300;
@@ -212,18 +212,19 @@ namespace RetroBar.Controls
             };
         }
 
+        // At rest the frame has no transform at all: any render transform switches off pixel snapping, which blurs its lines.
         private void ClearForecastAnimations()
         {
             _forecastSlide.BeginAnimation(TranslateTransform.XProperty, null);
             _forecastSlide.BeginAnimation(TranslateTransform.YProperty, null);
             _forecastSlide.X = 0;
             _forecastSlide.Y = 0;
+            ForecastSlideHost.RenderTransform = null;
         }
 
         private void ShowForecast()
         {
             (DependencyProperty axis, double start) = ForecastSlideAxis();
-            ForecastFrame.RenderTransform = _forecastSlide;
 
             // Still on screen (sliding away): carry on from where it is.
             bool resuming = ForecastPopup.IsOpen;
@@ -231,13 +232,22 @@ namespace RetroBar.Controls
 
             _forecastClosing = false;
             ClearForecastAnimations();
+            ForecastSlideHost.RenderTransform = _forecastSlide;
             _forecastSlide.SetValue(axis, fromOffset);
             ForecastPopup.IsOpen = true;
 
-            _forecastSlide.BeginAnimation(axis, new DoubleAnimation(fromOffset, 0, ForecastShowDuration)
+            var slideIn = new DoubleAnimation(fromOffset, 0, ForecastShowDuration)
             {
                 EasingFunction = new CubicEase { EasingMode = EasingMode.EaseOut },
-            });
+            };
+            slideIn.Completed += (s, e) =>
+            {
+                if (!_forecastClosing)
+                {
+                    ClearForecastAnimations();
+                }
+            };
+            _forecastSlide.BeginAnimation(axis, slideIn);
         }
 
         private void HideForecast()
@@ -249,6 +259,7 @@ namespace RetroBar.Controls
 
             _forecastClosing = true;
             (DependencyProperty axis, double start) = ForecastSlideAxis();
+            ForecastSlideHost.RenderTransform = _forecastSlide;
 
             var slide = new DoubleAnimation((double)_forecastSlide.GetValue(axis), start, ForecastHideDuration)
             {

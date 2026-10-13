@@ -193,9 +193,13 @@
                   RenderOptions.ClearTypeHint="Enabled"
                   UseLayoutRounding="True"
                   SnapsToDevicePixels="True"
+                  ClipToBounds="True"
                   PreviewMouseDown="SeekPopupRoot_OnPreviewMouseDown"
                   PreviewMouseLeftButtonDown="SeekPopupRoot_OnPreviewMouseLeftButtonDown"
                   MouseRightButtonUp="SeekPopupRoot_OnMouseRightButtonUp">
+                <!-- What slides (see OpenSeekPopupAnimated): the root clips to its own bounds so that the popup's window is the size of
+                     the popup at rest, not of it and the distance it has slid. -->
+                <Grid x:Name="SeekSlideHost">
                 <controls:PopupShadow Strength="0.5" />
                 <!-- The outermost line of the bevel (DarkShadow, right and bottom) is the frame's own outer border, not a border inside
                      another one that has a padding: it was not drawn at all that way at 125% (nothing red where it should be, with it
@@ -476,6 +480,7 @@
                         </Border>
                     </Border>
                 </Border>
+                </Grid>
             </Grid>
         </Popup>
     </utilities:UnclippedStackPanel>

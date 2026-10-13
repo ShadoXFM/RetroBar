@@ -1711,28 +1711,38 @@ namespace RetroBar.Controls
         private readonly TranslateTransform _seekSlide = new();
         private bool _seekPopupClosing;
 
-        private double SeekSlideDistance() => SeekPopupRoot.ActualHeight > 0 ? SeekPopupRoot.ActualHeight : 400;
+        private double SeekSlideDistance() => SeekSlideHost.ActualHeight > 0 ? SeekSlideHost.ActualHeight : 400;
 
+        // At rest the popup has no transform at all: any render transform switches off pixel snapping, which blurs the frame's lines.
         private void ClearSeekPopupAnimations()
         {
             _seekSlide.BeginAnimation(TranslateTransform.YProperty, null);
             _seekSlide.Y = 0;
+            SeekSlideHost.RenderTransform = null;
         }
 
         private void OpenSeekPopupAnimated()
         {
             _seekPopupClosing = false;
             ClearSeekPopupAnimations();
-            SeekPopupRoot.RenderTransform = _seekSlide;
+            SeekSlideHost.RenderTransform = _seekSlide;
 
             double distance = SeekSlideDistance();
             _seekSlide.Y = distance;
             SeekPopup.IsOpen = true;
 
-            _seekSlide.BeginAnimation(TranslateTransform.YProperty, new DoubleAnimation(distance, 0, SeekShowDuration)
+            var slide = new DoubleAnimation(distance, 0, SeekShowDuration)
             {
                 EasingFunction = new CubicEase { EasingMode = EasingMode.EaseOut },
-            });
+            };
+            slide.Completed += (s, e) =>
+            {
+                if (!_seekPopupClosing)
+                {
+                    ClearSeekPopupAnimations();
+                }
+            };
+            _seekSlide.BeginAnimation(TranslateTransform.YProperty, slide);
         }
 
         private void CloseSeekPopupAnimated()
@@ -1743,6 +1753,7 @@ namespace RetroBar.Controls
             }
 
             _seekPopupClosing = true;
+            SeekSlideHost.RenderTransform = _seekSlide;
             var slide = new DoubleAnimation(_seekSlide.Y, SeekSlideDistance(), SeekHideDuration)
             {
                 EasingFunction = new CubicEase { EasingMode = EasingMode.EaseIn },
