@@ -188,7 +188,7 @@
                  popup's offsets above are 10 further left / 10 lower to make up for it). -->
             <!-- The shadow is its own element behind the frame, not an Effect on it: an Effect redraws everything
                  inside it into an offscreen bitmap, which blurred the text and buttons. -->
-            <!-- Dragging the album art moves the popup (see SeekPopupRoot_OnPreviewMouseLeftButtonDown). -->
+            <!-- Dragging anywhere on it that isn't a control moves the popup (see SeekPopupRoot_OnPreviewMouseLeftButtonDown). -->
             <Grid x:Name="SeekPopupRoot"
                   RenderOptions.ClearTypeHint="Enabled"
                   UseLayoutRounding="True"
