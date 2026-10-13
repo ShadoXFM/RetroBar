@@ -427,8 +427,7 @@ namespace RetroBar.Controls
             return Geometry.Empty;
         }
 
-        // The most common colour of the cover art, for a gradient on the spectrum's bars: for Spotify's art only (its covers are what this
-        // was made for), none for any other player.
+        // The most common colour of the cover art, for a gradient on the spectrum's bars: for Spotify's art only, none for any other player.
         private Color? _seekAccentColor;
         private ImageSource _seekAccentSource;
 
@@ -450,8 +449,9 @@ namespace RetroBar.Controls
             ApplySeekSpectrumFill();
         }
 
-        // The bucket (4 bits a channel) of most pixels among the colourful ones - not the near-grey, black or white that a cover's
-        // background is - or of most pixels at all if there are none, averaged, and made light enough to read on the popup's dark face.
+        // The most common colour of the art: pixels counted in buckets of 5 bits a channel (taken as they are in the picture, not blended by
+        // scaling it down), the colour that of the bucket with most of them - the average of the pixels in it, which differ by a few levels
+        // at most. Near-black pixels are left out (it would not show on the popup's face), unless that is all there is.
         private static Color? ComputeDominantColor(ImageSource source)
         {
             if (source is not BitmapSource bitmap || bitmap.PixelWidth <= 0 || bitmap.PixelHeight <= 0)
@@ -461,37 +461,37 @@ namespace RetroBar.Controls
 
             try
             {
-                BitmapSource scaled = bitmap;
-                double factor = 48.0 / Math.Max(bitmap.PixelWidth, bitmap.PixelHeight);
-                if (factor < 1)
-                {
-                    scaled = new TransformedBitmap(bitmap, new ScaleTransform(factor, factor));
-                }
-
-                var converted = new FormatConvertedBitmap(scaled, PixelFormats.Bgra32, null, 0);
+                var converted = new FormatConvertedBitmap(bitmap, PixelFormats.Bgra32, null, 0);
                 int width = converted.PixelWidth;
                 int height = converted.PixelHeight;
                 int stride = width * 4;
                 var pixels = new byte[stride * height];
                 converted.CopyPixels(pixels, stride, 0);
 
-                var count = new int[4096];
-                var sumR = new long[4096];
-                var sumG = new long[4096];
-                var sumB = new long[4096];
-                for (int i = 0; i < pixels.Length; i += 4)
-                {
-                    if (pixels[i + 3] < 128)
-                    {
-                        continue;
-                    }
+                // Every n-th pixel of every n-th row: about 40,000 of them for any size.
+                int step = Math.Max(1, (int)Math.Sqrt(width * (double)height / 40000));
 
-                    byte b = pixels[i], g = pixels[i + 1], r = pixels[i + 2];
-                    int bucket = ((r >> 4) << 8) | ((g >> 4) << 4) | (b >> 4);
-                    count[bucket]++;
-                    sumR[bucket] += r;
-                    sumG[bucket] += g;
-                    sumB[bucket] += b;
+                var count = new int[32768];
+                var sumR = new long[32768];
+                var sumG = new long[32768];
+                var sumB = new long[32768];
+                for (int y = 0; y < height; y += step)
+                {
+                    for (int x = 0; x < width; x += step)
+                    {
+                        int i = y * stride + x * 4;
+                        if (pixels[i + 3] < 128)
+                        {
+                            continue;
+                        }
+
+                        byte b = pixels[i], g = pixels[i + 1], r = pixels[i + 2];
+                        int bucket = ((r >> 3) << 10) | ((g >> 3) << 5) | (b >> 3);
+                        count[bucket]++;
+                        sumR[bucket] += r;
+                        sumG[bucket] += g;
+                        sumB[bucket] += b;
+                    }
                 }
 
                 int best = -1;
@@ -508,10 +508,8 @@ namespace RetroBar.Controls
                         bestAny = i;
                     }
 
-                    double max = Math.Max(sumR[i], Math.Max(sumG[i], sumB[i])) / (double)count[i] / 255;
-                    double min = Math.Min(sumR[i], Math.Min(sumG[i], sumB[i])) / (double)count[i] / 255;
-                    double saturation = max <= 0 ? 0 : (max - min) / max;
-                    if (saturation >= 0.3 && max >= 0.25 && max <= 0.97 && (best < 0 || count[i] > count[best]))
+                    double brightest = Math.Max(sumR[i], Math.Max(sumG[i], sumB[i])) / (double)count[i];
+                    if (brightest >= 40 && (best < 0 || count[i] > count[best]))
                     {
                         best = i;
                     }
@@ -523,19 +521,7 @@ namespace RetroBar.Controls
                     return null;
                 }
 
-                double red = sumR[chosen] / (double)count[chosen];
-                double green = sumG[chosen] / (double)count[chosen];
-                double blue = sumB[chosen] / (double)count[chosen];
-                double top = Math.Max(red, Math.Max(green, blue));
-                if (top > 0 && top < 190)
-                {
-                    double lift = 190 / top;
-                    red = Math.Min(255, red * lift);
-                    green = Math.Min(255, green * lift);
-                    blue = Math.Min(255, blue * lift);
-                }
-
-                return Color.FromRgb((byte)red, (byte)green, (byte)blue);
+                return Color.FromRgb((byte)(sumR[chosen] / count[chosen]), (byte)(sumG[chosen] / count[chosen]), (byte)(sumB[chosen] / count[chosen]));
             }
             catch (Exception ex) when (ex is ArgumentException or InvalidOperationException or NotSupportedException or System.IO.IOException)
             {
