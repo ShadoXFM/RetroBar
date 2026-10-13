@@ -2159,6 +2159,14 @@ namespace RetroBar.Controls
             _seekSlide.BeginAnimation(TranslateTransform.YProperty, slide);
         }
 
+        // Gone at once, with no slide.
+        private void CloseSeekPopupNow()
+        {
+            _seekPopupClosing = false;
+            SeekPopup.IsOpen = false;
+            ClearSeekPopupAnimations();
+        }
+
         private void CloseSeekPopupAnimated()
         {
             if (!SeekPopup.IsOpen || _seekPopupClosing)
@@ -2253,7 +2261,15 @@ namespace RetroBar.Controls
                 ((escapeCursor.X >= escapeWindow.Left && escapeCursor.X < escapeWindow.Right && escapeCursor.Y >= escapeWindow.Top && escapeCursor.Y < escapeWindow.Bottom) ||
                  GetForegroundWindow() == escapeSource.Handle))
             {
-                CloseSeekPopupAnimated();
+                // A popup that is a window of its own (moved, or on top) just goes; the other one slides down.
+                if (_seekPopupMovedTo != null || _seekPopupPinned)
+                {
+                    CloseSeekPopupNow();
+                }
+                else
+                {
+                    CloseSeekPopupAnimated();
+                }
             }
 
             _seekEscapeWasDown = escape;
@@ -2347,13 +2363,7 @@ namespace RetroBar.Controls
             };
 
             var close = new MenuItem { Header = TryFindResource("close") as string ?? "_Close" };
-            close.Click += (s, args) =>
-            {
-                // From its own menu it just goes: no slide.
-                _seekPopupClosing = false;
-                SeekPopup.IsOpen = false;
-                ClearSeekPopupAnimations();
-            };
+            close.Click += (s, args) => CloseSeekPopupNow();
 
             var menu = new ContextMenu
             {
