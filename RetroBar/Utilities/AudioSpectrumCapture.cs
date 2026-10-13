@@ -51,6 +51,9 @@ namespace RetroBar.Utilities
         private const double VuFloorDb = -42;
         private const double VuCeilingDb = -18;
 
+        // The popup's spectrum is louder than the signal by this (2 is 6 dB: every bar an eighth of the bar further up).
+        private const double SpectrumGain = 2;
+
         // Throttles how often LevelUpdated fires, independent of the capture callback's own
         // (format/buffer-size dependent) cadence - the meter only needs to look smooth, not
         // update as fast as the raw audio buffers arrive.
@@ -313,7 +316,7 @@ namespace RetroBar.Utilities
 
                 // A full-scale sine through the window reads FftSize / 4 in its bin once the FFT is scaled by 1 / FftSize (NAudio's
                 // forward transform does that): scale back to 1 for a full-scale sine, so 0 dB is full scale as in the VU meter.
-                bands[band] = ToLevel(peak * 4 * volume);
+                bands[band] = ToLevel(peak * 4 * volume * SpectrumGain);
             }
 
             return bands;
