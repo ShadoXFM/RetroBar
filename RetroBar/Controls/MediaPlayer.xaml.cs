@@ -1763,132 +1763,6 @@ namespace RetroBar.Controls
         // pause glyph with the taskbar's own bars (2.4 DIP wide, 1.6 apart). All three buttons are as wide as the widest glyph
         // plus a pixel, and the glyphs are set in them so that the gap between one glyph and the next is the same pixel count
         // either side of the pause: the arrows keep to the outside of their boxes, one to each side, the pause is centered.
-        // ---- The volume of the default sound device, in the popup.
-        private NAudio.CoreAudioApi.MMDevice _seekVolumeDevice;
-        private NAudio.CoreAudioApi.AudioEndpointVolume _seekVolume;
-        private bool _seekVolumeUpdating;
-
-        private void ApplySeekVolumeGlyph(DpiScale dpi)
-        {
-            int boxHeight = (int)Math.Round(7 * dpi.DpiScaleY);
-            int height = boxHeight % 2 == 1 ? boxHeight : boxHeight + 1;
-            string[] rows = PixelShape.Speaker(height, _seekVolume?.Mute == true);
-            SeekVolumeGlyph.Stretch = Stretch.None;
-            SeekVolumeGlyph.Width = (rows[0].Length + 1) / dpi.DpiScaleX;
-            SeekVolumeGlyph.Height = boxHeight / dpi.DpiScaleY;
-            SeekVolumeGlyph.Data = PixelShape.FromRows(rows, 0, Math.Max(0, (boxHeight - rows.Length) / 2), dpi);
-        }
-
-        private void InitializeSeekVolume()
-        {
-            try
-            {
-                _seekVolumeDevice = new NAudio.CoreAudioApi.MMDeviceEnumerator().GetDefaultAudioEndpoint(NAudio.CoreAudioApi.DataFlow.Render, NAudio.CoreAudioApi.Role.Multimedia);
-                _seekVolume = _seekVolumeDevice.AudioEndpointVolume;
-                _seekVolume.OnVolumeNotification += SeekVolume_OnVolumeNotification;
-                RefreshSeekVolume();
-                SeekVolumeRow.Visibility = Visibility.Visible;
-            }
-            catch (Exception ex)
-            {
-                ShellLogger.Debug($"MediaPlayer: no volume to show: {ex.Message}");
-                DisposeSeekVolume();
-                SeekVolumeRow.Visibility = Visibility.Collapsed;
-            }
-        }
-
-        private void DisposeSeekVolume()
-        {
-            try
-            {
-                if (_seekVolume != null)
-                {
-                    _seekVolume.OnVolumeNotification -= SeekVolume_OnVolumeNotification;
-                }
-
-                _seekVolumeDevice?.Dispose();
-            }
-            catch (Exception)
-            {
-            }
-
-            _seekVolume = null;
-            _seekVolumeDevice = null;
-        }
-
-        private void RefreshSeekVolume()
-        {
-            if (_seekVolume == null)
-            {
-                return;
-            }
-
-            _seekVolumeUpdating = true;
-            try
-            {
-                double percent = Math.Round(_seekVolume.MasterVolumeLevelScalar * 100);
-                if (!SeekVolumeSlider.IsMouseCaptureWithin)
-                {
-                    SeekVolumeSlider.Value = percent;
-                }
-
-                SeekVolumeText.Text = _seekVolume.Mute ? "0%" : $"{percent:0}%";
-                ApplySeekVolumeGlyph(GetSeekDpi());
-            }
-            finally
-            {
-                _seekVolumeUpdating = false;
-            }
-        }
-
-        // From the sound system, on its own thread: the volume was changed elsewhere (the keys, the tray's mixer).
-        private void SeekVolume_OnVolumeNotification(NAudio.CoreAudioApi.AudioVolumeNotificationData data)
-        {
-            Dispatcher.BeginInvoke(new Action(RefreshSeekVolume));
-        }
-
-        private void SeekVolumeSlider_OnValueChanged(object sender, RoutedPropertyChangedEventArgs<double> e)
-        {
-            if (_seekVolumeUpdating || _seekVolume == null)
-            {
-                return;
-            }
-
-            try
-            {
-                _seekVolume.MasterVolumeLevelScalar = (float)(e.NewValue / 100);
-                if (_seekVolume.Mute && e.NewValue > 0)
-                {
-                    _seekVolume.Mute = false;
-                }
-            }
-            catch (Exception ex)
-            {
-                ShellLogger.Debug($"MediaPlayer: setting the volume threw: {ex.Message}");
-            }
-
-            RefreshSeekVolume();
-        }
-
-        private void SeekMuteButton_OnClick(object sender, RoutedEventArgs e)
-        {
-            if (_seekVolume == null)
-            {
-                return;
-            }
-
-            try
-            {
-                _seekVolume.Mute = !_seekVolume.Mute;
-            }
-            catch (Exception ex)
-            {
-                ShellLogger.Debug($"MediaPlayer: muting threw: {ex.Message}");
-            }
-
-            RefreshSeekVolume();
-        }
-
         private DpiScale GetSeekDpi() => VisualTreeHelper.GetDpi(SeekPopupRoot.IsLoaded ? SeekPopupRoot : this);
 
         private void ApplySeekGlyphs()
@@ -1922,7 +1796,6 @@ namespace RetroBar.Controls
 
             // At 125% each is another pixel out, away from its neighbor.
             int skipOut = dpi.DpiScaleX < 1.125 ? 0 : 1;
-            ApplySeekVolumeGlyph(dpi);
             Apply(SeekPreviousGlyph, previous, Math.Max(0, boxWidth - previous[0].Length - 1 - skipOut));
             Apply(SeekNextGlyph, next, Math.Min(1 + skipOut, boxWidth - next[0].Length));
             Apply(SeekBackGlyph, rewind, 0);
@@ -2085,14 +1958,10 @@ namespace RetroBar.Controls
         private const int DragThreshold = 4;
         private DispatcherTimer _seekPopupDragTimer;
 
-        // The wheel over the popup seeks 5 seconds a notch (up forward); over the volume, it changes it by 2% a notch.
+        // The wheel over the popup seeks 5 seconds a notch (up forward).
         private void SeekPopupRoot_OnPreviewMouseWheel(object sender, MouseWheelEventArgs e)
         {
-            if (SeekVolumeRow.IsMouseOver && _seekVolume != null)
-            {
-                SeekVolumeSlider.Value = Math.Clamp(SeekVolumeSlider.Value + 2 * Math.Sign(e.Delta), 0, 100);
-            }
-            else if (e.Delta != 0 && _sessionManager?.CanSeek == true)
+            if (e.Delta != 0 && _sessionManager?.CanSeek == true)
             {
                 _ = SeekRelativeAsync(TimeSpan.FromSeconds(5 * Math.Sign(e.Delta)));
             }
@@ -2501,7 +2370,6 @@ namespace RetroBar.Controls
 
         private void SeekPopup_OnOpened(object sender, EventArgs e)
         {
-            InitializeSeekVolume();
             StartSeekClickAwayTimer();
 
             // One popup at a time, whichever monitor's player it belongs to.
@@ -2545,8 +2413,6 @@ namespace RetroBar.Controls
             {
                 _seekSliderTip.IsOpen = false;
             }
-
-            DisposeSeekVolume();
 
             Array.Clear(_seekSpectrumLevels);
             Array.Clear(_seekSpectrumPeaks);

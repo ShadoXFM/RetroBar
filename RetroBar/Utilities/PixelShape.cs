@@ -96,68 +96,6 @@ namespace RetroBar.Utilities
             return rows;
         }
 
-        /// <summary>A loudspeaker, height rows tall (odd, 7 or more): a body, a cone widening to the right, and two sound waves - or, muted, a
-        /// small X where the waves are.</summary>
-        public static string[] Speaker(int height, bool muted)
-        {
-            int bodyHeight = (height / 3) | 1;
-            int bodyWidth = Math.Max(2, height / 4 + 1);
-            int coneColumns = (height - bodyHeight) / 2;
-            int waveStart = bodyWidth + coneColumns + 1;
-            int width = waveStart + (muted ? bodyHeight : 4);
-            int center = height / 2;
-
-            var grid = new char[height][];
-            for (int y = 0; y < height; y++)
-            {
-                grid[y] = new string('.', width).ToCharArray();
-            }
-
-            void Column(int x, int tall)
-            {
-                for (int y = center - tall / 2; y <= center + tall / 2; y++)
-                {
-                    if (y >= 0 && y < height && x >= 0 && x < width)
-                    {
-                        grid[y][x] = 'X';
-                    }
-                }
-            }
-
-            for (int x = 0; x < bodyWidth; x++)
-            {
-                Column(x, bodyHeight);
-            }
-
-            for (int c = 0; c < coneColumns; c++)
-            {
-                Column(bodyWidth + c, bodyHeight + 2 * (c + 1));
-            }
-
-            if (muted)
-            {
-                for (int i = 0; i < bodyHeight; i++)
-                {
-                    int y = center - bodyHeight / 2 + i;
-                    grid[y][waveStart + i] = 'X';
-                    grid[y][waveStart + bodyHeight - 1 - i] = 'X';
-                }
-            }
-            else
-            {
-                Column(waveStart, bodyHeight);
-                Column(waveStart + 2, bodyHeight + 2);
-            }
-
-            var rows = new string[height];
-            for (int y = 0; y < height; y++)
-            {
-                rows[y] = new string(grid[y]);
-            }
-
-            return rows;
-        }
-
         /// <summary>Two triangles, one after the other, pointing right ("fast forward") or left ("rewind").</summary>
         public static string[] DoubleTriangle(int height, bool pointsRight)
         {

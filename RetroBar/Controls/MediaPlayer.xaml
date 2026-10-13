@@ -490,47 +490,6 @@
                                                Text="0:00 / 0:00"
                                                utilities:MonitorOffset.Tag="MediaSeekTimeText" />
                                 </StackPanel>
-                                <!-- The volume of the sound device the sound goes to: a speaker button that mutes, a slider, the percentage. As
-                                     wide as the row above; not shown if there is no device to ask (see InitializeSeekVolume). -->
-                                <Grid x:Name="SeekVolumeRow"
-                                      HorizontalAlignment="Center"
-                                      Width="{Binding ActualWidth, ElementName=SeekControlsRow}"
-                                      Margin="0,2,0,3"
-                                      Visibility="Collapsed">
-                                    <Grid.ColumnDefinitions>
-                                        <ColumnDefinition Width="Auto" />
-                                        <ColumnDefinition Width="*" />
-                                        <ColumnDefinition Width="Auto" />
-                                    </Grid.ColumnDefinitions>
-                                    <Button x:Name="SeekMuteButton"
-                                            Grid.Column="0"
-                                            Style="{DynamicResource MediaPlayerButtonStyle}"
-                                            Click="SeekMuteButton_OnClick"
-                                            VerticalAlignment="Center"
-                                            Margin="4,0,0,0">
-                                        <Path x:Name="SeekVolumeGlyph"
-                                              Style="{DynamicResource MediaPlayerGlyphStyle}" />
-                                    </Button>
-                                    <Slider x:Name="SeekVolumeSlider"
-                                            Grid.Column="1"
-                                            Style="{DynamicResource MediaSeekSliderStyle}"
-                                            Height="16"
-                                            Margin="6,0"
-                                            VerticalAlignment="Center"
-                                            Minimum="0"
-                                            Maximum="100"
-                                            Value="100"
-                                            IsMoveToPointEnabled="True"
-                                            ValueChanged="SeekVolumeSlider_OnValueChanged" />
-                                    <TextBlock x:Name="SeekVolumeText"
-                                               Grid.Column="2"
-                                               Style="{DynamicResource MediaPlayerTrackTextStyle}"
-                                               VerticalAlignment="Center"
-                                               TextAlignment="Right"
-                                               MinWidth="{Binding ActualWidth, ElementName=SeekTimeWidthRef}"
-                                               Margin="2,0,6,0"
-                                               Text="100%" />
-                                </Grid>
                               </StackPanel>
                             </Border>
                         </Border>
