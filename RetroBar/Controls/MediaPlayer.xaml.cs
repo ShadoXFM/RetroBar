@@ -1784,6 +1784,9 @@ namespace RetroBar.Controls
         private static extern int GetWindowLong(IntPtr hWnd, int index);
 
         [DllImport("user32.dll")]
+        private static extern bool SetForegroundWindow(IntPtr hWnd);
+
+        [DllImport("user32.dll")]
         private static extern IntPtr GetWindow(IntPtr hWnd, uint command);
 
         // Whatever WPF does to the popup's window, one that has been moved and is not on top is an ordinary window without an owner.
@@ -1897,6 +1900,14 @@ namespace RetroBar.Controls
             {
                 _seekPopupPinned = !_seekPopupPinned;
                 ApplySeekPopupTopmost();
+
+                // The menu was used, so the popup is the window being worked in: it stays in front as the active window (Windows would
+                // otherwise put it behind the one that was active before, as it stops being topmost).
+                if (!_seekPopupPinned && PresentationSource.FromVisual(SeekPopupRoot) is HwndSource source)
+                {
+                    SetWindowPos(source.Handle, HWND_TOP, 0, 0, 0, 0, SWP_NOMOVE | SWP_NOSIZE);
+                    SetForegroundWindow(source.Handle);
+                }
             };
 
             var close = new MenuItem { Header = TryFindResource("close") as string ?? "_Close" };
