@@ -50,7 +50,7 @@ namespace RetroBar.Controls
 
         private void UpdateSeekAccent(ImageSource art)
         {
-            if (!Settings.Instance.MediaPopupSpectrumCoverColor || !IsSpotify(_sessionManager?.SourceAppUserModelId) || art == null)
+            if (!IsSpotify(_sessionManager?.SourceAppUserModelId) || art == null)
             {
                 _seekAccentSource = null;
                 _seekAccentColor = null;
@@ -210,20 +210,31 @@ namespace RetroBar.Controls
 
         private DateTime _lastSeekSpectrumUpdate = DateTime.MinValue;
 
-        // The popup's settings (Properties window): the spectrum, its colour from the cover, and the fades of sliding text.
+        // The popup's setting (Properties window): the spectrum.
         private void ApplyMediaPopupSettings()
         {
             SeekSpectrumHost.Visibility = Settings.Instance.ShowMediaPopupSpectrum ? Visibility.Visible : Visibility.Collapsed;
+        }
 
-            _seekAccentSource = null;
-            UpdateSeekAccent(SeekAlbumArtImage.Source);
+        // The VU meter (Properties window): behind the track text while a track plays. The audio is captured while the meter shows or the
+        // popup is open (for its spectrum).
+        private void ApplyVuMeterSetting()
+        {
+            bool isPlaying = _sessionManager?.PlaybackState == MediaPlaybackState.Playing;
+            UpdateVisualizerActiveState(isPlaying);
+            UpdateVisualizerCapture(isPlaying);
+        }
 
-            if (_marqueeRunning)
+        private void UpdateVisualizerCapture(bool isPlaying)
+        {
+            if (isPlaying && (Settings.Instance.ShowVuMeter || SeekPopup.IsOpen))
             {
-                StartMarquee(_marqueeOverflow);
+                StartVisualizer();
             }
-
-            UpdateSeekMarquees(true);
+            else
+            {
+                ScheduleVisualizerStop();
+            }
         }
 
         private void UpdateSeekSpectrum(float[] bands)

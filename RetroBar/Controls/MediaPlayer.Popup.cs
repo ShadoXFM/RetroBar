@@ -277,6 +277,7 @@ namespace RetroBar.Controls
         {
             StartSeekWatching();
             ApplyMediaPopupSettings();
+            UpdateVisualizerCapture(_sessionManager?.PlaybackState == MediaPlaybackState.Playing);
 
             // One popup at a time, whichever monitor's player it belongs to.
             if (_openSeekPlayer != null && _openSeekPlayer != this)
@@ -316,6 +317,7 @@ namespace RetroBar.Controls
         {
             _seekPopupTimer?.Stop();
             StopSeekWatching();
+            UpdateVisualizerCapture(_sessionManager?.PlaybackState == MediaPlaybackState.Playing);
 
             if (_seekSliderTip != null)
             {

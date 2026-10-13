@@ -126,18 +126,11 @@ namespace RetroBar.Utilities
             set => Set(ref _showMediaPopupSpectrum, value);
         }
 
-        private bool _mediaPopupSpectrumCoverColor = true;
-        public bool MediaPopupSpectrumCoverColor
+        private bool _showVuMeter = true;
+        public bool ShowVuMeter
         {
-            get => _mediaPopupSpectrumCoverColor;
-            set => Set(ref _mediaPopupSpectrumCoverColor, value);
-        }
-
-        private bool _fadeMediaText = true;
-        public bool FadeMediaText
-        {
-            get => _fadeMediaText;
-            set => Set(ref _fadeMediaText, value);
+            get => _showVuMeter;
+            set => Set(ref _showVuMeter, value);
         }
 
         private bool _showWeather = true;

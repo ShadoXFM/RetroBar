@@ -253,8 +253,9 @@ namespace RetroBar.Controls
         // text shouldn't show for a paused/silent track.
         private void UpdateVisualizerActiveState(bool isPlaying)
         {
-            VuMeterContainer.Visibility = isPlaying ? Visibility.Visible : Visibility.Collapsed;
-            if (!isPlaying)
+            bool show = isPlaying && Settings.Instance.ShowVuMeter;
+            VuMeterContainer.Visibility = show ? Visibility.Visible : Visibility.Collapsed;
+            if (!show)
             {
                 // So the next time it reappears, it doesn't flash whatever width either bar last
                 // had before VisualizerCapture_OnLevelUpdated's own next update arrives.
@@ -271,9 +272,15 @@ namespace RetroBar.Controls
                 return;
             }
 
-            if (e.PropertyName is nameof(Settings.ShowMediaPopupSpectrum) or nameof(Settings.MediaPopupSpectrumCoverColor) or nameof(Settings.FadeMediaText))
+            if (e.PropertyName == nameof(Settings.ShowMediaPopupSpectrum))
             {
                 Dispatcher.BeginInvoke(new Action(ApplyMediaPopupSettings));
+                return;
+            }
+
+            if (e.PropertyName == nameof(Settings.ShowVuMeter))
+            {
+                Dispatcher.BeginInvoke(new Action(ApplyVuMeterSetting));
                 return;
             }
 
@@ -350,16 +357,9 @@ namespace RetroBar.Controls
                 Dispatcher.BeginInvoke(new Action(InitializeTransportButtonAdorners), DispatcherPriority.Loaded);
             }
 
-            // The audio is only captured (and analysed) while something plays (and a little after it stops): a paused track has nothing
-            // to show.
-            if (isPlaying)
-            {
-                StartVisualizer();
-            }
-            else
-            {
-                ScheduleVisualizerStop();
-            }
+            // The audio is only captured (and analysed) while something plays (and a little after it stops) and the meter or the popup
+            // shows it: a paused track has nothing to show.
+            UpdateVisualizerCapture(isPlaying);
 
             string currentAumid = _sessionManager.SourceAppUserModelId;
             if (!string.Equals(currentAumid, _lastSourceAumid, StringComparison.OrdinalIgnoreCase))

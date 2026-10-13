@@ -440,15 +440,10 @@
                                       IsEnabled="{Binding Source={x:Static Settings:Settings.Instance}, Path=ShowMediaPlayer, UpdateSourceTrigger=PropertyChanged}">
                                 <Label Content="{DynamicResource show_media_popup_spectrum}" />
                             </CheckBox>
-                            <CheckBox x:Name="cbMediaPopupSpectrumCoverColor"
-                                      IsChecked="{Binding Source={x:Static Settings:Settings.Instance}, Path=MediaPopupSpectrumCoverColor, UpdateSourceTrigger=PropertyChanged}"
+                            <CheckBox x:Name="cbShowVuMeter"
+                                      IsChecked="{Binding Source={x:Static Settings:Settings.Instance}, Path=ShowVuMeter, UpdateSourceTrigger=PropertyChanged}"
                                       IsEnabled="{Binding Source={x:Static Settings:Settings.Instance}, Path=ShowMediaPlayer, UpdateSourceTrigger=PropertyChanged}">
-                                <Label Content="{DynamicResource media_popup_spectrum_cover_color}" />
-                            </CheckBox>
-                            <CheckBox x:Name="cbFadeMediaText"
-                                      IsChecked="{Binding Source={x:Static Settings:Settings.Instance}, Path=FadeMediaText, UpdateSourceTrigger=PropertyChanged}"
-                                      IsEnabled="{Binding Source={x:Static Settings:Settings.Instance}, Path=ShowMediaPlayer, UpdateSourceTrigger=PropertyChanged}">
-                                <Label Content="{DynamicResource fade_media_text}" />
+                                <Label Content="{DynamicResource show_vu_meter}" />
                             </CheckBox>
                         </StackPanel>
                     </GroupBox>
