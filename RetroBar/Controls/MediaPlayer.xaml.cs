@@ -13,6 +13,7 @@ using System.Windows.Interop;
 using System.Windows.Input;
 using System.Windows.Media;
 using System.Windows.Media.Animation;
+using System.Windows.Media.Imaging;
 using System.Windows.Shapes;
 using System.Windows.Threading;
 
@@ -426,6 +427,143 @@ namespace RetroBar.Controls
             return Geometry.Empty;
         }
 
+        // The most common colour of the cover art, for a gradient on the spectrum's bars: for Spotify's art only (its covers are what this
+        // was made for), none for any other player.
+        private Color? _seekAccentColor;
+        private ImageSource _seekAccentSource;
+
+        private static bool IsSpotify(string aumid) => aumid != null && aumid.Contains("spotify", StringComparison.OrdinalIgnoreCase);
+
+        private void UpdateSeekAccent(ImageSource art)
+        {
+            if (!IsSpotify(_sessionManager?.SourceAppUserModelId) || art == null)
+            {
+                _seekAccentSource = null;
+                _seekAccentColor = null;
+            }
+            else if (!ReferenceEquals(art, _seekAccentSource))
+            {
+                _seekAccentSource = art;
+                _seekAccentColor = ComputeDominantColor(art);
+            }
+
+            ApplySeekSpectrumFill();
+        }
+
+        // The bucket (4 bits a channel) of most pixels among the colourful ones - not the near-grey, black or white that a cover's
+        // background is - or of most pixels at all if there are none, averaged, and made light enough to read on the popup's dark face.
+        private static Color? ComputeDominantColor(ImageSource source)
+        {
+            if (source is not BitmapSource bitmap || bitmap.PixelWidth <= 0 || bitmap.PixelHeight <= 0)
+            {
+                return null;
+            }
+
+            try
+            {
+                BitmapSource scaled = bitmap;
+                double factor = 48.0 / Math.Max(bitmap.PixelWidth, bitmap.PixelHeight);
+                if (factor < 1)
+                {
+                    scaled = new TransformedBitmap(bitmap, new ScaleTransform(factor, factor));
+                }
+
+                var converted = new FormatConvertedBitmap(scaled, PixelFormats.Bgra32, null, 0);
+                int width = converted.PixelWidth;
+                int height = converted.PixelHeight;
+                int stride = width * 4;
+                var pixels = new byte[stride * height];
+                converted.CopyPixels(pixels, stride, 0);
+
+                var count = new int[4096];
+                var sumR = new long[4096];
+                var sumG = new long[4096];
+                var sumB = new long[4096];
+                for (int i = 0; i < pixels.Length; i += 4)
+                {
+                    if (pixels[i + 3] < 128)
+                    {
+                        continue;
+                    }
+
+                    byte b = pixels[i], g = pixels[i + 1], r = pixels[i + 2];
+                    int bucket = ((r >> 4) << 8) | ((g >> 4) << 4) | (b >> 4);
+                    count[bucket]++;
+                    sumR[bucket] += r;
+                    sumG[bucket] += g;
+                    sumB[bucket] += b;
+                }
+
+                int best = -1;
+                int bestAny = -1;
+                for (int i = 0; i < count.Length; i++)
+                {
+                    if (count[i] == 0)
+                    {
+                        continue;
+                    }
+
+                    if (bestAny < 0 || count[i] > count[bestAny])
+                    {
+                        bestAny = i;
+                    }
+
+                    double max = Math.Max(sumR[i], Math.Max(sumG[i], sumB[i])) / (double)count[i] / 255;
+                    double min = Math.Min(sumR[i], Math.Min(sumG[i], sumB[i])) / (double)count[i] / 255;
+                    double saturation = max <= 0 ? 0 : (max - min) / max;
+                    if (saturation >= 0.3 && max >= 0.25 && max <= 0.97 && (best < 0 || count[i] > count[best]))
+                    {
+                        best = i;
+                    }
+                }
+
+                int chosen = best >= 0 ? best : bestAny;
+                if (chosen < 0)
+                {
+                    return null;
+                }
+
+                double red = sumR[chosen] / (double)count[chosen];
+                double green = sumG[chosen] / (double)count[chosen];
+                double blue = sumB[chosen] / (double)count[chosen];
+                double top = Math.Max(red, Math.Max(green, blue));
+                if (top > 0 && top < 190)
+                {
+                    double lift = 190 / top;
+                    red = Math.Min(255, red * lift);
+                    green = Math.Min(255, green * lift);
+                    blue = Math.Min(255, blue * lift);
+                }
+
+                return Color.FromRgb((byte)red, (byte)green, (byte)blue);
+            }
+            catch (Exception ex) when (ex is ArgumentException or InvalidOperationException or NotSupportedException or System.IO.IOException)
+            {
+                return null;
+            }
+        }
+
+        // White at the bottom of the spectrum, the cover's colour at the top; the text's own colour for every other player.
+        private void ApplySeekSpectrumFill()
+        {
+            if (_seekAccentColor is Color accent && SeekTitleText.Foreground is SolidColorBrush foreground)
+            {
+                // Full colour from 70% of the way up, so the bars that are not the tallest ones have it at their tops too.
+                var brush = new LinearGradientBrush(new GradientStopCollection
+                {
+                    new GradientStop(foreground.Color, 0),
+                    new GradientStop(accent, 0.7),
+                    new GradientStop(accent, 1),
+                }, new Point(0, 1), new Point(0, 0));
+                brush.Freeze();
+                SeekSpectrum.Fill = brush;
+            }
+            else
+            {
+                SeekSpectrum.Fill = SeekTitleText.Foreground;
+            }
+        }
+
         private void UpdateAlbumArt()
         {
             // Falls back to the source app's own taskbar icon (e.g. foobar2000's) when the track
@@ -451,6 +589,7 @@ namespace RetroBar.Controls
             ImageSource largeArt = Settings.Instance.ShowMediaPlayerAlbumArt ? (_sessionManager?.LargeThumbnail ?? sourceWindow?.Icon) : null;
             SeekAlbumArtImage.Source = largeArt;
             SeekAlbumArtImage.Visibility = largeArt == null ? Visibility.Collapsed : Visibility.Visible;
+            UpdateSeekAccent(largeArt ?? art);
 
             if (art == null)
             {
@@ -789,6 +928,9 @@ namespace RetroBar.Controls
         private DateTime? _seekSpectrumQuietSince;
         private bool _seekSpectrumShown = true;
 
+        private readonly TranslateTransform _seekSpectrumSlide = new();
+
+        // Out of sight it is below the row (which clips it); no transform at all while it is showing, which keeps its pixels snapped.
         private void SetSeekSpectrumShown(bool shown)
         {
             if (_seekSpectrumShown == shown)
@@ -797,7 +939,27 @@ namespace RetroBar.Controls
             }
 
             _seekSpectrumShown = shown;
-            SeekSpectrum.BeginAnimation(UIElement.OpacityProperty, new DoubleAnimation(shown ? 1 : 0, TimeSpan.FromMilliseconds(250)));
+            SeekSpectrumHost.RenderTransform = _seekSpectrumSlide;
+
+            double hidden = SeekSpectrumHost.ActualHeight + 4;
+            var slide = new DoubleAnimation(shown ? 0 : hidden, TimeSpan.FromMilliseconds(shown ? 220 : 260))
+            {
+                EasingFunction = new CubicEase { EasingMode = shown ? EasingMode.EaseOut : EasingMode.EaseIn },
+            };
+            if (shown)
+            {
+                slide.Completed += (s, e) =>
+                {
+                    if (_seekSpectrumShown)
+                    {
+                        _seekSpectrumSlide.BeginAnimation(TranslateTransform.YProperty, null);
+                        _seekSpectrumSlide.Y = 0;
+                        SeekSpectrumHost.RenderTransform = null;
+                    }
+                };
+            }
+
+            _seekSpectrumSlide.BeginAnimation(TranslateTransform.YProperty, slide);
         }
 
         private void VisualizerCapture_OnSpectrumUpdated(float[] bands)
@@ -845,6 +1007,12 @@ namespace RetroBar.Controls
             var geometry = new StreamGeometry();
             using (StreamGeometryContext context = geometry.Open())
             {
+                // The gradient fills the geometry's bounds: these two points make them the whole box, not just the tallest bar.
+                context.BeginFigure(new Point(0, 0), true, true);
+                context.LineTo(new Point(0, 0), false, false);
+                context.BeginFigure(new Point(width, height), true, true);
+                context.LineTo(new Point(width, height), false, false);
+
                 for (int i = 0; i < count; i++)
                 {
                     int barHeight = Math.Clamp((int)Math.Round(_seekSpectrumLevels[i] * height), 1, height);
@@ -998,6 +1166,30 @@ namespace RetroBar.Controls
         private void TrackTextClip_OnSizeChanged(object sender, SizeChangedEventArgs e)
         {
             TrackTextClip.Clip = new RectangleGeometry(new Rect(0, 0, TrackTextClip.ActualWidth, TrackTextClip.ActualHeight + TrackTextDescenderRoom));
+            UpdateTrackTextFade();
+        }
+
+        // A track text too long for its room fades out over its last few DIPs (the slide goes on that much further, so its end is clear of
+        // the fade). A mask on the text only: the VU meter behind it is not faded.
+        private const double TrackTextFadeWidth = 14;
+
+        private void UpdateTrackTextFade()
+        {
+            double width = TrackTextClip.ActualWidth;
+            if (!_marqueeRunning || width <= TrackTextFadeWidth * 2)
+            {
+                TrackTextClip.ClearValue(UIElement.OpacityMaskProperty);
+                return;
+            }
+
+            var mask = new LinearGradientBrush(new GradientStopCollection
+            {
+                new GradientStop(Colors.Black, 0),
+                new GradientStop(Colors.Black, 1 - TrackTextFadeWidth / width),
+                new GradientStop(Colors.Transparent, 1),
+            }, new Point(0, 0), new Point(1, 0));
+            mask.Freeze();
+            TrackTextClip.OpacityMask = mask;
         }
 
         private void TrackText_SizeChanged(object sender, SizeChangedEventArgs e)
@@ -1050,6 +1242,8 @@ namespace RetroBar.Controls
                 return;
             }
 
+            overflow += TrackTextFadeWidth;
+
             // Don't restart an identical animation on every tick of the session.
             if (_marqueeRunning && Math.Abs(_marqueeOverflow - overflow) < 0.5)
             {
@@ -1057,6 +1251,7 @@ namespace RetroBar.Controls
             }
 
             StartMarquee(overflow);
+            UpdateTrackTextFade();
         }
 
         private static DoubleAnimationUsingKeyFrames CreateMarqueeAnimation(double overflow)
@@ -1170,6 +1365,7 @@ namespace RetroBar.Controls
             }
 
             TrackTextTransform.X = 0;
+            TrackTextClip.ClearValue(UIElement.OpacityMaskProperty);
         }
 
         #endregion
@@ -2113,8 +2309,9 @@ namespace RetroBar.Controls
             Array.Clear(_seekSpectrumPeaks);
             _seekSpectrumQuietSince = null;
             _seekSpectrumShown = true;
-            SeekSpectrum.BeginAnimation(UIElement.OpacityProperty, null);
-            SeekSpectrum.Opacity = 1;
+            _seekSpectrumSlide.BeginAnimation(TranslateTransform.YProperty, null);
+            _seekSpectrumSlide.Y = 0;
+            SeekSpectrumHost.RenderTransform = null;
             if (_seekPopupSource != null)
             {
                 _seekPopupSource.DpiChanged -= SeekPopupSource_OnDpiChanged;

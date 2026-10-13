@@ -288,6 +288,7 @@
                                 </Canvas>
                                 <Grid x:Name="SeekTextRow"
                                       HorizontalAlignment="Center"
+                                      ClipToBounds="True"
                                       Width="{Binding ActualWidth, ElementName=SeekControlsRow}"
                                       Margin="0,5,0,5">
                                     <Grid.ColumnDefinitions>
@@ -343,15 +344,19 @@
                                             </Grid>
                                         </Border>
                                     </StackPanel>
-                                    <Path x:Name="SeekSpectrum"
+                                    <!-- The spectrum drops out of sight, below the row, when nothing plays (see SetSeekSpectrumShown); the row clips it. -->
+                                    <Grid x:Name="SeekSpectrumHost"
                                           Grid.Column="1"
                                           Margin="0,0,6,0"
-                                          VerticalAlignment="Center"
-                                          Stretch="None"
-                                          SnapsToDevicePixels="True"
-                                          UseLayoutRounding="True"
-                                          Fill="{Binding Foreground, ElementName=SeekTitleText}"
-                                          utilities:MonitorOffset.Tag="MediaSeekSpectrum" />
+                                          VerticalAlignment="Center">
+                                        <Path x:Name="SeekSpectrum"
+                                              VerticalAlignment="Center"
+                                              Stretch="None"
+                                              SnapsToDevicePixels="True"
+                                              UseLayoutRounding="True"
+                                              Fill="{Binding Foreground, ElementName=SeekTitleText}"
+                                              utilities:MonitorOffset.Tag="MediaSeekSpectrum" />
+                                    </Grid>
                                 </Grid>
                                 <!-- HorizontalAlignment="Center" (instead of the StackPanel-child
                                      default of Stretch) matters for more than just centering: the
