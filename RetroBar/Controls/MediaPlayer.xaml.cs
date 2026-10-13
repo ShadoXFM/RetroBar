@@ -98,6 +98,7 @@ namespace RetroBar.Controls
         public MediaPlayer()
         {
             InitializeComponent();
+            SeekPopupRoot.SizeChanged += (s, e) => UpdateSeekSlideClip();
 
             // The popup is part of this control's logical tree, so the track text's tooltip (this control's own) would show for
             // anything the mouse rests on in it, and then stay up when the mouse leaves. The popup shows the same text itself.
@@ -1732,6 +1733,22 @@ namespace RetroBar.Controls
             return _lastSeekFrameBottom;
         }
 
+        // While it slides, the popup shows only what is above the taskbar: its window reaches a little way down over the taskbar (the shadow's
+        // room under the frame), and what slid there showed on the taskbar. At rest there is no clip.
+        private bool _seekSliding;
+
+        private void UpdateSeekSlideClip()
+        {
+            if (!_seekSliding || SeekPopupRoot.ActualHeight <= 0 || Window.GetWindow(this) is not Taskbar taskbar)
+            {
+                SeekPopupRoot.ClearValue(UIElement.ClipProperty);
+                return;
+            }
+
+            double overlap = Math.Max(0, (GetSeekFrameBottom(taskbar) ?? 0) + SeekFrameShadowRoom);
+            SeekPopupRoot.Clip = new RectangleGeometry(new Rect(0, 0, SeekPopupRoot.ActualWidth, Math.Max(0, SeekPopupRoot.ActualHeight - overlap)));
+        }
+
         private double SeekSlideDistance() => SeekSlideHost.ActualHeight > 0 ? SeekSlideHost.ActualHeight : 400;
 
         // At rest the popup has no transform at all: any render transform switches off pixel snapping, which blurs the frame's lines.
@@ -1740,6 +1757,8 @@ namespace RetroBar.Controls
             _seekSlide.BeginAnimation(TranslateTransform.YProperty, null);
             _seekSlide.Y = 0;
             SeekSlideHost.RenderTransform = null;
+            _seekSliding = false;
+            UpdateSeekSlideClip();
         }
 
         private void OpenSeekPopupAnimated()
@@ -1750,6 +1769,8 @@ namespace RetroBar.Controls
 
             double distance = SeekSlideDistance();
             _seekSlide.Y = distance;
+            _seekSliding = true;
+            UpdateSeekSlideClip();
             SeekPopup.IsOpen = true;
 
             var slide = new DoubleAnimation(distance, 0, SeekShowDuration)
@@ -1775,6 +1796,8 @@ namespace RetroBar.Controls
 
             _seekPopupClosing = true;
             SeekSlideHost.RenderTransform = _seekSlide;
+            _seekSliding = true;
+            UpdateSeekSlideClip();
             var slide = new DoubleAnimation(_seekSlide.Y, SeekSlideDistance(), SeekHideDuration)
             {
                 EasingFunction = new CubicEase { EasingMode = EasingMode.EaseIn },

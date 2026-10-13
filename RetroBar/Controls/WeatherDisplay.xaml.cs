@@ -28,6 +28,7 @@ namespace RetroBar.Controls
         public WeatherDisplay()
         {
             InitializeComponent();
+            ForecastFrame.SizeChanged += (s, e) => UpdateForecastSlideClip();
 
             // Wait until the control is fully loaded before starting the timer
             this.Loaded += WeatherDisplay_Loaded;
@@ -212,6 +213,37 @@ namespace RetroBar.Controls
             };
         }
 
+        // While it slides (on a taskbar at the bottom), the forecast shows only what is above the taskbar: its window reaches a little way down
+        // over the taskbar (the shadow's room under the frame), and what slid there showed on the taskbar. At rest there is no clip.
+        private bool _forecastSliding;
+
+        private void UpdateForecastSlideClip()
+        {
+            if (!_forecastSliding || ForecastFrame.ActualHeight <= 0 || Window.GetWindow(this) is not Taskbar taskbar ||
+                Settings.Instance.Edge is ManagedShell.AppBar.AppBarEdge.Left or ManagedShell.AppBar.AppBarEdge.Right or ManagedShell.AppBar.AppBarEdge.Top)
+            {
+                ForecastFrame.ClearValue(UIElement.ClipProperty);
+                return;
+            }
+
+            // The frame's bottom (see PlaceForecast) and, from it, how far the window reaches below the taskbar's top.
+            double? frameBottom = taskbar.MediaPlayerControl.GetSeekFrameBottom(taskbar);
+            if (frameBottom == null)
+            {
+                try
+                {
+                    frameBottom = WeatherPanel.TransformToAncestor(taskbar).Transform(new Point(0, 0)).Y;
+                }
+                catch (InvalidOperationException)
+                {
+                    frameBottom = 0;
+                }
+            }
+
+            double overlap = Math.Max(0, frameBottom.Value + ShadowRoom);
+            ForecastFrame.Clip = new RectangleGeometry(new Rect(0, 0, ForecastFrame.ActualWidth, Math.Max(0, ForecastFrame.ActualHeight - overlap)));
+        }
+
         // At rest the frame has no transform at all: any render transform switches off pixel snapping, which blurs its lines.
         private void ClearForecastAnimations()
         {
@@ -220,6 +252,8 @@ namespace RetroBar.Controls
             _forecastSlide.X = 0;
             _forecastSlide.Y = 0;
             ForecastSlideHost.RenderTransform = null;
+            _forecastSliding = false;
+            UpdateForecastSlideClip();
         }
 
         private void ShowForecast()
@@ -234,6 +268,8 @@ namespace RetroBar.Controls
             ClearForecastAnimations();
             ForecastSlideHost.RenderTransform = _forecastSlide;
             _forecastSlide.SetValue(axis, fromOffset);
+            _forecastSliding = true;
+            UpdateForecastSlideClip();
             ForecastPopup.IsOpen = true;
 
             var slideIn = new DoubleAnimation(fromOffset, 0, ForecastShowDuration)
@@ -260,6 +296,8 @@ namespace RetroBar.Controls
             _forecastClosing = true;
             (DependencyProperty axis, double start) = ForecastSlideAxis();
             ForecastSlideHost.RenderTransform = _forecastSlide;
+            _forecastSliding = true;
+            UpdateForecastSlideClip();
 
             var slide = new DoubleAnimation((double)_forecastSlide.GetValue(axis), start, ForecastHideDuration)
             {
