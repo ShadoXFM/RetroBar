@@ -27,10 +27,10 @@ namespace RetroBar.Utilities
         /// SpectrumBands frequency bands, lowest first, for the spectrum in the media popup.</summary>
         public event Action<float[]> SpectrumUpdated;
 
-        public const int SpectrumBands = 14;
-        private const int FftSize = 2048;
-        private const int FftLog2 = 11;
-        private const double LowestBandHz = 50;
+        public const int SpectrumBands = 16;
+        private const int FftSize = 4096;
+        private const int FftLog2 = 12;
+        private const double LowestBandHz = 22;
         private const double HighestBandHz = 14000;
 
         private readonly float[] _fftWindow = new float[FftSize];
