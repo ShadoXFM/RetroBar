@@ -87,14 +87,16 @@ namespace RetroBar.Controls
             ApplyVuMeterFill();
         }
 
-        // The VU meter's bars go from the cover's colour at their left to the text's colour at their tip (as translucent as the accent they
+        // The VU meter's bars go from the cover's colour at their left to a darker grey at their tip (as translucent as the accent they
         // have otherwise: the system's accent colour, muted). Every other player's stay that.
         private void ApplyVuMeterFill()
         {
             if (_seekAccentColor is Color accent && TryFindResource("ClockForeground") is SolidColorBrush foreground)
             {
                 double opacity = (TryFindResource("VuMeterAccentBrush") as Brush)?.Opacity ?? 0.2;
-                var brush = new LinearGradientBrush(accent, foreground.Color, new Point(0, 0), new Point(1, 0)) { Opacity = opacity };
+                // The tip is the text's colour at half its strength: the bars were a light grey there.
+                Color tip = Color.FromRgb((byte)(foreground.Color.R / 2), (byte)(foreground.Color.G / 2), (byte)(foreground.Color.B / 2));
+                var brush = new LinearGradientBrush(accent, tip, new Point(0, 0), new Point(1, 0)) { Opacity = opacity };
                 brush.Freeze();
                 VuMeterFillLeft.Fill = brush;
                 VuMeterFillRight.Fill = brush;
