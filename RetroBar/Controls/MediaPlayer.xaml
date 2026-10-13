@@ -24,7 +24,16 @@
     <utilities:UnclippedStackPanel x:Name="MediaPlayerRoot"
                 Orientation="Horizontal"
                 Style="{DynamicResource MediaPlayerPanelStyle}">
-        <!-- The transport buttons come first, before the album art and the track text. -->
+        <!-- A layout/position anchor only - always Hidden (never actually painted) when
+             there's art. The visible copy lives in an Adorner (see UpdateAlbumArtAdorner
+             in the code-behind) so a per-monitor MonitorAdjustments offset can push it
+             outside this control's own layout bounds without the Tray GroupBox's
+             Padding/BorderThickness clipping it - see Utilities/UIElementAdorner.cs. -->
+        <Image x:Name="AlbumArtImage"
+               Style="{DynamicResource MediaPlayerAlbumArtStyle}"
+               Visibility="Collapsed"
+               utilities:MonitorOffset.Tag="MediaAlbumArt" />
+        <!-- The album art comes first, then the transport buttons, then the track text. -->
         <!-- Real, interactive buttons live in code (see InitializeTransportButtonAdorners in
              MediaPlayer.xaml.cs), each hosted in its own Adorner anchored to one of these
              spacers. A spacer only reserves this Grid column's layout space (same Style, so it
@@ -81,15 +90,6 @@
             </Button>
         </Grid>
 
-        <!-- A layout/position anchor only - always Hidden (never actually painted) when
-             there's art. The visible copy lives in an Adorner (see UpdateAlbumArtAdorner
-             in the code-behind) so a per-monitor MonitorAdjustments offset can push it
-             outside this control's own layout bounds without the Tray GroupBox's
-             Padding/BorderThickness clipping it - see Utilities/UIElementAdorner.cs. -->
-        <Image x:Name="AlbumArtImage"
-               Style="{DynamicResource MediaPlayerAlbumArtStyle}"
-               Visibility="Collapsed"
-               utilities:MonitorOffset.Tag="MediaAlbumArt" />
         <Grid x:Name="TrackTextHost"
               Style="{DynamicResource MediaPlayerTrackTextHostStyle}">
             <!-- The VU-meter visualizer - two stacked translucent bars (one per stereo channel)
@@ -169,15 +169,16 @@
         </Grid>
         <!-- Opens on a click on the track text (see TrackTextCanvas_OnMouseLeftButtonUp) - lets
              seeking within the current track, which doesn't fit as a permanently-visible part of
-             the compact taskbar widget. A click elsewhere closes it, unless it has been dragged (see UpdateSeekPopupStaysOpen); "Always on top" (its menu)
-             only decides whether other windows can cover it. -->
+             the compact taskbar widget. A click elsewhere closes it (slid down like it slid up; see SeekClickAwayTimer_OnTick: the popup itself stays
+             open, as WPF would close it at once), unless it has been dragged or has "Always on top" (its menu) checked: then it is a
+             window of its own. -->
         <Popup x:Name="SeekPopup"
                PlacementTarget="{Binding ElementName=TrackTextCanvas}"
                Placement="Top"
                HorizontalOffset="-45"
                VerticalOffset="2"
                AllowsTransparency="True"
-               StaysOpen="False"
+               StaysOpen="True"
                Opened="SeekPopup_OnOpened"
                Closed="SeekPopup_OnClosed">
             <!-- Same 4-line raised bevel as a resting (non-pressed) tab (see TaskButton's own
@@ -192,11 +193,13 @@
                   RenderOptions.ClearTypeHint="Enabled"
                   UseLayoutRounding="True"
                   SnapsToDevicePixels="True"
+                  ClipToBounds="True"
+                  PreviewMouseDown="SeekPopupRoot_OnPreviewMouseDown"
                   PreviewMouseLeftButtonDown="SeekPopupRoot_OnPreviewMouseLeftButtonDown"
-                  PreviewMouseMove="SeekPopupRoot_OnPreviewMouseMove"
-                  PreviewMouseLeftButtonUp="SeekPopupRoot_OnPreviewMouseLeftButtonUp"
-                  MouseRightButtonUp="SeekPopupRoot_OnMouseRightButtonUp"
-                  LostMouseCapture="SeekPopupRoot_OnLostMouseCapture">
+                  MouseRightButtonUp="SeekPopupRoot_OnMouseRightButtonUp">
+                <!-- What slides (see OpenSeekPopupAnimated): the root clips to its own bounds so that the popup's window is the size of
+                     the popup at rest, not of it and the distance it has slid. -->
+                <Grid x:Name="SeekSlideHost">
                 <controls:PopupShadow Strength="0.5" />
                 <!-- The outermost line of the bevel (DarkShadow, right and bottom) is the frame's own outer border, not a border inside
                      another one that has a padding: it was not drawn at all that way at 125% (nothing red where it should be, with it
@@ -477,6 +480,7 @@
                         </Border>
                     </Border>
                 </Border>
+                </Grid>
             </Grid>
         </Popup>
     </utilities:UnclippedStackPanel>

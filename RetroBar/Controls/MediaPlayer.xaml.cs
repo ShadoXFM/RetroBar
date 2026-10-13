@@ -98,6 +98,7 @@ namespace RetroBar.Controls
         public MediaPlayer()
         {
             InitializeComponent();
+            SeekPopupRoot.SizeChanged += (s, e) => UpdateSeekSlideClip();
 
             // The popup is part of this control's logical tree, so the track text's tooltip (this control's own) would show for
             // anything the mouse rests on in it, and then stay up when the mouse leaves. The popup shows the same text itself.
@@ -620,9 +621,8 @@ namespace RetroBar.Controls
             // by exactly this amount moves its start back to the tray box's own left edge.
             Point trackTextHostOrigin = TrackTextHost.TransformToVisual(MediaPlayerRoot).Transform(new Point(0, 0));
 
-            // The transport buttons come before the album art, and the meter starts at the art, not behind the buttons.
-            double buttonsWidth = TransportButtonsArea.ActualWidth + TransportButtonsArea.Margin.Left + TransportButtonsArea.Margin.Right;
-            double leftOffset = Math.Max(0, trackTextHostOrigin.X - buttonsWidth);
+            // The album art and the transport buttons come before the text, and the meter starts at the art, the first of them.
+            double leftOffset = Math.Max(0, trackTextHostOrigin.X);
 
             // TrackText's own ActualWidth capped by TrackTextHost's own MaxWidth (its Style's
             // fixed 150, not its dynamic ActualWidth) - the actual glyph width for short text,
@@ -1383,7 +1383,15 @@ namespace RetroBar.Controls
 
             if (_sessionManager != null && _sessionManager.HasSession)
             {
-                SeekPopup.IsOpen = !SeekPopup.IsOpen;
+                if (SeekPopup.IsOpen)
+                {
+                    CloseSeekPopupAnimated();
+                }
+                else
+                {
+                    OpenSeekPopupAnimated();
+                }
+
                 _ignoreNextTrackTextClick = false;
             }
         }
@@ -1477,7 +1485,8 @@ namespace RetroBar.Controls
         private POINT _seekPopupDragStart;
         private POINT _seekPopupDragWindow;
         private HwndSource _seekPopupSource;
-        // Shared by every monitor's player (they each have their own popup, one open at a time).
+        // "Always on top" for the popup that is open now; shared by every monitor's player (they each have their own popup, one open at
+        // a time), and off again when it closes.
         private static bool _seekPopupPinned;
         private static MediaPlayer _openSeekPlayer;
 
@@ -1497,13 +1506,28 @@ namespace RetroBar.Controls
 
         private IntPtr SeekPopupHook(IntPtr hwnd, int msg, IntPtr wParam, IntPtr lParam, ref bool handled)
         {
-            if (msg == WM_WINDOWPOSCHANGING && _seekPopupMovedTo is POINT moved)
+            if (msg == WM_WINDOWPOSCHANGING && (_seekPopupMovedTo != null || _seekPopupPinned))
             {
                 WINDOWPOS position = Marshal.PtrToStructure<WINDOWPOS>(lParam);
-                if ((position.Flags & SWP_NOMOVE) == 0 && (position.X != moved.X || position.Y != moved.Y))
+                bool changed = false;
+
+                if (_seekPopupMovedTo is POINT moved && (position.Flags & SWP_NOMOVE) == 0 && (position.X != moved.X || position.Y != moved.Y))
                 {
                     position.X = moved.X;
                     position.Y = moved.Y;
+                    changed = true;
+                }
+
+                // WPF puts its popups' windows at the top of the topmost ones whenever it places them again: one that is not on top
+                // is left where it is among the ordinary windows.
+                if (!_seekPopupPinned && (position.Flags & SWP_NOZORDER) == 0 && position.InsertAfter == HWND_TOPMOST)
+                {
+                    position.InsertAfter = HWND_NOTOPMOST;
+                    changed = true;
+                }
+
+                if (changed)
+                {
                     Marshal.StructureToPtr(position, lParam, false);
                 }
             }
@@ -1556,6 +1580,8 @@ namespace RetroBar.Controls
         private static extern int SetWindowLong(IntPtr hWnd, int index, int value);
 
         private const int GWLP_HWNDPARENT = -8;
+        private const int GWL_EXSTYLE = -20;
+        private const int WS_EX_NOACTIVATE = 0x08000000;
         private static readonly IntPtr HWND_TOPMOST = new(-1);
         private static readonly IntPtr HWND_NOTOPMOST = new(-2);
         private const uint SWP_NOMOVE = 0x0002;
@@ -1563,6 +1589,25 @@ namespace RetroBar.Controls
         private const uint SWP_NOZORDER = 0x0004;
         private const uint SWP_NOACTIVATE = 0x0010;
         private const uint MONITOR_DEFAULTTONEAREST = 2;
+
+        [DllImport("user32.dll")]
+        private static extern short GetAsyncKeyState(int key);
+
+        private const int VK_LBUTTON = 0x01;
+        private const int DragThreshold = 4;
+        private DispatcherTimer _seekPopupDragTimer;
+
+        private static readonly IntPtr HWND_TOP = IntPtr.Zero;
+
+        // A popup's window is never activated by a click, so an ordinary window (moved, not on top) would stay behind the others
+        // however often it is clicked: a click brings it in front of them.
+        private void SeekPopupRoot_OnPreviewMouseDown(object sender, MouseButtonEventArgs e)
+        {
+            if ((_seekPopupMovedTo != null || _seekPopupPinned) && PresentationSource.FromVisual(SeekPopupRoot) is HwndSource source)
+            {
+                SetWindowPos(source.Handle, _seekPopupPinned ? HWND_TOPMOST : HWND_TOP, 0, 0, 0, 0, SWP_NOMOVE | SWP_NOSIZE | SWP_NOACTIVATE);
+            }
+        }
 
         private void SeekPopupRoot_OnPreviewMouseLeftButtonDown(object sender, MouseButtonEventArgs e)
         {
@@ -1579,71 +1624,274 @@ namespace RetroBar.Controls
                 return;
             }
 
+            // Nothing about the popup changes for a click: it only starts to be dragged once the pointer has gone a few pixels with the
+            // button held down (mouse capture is left alone, which is what keeps the popup closing when a click lands elsewhere).
             GetCursorPos(out _seekPopupDragStart);
             _seekPopupDragWindow = new POINT { X = window.Left, Y = window.Top };
-            _seekPopupDragging = true;
-            SeekPopup.StaysOpen = true;
-            SeekPopupRoot.CaptureMouse();
-            e.Handled = true;
+            _seekPopupDragging = false;
+
+            _seekPopupDragTimer ??= new DispatcherTimer(DispatcherPriority.Normal) { Interval = TimeSpan.FromMilliseconds(8) };
+            _seekPopupDragTimer.Tick -= SeekPopupDragTimer_OnTick;
+            _seekPopupDragTimer.Tick += SeekPopupDragTimer_OnTick;
+            _seekPopupDragTimer.Start();
         }
 
-        private void SeekPopupRoot_OnPreviewMouseMove(object sender, MouseEventArgs e)
+        private void SeekPopupDragTimer_OnTick(object sender, EventArgs e)
         {
-            if (!_seekPopupDragging || PresentationSource.FromVisual(SeekPopupRoot) is not HwndSource source)
+            if ((GetAsyncKeyState(VK_LBUTTON) & 0x8000) == 0 || !SeekPopup.IsOpen ||
+                PresentationSource.FromVisual(SeekPopupRoot) is not HwndSource source)
             {
+                _seekPopupDragTimer.Stop();
+                _seekPopupDragging = false;
                 return;
             }
 
             GetCursorPos(out POINT now);
-            _seekPopupMovedTo = new POINT { X = _seekPopupDragWindow.X + now.X - _seekPopupDragStart.X, Y = _seekPopupDragWindow.Y + now.Y - _seekPopupDragStart.Y };
+            int dx = now.X - _seekPopupDragStart.X;
+            int dy = now.Y - _seekPopupDragStart.Y;
+
+            if (!_seekPopupDragging)
+            {
+                if (Math.Abs(dx) + Math.Abs(dy) < DragThreshold)
+                {
+                    return;
+                }
+
+                // Moved: from here the popup is a window of its own that stays where it is put.
+                _seekPopupDragging = true;
+                _seekPopupMovedTo = _seekPopupDragWindow;
+                ApplySeekPopupTopmost();
+            }
+
+            _seekPopupMovedTo = new POINT { X = _seekPopupDragWindow.X + dx, Y = _seekPopupDragWindow.Y + dy };
             SetWindowPos(source.Handle, IntPtr.Zero, _seekPopupMovedTo.Value.X, _seekPopupMovedTo.Value.Y, 0, 0, SWP_NOSIZE | SWP_NOZORDER | SWP_NOACTIVATE);
             RefreshSeekPopupMonitor(source);
         }
 
-        private void SeekPopupRoot_OnPreviewMouseLeftButtonUp(object sender, MouseButtonEventArgs e)
-        {
-            if (_seekPopupDragging)
-            {
-                SeekPopupRoot.ReleaseMouseCapture();
-            }
-        }
-
-        // A popup's window is above every other window by default. Without "Always on top" it is an ordinary one, which another window
-        // can come in front of.
+        // A popup's window is above every other window by default. Once it has been moved or set to be on top it is a window of its own
+        // (no owner), which stays where it is and open; until then, clicking in it changes nothing about it. Without "Always on top"
+        // that window is an ordinary one, which another window can come in front of.
         private void ApplySeekPopupTopmost()
         {
+            if (_seekPopupMovedTo == null && !_seekPopupPinned)
+            {
+                return;
+            }
+
             if (PresentationSource.FromVisual(SeekPopupRoot) is HwndSource source)
             {
                 // The popup is owned by the taskbar's window, which is itself always on top, and a window owned by a topmost one is
                 // topmost whatever it asks for: without the owner it can be an ordinary window.
-                if (!_seekPopupPinned)
+                if (IntPtr.Size == 8)
                 {
-                    if (IntPtr.Size == 8)
-                    {
-                        SetWindowLongPtr(source.Handle, GWLP_HWNDPARENT, IntPtr.Zero);
-                    }
-                    else
-                    {
-                        SetWindowLong(source.Handle, GWLP_HWNDPARENT, 0);
-                    }
+                    SetWindowLongPtr(source.Handle, GWLP_HWNDPARENT, IntPtr.Zero);
+                }
+                else
+                {
+                    SetWindowLong(source.Handle, GWLP_HWNDPARENT, 0);
+                }
+
+                // A popup's window is never activated by a click (WS_EX_NOACTIVATE), and Windows will not put a window that is not
+                // the active one above the others whatever it is asked: as a window of its own it is activated by a click, which is
+                // what brings it in front of the windows an ordinary window is above.
+                int style = GetWindowLong(source.Handle, GWL_EXSTYLE);
+                if ((style & WS_EX_NOACTIVATE) != 0)
+                {
+                    SetWindowLong(source.Handle, GWL_EXSTYLE, style & ~WS_EX_NOACTIVATE);
                 }
 
                 SetWindowPos(source.Handle, _seekPopupPinned ? HWND_TOPMOST : HWND_NOTOPMOST, 0, 0, 0, 0, SWP_NOMOVE | SWP_NOSIZE | SWP_NOACTIVATE);
             }
         }
 
-        private void SeekPopupRoot_OnLostMouseCapture(object sender, MouseEventArgs e)
+        // The popup slides up out of the taskbar's edge, and back down into it: its content moves inside its window (which stays where
+        // it is, and clips what is outside it), from a window's height below, so it comes from the bottom and does not fade. A click
+        // elsewhere closes it the same way (see the click-away timer below).
+        private static readonly Duration SeekShowDuration = new(TimeSpan.FromMilliseconds(200));
+        private static readonly Duration SeekHideDuration = new(TimeSpan.FromMilliseconds(150));
+        private readonly TranslateTransform _seekSlide = new();
+        private bool _seekPopupClosing;
+
+        // Where the bottom of the popup's frame is, in DIPs from the top of the element given (the taskbar's window): the 10 is the frame's
+        // margin for the shadow, which is part of the popup's window. The weather forecast puts its own frame's bottom here too.
+        private const double SeekFrameShadowRoom = 10;
+        private double? _lastSeekFrameBottom;
+
+        public double? GetSeekFrameBottom(Visual relativeTo)
         {
-            _seekPopupDragging = false;
-            UpdateSeekPopupStaysOpen();
-            ApplySeekPopupTopmost();
+            try
+            {
+                if (IsVisible && TrackTextCanvas.ActualWidth > 0)
+                {
+                    _lastSeekFrameBottom = TrackTextCanvas.TransformToAncestor(relativeTo).Transform(new Point(0, 0)).Y + SeekPopup.VerticalOffset - SeekFrameShadowRoom;
+                }
+            }
+            catch (InvalidOperationException)
+            {
+            }
+
+            return _lastSeekFrameBottom;
         }
 
-        // Closed by a click elsewhere, unless it has been moved: then it is where the user put it, and stays (on top or not).
-        private void UpdateSeekPopupStaysOpen()
+        // While it slides, the popup shows only what is above the taskbar: its window reaches a little way down over the taskbar (the shadow's
+        // room under the frame), and what slid there showed on the taskbar. At rest there is no clip.
+        private bool _seekSliding;
+
+        private void UpdateSeekSlideClip()
         {
-            SeekPopup.StaysOpen = _seekPopupMovedTo != null;
+            if (!_seekSliding || SeekPopupRoot.ActualHeight <= 0 || Window.GetWindow(this) is not Taskbar taskbar)
+            {
+                SeekPopupRoot.ClearValue(UIElement.ClipProperty);
+                return;
+            }
+
+            double overlap = Math.Max(0, (GetSeekFrameBottom(taskbar) ?? 0) + SeekFrameShadowRoom);
+            SeekPopupRoot.Clip = new RectangleGeometry(new Rect(0, 0, SeekPopupRoot.ActualWidth, Math.Max(0, SeekPopupRoot.ActualHeight - overlap)));
         }
+
+        private double SeekSlideDistance() => SeekSlideHost.ActualHeight > 0 ? SeekSlideHost.ActualHeight : 400;
+
+        // At rest the popup has no transform at all: any render transform switches off pixel snapping, which blurs the frame's lines.
+        private void ClearSeekPopupAnimations()
+        {
+            _seekSlide.BeginAnimation(TranslateTransform.YProperty, null);
+            _seekSlide.Y = 0;
+            SeekSlideHost.RenderTransform = null;
+            _seekSliding = false;
+            UpdateSeekSlideClip();
+        }
+
+        private void OpenSeekPopupAnimated()
+        {
+            _seekPopupClosing = false;
+            ClearSeekPopupAnimations();
+            SeekSlideHost.RenderTransform = _seekSlide;
+
+            double distance = SeekSlideDistance();
+            _seekSlide.Y = distance;
+            _seekSliding = true;
+            UpdateSeekSlideClip();
+            SeekPopup.IsOpen = true;
+
+            var slide = new DoubleAnimation(distance, 0, SeekShowDuration)
+            {
+                EasingFunction = new CubicEase { EasingMode = EasingMode.EaseOut },
+            };
+            slide.Completed += (s, e) =>
+            {
+                if (!_seekPopupClosing)
+                {
+                    ClearSeekPopupAnimations();
+                }
+            };
+            _seekSlide.BeginAnimation(TranslateTransform.YProperty, slide);
+        }
+
+        private void CloseSeekPopupAnimated()
+        {
+            if (!SeekPopup.IsOpen || _seekPopupClosing)
+            {
+                return;
+            }
+
+            _seekPopupClosing = true;
+            SeekSlideHost.RenderTransform = _seekSlide;
+            _seekSliding = true;
+            UpdateSeekSlideClip();
+            var slide = new DoubleAnimation(_seekSlide.Y, SeekSlideDistance(), SeekHideDuration)
+            {
+                EasingFunction = new CubicEase { EasingMode = EasingMode.EaseIn },
+            };
+            slide.Completed += (s, e) =>
+            {
+                if (_seekPopupClosing)
+                {
+                    _seekPopupClosing = false;
+                    SeekPopup.IsOpen = false;
+                    ClearSeekPopupAnimations();
+                }
+            };
+            _seekSlide.BeginAnimation(TranslateTransform.YProperty, slide);
+        }
+
+        // A click elsewhere closes the popup, sliding down, unless it is a window of its own (it has been moved, or is set to be on top).
+        // The popup itself never closes on a click (StaysOpen), since WPF would close it at once, with no slide: this timer watches the
+        // mouse buttons instead.
+        private DispatcherTimer _seekClickAwayTimer;
+        private bool _seekClickAwayWasDown;
+        private bool _seekMenuOpen;
+
+        private static bool IsAnyMouseButtonDown() => ((GetAsyncKeyState(0x01) | GetAsyncKeyState(0x02) | GetAsyncKeyState(0x04)) & 0x8000) != 0;
+
+        [DllImport("user32.dll", EntryPoint = "GetWindowLongW")]
+        private static extern int GetWindowLong(IntPtr hWnd, int index);
+
+        [DllImport("user32.dll")]
+        private static extern bool SetForegroundWindow(IntPtr hWnd);
+
+        [DllImport("user32.dll")]
+        private static extern IntPtr GetWindow(IntPtr hWnd, uint command);
+
+        // Whatever WPF does to the popup's window, one that has been moved and is not on top is an ordinary window without an owner.
+        private void EnsureSeekPopupIsOrdinary()
+        {
+            if ((_seekPopupMovedTo == null && !_seekPopupPinned) || PresentationSource.FromVisual(SeekPopupRoot) is not HwndSource source)
+            {
+                return;
+            }
+
+            if (GetWindow(source.Handle, 4 /* GW_OWNER */) != IntPtr.Zero || (!_seekPopupPinned && (GetWindowLong(source.Handle, -20 /* GWL_EXSTYLE */) & 0x8 /* WS_EX_TOPMOST */) != 0))
+            {
+                ApplySeekPopupTopmost();
+            }
+        }
+
+        private void StartSeekClickAwayTimer()
+        {
+            _seekClickAwayWasDown = IsAnyMouseButtonDown();
+            _seekClickAwayTimer ??= new DispatcherTimer(DispatcherPriority.Normal) { Interval = TimeSpan.FromMilliseconds(16) };
+            _seekClickAwayTimer.Tick -= SeekClickAwayTimer_OnTick;
+            _seekClickAwayTimer.Tick += SeekClickAwayTimer_OnTick;
+            _seekClickAwayTimer.Start();
+        }
+
+        private void SeekClickAwayTimer_OnTick(object sender, EventArgs e)
+        {
+            if (!SeekPopup.IsOpen)
+            {
+                _seekClickAwayTimer.Stop();
+                return;
+            }
+
+            EnsureSeekPopupIsOrdinary();
+
+            bool down = IsAnyMouseButtonDown();
+            bool pressed = down && !_seekClickAwayWasDown;
+            _seekClickAwayWasDown = down;
+
+            if (!pressed || _seekPopupClosing || _seekMenuOpen || _seekPopupMovedTo != null || _seekPopupPinned ||
+                PresentationSource.FromVisual(SeekPopupRoot) is not HwndSource source || !GetWindowRect(source.Handle, out RECT window) ||
+                !GetCursorPos(out POINT cursor))
+            {
+                return;
+            }
+
+            if (cursor.X >= window.Left && cursor.X < window.Right && cursor.Y >= window.Top && cursor.Y < window.Bottom)
+            {
+                return;
+            }
+
+            // The click on the track text that closes it must not open it again when the button comes up.
+            Point onText = TrackTextCanvas.PointFromScreen(new Point(cursor.X, cursor.Y));
+            if (onText.X >= 0 && onText.Y >= 0 && onText.X <= TrackTextCanvas.ActualWidth && onText.Y <= TrackTextCanvas.ActualHeight)
+            {
+                _ignoreNextTrackTextClick = true;
+                _ignoreTrackTextClickUntil = DateTime.UtcNow + TimeSpan.FromMilliseconds(600);
+            }
+
+            CloseSeekPopupAnimated();
+        }
+
 
         // The monitor the popup is on decides which adjustments of monitor-adjustments.json apply to it, and the pixel art is drawn for
         // that monitor's DPI (which WPF has already given the popup's window by now, or does when it raises DpiChanged below).
@@ -1694,12 +1942,25 @@ namespace RetroBar.Controls
             onTop.Click += (s, args) =>
             {
                 _seekPopupPinned = !_seekPopupPinned;
-                UpdateSeekPopupStaysOpen();
                 ApplySeekPopupTopmost();
+
+                // The menu was used, so the popup is the window being worked in: it stays in front as the active window (Windows would
+                // otherwise put it behind the one that was active before, as it stops being topmost).
+                if (!_seekPopupPinned && PresentationSource.FromVisual(SeekPopupRoot) is HwndSource source)
+                {
+                    SetWindowPos(source.Handle, HWND_TOP, 0, 0, 0, 0, SWP_NOMOVE | SWP_NOSIZE);
+                    SetForegroundWindow(source.Handle);
+                }
             };
 
             var close = new MenuItem { Header = TryFindResource("close") as string ?? "_Close" };
-            close.Click += (s, args) => SeekPopup.IsOpen = false;
+            close.Click += (s, args) =>
+            {
+                // From its own menu it just goes: no slide.
+                _seekPopupClosing = false;
+                SeekPopup.IsOpen = false;
+                ClearSeekPopupAnimations();
+            };
 
             var menu = new ContextMenu
             {
@@ -1709,17 +1970,19 @@ namespace RetroBar.Controls
             menu.Items.Add(onTop);
             menu.Items.Add(MakeMenuSeparator());
             menu.Items.Add(close);
+            menu.Opened += (s, args) => _seekMenuOpen = true;
+            menu.Closed += (s, args) => Dispatcher.BeginInvoke(new Action(() => _seekMenuOpen = false), DispatcherPriority.Background);
             menu.IsOpen = true;
         }
 
         private void SeekPopup_OnOpened(object sender, EventArgs e)
         {
-            UpdateSeekPopupStaysOpen();
+            StartSeekClickAwayTimer();
 
             // One popup at a time, whichever monitor's player it belongs to.
             if (_openSeekPlayer != null && _openSeekPlayer != this)
             {
-                _openSeekPlayer.SeekPopup.IsOpen = false;
+                _openSeekPlayer.CloseSeekPopupAnimated();
             }
 
             _openSeekPlayer = this;
@@ -1770,6 +2033,9 @@ namespace RetroBar.Controls
 
             _seekPopupMonitor = null;
             _seekPopupMovedTo = null;
+
+            // Moved or on top is for the one opening: the next one starts as an ordinary popup again.
+            _seekPopupPinned = false;
             SeekPopupRoot.ClearValue(MonitorOffset.DeviceNameOverrideProperty);
 
             // Only suppress the next click if it's plausibly the one that just caused this close
