@@ -905,35 +905,6 @@ namespace RetroBar.Controls
         // Visible (see UpdateVisualizerActiveState) - no need to keep computing a Width nobody can
         // see, and this way a track that's paused (Visibility already Collapsed) doesn't leave
         // either bar holding whatever width it last had once playback resumes and they reappear.
-        // The automatic gain of the VU meter and the popup's spectrum, in decibels: the levels (0-1 over AudioSpectrumCapture.LevelRangeDb)
-        // are shown relative to the loudest lately, which falls by VuPeakFallDb a second - so a lowered volume (down to about VuGateDb) is made
-        // up for within a few seconds, whatever the volume was: the loudest is full, and VuShownRangeDb below it is nothing. Below the gate there
-        // is only hiss, and nothing is shown.
-        private float _vuPeak;
-        private float _spectrumPeak;
-        private const double VuPeakFallDb = 12;
-        private const double VuUpdateSeconds = 0.04;
-        private const double VuGateDb = -80;
-        private const double VuShownRangeDb = 36;
-        private const double SpectrumShownRangeDb = 48;
-        private const float VuTarget = 0.95f;
-
-        private static float NormaliseLevel(float level, float peak, double shownRangeDb)
-        {
-            if (peak <= 0 || peak < (VuGateDb + AudioSpectrumCapture.LevelRangeDb) / AudioSpectrumCapture.LevelRangeDb)
-            {
-                return 0;
-            }
-
-            double below = (peak - level) * AudioSpectrumCapture.LevelRangeDb;
-            return (float)(Math.Clamp(1 - below / shownRangeDb, 0, 1) * VuTarget);
-        }
-
-        private static float FallenPeak(float peak, float level)
-        {
-            return Math.Max(level, peak - (float)(VuPeakFallDb * VuUpdateSeconds / AudioSpectrumCapture.LevelRangeDb));
-        }
-
         private void VisualizerCapture_OnLevelUpdated(float left, float right)
         {
             Dispatcher.BeginInvoke(new Action(() =>
@@ -942,11 +913,6 @@ namespace RetroBar.Controls
                 {
                     return;
                 }
-
-                // Normalised: the loudest it has been lately reaches nearly the end of the bar (see _vuPeak).
-                _vuPeak = FallenPeak(_vuPeak, Math.Max(left, right));
-                left = NormaliseLevel(left, _vuPeak, VuShownRangeDb);
-                right = NormaliseLevel(right, _vuPeak, VuShownRangeDb);
 
                 // _vuMeterMaxWidth (kept up to date by UpdateVuMeterOffset) already reproduces
                 // the old TrackText/TrackTextHost cap, just measured from the tray box's own left
@@ -991,21 +957,9 @@ namespace RetroBar.Controls
             bool playing = _sessionManager?.PlaybackState == MediaPlaybackState.Playing;
             bool sound = false;
 
-            // The same automatic gain as the VU meter's: the loudest band lately reaches nearly the top.
-            if (bands != null)
-            {
-                float loudestBand = 0;
-                foreach (float band in bands)
-                {
-                    loudestBand = Math.Max(loudestBand, band);
-                }
-
-                _spectrumPeak = FallenPeak(_spectrumPeak, loudestBand);
-            }
-
             for (int i = 0; i < _seekSpectrumLevels.Length; i++)
             {
-                float level = playing && bands != null ? NormaliseLevel(bands[i], _spectrumPeak, SpectrumShownRangeDb) : 0;
+                float level = playing && bands != null ? bands[i] : 0;
                 sound |= level > 0.05f;
                 _seekSpectrumLevels[i] = Math.Max(level, _seekSpectrumLevels[i] - 0.08f);
                 _seekSpectrumPeaks[i] = Math.Max(_seekSpectrumLevels[i], _seekSpectrumPeaks[i] - (sound ? 0.02f : 0.05f));
