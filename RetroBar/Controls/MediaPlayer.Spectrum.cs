@@ -311,18 +311,29 @@ namespace RetroBar.Controls
 
             int count = _seekSpectrumLevels.Length;
             DateTime now = DateTime.UtcNow;
-            int appearing = 0;
             for (int i = 0; i < count; i++)
             {
                 if (quietMs > SeekSpectrumDashLife + i * SeekSpectrumDashStagger)
                 {
                     _seekBarGone[i] = true;
                 }
-                else if (sound && _seekBarGone[i])
+            }
+
+            if (sound && Array.IndexOf(_seekBarGone, true) >= 0)
+            {
+                // Sound is back: the bars that are gone come back. After the whole spectrum has gone they come from the left; while it is still
+                // vanishing (from the left) it goes back the way it went: the last to go is the first to return.
+                bool vanishing = Array.IndexOf(_seekBarGone, false) >= 0;
+                int appearing = 0;
+                for (int n = 0; n < count; n++)
                 {
-                    _seekBarGone[i] = false;
-                    _seekBarAppearAt[i] = _seekSpectrumSkipAppear ? DateTime.MinValue : now.AddMilliseconds(appearing * SeekSpectrumAppearStagger);
-                    appearing++;
+                    int i = vanishing ? count - 1 - n : n;
+                    if (_seekBarGone[i])
+                    {
+                        _seekBarGone[i] = false;
+                        _seekBarAppearAt[i] = _seekSpectrumSkipAppear ? DateTime.MinValue : now.AddMilliseconds(appearing * SeekSpectrumAppearStagger);
+                        appearing++;
+                    }
                 }
             }
 
