@@ -118,7 +118,7 @@
                                                Foreground="{DynamicResource ButtonForeground}"
                                                FontFamily="Tahoma"
                                                FontWeight="Bold"
-                                               TextAlignment="Right"
+                                               TextAlignment="Left"
                                                MinWidth="54"
                                                Margin="4,0,2,0"
                                                VerticalAlignment="Center" />
