@@ -1578,6 +1578,8 @@ namespace RetroBar.Controls
         private static extern int SetWindowLong(IntPtr hWnd, int index, int value);
 
         private const int GWLP_HWNDPARENT = -8;
+        private const int GWL_EXSTYLE = -20;
+        private const int WS_EX_NOACTIVATE = 0x08000000;
         private static readonly IntPtr HWND_TOPMOST = new(-1);
         private static readonly IntPtr HWND_NOTOPMOST = new(-2);
         private const uint SWP_NOMOVE = 0x0002;
@@ -1685,6 +1687,15 @@ namespace RetroBar.Controls
                 else
                 {
                     SetWindowLong(source.Handle, GWLP_HWNDPARENT, 0);
+                }
+
+                // A popup's window is never activated by a click (WS_EX_NOACTIVATE), and Windows will not put a window that is not
+                // the active one above the others whatever it is asked: as a window of its own it is activated by a click, which is
+                // what brings it in front of the windows an ordinary window is above.
+                int style = GetWindowLong(source.Handle, GWL_EXSTYLE);
+                if ((style & WS_EX_NOACTIVATE) != 0)
+                {
+                    SetWindowLong(source.Handle, GWL_EXSTYLE, style & ~WS_EX_NOACTIVATE);
                 }
 
                 SetWindowPos(source.Handle, _seekPopupPinned ? HWND_TOPMOST : HWND_NOTOPMOST, 0, 0, 0, 0, SWP_NOMOVE | SWP_NOSIZE | SWP_NOACTIVATE);
