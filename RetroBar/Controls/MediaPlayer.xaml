@@ -260,7 +260,6 @@
                                        HorizontalAlignment="Center"
                                        Margin="8.4,7.4,8.4,4"
                                        Visibility="Collapsed"
-                                       Cursor="SizeAll"
                                        SnapsToDevicePixels="True"
                                        UseLayoutRounding="True"
                                        RenderOptions.BitmapScalingMode="HighQuality"
