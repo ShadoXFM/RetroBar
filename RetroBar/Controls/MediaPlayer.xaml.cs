@@ -1607,10 +1607,16 @@ namespace RetroBar.Controls
             }
         }
 
-        // A popup's window is above every other window by default. Without "Always on top" it is an ordinary one, which another window
-        // can come in front of.
+        // A popup's window is above every other window by default. Once it has been moved or set to be on top it is a window of its own
+        // (see below); until then, clicking in it changes nothing about it. Without "Always on top" it is an ordinary window, which
+        // another window can come in front of.
         private void ApplySeekPopupTopmost()
         {
+            if (_seekPopupMovedTo == null && !_seekPopupPinned)
+            {
+                return;
+            }
+
             if (PresentationSource.FromVisual(SeekPopupRoot) is HwndSource source)
             {
                 // The popup is owned by the taskbar's window, which is itself always on top, and a window owned by a topmost one is
