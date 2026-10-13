@@ -70,11 +70,9 @@ namespace RetroBar.Utilities
         // recording device, e.g. a virtual cable/bus), depending on Settings.VuMeterCaptureDevice.
         private IWaveIn _capture;
 
-        // The output device being listened to (a loopback capture hears the sound before the device's own volume is applied, so
-        // a quiet listening volume still read as a loud signal).
+        // The output device being listened to. A loopback capture hears the sound before the device's own volume is applied, and that is
+        // what the meter and the spectrum show: as loud as the signal is, not as loud as it is heard.
         private MMDevice _outputDevice;
-        private float _outputVolume = 1;
-        private DateTime _outputVolumeRead = DateTime.MinValue;
         private readonly object _lifecycleLock = new();
 
         public void Start()
@@ -234,31 +232,6 @@ namespace RetroBar.Utilities
             return (float)Math.Clamp((db - FloorDb) / -FloorDb, 0, 1);
         }
 
-        private float GetOutputVolume()
-        {
-            if (_outputDevice == null)
-            {
-                return 1;
-            }
-
-            if (DateTime.Now - _outputVolumeRead > TimeSpan.FromMilliseconds(250))
-            {
-                _outputVolumeRead = DateTime.Now;
-
-                try
-                {
-                    AudioEndpointVolume endpoint = _outputDevice.AudioEndpointVolume;
-                    _outputVolume = endpoint.Mute ? 0 : endpoint.MasterVolumeLevelScalar;
-                }
-                catch (Exception)
-                {
-                    _outputVolume = 1;
-                }
-            }
-
-            return _outputVolume;
-        }
-
         private void ProcessLevels(int sampleRate)
         {
             if (DateTime.Now - _lastUpdate < UpdateInterval || _levelSampleCount == 0)
@@ -267,9 +240,6 @@ namespace RetroBar.Utilities
             }
             double elapsed = Math.Min((DateTime.Now - _lastUpdate).TotalSeconds, 0.5);
             _lastUpdate = DateTime.Now;
-
-            // The spectrum is as loud as it is heard: scaled by the output device's volume (and silent while it is muted).
-            double volume = GetOutputVolume();
 
             // The VU meter: up at once, down by a fixed fraction per second.
             double fall = Math.Exp(-elapsed / VuFallTime);
@@ -282,13 +252,13 @@ namespace RetroBar.Utilities
 
             if (SpectrumUpdated != null && _fftFilled == FftSize)
             {
-                SpectrumUpdated(ComputeSpectrum(sampleRate, volume));
+                SpectrumUpdated(ComputeSpectrum(sampleRate));
             }
         }
 
         // The last FftSize samples through a Hann window and an FFT, the magnitudes of the bins gathered into bands spaced evenly
         // on a log scale (as the ear hears pitch), each band's loudest bin taken and turned into the 0-1 decibel level.
-        private float[] ComputeSpectrum(int sampleRate, double volume)
+        private float[] ComputeSpectrum(int sampleRate)
         {
             for (int i = 0; i < FftSize; i++)
             {
@@ -320,7 +290,7 @@ namespace RetroBar.Utilities
 
                 // A full-scale sine through the window reads FftSize / 4 in its bin once the FFT is scaled by 1 / FftSize (NAudio's
                 // forward transform does that): scale back to 1 for a full-scale sine, so 0 dB is full scale as in the VU meter.
-                bands[band] = ToLevel(peak * 4 * volume * SpectrumGain);
+                bands[band] = ToLevel(peak * 4 * SpectrumGain);
             }
 
             return bands;
