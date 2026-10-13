@@ -1629,7 +1629,6 @@ namespace RetroBar.Controls
                 // Moved: from here the popup is a window of its own that stays where it is put.
                 _seekPopupDragging = true;
                 _seekPopupMovedTo = _seekPopupDragWindow;
-                UpdateSeekPopupStaysOpen();
                 ApplySeekPopupTopmost();
             }
 
@@ -1639,8 +1638,8 @@ namespace RetroBar.Controls
         }
 
         // A popup's window is above every other window by default. Once it has been moved or set to be on top it is a window of its own
-        // (see below); until then, clicking in it changes nothing about it. Without "Always on top" it is an ordinary window, which
-        // another window can come in front of.
+        // (no owner), which stays where it is and open; until then, clicking in it changes nothing about it. Without "Always on top"
+        // that window is an ordinary one, which another window can come in front of.
         private void ApplySeekPopupTopmost()
         {
             if (_seekPopupMovedTo == null && !_seekPopupPinned)
@@ -1652,16 +1651,13 @@ namespace RetroBar.Controls
             {
                 // The popup is owned by the taskbar's window, which is itself always on top, and a window owned by a topmost one is
                 // topmost whatever it asks for: without the owner it can be an ordinary window.
-                if (!_seekPopupPinned)
+                if (IntPtr.Size == 8)
                 {
-                    if (IntPtr.Size == 8)
-                    {
-                        SetWindowLongPtr(source.Handle, GWLP_HWNDPARENT, IntPtr.Zero);
-                    }
-                    else
-                    {
-                        SetWindowLong(source.Handle, GWLP_HWNDPARENT, 0);
-                    }
+                    SetWindowLongPtr(source.Handle, GWLP_HWNDPARENT, IntPtr.Zero);
+                }
+                else
+                {
+                    SetWindowLong(source.Handle, GWLP_HWNDPARENT, 0);
                 }
 
                 SetWindowPos(source.Handle, _seekPopupPinned ? HWND_TOPMOST : HWND_NOTOPMOST, 0, 0, 0, 0, SWP_NOMOVE | SWP_NOSIZE | SWP_NOACTIVATE);
@@ -1737,11 +1733,59 @@ namespace RetroBar.Controls
             SeekPopupRoot.BeginAnimation(UIElement.OpacityProperty, fade);
         }
 
-        // Closed by a click elsewhere, unless it has been moved: then it is where the user put it, and stays (on top or not).
-        private void UpdateSeekPopupStaysOpen()
+        // A click elsewhere closes the popup, sliding down, unless it is a window of its own (it has been moved, or is set to be on top).
+        // The popup itself never closes on a click (StaysOpen), since WPF would close it at once, with no slide: this timer watches the
+        // mouse buttons instead.
+        private DispatcherTimer _seekClickAwayTimer;
+        private bool _seekClickAwayWasDown;
+        private bool _seekMenuOpen;
+
+        private static bool IsAnyMouseButtonDown() => ((GetAsyncKeyState(0x01) | GetAsyncKeyState(0x02) | GetAsyncKeyState(0x04)) & 0x8000) != 0;
+
+        private void StartSeekClickAwayTimer()
         {
-            SeekPopup.StaysOpen = _seekPopupMovedTo != null;
+            _seekClickAwayWasDown = IsAnyMouseButtonDown();
+            _seekClickAwayTimer ??= new DispatcherTimer(DispatcherPriority.Normal) { Interval = TimeSpan.FromMilliseconds(16) };
+            _seekClickAwayTimer.Tick -= SeekClickAwayTimer_OnTick;
+            _seekClickAwayTimer.Tick += SeekClickAwayTimer_OnTick;
+            _seekClickAwayTimer.Start();
         }
+
+        private void SeekClickAwayTimer_OnTick(object sender, EventArgs e)
+        {
+            if (!SeekPopup.IsOpen)
+            {
+                _seekClickAwayTimer.Stop();
+                return;
+            }
+
+            bool down = IsAnyMouseButtonDown();
+            bool pressed = down && !_seekClickAwayWasDown;
+            _seekClickAwayWasDown = down;
+
+            if (!pressed || _seekPopupClosing || _seekMenuOpen || _seekPopupMovedTo != null || _seekPopupPinned ||
+                PresentationSource.FromVisual(SeekPopupRoot) is not HwndSource source || !GetWindowRect(source.Handle, out RECT window) ||
+                !GetCursorPos(out POINT cursor))
+            {
+                return;
+            }
+
+            if (cursor.X >= window.Left && cursor.X < window.Right && cursor.Y >= window.Top && cursor.Y < window.Bottom)
+            {
+                return;
+            }
+
+            // The click on the track text that closes it must not open it again when the button comes up.
+            Point onText = TrackTextCanvas.PointFromScreen(new Point(cursor.X, cursor.Y));
+            if (onText.X >= 0 && onText.Y >= 0 && onText.X <= TrackTextCanvas.ActualWidth && onText.Y <= TrackTextCanvas.ActualHeight)
+            {
+                _ignoreNextTrackTextClick = true;
+                _ignoreTrackTextClickUntil = DateTime.UtcNow + TimeSpan.FromMilliseconds(600);
+            }
+
+            CloseSeekPopupAnimated();
+        }
+
 
         // The monitor the popup is on decides which adjustments of monitor-adjustments.json apply to it, and the pixel art is drawn for
         // that monitor's DPI (which WPF has already given the popup's window by now, or does when it raises DpiChanged below).
@@ -1792,7 +1836,6 @@ namespace RetroBar.Controls
             onTop.Click += (s, args) =>
             {
                 _seekPopupPinned = !_seekPopupPinned;
-                UpdateSeekPopupStaysOpen();
                 ApplySeekPopupTopmost();
             };
 
@@ -1807,17 +1850,19 @@ namespace RetroBar.Controls
             menu.Items.Add(onTop);
             menu.Items.Add(MakeMenuSeparator());
             menu.Items.Add(close);
+            menu.Opened += (s, args) => _seekMenuOpen = true;
+            menu.Closed += (s, args) => Dispatcher.BeginInvoke(new Action(() => _seekMenuOpen = false), DispatcherPriority.Background);
             menu.IsOpen = true;
         }
 
         private void SeekPopup_OnOpened(object sender, EventArgs e)
         {
-            UpdateSeekPopupStaysOpen();
+            StartSeekClickAwayTimer();
 
             // One popup at a time, whichever monitor's player it belongs to.
             if (_openSeekPlayer != null && _openSeekPlayer != this)
             {
-                _openSeekPlayer.SeekPopup.IsOpen = false;
+                _openSeekPlayer.CloseSeekPopupAnimated();
             }
 
             _openSeekPlayer = this;

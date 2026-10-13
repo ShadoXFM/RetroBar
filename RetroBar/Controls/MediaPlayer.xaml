@@ -169,15 +169,16 @@
         </Grid>
         <!-- Opens on a click on the track text (see TrackTextCanvas_OnMouseLeftButtonUp) - lets
              seeking within the current track, which doesn't fit as a permanently-visible part of
-             the compact taskbar widget. A click elsewhere closes it, unless it has been dragged (see UpdateSeekPopupStaysOpen); "Always on top" (its menu)
-             only decides whether other windows can cover it. -->
+             the compact taskbar widget. A click elsewhere closes it (slid down like it slid up; see SeekClickAwayTimer_OnTick: the popup itself stays
+             open, as WPF would close it at once), unless it has been dragged or has "Always on top" (its menu) checked: then it is a
+             window of its own. -->
         <Popup x:Name="SeekPopup"
                PlacementTarget="{Binding ElementName=TrackTextCanvas}"
                Placement="Top"
                HorizontalOffset="-45"
                VerticalOffset="2"
                AllowsTransparency="True"
-               StaysOpen="False"
+               StaysOpen="True"
                Opened="SeekPopup_OnOpened"
                Closed="SeekPopup_OnClosed">
             <!-- Same 4-line raised bevel as a resting (non-pressed) tab (see TaskButton's own
