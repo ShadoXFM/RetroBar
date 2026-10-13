@@ -1938,9 +1938,7 @@ namespace RetroBar.Controls
             // The row starts 6 pixels in, less 1 at 125% and 2 at 100% (the slider takes up what that gives up).
             double shift = (dpi.DpiScaleX < 1.125 ? 2 : 1) * pixel;
             SeekPreviousButton.Margin = new Thickness(6 * pixel - shift, 0, 0, 0);
-            SeekBackButton.Margin = new Thickness(-pull, 0, 0, 0);
             SeekPlayPauseButton.Margin = new Thickness(-pull, 0, 0, 0);
-            SeekForwardButton.Margin = new Thickness(-pull, 0, 0, 0);
             SeekNextButton.Margin = new Thickness(-pull, 0, 0, 0);
 
             // The slider takes up the width the buttons' margins gave up (2 pixels each side, and the pulled-in gaps), so the row,
@@ -1950,14 +1948,14 @@ namespace RetroBar.Controls
             double closer = dpi.DpiScaleX < 1.125 ? 4 * pixel : 0;
             // The slider reaches 2 pixels further at each end, into what was the gaps (so they are 2 pixels smaller) - it is 4 pixels
             // longer: its width is the same binding as in the XAML, with that much less deducted.
-            SeekSlider.Margin = new Thickness(4 + 4 * pull + shift - closer, 0, 6 + closer, 2 * pixel);
+            SeekSlider.Margin = new Thickness(4 + 2 * pull + shift - closer, 0, 6 + closer, 2 * pixel);
 
             var width = new MultiBinding
             {
                 Converter = (IMultiValueConverter)FindResource("remainingWidthConverter"),
                 ConverterParameter = string.Create(System.Globalization.CultureInfo.InvariantCulture, $"{12.8 - 4 * pixel},30"),
             };
-            foreach (FrameworkElement source in new FrameworkElement[] { SeekAlbumArtImage, SeekBackButton, SeekPlayPauseButton, SeekForwardButton, SeekPreviousButton, SeekNextButton, SeekTimeText })
+            foreach (FrameworkElement source in new FrameworkElement[] { SeekAlbumArtImage, SeekPlayPauseButton, SeekPreviousButton, SeekNextButton, SeekTimeText })
             {
                 width.Bindings.Add(new Binding(nameof(ActualWidth)) { Source = source });
             }
@@ -2531,8 +2529,6 @@ namespace RetroBar.Controls
 
             bool canSeek = _sessionManager?.CanSeek ?? false;
             SeekSlider.IsEnabled = canSeek;
-            SeekBackButton.IsEnabled = canSeek;
-            SeekForwardButton.IsEnabled = canSeek;
 
             RefreshSeekDisplay();
 
@@ -2690,16 +2686,6 @@ namespace RetroBar.Controls
             SetSeekDisplay(target, TimeSpan.FromSeconds(SeekSlider.Maximum));
 
             await _sessionManager.SeekAsync(target);
-        }
-
-        private async void SeekBackButton_OnClick(object sender, RoutedEventArgs e)
-        {
-            await SeekRelativeAsync(TimeSpan.FromSeconds(-10));
-        }
-
-        private async void SeekForwardButton_OnClick(object sender, RoutedEventArgs e)
-        {
-            await SeekRelativeAsync(TimeSpan.FromSeconds(10));
         }
 
         private async System.Threading.Tasks.Task SeekRelativeAsync(TimeSpan delta)
