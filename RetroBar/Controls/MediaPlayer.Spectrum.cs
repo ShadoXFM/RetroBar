@@ -231,7 +231,7 @@ namespace RetroBar.Controls
 
         // When sound comes back after the dashes have all gone, the bars come back one after the other from the left (each a little after the
         // one on its left), as they went.
-        private const double SeekSpectrumAppearStagger = 45;
+        private const double SeekSpectrumAppearStagger = 22;
 
         private bool _seekSpectrumHidden = true;
 
