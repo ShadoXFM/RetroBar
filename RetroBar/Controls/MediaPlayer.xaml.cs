@@ -905,11 +905,13 @@ namespace RetroBar.Controls
         // Visible (see UpdateVisualizerActiveState) - no need to keep computing a Width nobody can
         // see, and this way a track that's paused (Visibility already Collapsed) doesn't leave
         // either bar holding whatever width it last had once playback resumes and they reappear.
-        // The VU meter's automatic gain: the peak level lately (0-1, the decibel mapping of AudioSpectrumCapture), which falls slowly - about 1
-        // in 25 seconds at the 40 ms the levels come at - so a quiet track or a lowered volume fills the bar as much as a loud one. The
-        // loudest reaches VuTarget of the bar; the gain is not more than VuTarget / VuLeastReference (4), so silence and hiss stay low.
+        // The automatic gain of the VU meter and the popup's spectrum: the peak level lately (0-1, the decibel mapping of AudioSpectrumCapture),
+        // which falls by 1.5% every 40 ms the levels come at (it halves in about 1.8 seconds, so a lowered volume is made up for within a few
+        // seconds) - so a quiet track or a lowered volume fills the bar as much as a loud one. The loudest reaches VuTarget of the bar; the gain
+        // is not more than VuTarget / VuLeastReference (4), so silence and hiss stay low.
         private float _vuPeak;
-        private const float VuPeakFall = 0.0016f;
+        private float _spectrumPeak;
+        private const float VuPeakDecay = 0.985f;
         private const float VuTarget = 0.95f;
         private const float VuLeastReference = 0.24f;
 
@@ -924,7 +926,7 @@ namespace RetroBar.Controls
 
                 // Normalised: scaled so that the loudest it has been lately reaches nearly the end of the bar (see _vuPeak).
                 float loudest = Math.Max(left, right);
-                _vuPeak = Math.Max(loudest, _vuPeak - VuPeakFall);
+                _vuPeak = Math.Max(loudest, _vuPeak * VuPeakDecay);
                 float gain = VuTarget / Math.Max(_vuPeak, VuLeastReference);
                 left = Math.Min(1, left * gain);
                 right = Math.Min(1, right * gain);
@@ -971,9 +973,24 @@ namespace RetroBar.Controls
 
             bool playing = _sessionManager?.PlaybackState == MediaPlaybackState.Playing;
             bool sound = false;
+
+            // The same automatic gain as the VU meter's: the loudest band lately reaches nearly the top.
+            float gain = 1;
+            if (bands != null)
+            {
+                float loudestBand = 0;
+                foreach (float band in bands)
+                {
+                    loudestBand = Math.Max(loudestBand, band);
+                }
+
+                _spectrumPeak = Math.Max(loudestBand, _spectrumPeak * VuPeakDecay);
+                gain = VuTarget / Math.Max(_spectrumPeak, VuLeastReference);
+            }
+
             for (int i = 0; i < _seekSpectrumLevels.Length; i++)
             {
-                float level = playing && bands != null ? bands[i] : 0;
+                float level = playing && bands != null ? Math.Min(1, bands[i] * gain) : 0;
                 sound |= level > 0.05f;
                 _seekSpectrumLevels[i] = Math.Max(level, _seekSpectrumLevels[i] - 0.08f);
                 _seekSpectrumPeaks[i] = Math.Max(_seekSpectrumLevels[i], _seekSpectrumPeaks[i] - (sound ? 0.02f : 0.05f));
@@ -1247,6 +1264,16 @@ namespace RetroBar.Controls
                 new GradientStop(Colors.Black, 1 - MarqueeFadeWidth / width),
                 _trackTextMaskRight,
             }, new Point(0, 0), new Point(1, 0));
+
+            // In DIPs of the clip, not relative to the element's bounds: those include the whole text, which is much wider than the clip
+            // (it sits on a Canvas), so the fade did not reach the end of what shows.
+            _trackTextMask.MappingMode = BrushMappingMode.Absolute;
+            _trackTextMask.EndPoint = new Point(width, 0);
+            for (int i = 1; i <= 2; i++)
+            {
+                _trackTextMask.GradientStops[i].Offset = i == 1 ? MarqueeFadeWidth / width : 1 - MarqueeFadeWidth / width;
+            }
+
             TrackTextClip.OpacityMask = _trackTextMask;
             EnsureFadeRendering();
             UpdateFades();
@@ -1274,6 +1301,7 @@ namespace RetroBar.Controls
                 return;
             }
 
+            _trackTextMask.EndPoint = new Point(width, 0);
             _trackTextMask.GradientStops[1].Offset = MarqueeFadeWidth / width;
             _trackTextMask.GradientStops[2].Offset = 1 - MarqueeFadeWidth / width;
         }
