@@ -1,5 +1,6 @@
 using ManagedShell.Common.Logging;
 using System;
+using System.Linq;
 using System.Collections.Generic;
 using System.IO;
 using System.Text.Json;
@@ -134,6 +135,13 @@ namespace RetroBar.Utilities
             public Dictionary<string, JsonElement> Tags { get; set; }
         }
 
+        /// <summary>What is wrong with the file as it was read last (each also in the log): a field or a tag that is not known, a value of
+        /// the wrong type, or the file itself not being valid JSON. Empty when it is fine.</summary>
+        public static IReadOnlyList<string> Problems { get; private set; } = Array.Empty<string>();
+
+        private static readonly HashSet<string> ValidFields = new(
+            typeof(MonitorOffsetValue).GetProperties().Select(property => property.Name), StringComparer.Ordinal);
+
         private static Dictionary<string, MonitorEntry> _monitors;
         private static FileSystemWatcher _watcher;
 
@@ -211,23 +219,158 @@ namespace RetroBar.Utilities
             {
                 if (!File.Exists(FilePath))
                 {
+                    SetProblems(new List<string>());
                     return new Dictionary<string, MonitorEntry>();
                 }
 
                 string json = File.ReadAllText(FilePath);
                 if (string.IsNullOrWhiteSpace(json))
                 {
+                    SetProblems(new List<string>());
                     return new Dictionary<string, MonitorEntry>();
                 }
 
                 var loaded = JsonSerializer.Deserialize<Dictionary<string, MonitorEntry>>(json, ReadOptions);
+                SetProblems(Validate(loaded));
                 return loaded ?? new Dictionary<string, MonitorEntry>();
             }
             catch (Exception ex)
             {
                 ShellLogger.Error($"MonitorAdjustments: Error reading {FilePath}, ignoring it until it's fixed: {ex.Message}");
+                SetProblems(new List<string> { $"The file is not valid JSON: {ex.Message}" });
                 return new Dictionary<string, MonitorEntry>();
             }
+        }
+
+        private static void SetProblems(List<string> problems)
+        {
+            Problems = problems;
+            foreach (string problem in problems)
+            {
+                ShellLogger.Warning($"MonitorAdjustments: {problem}");
+            }
+        }
+
+        // Typos are what goes wrong in a hand-edited file, and nothing says so: a field or a tag with a wrong letter is just not found. Only what
+        // is certainly a mistake is reported - a field that does not exist, a value of the wrong type, and a tag that is a letter or two off a
+        // real one (a tag nothing like any is allowed: an element can be tagged by hand).
+        private static List<string> Validate(Dictionary<string, MonitorEntry> monitors)
+        {
+            var problems = new List<string>();
+            if (monitors == null)
+            {
+                return problems;
+            }
+
+            foreach ((string device, MonitorEntry entry) in monitors)
+            {
+                if (entry?.Tags == null)
+                {
+                    continue;
+                }
+
+                foreach ((string tag, JsonElement value) in entry.Tags)
+                {
+                    if (!KnownMonitorTags.Names.Contains(tag) && Closest(tag, KnownMonitorTags.Names) is string near)
+                    {
+                        problems.Add($"{device}: no element has the tag '{tag}' (did you mean '{near}'?)");
+                    }
+
+                    if (value.ValueKind != JsonValueKind.Object)
+                    {
+                        problems.Add($"{device}/{tag}: expected an object of fields, like {{ \"X\": 1 }}");
+                        continue;
+                    }
+
+                    foreach (JsonProperty field in value.EnumerateObject())
+                    {
+                        if (!ValidFields.Contains(field.Name))
+                        {
+                            string hint = Closest(field.Name, ValidFields) is string like ? $" (did you mean '{like}'?)" : string.Empty;
+                            problems.Add($"{device}/{tag}: unknown field '{field.Name}'{hint}");
+                        }
+                    }
+
+                    try
+                    {
+                        value.Deserialize<MonitorOffsetValue>(ReadOptions);
+                    }
+                    catch (JsonException ex)
+                    {
+                        problems.Add($"{device}/{tag}: {ex.Message}");
+                    }
+                }
+            }
+
+            return problems;
+        }
+
+        // The known name that is a letter or two off (or only in its case), if any.
+        private static string Closest(string name, IEnumerable<string> known)
+        {
+            string best = null;
+            int bestDistance = 3;
+            foreach (string candidate in known)
+            {
+                if (Math.Abs(candidate.Length - name.Length) >= bestDistance)
+                {
+                    continue;
+                }
+
+                int distance = string.Equals(candidate, name, StringComparison.OrdinalIgnoreCase) ? 0 : EditDistance(candidate, name);
+                if (distance < bestDistance)
+                {
+                    bestDistance = distance;
+                    best = candidate;
+                }
+            }
+
+            return best;
+        }
+
+        private static int EditDistance(string a, string b)
+        {
+            var previous = new int[b.Length + 1];
+            var current = new int[b.Length + 1];
+            for (int j = 0; j <= b.Length; j++)
+            {
+                previous[j] = j;
+            }
+
+            for (int i = 1; i <= a.Length; i++)
+            {
+                current[0] = i;
+                for (int j = 1; j <= b.Length; j++)
+                {
+                    current[j] = Math.Min(Math.Min(current[j - 1] + 1, previous[j] + 1), previous[j - 1] + (a[i - 1] == b[j - 1] ? 0 : 1));
+                }
+
+                (previous, current) = (current, previous);
+            }
+
+            return previous[b.Length];
+        }
+
+        /// <summary>Opens the file in the program that opens .json files.</summary>
+        public static void OpenFile()
+        {
+            EnsureFileExists();
+            System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo(FilePath) { UseShellExecute = true });
+        }
+
+        /// <summary>Empties the file (every monitor's adjustments), keeping what was in it beside it: monitor-adjustments.json.bak-DATE.
+        /// Returns the backup's path, or null if there was nothing to keep.</summary>
+        public static string Reset()
+        {
+            string backup = null;
+            if (File.Exists(FilePath))
+            {
+                backup = FilePath + ".bak-" + DateTime.Now.ToString("yyyyMMdd-HHmmss");
+                File.Copy(FilePath, backup, true);
+            }
+
+            File.WriteAllText(FilePath, Template);
+            return backup;
         }
 
         private static FileSystemWatcher CreateWatcher()

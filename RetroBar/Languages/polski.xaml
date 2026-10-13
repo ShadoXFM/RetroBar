@@ -142,6 +142,7 @@
     <s:String x:Key="minimize">_Minimalizuj</s:String>
     <s:String x:Key="maximize">Mak_symalizuj</s:String>
     <s:String x:Key="close">Zam_knij</s:String>
+    <s:String x:Key="media_popup_always_on_top">Zawsze na _wierzchu</s:String>
     <s:String x:Key="end_task">Zakończyć polecenie</s:String>
 
     <s:String x:Key="show_hidden">Pokaż ukryte ikony</s:String>

@@ -142,6 +142,7 @@
     <s:String x:Key="minimize">Minimér</s:String>
     <s:String x:Key="maximize">Maksimér</s:String>
     <s:String x:Key="close">_Luk</s:String>
+    <s:String x:Key="media_popup_always_on_top">Altid _øverst</s:String>
     <s:String x:Key="end_task">_Afslut opgave</s:String>
 
     <s:String x:Key="show_hidden">Vis skjulte ikoner</s:String>

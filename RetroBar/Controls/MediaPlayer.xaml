@@ -194,6 +194,7 @@
                   UseLayoutRounding="True"
                   SnapsToDevicePixels="True"
                   ClipToBounds="True"
+                  PreviewMouseWheel="SeekPopupRoot_OnPreviewMouseWheel"
                   PreviewMouseDown="SeekPopupRoot_OnPreviewMouseDown"
                   PreviewMouseLeftButtonDown="SeekPopupRoot_OnPreviewMouseLeftButtonDown"
                   MouseRightButtonUp="SeekPopupRoot_OnMouseRightButtonUp">
@@ -277,6 +278,22 @@
                                 <!-- The width of "0:00 / 0:00" in the time text's own font (same tag, so the same monitor settings), which the art's
                                      size is worked out from instead of the live time text: that gets longer for a track of ten minutes or more,
                                      and the popup grew with it. The slider is what gives up the room then. -->
+                                <!-- The -10 s and +10 s buttons are gone (the wheel seeks), but the popup's size was worked out from their widths:
+                                     two hidden ones, in no room at all, keep it as it was (and the slider has their room). -->
+                                <Canvas Width="0" Height="0">
+                                    <Button x:Name="SeekBackButton"
+                                            Style="{DynamicResource MediaPlayerButtonStyle}"
+                                            Visibility="Hidden">
+                                        <Path x:Name="SeekBackGlyph"
+                                              Style="{DynamicResource MediaPlayerGlyphStyle}" />
+                                    </Button>
+                                    <Button x:Name="SeekForwardButton"
+                                            Style="{DynamicResource MediaPlayerButtonStyle}"
+                                            Visibility="Hidden">
+                                        <Path x:Name="SeekForwardGlyph"
+                                              Style="{DynamicResource MediaPlayerGlyphStyle}" />
+                                    </Button>
+                                </Canvas>
                                 <Canvas Width="0" Height="0">
                                     <TextBlock x:Name="SeekTimeWidthRef"
                                                Style="{DynamicResource MediaPlayerTrackTextStyle}"
@@ -302,6 +319,7 @@
                                         <Border x:Name="SeekTitleClip"
                                                 Margin="0,0,0,1"
                                                 SizeChanged="SeekClip_OnSizeChanged">
+                                            <Grid>
                                             <Canvas Height="{Binding ActualHeight, ElementName=SeekTitleText}">
                                                 <TextBlock x:Name="SeekTitleText"
                                                            Canvas.Left="0"
@@ -311,9 +329,24 @@
                                                            SizeChanged="SeekText_OnSizeChanged"
                                                            utilities:MonitorOffset.Tag="MediaSeekTitleText" />
                                             </Canvas>
+                                            <!-- A line too long for its room fades out at the end it is sliding away from or towards: filled with the popup's
+                                                 colour, and their opacity animated along with the slide, in code (see UpdateSeekMarquee). -->
+                                            <Rectangle x:Name="SeekTitleFadeLeft"
+                                                       HorizontalAlignment="Left"
+                                                       Width="32"
+                                                       Opacity="0"
+                                                       IsHitTestVisible="False"
+                                                       Visibility="Collapsed" />
+                                            <Rectangle x:Name="SeekTitleFade"
+                                                       HorizontalAlignment="Right"
+                                                       Width="32"
+                                                       IsHitTestVisible="False"
+                                                       Visibility="Collapsed" />
+                                            </Grid>
                                         </Border>
                                         <Border x:Name="SeekArtistClip"
                                                 SizeChanged="SeekClip_OnSizeChanged">
+                                            <Grid>
                                             <Canvas Height="{Binding ActualHeight, ElementName=SeekArtistText}">
                                                 <TextBlock x:Name="SeekArtistText"
                                                            Canvas.Left="0"
@@ -322,17 +355,34 @@
                                                            SizeChanged="SeekText_OnSizeChanged"
                                                            utilities:MonitorOffset.Tag="MediaSeekArtistText" />
                                             </Canvas>
+                                            <!-- A line too long for its room fades out at the end it is sliding away from or towards: filled with the popup's
+                                                 colour, and their opacity animated along with the slide, in code (see UpdateSeekMarquee). -->
+                                            <Rectangle x:Name="SeekArtistFadeLeft"
+                                                       HorizontalAlignment="Left"
+                                                       Width="32"
+                                                       Opacity="0"
+                                                       IsHitTestVisible="False"
+                                                       Visibility="Collapsed" />
+                                            <Rectangle x:Name="SeekArtistFade"
+                                                       HorizontalAlignment="Right"
+                                                       Width="32"
+                                                       IsHitTestVisible="False"
+                                                       Visibility="Collapsed" />
+                                            </Grid>
                                         </Border>
                                     </StackPanel>
-                                    <Path x:Name="SeekSpectrum"
+                                                                        <Grid x:Name="SeekSpectrumHost"
                                           Grid.Column="1"
                                           Margin="0,0,6,0"
-                                          VerticalAlignment="Center"
-                                          Stretch="None"
-                                          SnapsToDevicePixels="True"
-                                          UseLayoutRounding="True"
-                                          Fill="{Binding Foreground, ElementName=SeekTitleText}"
-                                          utilities:MonitorOffset.Tag="MediaSeekSpectrum" />
+                                          VerticalAlignment="Center">
+                                        <Path x:Name="SeekSpectrum"
+                                              VerticalAlignment="Center"
+                                              Stretch="None"
+                                              SnapsToDevicePixels="True"
+                                              UseLayoutRounding="True"
+                                              Fill="{Binding Foreground, ElementName=SeekTitleText}"
+                                              utilities:MonitorOffset.Tag="MediaSeekSpectrum" />
+                                    </Grid>
                                 </Grid>
                                 <!-- HorizontalAlignment="Center" (instead of the StackPanel-child
                                      default of Stretch) matters for more than just centering: the
@@ -368,24 +418,6 @@
                                               Style="{DynamicResource MediaPlayerGlyphStyle}"
                                               utilities:MonitorOffset.Tag="MediaSeekGlyphSkipPrevious" />
                                     </Button>
-                                    <Button x:Name="SeekBackButton"
-                                            Style="{DynamicResource MediaPlayerButtonStyle}"
-                                            Click="SeekBackButton_OnClick"
-                                            ToolTip="-10s"
-                                            VerticalAlignment="Center"
-                                            Margin="5,0,1,0"
-                                            utilities:MonitorOffset.Tag="MediaSeekButtonBack">
-                                        <!-- Own dedicated tag, deliberately NOT shared with the
-                                             main taskbar row's own "MediaGlyphPrevious" (see
-                                             SeekForwardButton's comment below for why). Two
-                                             left-pointing triangles ("<<"), same shape as the
-                                             original (pre-skip-icon) MediaPlayerPreviousGeometry
-                                             in System.xaml. -->
-                                        <Path x:Name="SeekBackGlyph"
-                                              Data="M 4,0 L 4,7 L 0,3.5 Z M 9,0 L 9,7 L 5,3.5 Z"
-                                              Style="{DynamicResource MediaPlayerGlyphStyle}"
-                                              utilities:MonitorOffset.Tag="MediaSeekGlyphPrevious" />
-                                    </Button>
                                     <Button x:Name="SeekPlayPauseButton"
                                             Style="{DynamicResource MediaPlayerButtonStyle}"
                                             Click="PlayPauseButton_OnClick"
@@ -397,26 +429,6 @@
                                               Data="{DynamicResource MediaPlayerPlayGeometry}"
                                               Style="{DynamicResource MediaPlayerGlyphStyle}"
                                               utilities:MonitorOffset.Tag="MediaSeekGlyphPlayPause" />
-                                    </Button>
-                                    <Button x:Name="SeekForwardButton"
-                                            Style="{DynamicResource MediaPlayerButtonStyle}"
-                                            Click="SeekForwardButton_OnClick"
-                                            ToolTip="+10s"
-                                            VerticalAlignment="Center"
-                                            Margin="1,0,1,0"
-                                            utilities:MonitorOffset.Tag="MediaSeekButtonForward">
-                                        <!-- Own dedicated tag, not shared with the main row's
-                                             "MediaGlyphNext" - a per-monitor Geometry override
-                                             tuned for that shared tag would otherwise silently
-                                             overwrite this popup's own glyph too (this is what
-                                             DISPLAY1 was doing before). Two right-pointing
-                                             triangles (">>"), same shape as the original
-                                             (pre-skip-icon) MediaPlayerNextGeometry in
-                                             System.xaml. -->
-                                        <Path x:Name="SeekForwardGlyph"
-                                              Data="M 0,0 L 4,3.5 L 0,7 Z M 5,0 L 9,3.5 L 5,7 Z"
-                                              Style="{DynamicResource MediaPlayerGlyphStyle}"
-                                              utilities:MonitorOffset.Tag="MediaSeekGlyphNext" />
                                     </Button>
                                     <Button x:Name="SeekNextButton"
                                             Style="{DynamicResource MediaPlayerButtonStyle}"
@@ -471,6 +483,9 @@
                                                VerticalAlignment="Center"
                                                Margin="2,0,6,0"
                                                TextAlignment="Right"
+                                               Background="Transparent"
+                                               Cursor="Hand"
+                                               MouseLeftButtonUp="SeekTimeText_OnMouseLeftButtonUp"
                                                MinWidth="{Binding ActualWidth, ElementName=SeekTimeWidthRef}"
                                                Text="0:00 / 0:00"
                                                utilities:MonitorOffset.Tag="MediaSeekTimeText" />

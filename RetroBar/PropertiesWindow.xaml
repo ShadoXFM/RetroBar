@@ -435,6 +435,33 @@
                                       IsEnabled="{Binding Source={x:Static Settings:Settings.Instance}, Path=ShowMediaPlayer, UpdateSourceTrigger=PropertyChanged}">
                                 <Label Content="{DynamicResource show_media_player_album_art}" />
                             </CheckBox>
+                            <CheckBox x:Name="cbShowMediaPopupSpectrum"
+                                      IsChecked="{Binding Source={x:Static Settings:Settings.Instance}, Path=ShowMediaPopupSpectrum, UpdateSourceTrigger=PropertyChanged}"
+                                      IsEnabled="{Binding Source={x:Static Settings:Settings.Instance}, Path=ShowMediaPlayer, UpdateSourceTrigger=PropertyChanged}">
+                                <Label Content="{DynamicResource show_media_popup_spectrum}" />
+                            </CheckBox>
+                            <CheckBox x:Name="cbShowVuMeter"
+                                      IsChecked="{Binding Source={x:Static Settings:Settings.Instance}, Path=ShowVuMeter, UpdateSourceTrigger=PropertyChanged}"
+                                      IsEnabled="{Binding Source={x:Static Settings:Settings.Instance}, Path=ShowMediaPlayer, UpdateSourceTrigger=PropertyChanged}">
+                                <Label Content="{DynamicResource show_vu_meter}" />
+                            </CheckBox>
+                        </StackPanel>
+                    </GroupBox>
+                    <GroupBox Header="{DynamicResource monitor_adjustments_heading}">
+                        <StackPanel Orientation="Vertical">
+                            <DockPanel>
+                                <Button x:Name="btnOpenMonitorAdjustments"
+                                        DockPanel.Dock="Left"
+                                        Content="{DynamicResource open_monitor_adjustments}"
+                                        Click="OpenMonitorAdjustments_OnClick" />
+                                <Button x:Name="btnResetMonitorAdjustments"
+                                        HorizontalAlignment="Right"
+                                        Content="{DynamicResource reset_monitor_adjustments}"
+                                        Click="ResetMonitorAdjustments_OnClick" />
+                            </DockPanel>
+                            <TextBlock x:Name="txtMonitorAdjustmentsProblems"
+                                       TextWrapping="Wrap"
+                                       Visibility="Collapsed" />
                         </StackPanel>
                     </GroupBox>
                     <GroupBox Header="{DynamicResource weather_heading}">

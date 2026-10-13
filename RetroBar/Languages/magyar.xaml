@@ -142,6 +142,7 @@
     <s:String x:Key="minimize">Mi_nimalizálás</s:String>
     <s:String x:Key="maximize">Ma_ximalizálás</s:String>
     <s:String x:Key="close">_Bezárás</s:String>
+    <s:String x:Key="media_popup_always_on_top">Mindig _felül</s:String>
     <s:String x:Key="end_task">_Feladat befejezése</s:String>
 
     <s:String x:Key="show_hidden">Rejtett ikonok mutatása</s:String>

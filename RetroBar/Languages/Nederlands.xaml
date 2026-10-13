@@ -139,6 +139,7 @@
     <s:String x:Key="minimize">Mi_nimaliseren</s:String>
     <s:String x:Key="maximize">_Maximaliseren</s:String>
     <s:String x:Key="close">_Sluiten</s:String>
+    <s:String x:Key="media_popup_always_on_top">Altijd _bovenaan</s:String>
     <s:String x:Key="end_task">_Taak beëindigen</s:String>
 
     <s:String x:Key="show_hidden">Verborgen pictogrammen weergeven</s:String>

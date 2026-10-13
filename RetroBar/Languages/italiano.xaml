@@ -142,6 +142,7 @@
     <s:String x:Key="minimize">_Riduci a icona</s:String>
     <s:String x:Key="maximize">_Ingrandisci</s:String>
     <s:String x:Key="close">_Chiudi</s:String>
+    <s:String x:Key="media_popup_always_on_top">Sempre in _primo piano</s:String>
     <s:String x:Key="end_task">_Termina attività</s:String>
 
     <s:String x:Key="show_hidden">Mostra icone nascoste</s:String>
