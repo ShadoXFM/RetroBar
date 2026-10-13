@@ -903,6 +903,14 @@ namespace RetroBar.Controls
         // Visible (see UpdateVisualizerActiveState) - no need to keep computing a Width nobody can
         // see, and this way a track that's paused (Visibility already Collapsed) doesn't leave
         // either bar holding whatever width it last had once playback resumes and they reappear.
+        // The VU meter's automatic gain: the peak level lately (0-1, the decibel mapping of AudioSpectrumCapture), which falls slowly - about 1
+        // in 25 seconds at the 40 ms the levels come at - so a quiet track or a lowered volume fills the bar as much as a loud one. The
+        // loudest reaches VuTarget of the bar; the gain is not more than VuTarget / VuLeastReference (4), so silence and hiss stay low.
+        private float _vuPeak;
+        private const float VuPeakFall = 0.0016f;
+        private const float VuTarget = 0.95f;
+        private const float VuLeastReference = 0.24f;
+
         private void VisualizerCapture_OnLevelUpdated(float left, float right)
         {
             Dispatcher.BeginInvoke(new Action(() =>
@@ -911,6 +919,13 @@ namespace RetroBar.Controls
                 {
                     return;
                 }
+
+                // Normalised: scaled so that the loudest it has been lately reaches nearly the end of the bar (see _vuPeak).
+                float loudest = Math.Max(left, right);
+                _vuPeak = Math.Max(loudest, _vuPeak - VuPeakFall);
+                float gain = VuTarget / Math.Max(_vuPeak, VuLeastReference);
+                left = Math.Min(1, left * gain);
+                right = Math.Min(1, right * gain);
 
                 // _vuMeterMaxWidth (kept up to date by UpdateVuMeterOffset) already reproduces
                 // the old TrackText/TrackTextHost cap, just measured from the tray box's own left
@@ -1150,52 +1165,69 @@ namespace RetroBar.Controls
         }
 
         // A line too long for its room fades out at the end it is sliding away from or towards (not at the end that is showing all of it), so
-        // the text neither starts nor ends in a faded edge. The fades follow the slide: this is the table of how much of each there is
-        // when (see FadeKeys), used by the taskbar's text (a mask on the text only: the VU meter behind it is not faded) and by the
-        // popup's lines.
-        private const double MarqueeFadeWidth = 14;
-
-        private (double Time, double Left, double Right)[] FadeKeys(double overflow, out double total)
-        {
-            double travel = Math.Max(overflow / _marqueeSpeed, 0.5);
-            double pause = _marqueePause;
-            double fade = Math.Min(MarqueeFadeWidth / _marqueeSpeed, travel / 2);
-            total = 2 * pause + 2 * travel;
-
-            return new[]
-            {
-                (0d, 0d, 1d),
-                (pause, 0d, 1d),
-                (pause + fade, 1d, 1d),
-                (pause + travel - fade, 1d, 1d),
-                (pause + travel, 1d, 0d),
-                (2 * pause + travel, 1d, 0d),
-                (2 * pause + travel + fade, 1d, 1d),
-                (total - fade, 1d, 1d),
-                (total, 0d, 1d),
-            };
-        }
-
-        private DoubleAnimationUsingKeyFrames FadeOpacityAnimation(double overflow, bool left)
-        {
-            var keys = FadeKeys(overflow, out double total);
-            var animation = new DoubleAnimationUsingKeyFrames
-            {
-                Duration = new Duration(TimeSpan.FromSeconds(total)),
-                RepeatBehavior = RepeatBehavior.Forever,
-            };
-
-            foreach (var key in keys)
-            {
-                animation.KeyFrames.Add(new LinearDoubleKeyFrame(left ? key.Left : key.Right, KeyTime.FromTimeSpan(TimeSpan.FromSeconds(key.Time))));
-            }
-
-            return animation;
-        }
+        // the text neither starts nor ends in a faded edge. How much of each fade there is follows where the slide is (read on every frame,
+        // so it can not be out of step with it): the taskbar's text has a mask on the text only (the VU meter behind it is not faded), and
+        // the popup's lines have a gradient over each end in the popup's colour.
+        private const double MarqueeFadeWidth = 20;
 
         private LinearGradientBrush _trackTextMask;
+        private GradientStop _trackTextMaskLeft;
+        private GradientStop _trackTextMaskRight;
+        private bool _fadeRenderingHooked;
 
-        private void StartTrackTextFade(double overflow)
+        private static double Clamp01(double value) => Math.Clamp(value, 0, 1);
+
+        private void EnsureFadeRendering()
+        {
+            if (!_fadeRenderingHooked)
+            {
+                _fadeRenderingHooked = true;
+                CompositionTarget.Rendering += FadeRendering;
+            }
+        }
+
+        private void FadeRendering(object sender, EventArgs e)
+        {
+            UpdateFades();
+
+            if (_trackTextMask == null && !SeekPopup.IsOpen)
+            {
+                CompositionTarget.Rendering -= FadeRendering;
+                _fadeRenderingHooked = false;
+            }
+        }
+
+        private void UpdateFades()
+        {
+            if (_trackTextMask != null)
+            {
+                // The text is at TrackTextTransform.X (0 to -overflow): the fade at the left end is as far as it has slid, at the right
+                // end as far as is left to slide.
+                double x = TrackTextTransform.X;
+                _trackTextMaskLeft.Color = Color.FromArgb((byte)Math.Round(255 * (1 - Clamp01(-x / MarqueeFadeWidth))), 0, 0, 0);
+                _trackTextMaskRight.Color = Color.FromArgb((byte)Math.Round(255 * (1 - Clamp01((_marqueeOverflow + x) / MarqueeFadeWidth))), 0, 0, 0);
+            }
+
+            if (SeekPopup.IsOpen)
+            {
+                UpdateSeekFade(SeekTitleText, SeekTitleFadeLeft, SeekTitleFade);
+                UpdateSeekFade(SeekArtistText, SeekArtistFadeLeft, SeekArtistFade);
+            }
+        }
+
+        private void UpdateSeekFade(TextBlock text, Rectangle fadeLeft, Rectangle fadeRight)
+        {
+            if (!_seekMarqueeOverflow.TryGetValue(text, out double overflow) || overflow <= 0)
+            {
+                return;
+            }
+
+            double x = Canvas.GetLeft(text);
+            fadeLeft.Opacity = Clamp01(-x / MarqueeFadeWidth);
+            fadeRight.Opacity = Clamp01((overflow + x) / MarqueeFadeWidth);
+        }
+
+        private void StartTrackTextFade()
         {
             double width = TrackTextClip.ActualWidth;
             if (width <= MarqueeFadeWidth * 2)
@@ -1204,38 +1236,18 @@ namespace RetroBar.Controls
                 return;
             }
 
-            var left = new GradientStop(Colors.Black, 0);
-            var right = new GradientStop(Colors.Black, 1);
+            _trackTextMaskLeft = new GradientStop(Colors.Black, 0);
+            _trackTextMaskRight = new GradientStop(Colors.Black, 1);
             _trackTextMask = new LinearGradientBrush(new GradientStopCollection
             {
-                left,
+                _trackTextMaskLeft,
                 new GradientStop(Colors.Black, MarqueeFadeWidth / width),
                 new GradientStop(Colors.Black, 1 - MarqueeFadeWidth / width),
-                right,
+                _trackTextMaskRight,
             }, new Point(0, 0), new Point(1, 0));
-
-            // The edges' colour goes from opaque (no fade) to transparent (faded) as the slide moves.
-            ColorAnimationUsingKeyFrames Animation(bool isLeft)
-            {
-                var keys = FadeKeys(overflow, out double total);
-                var animation = new ColorAnimationUsingKeyFrames
-                {
-                    Duration = new Duration(TimeSpan.FromSeconds(total)),
-                    RepeatBehavior = RepeatBehavior.Forever,
-                };
-
-                foreach (var key in keys)
-                {
-                    double faded = isLeft ? key.Left : key.Right;
-                    animation.KeyFrames.Add(new LinearColorKeyFrame(Color.FromArgb((byte)Math.Round(255 * (1 - faded)), 0, 0, 0), KeyTime.FromTimeSpan(TimeSpan.FromSeconds(key.Time))));
-                }
-
-                return animation;
-            }
-
-            left.BeginAnimation(GradientStop.ColorProperty, Animation(true));
-            right.BeginAnimation(GradientStop.ColorProperty, Animation(false));
             TrackTextClip.OpacityMask = _trackTextMask;
+            EnsureFadeRendering();
+            UpdateFades();
         }
 
         private void StopTrackTextFade()
@@ -1250,8 +1262,8 @@ namespace RetroBar.Controls
             double width = TrackTextClip.ActualWidth;
             if (_trackTextMask == null && _marqueeRunning && width > MarqueeFadeWidth * 2)
             {
-                // The slide began before the clip had a width, so it started without a mask: start both again.
-                StartMarquee(_marqueeOverflow);
+                // The slide began before the clip had a width, so it started without a mask.
+                StartTrackTextFade();
                 return;
             }
 
@@ -1325,9 +1337,10 @@ namespace RetroBar.Controls
             StartMarquee(overflow);
         }
 
-        private DoubleAnimationUsingKeyFrames CreateMarqueeAnimation(double overflow)
+        // travelSeconds: how long one way takes, if it is not the one the speed gives.
+        private DoubleAnimationUsingKeyFrames CreateMarqueeAnimation(double overflow, double? travelOverride = null)
         {
-            double travelSeconds = Math.Max(overflow / _marqueeSpeed, 0.5);
+            double travelSeconds = travelOverride ?? Math.Max(overflow / _marqueeSpeed, 0.5);
 
             TimeSpan pause = TimeSpan.FromSeconds(_marqueePause);
             TimeSpan travel = TimeSpan.FromSeconds(travelSeconds);
@@ -1352,6 +1365,10 @@ namespace RetroBar.Controls
             return animation;
         }
 
+        // How long the taskbar's text takes to slide to its end: the popup's lines take as long (each at the speed that gets it there then),
+        // so they reach their ends together with the taskbar's text.
+        private double _marqueeTravel;
+
         private void StartMarquee(double overflow)
         {
             DoubleAnimationUsingKeyFrames animation = CreateMarqueeAnimation(overflow);
@@ -1360,7 +1377,8 @@ namespace RetroBar.Controls
 
             _marqueeRunning = true;
             _marqueeOverflow = overflow;
-            StartTrackTextFade(overflow);
+            _marqueeTravel = Math.Max(overflow / _marqueeSpeed, 0.5);
+            StartTrackTextFade();
         }
 
         // The seek popup's title and artist slide the same way, along their Canvases (Canvas.Left, so a position set for them in the
@@ -1431,16 +1449,14 @@ namespace RetroBar.Controls
             _seekMarqueeOverflow[text] = overflow;
             text.BeginAnimation(Canvas.LeftProperty, null);
             Canvas.SetLeft(text, 0);
-            fadeLeft.BeginAnimation(UIElement.OpacityProperty, null);
-            fadeRight.BeginAnimation(UIElement.OpacityProperty, null);
             fadeLeft.Opacity = 0;
             fadeRight.Opacity = 1;
 
             if (overflow > 0)
             {
-                text.BeginAnimation(Canvas.LeftProperty, CreateMarqueeAnimation(overflow));
-                fadeLeft.BeginAnimation(UIElement.OpacityProperty, FadeOpacityAnimation(overflow, true));
-                fadeRight.BeginAnimation(UIElement.OpacityProperty, FadeOpacityAnimation(overflow, false));
+                double travel = _marqueeRunning ? _marqueeTravel : Math.Max(overflow / _marqueeSpeed, 0.5);
+                text.BeginAnimation(Canvas.LeftProperty, CreateMarqueeAnimation(overflow, travel));
+                EnsureFadeRendering();
             }
         }
 
