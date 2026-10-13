@@ -83,6 +83,27 @@ namespace RetroBar.Controls
             {
                 SeekSpectrum.Fill = SeekTitleText.Foreground;
             }
+
+            ApplyVuMeterFill();
+        }
+
+        // The VU meter's bars go from the cover's colour at their left to the text's colour at their tip (as translucent as the accent they
+        // have otherwise: the system's accent colour, muted). Every other player's stay that.
+        private void ApplyVuMeterFill()
+        {
+            if (_seekAccentColor is Color accent && TryFindResource("ClockForeground") is SolidColorBrush foreground)
+            {
+                double opacity = (TryFindResource("VuMeterAccentBrush") as Brush)?.Opacity ?? 0.2;
+                var brush = new LinearGradientBrush(accent, foreground.Color, new Point(0, 0), new Point(1, 0)) { Opacity = opacity };
+                brush.Freeze();
+                VuMeterFillLeft.Fill = brush;
+                VuMeterFillRight.Fill = brush;
+            }
+            else
+            {
+                VuMeterFillLeft.SetResourceReference(Shape.FillProperty, "VuMeterAccentBrush");
+                VuMeterFillRight.SetResourceReference(Shape.FillProperty, "VuMeterAccentBrush");
+            }
         }
 
         // The capture is opened and closed on a pool thread (opening an audio device takes a good part of a second, which on the UI thread
