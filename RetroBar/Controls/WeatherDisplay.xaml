@@ -6,6 +6,7 @@
              xmlns:controls="clr-namespace:RetroBar.Controls">
     <UserControl.Resources>
         <converters:CpuTempShownToMonitorTagConverter x:Key="cpuTempShownToMonitorTagConverter" />
+        <converters:BoolToVisibilityConverter x:Key="boolToVisibilityConverter" />
     </UserControl.Resources>
     <Grid>
     <!-- Transparent background so the whole widget (not just its icon and text) takes the click that
@@ -107,6 +108,51 @@
                     <StackPanel Margin="0,0,0,6"
                                 UseLayoutRounding="True"
                                 SnapsToDevicePixels="True">
+                        <Rectangle Height="1"
+                                   Fill="{DynamicResource ButtonShadow}" />
+                        <Rectangle Height="1"
+                                   Fill="{DynamicResource ButtonHighlight}" />
+                    </StackPanel>
+                    <!-- The next hours: the time, the weather and the temperature of each, in equal columns. -->
+                    <ItemsControl ItemsSource="{Binding Hourly}"
+                                  Margin="0,0,0,2"
+                                  Visibility="{Binding HasHourly, Converter={StaticResource boolToVisibilityConverter}}">
+                        <ItemsControl.ItemsPanel>
+                            <ItemsPanelTemplate>
+                                <UniformGrid Rows="1" />
+                            </ItemsPanelTemplate>
+                        </ItemsControl.ItemsPanel>
+                        <ItemsControl.ItemTemplate>
+                            <DataTemplate>
+                                <StackPanel HorizontalAlignment="Center">
+                                    <TextBlock Text="{Binding Label}"
+                                               Style="{DynamicResource GlobalFonts}"
+                                               Foreground="{DynamicResource ButtonForeground}"
+                                               HorizontalAlignment="Center" />
+                                    <Rectangle Width="20"
+                                               Height="20"
+                                               Margin="0,2"
+                                               Fill="{DynamicResource ButtonForeground}"
+                                               HorizontalAlignment="Center"
+                                               RenderOptions.BitmapScalingMode="HighQuality">
+                                        <Rectangle.OpacityMask>
+                                            <ImageBrush ImageSource="{Binding IconPath}" Stretch="Uniform" />
+                                        </Rectangle.OpacityMask>
+                                    </Rectangle>
+                                    <TextBlock Text="{Binding Temp}"
+                                               Style="{DynamicResource GlobalFonts}"
+                                               Foreground="{DynamicResource ButtonForeground}"
+                                               FontFamily="Tahoma"
+                                               FontWeight="Bold"
+                                               HorizontalAlignment="Center" />
+                                </StackPanel>
+                            </DataTemplate>
+                        </ItemsControl.ItemTemplate>
+                    </ItemsControl>
+                    <StackPanel Margin="0,4,0,6"
+                                UseLayoutRounding="True"
+                                SnapsToDevicePixels="True"
+                                Visibility="{Binding HasHourly, Converter={StaticResource boolToVisibilityConverter}}">
                         <Rectangle Height="1"
                                    Fill="{DynamicResource ButtonShadow}" />
                         <Rectangle Height="1"

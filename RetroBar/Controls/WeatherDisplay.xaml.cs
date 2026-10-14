@@ -319,6 +319,7 @@ namespace RetroBar.Controls
         private static string _cachedIconPath;
         private static List<DailyForecast> _cachedForecast = new();
         private static WeatherDetails _cachedDetails;
+        private static List<HourlyForecast> _cachedHourly = new();
 
         // Set when the network comes back (see OnNetworkAvailabilityChanged): the next update refetches
         // even though the cached reading isn't old yet, since the last attempt may have failed offline.
@@ -411,6 +412,23 @@ namespace RetroBar.Controls
 
         /// <summary>The next few days, for the forecast popup.</summary>
         public ObservableCollection<ForecastDay> Forecast { get; } = new();
+
+        /// <summary>The next hours (every second one), for the forecast popup.</summary>
+        public ObservableCollection<HourlyItem> Hourly { get; } = new();
+
+        private bool _hasHourly;
+        public bool HasHourly
+        {
+            get => _hasHourly;
+            set
+            {
+                if (_hasHourly != value)
+                {
+                    _hasHourly = value;
+                    OnPropertyChanged();
+                }
+            }
+        }
 
         private ImageSource _flagSource;
         public ImageSource FlagSource
@@ -553,6 +571,7 @@ namespace RetroBar.Controls
             public string IconFile { get; set; }
             public List<DailyForecast> Forecast { get; set; }
             public WeatherDetails Details { get; set; }
+            public List<HourlyForecast> Hourly { get; set; }
             public string GeocodedDisplayName { get; set; }
             public string GeocodedCountryCode { get; set; }
             public double Latitude { get; set; }
@@ -570,6 +589,7 @@ namespace RetroBar.Controls
                     IconFile = iconFile,
                     Forecast = _cachedForecast,
                     Details = _cachedDetails,
+                    Hourly = _cachedHourly,
                     GeocodedDisplayName = _geocodedDisplayName,
                     GeocodedCountryCode = _geocodedCountryCode,
                     Latitude = _latitude,
@@ -615,6 +635,7 @@ namespace RetroBar.Controls
                 _cachedIconPath = GetImagePath(reading.IconFile.StartsWith("moon_", StringComparison.Ordinal) ? "moon.png" : reading.IconFile);
                 _cachedForecast = reading.Forecast ?? new List<DailyForecast>();
                 _cachedDetails = reading.Details;
+                _cachedHourly = reading.Hourly ?? new List<HourlyForecast>();
 
                 // Without these a later fetch would skip geocoding (the location "is" geocoded) and use no coordinates.
                 if (reading.Latitude != 0 || reading.Longitude != 0)
@@ -709,7 +730,7 @@ namespace RetroBar.Controls
                 }
 
                 string url = string.Format(CultureInfo.InvariantCulture,
-                    "https://api.open-meteo.com/v1/forecast?latitude={0}&longitude={1}&current=temperature_2m,apparent_temperature,relative_humidity_2m,wind_speed_10m,weather_code,is_day&daily=weather_code,temperature_2m_max,temperature_2m_min,precipitation_probability_max&forecast_days=7&timezone=auto&temperature_unit=celsius",
+                    "https://api.open-meteo.com/v1/forecast?latitude={0}&longitude={1}&current=temperature_2m,apparent_temperature,relative_humidity_2m,wind_speed_10m,weather_code,is_day&hourly=temperature_2m,weather_code,is_day&forecast_hours=13&daily=weather_code,temperature_2m_max,temperature_2m_min,precipitation_probability_max,sunrise,sunset&forecast_days=7&timezone=auto&temperature_unit=celsius",
                     _latitude, _longitude);
 
                 string json = await _httpClient.GetStringAsync(url);
@@ -746,12 +767,32 @@ namespace RetroBar.Controls
                         rainChance = chances[0].GetInt32();
                     }
 
-                    details = new WeatherDetails(feels.GetDouble(), (int)Math.Round(humidity.GetDouble()), wind.GetDouble(), rainChance);
+                    DateTime? sunrise = ReadLocalTime(daily, "sunrise");
+                    DateTime? sunset = ReadLocalTime(daily, "sunset");
+                    details = new WeatherDetails(feels.GetDouble(), (int)Math.Round(humidity.GetDouble()), wind.GetDouble(), rainChance, sunrise, sunset);
+                }
+
+                var hourly = new List<HourlyForecast>();
+                if (doc.RootElement.TryGetProperty("hourly", out JsonElement hours))
+                {
+                    JsonElement times = hours.GetProperty("time");
+                    JsonElement hourCodes = hours.GetProperty("weather_code");
+                    JsonElement temperatures = hours.GetProperty("temperature_2m");
+                    JsonElement daylight = hours.GetProperty("is_day");
+                    for (int i = 0; i < times.GetArrayLength(); i++)
+                    {
+                        hourly.Add(new HourlyForecast(
+                            DateTime.ParseExact(times[i].GetString(), "yyyy-MM-dd'T'HH:mm", CultureInfo.InvariantCulture),
+                            hourCodes[i].GetInt32(),
+                            temperatures[i].GetDouble(),
+                            daylight[i].GetInt32() != 0));
+                    }
                 }
 
                 string iconFile = GetIconFileName(weatherCode, isDay);
                 _cachedLocation = location;
                 _cachedDetails = details;
+                _cachedHourly = hourly;
                 _cachedCelsius = temperature;
                 _cachedForecast = forecast;
                 _cachedIconPath = GetImagePath(iconFile);
@@ -769,6 +810,18 @@ namespace RetroBar.Controls
 
             // Every monitor's display picks up the result (or the failure) at the same moment.
             SharedStateChanged?.Invoke();
+        }
+
+        // Today's sunrise or sunset, as the local time at the place that Open-Meteo gives it in ("2026-10-14T07:41").
+        private static DateTime? ReadLocalTime(JsonElement daily, string name)
+        {
+            if (daily.TryGetProperty(name, out JsonElement values) && values.GetArrayLength() > 0 && values[0].ValueKind == JsonValueKind.String
+                && DateTime.TryParseExact(values[0].GetString(), "yyyy-MM-dd'T'HH:mm", CultureInfo.InvariantCulture, DateTimeStyles.None, out DateTime time))
+            {
+                return time;
+            }
+
+            return null;
         }
 
         // Shows the shared reading (or the one saved on disk) if it's for the location currently set; otherwise N/A.
@@ -790,6 +843,19 @@ namespace RetroBar.Controls
                 WeatherBarTemp = FormatBarTemperature(_cachedCelsius.Value);
                 WeatherDetailsText = FormatDetails();
                 WeatherIconPath = _cachedIconPath;
+
+                // The next hours, every second one, a half day in all.
+                Hourly.Clear();
+                for (int i = 2; i < _cachedHourly.Count; i += 2)
+                {
+                    HourlyForecast hour = _cachedHourly[i];
+                    string label = CultureInfo.CurrentCulture.DateTimeFormat.ShortTimePattern.Contains("tt")
+                        ? hour.Time.ToString("h tt", CultureInfo.CurrentCulture)
+                        : hour.Time.Hour + "h";
+                    Hourly.Add(new HourlyItem(label, GetImagePath(GetIconFileName(hour.WeatherCode, hour.IsDay)), FormatBarTemperature(hour.Celsius)));
+                }
+
+                HasHourly = Hourly.Count > 0;
 
                 Forecast.Clear();
                 foreach (DailyForecast day in _cachedForecast)
@@ -813,6 +879,8 @@ namespace RetroBar.Controls
                 WeatherTemp = "N/A";
                 WeatherBarTemp = "N/A";
                 WeatherDetailsText = "";
+                Hourly.Clear();
+                HasHourly = false;
                 Forecast.Clear();
             }
         }
@@ -844,7 +912,14 @@ namespace RetroBar.Controls
                 string.Format(Text("weather_wind", "Wind {0} {1}"), Math.Round(wind), imperial ? "mph" : "km/h"),
             };
 
-            return string.Join("  ·  ", first) + "\n" + string.Join("  ·  ", second);
+            string text = string.Join("  ·  ", first) + "\n" + string.Join("  ·  ", second);
+            if (details.Sunrise is DateTime sunrise && details.Sunset is DateTime sunset)
+            {
+                text += "\n" + string.Format(Text("weather_sunrise", "Sunrise {0}"), sunrise.ToString("t", CultureInfo.CurrentCulture))
+                        + "  ·  " + string.Format(Text("weather_sunset", "Sunset {0}"), sunset.ToString("t", CultureInfo.CurrentCulture));
+            }
+
+            return text;
         }
 
         private static async Task<bool> GeocodeAsync(string location)
@@ -923,7 +998,13 @@ namespace RetroBar.Controls
     }
 
     /// <summary>The current conditions beyond the temperature, as fetched (Celsius and km/h, so the units can be switched without refetching).</summary>
-    public record WeatherDetails(double FeelsLikeCelsius, int Humidity, double WindKmh, int? RainChance);
+    public record WeatherDetails(double FeelsLikeCelsius, int Humidity, double WindKmh, int? RainChance, DateTime? Sunrise = null, DateTime? Sunset = null);
+
+    /// <summary>One hour of the forecast as fetched (raw Celsius).</summary>
+    public record HourlyForecast(DateTime Time, int WeatherCode, double Celsius, bool IsDay);
+
+    /// <summary>One hour as the forecast popup shows it.</summary>
+    public record HourlyItem(string Label, string IconPath, string Temp);
 
     /// <summary>One day of the forecast as fetched (raw Celsius, so °C/°F can be switched without refetching).</summary>
     public record DailyForecast(DateTime Date, int WeatherCode, double HighCelsius, double LowCelsius);
