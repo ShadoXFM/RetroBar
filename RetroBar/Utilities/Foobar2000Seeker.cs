@@ -63,18 +63,17 @@ namespace RetroBar.Utilities
                     return;
                 }
 
-                foreach (string command in commands)
+                // All the commands in one run of the program, so that foobar2000 does them one straight after the other: one run for each
+                // made it seek, play a moment, and seek again, a few times, which could be heard.
+                string arguments = string.Join(" ", commands.Select(command => $"/command:\"{command}\""));
+                try
                 {
-                    try
-                    {
-                        using Process process = Process.Start(new ProcessStartInfo(exe, $"/command:\"{command}\"") { UseShellExecute = false, CreateNoWindow = true });
-                        process?.WaitForExit(3000);
-                    }
-                    catch (Exception ex) when (ex is System.ComponentModel.Win32Exception or InvalidOperationException)
-                    {
-                        ShellLogger.Debug($"Foobar2000Seeker: unable to run '{command}': {ex.Message}");
-                        return;
-                    }
+                    using Process process = Process.Start(new ProcessStartInfo(exe, arguments) { UseShellExecute = false, CreateNoWindow = true });
+                    process?.WaitForExit(5000);
+                }
+                catch (Exception ex) when (ex is System.ComponentModel.Win32Exception or InvalidOperationException)
+                {
+                    ShellLogger.Debug($"Foobar2000Seeker: unable to run '{arguments}': {ex.Message}");
                 }
             });
         }
