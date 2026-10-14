@@ -12,11 +12,26 @@ namespace RetroBar.Controls
         private string _lyricsKey;
         private LyricLine _shownLyric;
 
-        // Asks for the lyrics of the current track once (when its length is known, which the search needs) while the popup is open.
+        // Asks for the lyrics of the current track once (when its length is known, which the search needs) while the popup is open. Only
+        // for Spotify's tracks.
         private void EnsureLyrics(TimeSpan duration)
         {
             if (!Settings.Instance.ShowMediaPopupLyrics || _sessionManager == null || !SeekPopup.IsOpen)
             {
+                return;
+            }
+
+            if (!IsSpotify(_sessionManager.SourceAppUserModelId))
+            {
+                if (_lyricsKey != null)
+                {
+                    _lyricsKey = null;
+                    _lyrics = null;
+                    _shownLyric = null;
+                    SeekLyricsText.Text = "";
+                    SeekLyricsText.Visibility = Visibility.Collapsed;
+                }
+
                 return;
             }
 
