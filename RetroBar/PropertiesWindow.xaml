@@ -350,7 +350,9 @@
             </TabItem>
             <TabItem Header="{DynamicResource notification_area}">
                 <StackPanel Orientation="Vertical"
-                            Margin="10">
+                            Margin="10"
+                            x:Name="NotificationTabContent"
+                            Height="{Binding ElementName=FirstTabContent, Path=ActualHeight}">
                     <Border Style="{StaticResource PreviewBorder}">
                         <ContentControl x:Name="NotificationAreaPreviewControl"
                                         IsHitTestVisible="False"

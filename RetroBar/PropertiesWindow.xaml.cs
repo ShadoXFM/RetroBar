@@ -342,6 +342,16 @@ namespace RetroBar
 
         private void PropertiesWindow_OnContentRendered(object sender, EventArgs e)
         {
+            // The tabs are all as tall as the first one; make that as tall as the tallest needs (the Notification area's has the most), so the
+            // window is the same size whichever tab is open, not only taller once that tab has been opened.
+            NotificationTabContent.Measure(new Size(FirstTabContent.ActualWidth + 20, double.PositiveInfinity));
+            double needed = NotificationTabContent.DesiredSize.Height - 20;
+            if (needed > FirstTabContent.ActualHeight)
+            {
+                FirstTabContent.MinHeight = needed;
+                UpdateLayout();
+            }
+
             UpdateWindowPosition();
         }
 
