@@ -92,8 +92,8 @@
                         </StackPanel>
                         <!-- The drawing only, at the top right: no room round it but the widget's own. -->
                         <Rectangle Grid.Column="1"
-                                   Width="40"
-                                   Height="40"
+                                   Width="34"
+                                   Height="34"
                                    Margin="12,0,0,0"
                                    Fill="{DynamicResource ButtonForeground}"
                                    VerticalAlignment="Top"
