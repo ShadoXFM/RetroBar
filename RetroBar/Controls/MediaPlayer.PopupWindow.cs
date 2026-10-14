@@ -475,8 +475,8 @@ namespace RetroBar.Controls
                 PlacementTarget = SeekPopupRoot,
                 Placement = System.Windows.Controls.Primitives.PlacementMode.MousePoint,
             };
-            menu.Items.Add(lyrics);
             menu.Items.Add(onTop);
+            menu.Items.Add(lyrics);
             menu.Items.Add(MakeMenuSeparator());
             menu.Items.Add(close);
             menu.Opened += (s, args) => _seekMenuOpen = true;
