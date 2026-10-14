@@ -513,8 +513,66 @@ namespace RetroBar.Controls
                 {
                     _weatherIconPath = value;
                     OnPropertyChanged();
+                    OnPropertyChanged(nameof(WeatherIconBounds));
                 }
             }
+        }
+
+        // Where the drawing is in the icon's picture, as a share of it: the picture has some room round the drawing, which the big icon in
+        // the forecast popup leaves out, so that the drawing is at the corner and not inset from it.
+        public Rect WeatherIconBounds => IconBounds(_weatherIconPath);
+
+        private static readonly Dictionary<string, Rect> IconBoundsCache = new();
+
+        private static Rect IconBounds(string path)
+        {
+            var whole = new Rect(0, 0, 1, 1);
+            if (string.IsNullOrEmpty(path))
+            {
+                return whole;
+            }
+
+            if (IconBoundsCache.TryGetValue(path, out Rect cached))
+            {
+                return cached;
+            }
+
+            Rect bounds = whole;
+            try
+            {
+                var bitmap = new System.Windows.Media.Imaging.FormatConvertedBitmap(
+                    new System.Windows.Media.Imaging.BitmapImage(new Uri(path)), PixelFormats.Bgra32, null, 0);
+                int width = bitmap.PixelWidth, height = bitmap.PixelHeight, stride = width * 4;
+                var pixels = new byte[stride * height];
+                bitmap.CopyPixels(pixels, stride, 0);
+
+                int left = width, top = height, right = -1, bottom = -1;
+                for (int y = 0; y < height; y++)
+                {
+                    for (int x = 0; x < width; x++)
+                    {
+                        if (pixels[y * stride + x * 4 + 3] > 20)
+                        {
+                            left = Math.Min(left, x);
+                            right = Math.Max(right, x);
+                            top = Math.Min(top, y);
+                            bottom = Math.Max(bottom, y);
+                        }
+                    }
+                }
+
+                if (right >= left && bottom >= top)
+                {
+                    bounds = new Rect((double)left / width, (double)top / height, (double)(right - left + 1) / width, (double)(bottom - top + 1) / height);
+                }
+            }
+            catch (Exception ex) when (ex is IOException or NotSupportedException or ArgumentException or InvalidOperationException)
+            {
+                // The whole picture, then.
+            }
+
+            IconBoundsCache[path] = bounds;
+            return bounds;
         }
 
         private string _weatherTemp;
