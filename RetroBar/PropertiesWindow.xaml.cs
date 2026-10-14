@@ -87,7 +87,6 @@ namespace RetroBar
             LoadWidth();
             LoadAppInfo();
             LoadClockActions();
-            ShowMonitorAdjustmentsProblems();
 
             Settings.Instance.PropertyChanged += Settings_PropertyChanged;
         }
@@ -342,17 +341,6 @@ namespace RetroBar
 
         private void PropertiesWindow_OnContentRendered(object sender, EventArgs e)
         {
-            // The tabs are all as tall as the first one; make that as tall as the tallest needs (the Notification area's has the most), so the
-            // window is the same size whichever tab is open, not only taller once that tab has been opened.
-            NotificationTabContent.Measure(new Size(FirstTabContent.ActualWidth + 20, double.PositiveInfinity));
-            double needed = NotificationTabContent.DesiredSize.Height - 20;
-            if (needed > FirstTabContent.ActualHeight)
-            {
-                FirstTabContent.MinHeight = needed;
-                NotificationTabContent.MinHeight = needed;
-                UpdateLayout();
-            }
-
             UpdateWindowPosition();
         }
 
@@ -469,56 +457,6 @@ namespace RetroBar
             {
                 System.Windows.MessageBox.Show((string)System.Windows.Application.Current.FindResource("hotkey_warning_text"), (string)System.Windows.Application.Current.FindResource("hotkey_warning_title"), MessageBoxButton.OK, MessageBoxImage.Information);
             }
-        }
-
-        // The per-monitor file: opened in the editor, emptied (what was in it is kept beside it), and what is wrong with it said here (and in
-        // the log).
-        private void OpenMonitorAdjustments_OnClick(object sender, RoutedEventArgs e)
-        {
-            try
-            {
-                MonitorAdjustments.OpenFile();
-            }
-            catch (Exception ex)
-            {
-                ShellLogger.Error($"PropertiesWindow: unable to open monitor-adjustments.json: {ex.Message}");
-            }
-        }
-
-        private void ResetMonitorAdjustments_OnClick(object sender, RoutedEventArgs e)
-        {
-            string question = TryFindResource("reset_monitor_adjustments_question") as string
-                              ?? "Remove every per-monitor adjustment? What is in the file now is kept beside it.";
-            if (System.Windows.MessageBox.Show(this, question, Title, MessageBoxButton.OKCancel, MessageBoxImage.Question) != MessageBoxResult.OK)
-            {
-                return;
-            }
-
-            try
-            {
-                MonitorAdjustments.Reset();
-            }
-            catch (Exception ex)
-            {
-                ShellLogger.Error($"PropertiesWindow: unable to reset monitor-adjustments.json: {ex.Message}");
-            }
-
-            ShowMonitorAdjustmentsProblems();
-        }
-
-        private void ShowMonitorAdjustmentsProblems()
-        {
-            // The file is read again a moment after it is saved.
-            Dispatcher.BeginInvoke(new Action(() =>
-            {
-                int count = MonitorAdjustments.Problems.Count;
-                txtMonitorAdjustmentsProblems.Visibility = count > 0 ? Visibility.Visible : Visibility.Collapsed;
-                if (count > 0)
-                {
-                    string format = TryFindResource("monitor_adjustments_problems") as string ?? "{0} problem(s) in the file: {1}";
-                    txtMonitorAdjustmentsProblems.Text = string.Format(format, count, MonitorAdjustments.Problems[0]);
-                }
-            }), System.Windows.Threading.DispatcherPriority.ApplicationIdle);
         }
 
         private void CustomizeNotifications_OnClick(object sender, RoutedEventArgs e)

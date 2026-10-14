@@ -10,14 +10,9 @@
     <s:String x:Key="general_heading">Généralités</s:String>
     <s:String x:Key="media_player_heading">Media Player</s:String>
     <s:String x:Key="show_vu_meter">Afficher le _vu-mètre derrière le titre</s:String>
-    <s:String x:Key="monitor_adjustments_heading">Réglages par écran</s:String>
-    <s:String x:Key="open_monitor_adjustments">_Ouvrir le fichier</s:String>
-    <s:String x:Key="reset_monitor_adjustments">_Réinitialiser (garde une copie)</s:String>
-    <s:String x:Key="reset_monitor_adjustments_question">Supprimer tous les réglages par écran ? Le contenu actuel du fichier est conservé à côté.</s:String>
-    <s:String x:Key="monitor_adjustments_problems">{0} problème(s) dans monitor-adjustments.json, le premier : {1}</s:String>
     <s:String x:Key="show_media_player">Montrer les contrôles du lecteur media</s:String>
     <s:String x:Key="show_media_player_album_art">Afficher la p_ochette de l'album</s:String>
-    <s:String x:Key="weather_heading">Météo</s:String>
+    <s:String x:Key="weather_cpu_temp_heading">Météo et température du CPU</s:String>
     <s:String x:Key="pin_to_taskbar">Épingler à la barre des tâches</s:String>
     <s:String x:Key="unpin_from_taskbar">Détacher de la barre des tâches</s:String>
     <s:String x:Key="show_weather">Afficher la _météo</s:String>
@@ -25,7 +20,6 @@
     <s:String x:Key="media_source_automatic">Automatique (suivre Windows)</s:String>
     <s:String x:Key="media_source_browser">Navigateur</s:String>
     <s:String x:Key="media_source_none">Aucun média en cours</s:String>
-    <s:String x:Key="cpu_temp_heading">Température du CPU</s:String>
     <s:String x:Key="show_cpu_temp">Afficher la température du _CPU</s:String>
     <s:String x:Key="media_previous">Précédent</s:String>
     <s:String x:Key="media_play_pause">Lecture/Pause</s:String>
