@@ -36,10 +36,12 @@ namespace RetroBar.Controls
 
         // The window fades out at its top and bottom edges, where there are more lines beyond them, so a line is not cut off sharply there:
         // nothing at all in the outermost row (what is cut off there is part of a line, which would be a stray mark), then growing to the
-        // full look over the next two. The edge fades by how much there is beyond it, up to a row: with only a little (the last lines of the
-        // song, a few pixels short of the end), the lines there are still shown.
+        // full look by the time it is this many rows from the edge. The scroll does not stop closer to an end than LyricEdgePinRows
+        // (see LyricScrollFor): the first and last lines are at the very top and bottom, not in the fade.
         private const double LyricEdgeClearRows = 1;
-        private const double LyricEdgeFadeRows = 3;
+        private const double LyricEdgeFadeRows = 2.2;
+        private const double LyricEdgePinRows = 1.5;
+        private LinearGradientBrush _lyricFadeMask;
         private GradientStop[] _lyricFadeTop;
         private GradientStop[] _lyricFadeBottom;
         private GradientStop _lyricFadeTopInner;
@@ -73,7 +75,10 @@ namespace RetroBar.Controls
                 _lyricFadeBottom = new[] { new GradientStop(Colors.Black, 0.9), new GradientStop(Colors.Black, 1) };
                 _lyricFadeTopInner = new GradientStop(Colors.Black, 0.3);
                 _lyricFadeBottomInner = new GradientStop(Colors.Black, 0.7);
-                var mask = new LinearGradientBrush(new GradientStopCollection
+
+                // In the window's own units: a mask relative to the element's bounds would be spread over all the lines the window is
+                // scrolled over, which are all inside it.
+                _lyricFadeMask = new LinearGradientBrush(new GradientStopCollection
                 {
                     _lyricFadeTop[0],
                     _lyricFadeTop[1],
@@ -81,14 +86,18 @@ namespace RetroBar.Controls
                     _lyricFadeBottomInner,
                     _lyricFadeBottom[0],
                     _lyricFadeBottom[1],
-                }, new Point(0, 0), new Point(0, 1));
-                SeekLyricsHost.OpacityMask = mask;
+                }, new Point(0, 0), new Point(0, 1))
+                {
+                    MappingMode = BrushMappingMode.Absolute,
+                };
+                SeekLyricsHost.OpacityMask = _lyricFadeMask;
             }
 
             // The rows' share of the window.
             double window = SeekLyricsHost.Height;
             if (window > 0 && _lyricRowUnit > 0)
             {
+                _lyricFadeMask.EndPoint = new Point(0, window);
                 double clear = Math.Min(0.2, LyricEdgeClearRows * _lyricRowUnit / window);
                 double fade = Math.Min(0.45, LyricEdgeFadeRows * _lyricRowUnit / window);
                 _lyricFadeTop[1].Offset = clear;
@@ -98,12 +107,11 @@ namespace RetroBar.Controls
             }
         }
 
-        // An edge fades by how much there is beyond it (up to a row).
+        // An edge fades when there are lines beyond it.
         private void UpdateLyricEdges(double scroll, bool animate)
         {
-            double unit = _lyricRowUnit > 0 ? _lyricRowUnit : 15;
-            SetLyricEdge(_lyricFadeTop, Math.Clamp(scroll / unit, 0, 1), animate);
-            SetLyricEdge(_lyricFadeBottom, Math.Clamp((_lyricScrollMax - scroll) / unit, 0, 1), animate);
+            SetLyricEdge(_lyricFadeTop, scroll > 0.5 ? 1 : 0, animate);
+            SetLyricEdge(_lyricFadeBottom, scroll < _lyricScrollMax - 0.5 ? 1 : 0, animate);
         }
 
         private static void SetLyricEdge(GradientStop[] edge, double strength, bool animate)
@@ -298,6 +306,18 @@ namespace RetroBar.Controls
             TextBlock row = _lyricRows[index];
             double middle = row.TranslatePoint(new Point(0, row.ActualHeight / 2), SeekLyricsPanel).Y;
             double scroll = Math.Clamp(middle - window / 2, 0, maximum);
+
+            // Not just short of an end: the lines there would be in the fade. The first lines are at the top, the last at the bottom.
+            double pin = LyricEdgePinRows * _lyricRowUnit;
+            if (scroll < pin)
+            {
+                scroll = 0;
+            }
+            else if (maximum - scroll < pin)
+            {
+                scroll = maximum;
+            }
+
             double scale = GetSeekDpi().DpiScaleY;
             return Math.Round(scroll * scale) / scale;
         }
@@ -317,6 +337,7 @@ namespace RetroBar.Controls
             row.Opacity = opacity;
 
             if (blur > 0 || oldBlur > 0)
+
             {
                 bool moves = animate && (oldBlur != blur || oldOpacity != opacity);
                 var effect = new BlurEffect { Radius = moves ? oldBlur : blur, RenderingBias = RenderingBias.Performance };
