@@ -16,7 +16,7 @@
     <s:String x:Key="pin_to_taskbar">Pin to taskbar</s:String>
     <s:String x:Key="unpin_from_taskbar">Unpin from taskbar</s:String>
     <s:String x:Key="show_weather">Show _weather</s:String>
-    <s:String x:Key="weather_use_fahrenheit">Use _Fahrenheit (°F) for the temperatures</s:String>
+    <s:String x:Key="weather_use_fahrenheit">Use _Fahrenheit (°F)</s:String>
     <s:String x:Key="media_source_automatic">Automatic (follow Windows)</s:String>
     <s:String x:Key="media_source_browser">Browser</s:String>
     <s:String x:Key="media_source_none">No media playing</s:String>
