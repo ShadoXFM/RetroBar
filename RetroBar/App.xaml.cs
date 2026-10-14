@@ -71,6 +71,7 @@ namespace RetroBar
         {
             if (sender is System.Windows.Controls.ContextMenu menu)
             {
+                BindMenuTextRendering(menu);
                 MenuSeparator.Apply(menu);
                 MenuItemStyle.Apply(menu);
                 MenuSeparator.Tidy(menu);
@@ -89,7 +90,17 @@ namespace RetroBar
                 MenuSeparator.Tidy(separated);
             }
 
-            if (sender is System.Windows.Controls.ContextMenu menu && menu.ReadLocalValue(TextOptions.TextRenderingModeProperty) == DependencyProperty.UnsetValue)
+            if (sender is System.Windows.Controls.ContextMenu loaded)
+            {
+                BindMenuTextRendering(loaded);
+            }
+        }
+
+        // The menus made in code take the text rendering the setting says too, not the one of whatever they are opened from (which is the
+        // taskbar's own smoothing setting): a menu that is not bound to it yet gets bound as it opens.
+        private static void BindMenuTextRendering(System.Windows.Controls.ContextMenu menu)
+        {
+            if (menu.ReadLocalValue(TextOptions.TextRenderingModeProperty) == DependencyProperty.UnsetValue)
             {
                 menu.SetBinding(TextOptions.TextRenderingModeProperty, new System.Windows.Data.Binding(nameof(Settings.AllowFontSmoothingMenu))
                 {
