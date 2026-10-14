@@ -21,6 +21,8 @@
     <s:String x:Key="weather_rain_chance">Pluie {0} %</s:String>
     <s:String x:Key="weather_humidity">Humidité {0} %</s:String>
     <s:String x:Key="weather_wind">Vent {0} {1}</s:String>
+    <s:String x:Key="weather_sunrise">Lever {0}</s:String>
+    <s:String x:Key="weather_sunset">Coucher {0}</s:String>
     <s:String x:Key="media_source_automatic">Automatique (suivre Windows)</s:String>
     <s:String x:Key="media_source_browser">Navigateur</s:String>
     <s:String x:Key="media_source_none">Aucun média en cours</s:String>
