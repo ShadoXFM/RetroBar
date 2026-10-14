@@ -357,7 +357,7 @@ namespace RetroBar.Controls
 
             RefreshSeekDisplay();
 
-            _seekPopupTimer ??= new DispatcherTimer { Interval = TimeSpan.FromMilliseconds(500) };
+            _seekPopupTimer ??= new DispatcherTimer { Interval = TimeSpan.FromMilliseconds(250) };
             _seekPopupTimer.Tick -= SeekPopupTimer_OnTick;
             _seekPopupTimer.Tick += SeekPopupTimer_OnTick;
             _seekPopupTimer.Start();
@@ -433,10 +433,55 @@ namespace RetroBar.Controls
             (TimeSpan position, TimeSpan duration) = _sessionManager.GetTimeline();
             if (duration <= TimeSpan.Zero && TitleTimeline.TryParse(FindSourceAppWindow()?.Title, out TimeSpan titlePosition, out TimeSpan titleLength))
             {
-                return (titlePosition, titleLength);
+                return (SmoothTitlePosition(titlePosition), titleLength);
             }
 
+            _titleHasEstimate = false;
             return (position, duration);
+        }
+
+        // The title's time changes once a second, by whole seconds, and not at the moments the popup reads it: shown as it is, the slider
+        // stood still for a poll and then jumped two. The position runs on by the clock between the title's changes instead, and is only
+        // pulled towards the title (which shows the second that has begun, so the true time is half a second on from it) when it changes.
+        private bool _titleHasEstimate;
+        private TimeSpan _titleEstimate;
+        private TimeSpan _titleLastValue;
+        private DateTime _titleEstimateAt;
+
+        private TimeSpan SmoothTitlePosition(TimeSpan titlePosition)
+        {
+            DateTime now = DateTime.UtcNow;
+            bool playing = _sessionManager.PlaybackState == MediaPlaybackState.Playing;
+            TimeSpan estimate = _titleHasEstimate ? _titleEstimate + (playing ? now - _titleEstimateAt : TimeSpan.Zero) : titlePosition;
+
+            if (!_titleHasEstimate || titlePosition != _titleLastValue)
+            {
+                _titleLastValue = titlePosition;
+                TimeSpan error = titlePosition + TimeSpan.FromSeconds(0.5) - estimate;
+                if (!_titleHasEstimate || Math.Abs(error.TotalSeconds) > 1.5)
+                {
+                    // A seek, a new track, or the first reading: take the title's time.
+                    estimate = titlePosition + (playing ? TimeSpan.FromSeconds(0.5) : TimeSpan.Zero);
+                }
+                else
+                {
+                    estimate += TimeSpan.FromSeconds(error.TotalSeconds * 0.3);
+                }
+            }
+            else if (!playing)
+            {
+                estimate = titlePosition;
+            }
+
+            if (estimate < TimeSpan.Zero)
+            {
+                estimate = TimeSpan.Zero;
+            }
+
+            _titleHasEstimate = true;
+            _titleEstimate = estimate;
+            _titleEstimateAt = now;
+            return estimate;
         }
 
         private DateTime _seekHoldUntil = DateTime.MinValue;
