@@ -404,9 +404,10 @@ namespace RetroBar.Controls
                 // °C <-> °F is just a display choice: reformat the reading we already have.
                 System.Windows.Application.Current?.Dispatcher.BeginInvoke(new Action(ApplyShared));
             }
-            else if (e.PropertyName == nameof(Settings.Language))
+            else if (e.PropertyName is nameof(Settings.Language) or nameof(Settings.OverrideClockFormat) or nameof(Settings.ClockFormat)
+                     or nameof(Settings.OverrideAMPMDesignators) or nameof(Settings.AMDesignator) or nameof(Settings.PMDesignator))
             {
-                // The days and the times of the day are written in the language chosen.
+                // The days are written in the language chosen, and the times of the day as the clock's settings have them.
                 System.Windows.Application.Current?.Dispatcher.BeginInvoke(new Action(ApplyShared), System.Windows.Threading.DispatcherPriority.ApplicationIdle);
             }
             else if (e.PropertyName == nameof(Settings.WeatherLocation))
@@ -845,10 +846,7 @@ namespace RetroBar.Controls
                 DateTime now = _cachedHourly.Count > 0 ? _cachedHourly[0].Time : DateTime.MinValue;
                 foreach (HourlyForecast hour in _cachedHourly.Where(h => h.Time > now && h.Time.Hour % 3 == 0).Take(6))
                 {
-                    CultureInfo culture = LanguageCulture.Current;
-                    string label = culture.DateTimeFormat.ShortTimePattern.Contains("tt")
-                        ? hour.Time.ToString("h tt", culture)
-                        : hour.Time.ToString("t", culture);
+                    string label = FormatClockTime(hour.Time, true);
                     Hourly.Add(new HourlyItem(label, GetImagePath(GetIconFileName(hour.WeatherCode, hour.IsDay)), FormatBarTemperature(hour.Celsius)));
                 }
 
@@ -893,7 +891,6 @@ namespace RetroBar.Controls
                 return;
             }
 
-            CultureInfo culture = LanguageCulture.Current;
             bool imperial = Settings.Instance.WeatherUseFahrenheit;
             double wind = imperial ? details.WindKmh * 0.621371 : details.WindKmh;
 
@@ -905,9 +902,41 @@ namespace RetroBar.Controls
                 : new DetailItem("", "", ""));
             if (details.Sunrise is DateTime sunrise && details.Sunset is DateTime sunset)
             {
-                DetailItems.Add(Detail("weather_sunrise", "Sunrise {0}", sunrise.ToString("t", culture)));
-                DetailItems.Add(Detail("weather_sunset", "Sunset {0}", sunset.ToString("t", culture)));
+                DetailItems.Add(Detail("weather_sunrise", "Sunrise {0}", FormatClockTime(sunrise, false)));
+                DetailItems.Add(Detail("weather_sunset", "Sunset {0}", FormatClockTime(sunset, false)));
             }
+        }
+
+        // A time of the day as the clock's settings (Properties, Clock) write it: with AM and PM (and the designators set there) if the
+        // clock's format has the 12-hour hour, on the 24-hour clock if it has not. Without a format of its own, the clock's is the one of the
+        // system's (regional) settings, as the clock has it. onTheHour: just the hour ("3 PM", "15:00"), not the minutes.
+        private static string FormatClockTime(DateTime time, bool onTheHour)
+        {
+            CultureInfo language = CultureInfo.CurrentCulture;
+            string pattern = Settings.Instance.OverrideClockFormat && !string.IsNullOrEmpty(Settings.Instance.ClockFormat)
+                ? Settings.Instance.ClockFormat
+                : language.DateTimeFormat.ShortTimePattern;
+
+            if (!pattern.Contains('h') && !pattern.Contains("tt"))
+            {
+                return time.ToString("HH:mm", language);
+            }
+
+            CultureInfo culture = (CultureInfo)language.Clone();
+            if (Settings.Instance.OverrideAMPMDesignators)
+            {
+                if (Settings.Instance.AMDesignator != "")
+                {
+                    culture.DateTimeFormat.AMDesignator = Settings.Instance.AMDesignator;
+                }
+
+                if (Settings.Instance.PMDesignator != "")
+                {
+                    culture.DateTimeFormat.PMDesignator = Settings.Instance.PMDesignator;
+                }
+            }
+
+            return time.ToString(onTheHour ? "h tt" : "h:mm tt", culture);
         }
 
         // The text of a language string with the value in it, as what is before the value, the value, and what is after it.
