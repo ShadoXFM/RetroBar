@@ -349,6 +349,7 @@ namespace RetroBar
             if (needed > FirstTabContent.ActualHeight)
             {
                 FirstTabContent.MinHeight = needed;
+                NotificationTabContent.MinHeight = needed;
                 UpdateLayout();
             }
 
