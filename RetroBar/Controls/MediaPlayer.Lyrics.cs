@@ -11,7 +11,9 @@ using RetroBar.Utilities;
 namespace RetroBar.Controls
 {
     // The popup's lyrics: the synced lyrics of the playing track (LyricsClient), under the album art. The line being sung is in the middle, in
-    // the colour of the cover; the three before it and the three after it are above and below, blurred and dimmer the further they are.
+    // the colour of the cover; the three before it and the three after it are above and below, blurred and dimmer the further they are. When
+    // the next line starts, the lines scroll up by one: each takes the look of the place it moves to, and the line that is now the current
+    // one fades into the colour.
     public partial class MediaPlayer
     {
         private const int LyricRowsAround = 3;
@@ -26,12 +28,12 @@ namespace RetroBar.Controls
         private static readonly double[] LyricRowBlur = { 3.5, 2.5, 1.5, 0, 1.5, 2.5, 3.5 };
 
         // A line is shown a little before its time (the position that is read is a poll behind what is heard), the way the apps' own
-        // lyrics lead; and one line gives way to the next by the block fading out and in, sliding a little upward.
+        // lyrics lead.
         private static readonly TimeSpan LyricsLead = TimeSpan.FromMilliseconds(350);
-        private static readonly Duration LyricFadeOut = new(TimeSpan.FromMilliseconds(120));
-        private static readonly Duration LyricFadeIn = new(TimeSpan.FromMilliseconds(260));
-        private const double LyricSlide = 8;
-        private int _lyricFadeToken;
+        private static readonly Duration LyricScroll = new(TimeSpan.FromMilliseconds(320));
+        private static readonly Duration LyricColorFade = new(TimeSpan.FromMilliseconds(420));
+        private static readonly TimeSpan LyricsRetry = TimeSpan.FromSeconds(30);
+        private int _lyricScrollToken;
 
         private void EnsureLyricRows()
         {
@@ -86,7 +88,7 @@ namespace RetroBar.Controls
             }
         }
 
-        // Room for what is shown whatever the lines are, so the popup keeps its height: a line each, two for the current one (which wraps).
+        // A line each, two at the most for the current one (which wraps).
         private void ApplyLyricsHeight()
         {
             double line = SeekArtistText.ActualHeight;
@@ -97,10 +99,25 @@ namespace RetroBar.Controls
 
             for (int i = 0; i < _lyricRows.Length; i++)
             {
-                double height = i == LyricRowsAround ? line * 2 : line;
-                _lyricRows[i].MinHeight = height;
-                _lyricRows[i].MaxHeight = height;
+                bool current = i == LyricRowsAround;
+                _lyricRows[i].MinHeight = line;
+                _lyricRows[i].MaxHeight = current ? line * 2 : line;
             }
+        }
+
+        // The popup keeps its height: when the current line wraps to a second line, the last row (the faintest) gives that room.
+        private void ApplyLyricsWrap()
+        {
+            double line = SeekArtistText.ActualHeight;
+            double width = SeekLyricsHost.ActualWidth;
+            if (line <= 0 || width <= 0)
+            {
+                return;
+            }
+
+            TextBlock current = _lyricRows[LyricRowsAround];
+            current.Measure(new Size(width, double.PositiveInfinity));
+            _lyricRows[^1].Visibility = current.DesiredSize.Height > line * 1.5 ? Visibility.Collapsed : Visibility.Visible;
         }
 
         // Asks for the lyrics of the current track once (when its length is known, which the search needs) while the popup is open. Only
@@ -117,7 +134,7 @@ namespace RetroBar.Controls
                 if (_lyricsKey != null)
                 {
                     ResetLyrics();
-                    SeekLyricsPanel.Visibility = Visibility.Collapsed;
+                    SeekLyricsHost.Visibility = Visibility.Collapsed;
                 }
 
                 return;
@@ -132,7 +149,7 @@ namespace RetroBar.Controls
             ResetLyrics();
             _lyricsKey = key;
             EnsureLyricRows();
-            SeekLyricsPanel.Visibility = Visibility.Visible;
+            SeekLyricsHost.Visibility = Visibility.Visible;
             ApplyLyricsHeight();
             _ = LoadLyricsAsync(key, _sessionManager.Artist, _sessionManager.Title, duration);
         }
@@ -142,10 +159,7 @@ namespace RetroBar.Controls
             _lyricsKey = null;
             _lyrics = null;
             _shownLyricIndex = int.MinValue;
-            _lyricFadeToken++;
-            SeekLyricsPanel.BeginAnimation(OpacityProperty, null);
-            SeekLyricsPanel.RenderTransform = null;
-            SeekLyricsPanel.Opacity = 1;
+            StopLyricAnimations();
             if (_lyricRows != null)
             {
                 foreach (TextBlock row in _lyricRows)
@@ -155,9 +169,64 @@ namespace RetroBar.Controls
             }
         }
 
+        // Every row back at rest: its own opacity, blur and colour, and the lines in place.
+        private void StopLyricAnimations()
+        {
+            _lyricScrollToken++;
+            SeekLyricsPanel.RenderTransform = null;
+            if (_lyricRows == null)
+            {
+                return;
+            }
+
+            for (int i = 0; i < _lyricRows.Length; i++)
+            {
+                TextBlock row = _lyricRows[i];
+                row.BeginAnimation(OpacityProperty, null);
+                row.Opacity = LyricRowOpacity[i];
+                if (LyricRowBlur[i] > 0)
+                {
+                    var blur = new BlurEffect { Radius = LyricRowBlur[i], RenderingBias = RenderingBias.Performance };
+                    row.Effect = blur;
+                }
+                else
+                {
+                    row.Effect = null;
+                }
+
+                if (i != LyricRowsAround)
+                {
+                    row.ClearValue(TextBlock.ForegroundProperty);
+                }
+            }
+
+            ApplyLyricsColor();
+        }
+
         private async Task LoadLyricsAsync(string key, string artist, string title, TimeSpan duration)
         {
-            LyricLine[] lines = await LyricsClient.GetAsync(artist, title, duration);
+            LyricLine[] lines;
+            try
+            {
+                lines = await LyricsClient.GetAsync(artist, title, duration);
+            }
+            catch (Exception ex) when (ex is System.Net.Http.HttpRequestException or TaskCanceledException or System.Text.Json.JsonException)
+            {
+                // The service is down, or there is no connection: nothing is shown, and it is asked again in a while.
+                ManagedShell.Common.Logging.ShellLogger.Debug($"MediaPlayer: lyrics not available now: {ex.Message}");
+                if (key == _lyricsKey)
+                {
+                    SeekLyricsHost.Visibility = Visibility.Collapsed;
+                }
+
+                await Task.Delay(LyricsRetry);
+                if (key == _lyricsKey)
+                {
+                    _lyricsKey = null;
+                }
+
+                return;
+            }
 
             // Back on the UI thread; the track may have changed while it was asked for.
             if (key != _lyricsKey)
@@ -168,7 +237,7 @@ namespace RetroBar.Controls
             _lyrics = lines;
             if (lines == null)
             {
-                SeekLyricsPanel.Visibility = Visibility.Collapsed;
+                SeekLyricsHost.Visibility = Visibility.Collapsed;
             }
             else
             {
@@ -189,8 +258,9 @@ namespace RetroBar.Controls
                 return;
             }
 
+            int previous = _shownLyricIndex;
             _shownLyricIndex = index;
-            ShowLyrics(index);
+            ShowLyrics(previous, index);
         }
 
         private void FillLyricRows(int index)
@@ -202,65 +272,108 @@ namespace RetroBar.Controls
             }
         }
 
-        // Changes the lines with a fade: what is shown fades out (sliding up a little), then the new lines fade in (sliding up into place).
-        private void ShowLyrics(int index)
+        // Shows the lines around one: the next line after the one shown scrolls them up by a row, any other change (the first lines, a seek)
+        // puts them in place.
+        private void ShowLyrics(int previous, int index)
         {
-            int token = ++_lyricFadeToken;
             ApplyLyricsHeight();
+            bool scroll = previous != int.MinValue && index == previous + 1 && _lyricRows.Any(row => !string.IsNullOrEmpty(row.Text));
+            double distance = scroll ? _lyricRows[LyricRowsAround + 1].ActualHeight : 0;
 
-            double start = SeekLyricsPanel.Opacity;
-            SeekLyricsPanel.BeginAnimation(OpacityProperty, null);
+            StopLyricAnimations();
+            FillLyricRows(index);
+            ApplyLyricsWrap();
 
-            if (_lyricRows.All(row => string.IsNullOrEmpty(row.Text)))
+            if (scroll && distance > 0)
             {
-                FillLyricRows(index);
-                FadeInLyrics(token);
+                ScrollLyrics(distance);
+            }
+
+            FadeLyricAccent(scroll);
+        }
+
+        // The rows slide up into place from where they were a row lower, each changing from the look of the row it came from to its own.
+        private void ScrollLyrics(double distance)
+        {
+            int token = _lyricScrollToken;
+
+            var slide = new TranslateTransform(0, distance);
+            SeekLyricsPanel.RenderTransform = slide;
+            var ease = new QuadraticEase { EasingMode = EasingMode.EaseOut };
+            var slideAnimation = new DoubleAnimation(distance, 0, LyricScroll) { EasingFunction = ease };
+            slideAnimation.Completed += (s, e) =>
+            {
+                // A render transform, even one that does nothing, stops the text being snapped to the screen's pixels.
+                if (token == _lyricScrollToken)
+                {
+                    SeekLyricsPanel.RenderTransform = null;
+                    foreach (TextBlock row in _lyricRows)
+                    {
+                        row.BeginAnimation(OpacityProperty, null);
+                    }
+
+                    _lyricRows[LyricRowsAround].Effect = null;
+                }
+            };
+            slide.BeginAnimation(TranslateTransform.YProperty, slideAnimation);
+
+            for (int i = 0; i < _lyricRows.Length; i++)
+            {
+                TextBlock row = _lyricRows[i];
+                double fromOpacity = i + 1 < LyricRowOpacity.Length ? LyricRowOpacity[i + 1] : 0;
+                row.BeginAnimation(OpacityProperty, new DoubleAnimation(fromOpacity, LyricRowOpacity[i], LyricScroll) { EasingFunction = ease });
+
+                double fromBlur = i + 1 < LyricRowBlur.Length ? LyricRowBlur[i + 1] : LyricRowBlur[i];
+                if (i == LyricRowsAround)
+                {
+                    // The current line has no blur at rest (a blur effect would soften it): only while it comes from the row below.
+                    var blur = new BlurEffect { Radius = fromBlur, RenderingBias = RenderingBias.Performance };
+                    row.Effect = blur;
+                    blur.BeginAnimation(BlurEffect.RadiusProperty, new DoubleAnimation(fromBlur, 0, LyricScroll) { EasingFunction = ease });
+                }
+                else if (row.Effect is BlurEffect rowBlur)
+                {
+                    rowBlur.BeginAnimation(BlurEffect.RadiusProperty, new DoubleAnimation(i == LyricRowsAround - 1 ? 0 : fromBlur, LyricRowBlur[i], LyricScroll) { EasingFunction = ease });
+                }
+            }
+        }
+
+        // The current line takes the colour of the cover by fading into it from the text's own colour; the line that was the current one
+        // fades out of it as it moves up.
+        private void FadeLyricAccent(bool scrolled)
+        {
+            if (_seekAccentColor is not Color accent)
+            {
                 return;
             }
 
-            var slide = new TranslateTransform();
-            SeekLyricsPanel.RenderTransform = slide;
-            slide.BeginAnimation(TranslateTransform.YProperty, new DoubleAnimation(0, -LyricSlide, LyricFadeOut));
-
-            var fadeOut = new DoubleAnimation(start, 0, LyricFadeOut) { FillBehavior = FillBehavior.Stop };
-            fadeOut.Completed += (s, e) =>
+            TextBlock current = _lyricRows[LyricRowsAround];
+            if (_lyricRows[LyricRowsAround + 1].Foreground is not SolidColorBrush neutralBrush)
             {
-                if (token != _lyricFadeToken)
+                return;
+            }
+
+            Color neutral = neutralBrush.Color;
+            var fadeIn = new SolidColorBrush(neutral);
+            current.Foreground = fadeIn;
+            fadeIn.BeginAnimation(SolidColorBrush.ColorProperty, new ColorAnimation(neutral, accent, LyricColorFade));
+
+            if (scrolled)
+            {
+                TextBlock above = _lyricRows[LyricRowsAround - 1];
+                var fadeOut = new SolidColorBrush(accent);
+                above.Foreground = fadeOut;
+                var animation = new ColorAnimation(accent, neutral, LyricColorFade);
+                int token = _lyricScrollToken;
+                animation.Completed += (s, e) =>
                 {
-                    return;
-                }
-
-                SeekLyricsPanel.Opacity = 0;
-                FillLyricRows(index);
-                FadeInLyrics(token);
-            };
-            SeekLyricsPanel.BeginAnimation(OpacityProperty, fadeOut);
-        }
-
-        private void FadeInLyrics(int token)
-        {
-            var slide = new TranslateTransform(0, LyricSlide);
-            SeekLyricsPanel.RenderTransform = slide;
-            slide.BeginAnimation(TranslateTransform.YProperty, new DoubleAnimation(LyricSlide, 0, LyricFadeIn)
-            {
-                EasingFunction = new QuadraticEase { EasingMode = EasingMode.EaseOut },
-            });
-
-            SeekLyricsPanel.Opacity = 1;
-            var fadeIn = new DoubleAnimation(0, 1, LyricFadeIn)
-            {
-                EasingFunction = new QuadraticEase { EasingMode = EasingMode.EaseOut },
-                FillBehavior = FillBehavior.Stop,
-            };
-            fadeIn.Completed += (s, e) =>
-            {
-                // A render transform, even one that does nothing, stops the text being snapped to the screen's pixels.
-                if (token == _lyricFadeToken)
-                {
-                    SeekLyricsPanel.RenderTransform = null;
-                }
-            };
-            SeekLyricsPanel.BeginAnimation(OpacityProperty, fadeIn);
+                    if (token == _lyricScrollToken)
+                    {
+                        above.ClearValue(TextBlock.ForegroundProperty);
+                    }
+                };
+                fadeOut.BeginAnimation(SolidColorBrush.ColorProperty, animation);
+            }
         }
 
         // The setting (Properties window, right-click menu): off takes the lyrics away; on asks for those of what is playing.
@@ -274,7 +387,7 @@ namespace RetroBar.Controls
             }
             else
             {
-                SeekLyricsPanel.Visibility = Visibility.Collapsed;
+                SeekLyricsHost.Visibility = Visibility.Collapsed;
             }
         }
     }

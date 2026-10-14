@@ -278,12 +278,15 @@
                                 <!-- The lyrics (see MediaPlayer.Lyrics.cs), under the art, as wide as the controls row: the line being sung with three
                                      lines before it and three after it, whose rows are added in code. Their room is kept from when the lyrics are
                                      asked for, so the popup does not change height when they arrive or when a line wraps. -->
-                                <StackPanel x:Name="SeekLyricsPanel"
-                                            HorizontalAlignment="Center"
-                                            Width="{Binding ActualWidth, ElementName=SeekControlsRow}"
-                                            Margin="0,2,0,4"
-                                            Visibility="Collapsed"
-                                            utilities:MonitorOffset.Tag="MediaSeekLyricsText" />
+                                <Grid x:Name="SeekLyricsHost"
+                                      HorizontalAlignment="Center"
+                                      Width="{Binding ActualWidth, ElementName=SeekControlsRow}"
+                                      Margin="0,2,0,4"
+                                      ClipToBounds="True"
+                                      Visibility="Collapsed"
+                                      utilities:MonitorOffset.Tag="MediaSeekLyricsText">
+                                    <StackPanel x:Name="SeekLyricsPanel" />
+                                </Grid>
                                 <!-- The title and artist on the left, a spectrum (SeekSpectrum, drawn by UpdateSeekSpectrum) on the right, as wide as
                                      the controls row below. The margins give the text room above and below. -->
                                 <!-- The width of "0:00 / 0:00" in the time text's own font (same tag, so the same monitor settings), which the art's

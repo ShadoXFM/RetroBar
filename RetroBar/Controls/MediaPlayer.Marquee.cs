@@ -286,10 +286,9 @@ namespace RetroBar.Controls
             StartMarquee(overflow);
         }
 
-        // travelSeconds: how long one way takes, if it is not the one the speed gives.
-        private DoubleAnimationUsingKeyFrames CreateMarqueeAnimation(double overflow, double? travelOverride = null)
+        private DoubleAnimationUsingKeyFrames CreateMarqueeAnimation(double overflow)
         {
-            double travelSeconds = travelOverride ?? Math.Max(overflow / _marqueeSpeed, 0.5);
+            double travelSeconds = Math.Max(overflow / _marqueeSpeed, 0.5);
 
             TimeSpan pause = TimeSpan.FromSeconds(_marqueePause);
             TimeSpan travel = TimeSpan.FromSeconds(travelSeconds);
@@ -314,10 +313,6 @@ namespace RetroBar.Controls
             return animation;
         }
 
-        // How long the taskbar's text takes to slide to its end: the popup's lines take as long (each at the speed that gets it there then),
-        // so they reach their ends together with the taskbar's text.
-        private double _marqueeTravel;
-
         private void StartMarquee(double overflow)
         {
             DoubleAnimationUsingKeyFrames animation = CreateMarqueeAnimation(overflow);
@@ -326,7 +321,6 @@ namespace RetroBar.Controls
 
             _marqueeRunning = true;
             _marqueeOverflow = overflow;
-            _marqueeTravel = Math.Max(overflow / _marqueeSpeed, 0.5);
             StartTrackTextFade();
         }
 
@@ -349,8 +343,8 @@ namespace RetroBar.Controls
             }
         }
 
-        // The taskbar's text and the popup's lines start their slides at the same moment (each waiting at its start for the same time,
-        // and sliding at the same speed), so they move together.
+        // The taskbar's text and the popup's lines start their slides at the same moment (each waiting at its start for the same time, and
+        // sliding at the same speed: how long that takes to the end is each line's own, by how much of it is cut off).
         private void SyncMarquees()
         {
             if (_marqueeRunning)
@@ -403,8 +397,7 @@ namespace RetroBar.Controls
 
             if (overflow > 0)
             {
-                double travel = _marqueeRunning ? _marqueeTravel : Math.Max(overflow / _marqueeSpeed, 0.5);
-                text.BeginAnimation(Canvas.LeftProperty, CreateMarqueeAnimation(overflow, travel));
+                text.BeginAnimation(Canvas.LeftProperty, CreateMarqueeAnimation(overflow));
                 EnsureFadeRendering();
             }
         }

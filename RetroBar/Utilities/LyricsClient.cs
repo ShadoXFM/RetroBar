@@ -6,7 +6,6 @@ using System.Net.Http;
 using System.Text.Json;
 using System.Text.RegularExpressions;
 using System.Threading.Tasks;
-using ManagedShell.Common.Logging;
 
 namespace RetroBar.Utilities
 {
@@ -15,8 +14,8 @@ namespace RetroBar.Utilities
 
     /// <summary>
     /// Synced lyrics from lrclib.net (a free, open lyrics database): found by the track's title and artist (and the one whose length is
-    /// closest to the track's), as the lines with the time each starts. A track that has none, or a failed request, gives null, and is
-    /// not asked for again until the app restarts.
+    /// closest to the track's), as the lines with the time each starts. A track that has none gives null, and is not asked for again until
+    /// the app restarts; a request that fails (the service down, no connection) throws, and is not remembered.
     /// </summary>
     public static class LyricsClient
     {
@@ -38,7 +37,7 @@ namespace RetroBar.Utilities
             return client;
         }
 
-        /// <summary>The synced lyrics of a track, or null if there are none. Safe to call from any thread.</summary>
+        /// <summary>The synced lyrics of a track, or null if there are none; throws if they could not be asked for. Safe to call from any thread.</summary>
         public static async Task<LyricLine[]> GetAsync(string artist, string title, TimeSpan duration)
         {
             if (string.IsNullOrWhiteSpace(title))
@@ -55,18 +54,10 @@ namespace RetroBar.Utilities
                 }
             }
 
-            LyricLine[] lines = null;
-            try
-            {
-                string url = "https://lrclib.net/api/search?track_name=" + Uri.EscapeDataString(title)
-                    + (string.IsNullOrWhiteSpace(artist) ? "" : "&artist_name=" + Uri.EscapeDataString(artist));
-                string json = await Http.GetStringAsync(url).ConfigureAwait(false);
-                lines = Pick(json, duration);
-            }
-            catch (Exception ex) when (ex is HttpRequestException or TaskCanceledException or JsonException)
-            {
-                ShellLogger.Debug($"LyricsClient: no lyrics for '{key}': {ex.Message}");
-            }
+            string url = "https://lrclib.net/api/search?track_name=" + Uri.EscapeDataString(title)
+                + (string.IsNullOrWhiteSpace(artist) ? "" : "&artist_name=" + Uri.EscapeDataString(artist));
+            string json = await Http.GetStringAsync(url).ConfigureAwait(false);
+            LyricLine[] lines = Pick(json, duration);
 
             lock (Cache)
             {
