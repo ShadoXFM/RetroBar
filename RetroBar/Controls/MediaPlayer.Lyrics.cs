@@ -36,11 +36,10 @@ namespace RetroBar.Controls
 
         // The window fades out at its top and bottom edges, where there are more lines beyond them, so a line is not cut off sharply there:
         // nothing at all in the outermost row (what is cut off there is part of a line, which would be a stray mark), then growing to the
-        // full look by the time it is this many rows from the edge. The scroll does not stop closer to an end than LyricEdgePinRows
-        // (see LyricScrollFor): the first and last lines are at the very top and bottom, not in the fade.
+        // full look by the time it is this many rows from the edge. An edge fades by how much there is beyond it (all of it when there
+        // are as many rows as that), so as the lyrics get to their end the fade goes away by degrees, with the lines drifting down.
         private const double LyricEdgeClearRows = 1;
         private const double LyricEdgeFadeRows = 2.2;
-        private const double LyricEdgePinRows = 1.5;
         private LinearGradientBrush _lyricFadeMask;
         private GradientStop[] _lyricFadeTop;
         private GradientStop[] _lyricFadeBottom;
@@ -107,11 +106,12 @@ namespace RetroBar.Controls
             }
         }
 
-        // An edge fades when there are lines beyond it.
+        // An edge fades by how much there is beyond it.
         private void UpdateLyricEdges(double scroll, bool animate)
         {
-            SetLyricEdge(_lyricFadeTop, scroll > 0.5 ? 1 : 0, animate);
-            SetLyricEdge(_lyricFadeBottom, scroll < _lyricScrollMax - 0.5 ? 1 : 0, animate);
+            double fade = LyricEdgeFadeRows * (_lyricRowUnit > 0 ? _lyricRowUnit : 15);
+            SetLyricEdge(_lyricFadeTop, Math.Clamp(scroll / fade, 0, 1), animate);
+            SetLyricEdge(_lyricFadeBottom, Math.Clamp((_lyricScrollMax - scroll) / fade, 0, 1), animate);
         }
 
         private static void SetLyricEdge(GradientStop[] edge, double strength, bool animate)
@@ -306,17 +306,6 @@ namespace RetroBar.Controls
             TextBlock row = _lyricRows[index];
             double middle = row.TranslatePoint(new Point(0, row.ActualHeight / 2), SeekLyricsPanel).Y;
             double scroll = Math.Clamp(middle - window / 2, 0, maximum);
-
-            // Not just short of an end: the lines there would be in the fade. The first lines are at the top, the last at the bottom.
-            double pin = LyricEdgePinRows * _lyricRowUnit;
-            if (scroll < pin)
-            {
-                scroll = 0;
-            }
-            else if (maximum - scroll < pin)
-            {
-                scroll = maximum;
-            }
 
             double scale = GetSeekDpi().DpiScaleY;
             return Math.Round(scroll * scale) / scale;
