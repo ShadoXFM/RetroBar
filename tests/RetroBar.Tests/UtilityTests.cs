@@ -152,6 +152,17 @@ namespace RetroBar.Tests
         }
 
         [Fact]
+        public void The_index_of_the_line_being_sung_is_minus_one_before_the_first()
+        {
+            LyricLine[] lines = LyricsClient.Parse(Lrc);
+
+            Assert.Equal(-1, LyricsClient.IndexAt(lines, TimeSpan.FromSeconds(1)));
+            Assert.Equal(0, LyricsClient.IndexAt(lines, TimeSpan.FromSeconds(3.5)));
+            Assert.Equal(2, LyricsClient.IndexAt(lines, TimeSpan.FromSeconds(13)));
+            Assert.Equal(4, LyricsClient.IndexAt(lines, TimeSpan.FromSeconds(300)));
+        }
+
+        [Fact]
         public void The_line_being_sung_is_the_last_that_has_started()
         {
             LyricLine[] lines = LyricsClient.Parse(Lrc);

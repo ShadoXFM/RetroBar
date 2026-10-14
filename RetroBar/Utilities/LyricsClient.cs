@@ -144,21 +144,23 @@ namespace RetroBar.Utilities
             return lines.Count == 0 ? null : lines.OrderBy(line => line.Time).ToArray();
         }
 
-        /// <summary>The line being sung at a position: the last one that has started (null before the first).</summary>
-        public static LyricLine LineAt(LyricLine[] lines, TimeSpan position)
+        /// <summary>The index of the line being sung at a position: the last one that has started (-1 before the first).</summary>
+        public static int IndexAt(LyricLine[] lines, TimeSpan position)
         {
-            LyricLine current = null;
-            foreach (LyricLine line in lines)
+            int current = -1;
+            for (int i = 0; i < lines.Length && lines[i].Time <= position; i++)
             {
-                if (line.Time > position)
-                {
-                    break;
-                }
-
-                current = line;
+                current = i;
             }
 
             return current;
+        }
+
+        /// <summary>The line being sung at a position: the last one that has started (null before the first).</summary>
+        public static LyricLine LineAt(LyricLine[] lines, TimeSpan position)
+        {
+            int index = IndexAt(lines, position);
+            return index < 0 ? null : lines[index];
         }
     }
 }
