@@ -141,7 +141,6 @@ namespace RetroBar.Controls
                 {
                     // A click on a line goes to it; the whole of its row takes the click, not only its letters.
                     Background = Brushes.Transparent,
-                    Cursor = System.Windows.Input.Cursors.Hand,
                     HorizontalAlignment = HorizontalAlignment.Stretch,
                     TextAlignment = TextAlignment.Center,
                     TextWrapping = TextWrapping.Wrap,
