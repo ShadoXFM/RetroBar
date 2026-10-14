@@ -85,6 +85,10 @@
                                        FontWeight="Bold"
                                        FontSize="20"
                                        Margin="0,6,0,0" />
+                            <TextBlock Text="{Binding WeatherDetailsText}"
+                                       Style="{DynamicResource GlobalFonts}"
+                                       Foreground="{DynamicResource ButtonForeground}"
+                                       Margin="0,4,0,0" />
                         </StackPanel>
                         <Rectangle Grid.Column="1"
                                    Width="40"

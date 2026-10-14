@@ -318,6 +318,7 @@ namespace RetroBar.Controls
         private static double? _cachedCelsius;
         private static string _cachedIconPath;
         private static List<DailyForecast> _cachedForecast = new();
+        private static WeatherDetails _cachedDetails;
 
         // Set when the network comes back (see OnNetworkAvailabilityChanged): the next update refetches
         // even though the cached reading isn't old yet, since the last attempt may have failed offline.
@@ -474,6 +475,20 @@ namespace RetroBar.Controls
             }
         }
 
+        private string _weatherDetailsText;
+        public string WeatherDetailsText
+        {
+            get => _weatherDetailsText;
+            set
+            {
+                if (_weatherDetailsText != value)
+                {
+                    _weatherDetailsText = value;
+                    OnPropertyChanged();
+                }
+            }
+        }
+
         private string _weatherIconPath;
         public string WeatherIconPath
         {
@@ -537,6 +552,7 @@ namespace RetroBar.Controls
             public double Celsius { get; set; }
             public string IconFile { get; set; }
             public List<DailyForecast> Forecast { get; set; }
+            public WeatherDetails Details { get; set; }
             public string GeocodedDisplayName { get; set; }
             public string GeocodedCountryCode { get; set; }
             public double Latitude { get; set; }
@@ -553,6 +569,7 @@ namespace RetroBar.Controls
                     Celsius = _cachedCelsius.Value,
                     IconFile = iconFile,
                     Forecast = _cachedForecast,
+                    Details = _cachedDetails,
                     GeocodedDisplayName = _geocodedDisplayName,
                     GeocodedCountryCode = _geocodedCountryCode,
                     Latitude = _latitude,
@@ -597,6 +614,7 @@ namespace RetroBar.Controls
                 _cachedCelsius = reading.Celsius;
                 _cachedIconPath = GetImagePath(reading.IconFile.StartsWith("moon_", StringComparison.Ordinal) ? "moon.png" : reading.IconFile);
                 _cachedForecast = reading.Forecast ?? new List<DailyForecast>();
+                _cachedDetails = reading.Details;
 
                 // Without these a later fetch would skip geocoding (the location "is" geocoded) and use no coordinates.
                 if (reading.Latitude != 0 || reading.Longitude != 0)
@@ -691,7 +709,7 @@ namespace RetroBar.Controls
                 }
 
                 string url = string.Format(CultureInfo.InvariantCulture,
-                    "https://api.open-meteo.com/v1/forecast?latitude={0}&longitude={1}&current=temperature_2m,weather_code,is_day&daily=weather_code,temperature_2m_max,temperature_2m_min&forecast_days=7&timezone=auto&temperature_unit=celsius",
+                    "https://api.open-meteo.com/v1/forecast?latitude={0}&longitude={1}&current=temperature_2m,apparent_temperature,relative_humidity_2m,wind_speed_10m,weather_code,is_day&daily=weather_code,temperature_2m_max,temperature_2m_min,precipitation_probability_max&forecast_days=7&timezone=auto&temperature_unit=celsius",
                     _latitude, _longitude);
 
                 string json = await _httpClient.GetStringAsync(url);
@@ -717,8 +735,23 @@ namespace RetroBar.Controls
                         lows[i].GetDouble()));
                 }
 
+                WeatherDetails details = null;
+                if (current.TryGetProperty("apparent_temperature", out JsonElement feels) && current.TryGetProperty("relative_humidity_2m", out JsonElement humidity)
+                    && current.TryGetProperty("wind_speed_10m", out JsonElement wind))
+                {
+                    int? rainChance = null;
+                    if (daily.TryGetProperty("precipitation_probability_max", out JsonElement chances) && chances.GetArrayLength() > 0
+                        && chances[0].ValueKind == JsonValueKind.Number)
+                    {
+                        rainChance = chances[0].GetInt32();
+                    }
+
+                    details = new WeatherDetails(feels.GetDouble(), (int)Math.Round(humidity.GetDouble()), wind.GetDouble(), rainChance);
+                }
+
                 string iconFile = GetIconFileName(weatherCode, isDay);
                 _cachedLocation = location;
+                _cachedDetails = details;
                 _cachedCelsius = temperature;
                 _cachedForecast = forecast;
                 _cachedIconPath = GetImagePath(iconFile);
@@ -755,6 +788,7 @@ namespace RetroBar.Controls
 
                 WeatherTemp = FormatTemperature(_cachedCelsius.Value);
                 WeatherBarTemp = FormatBarTemperature(_cachedCelsius.Value);
+                WeatherDetailsText = FormatDetails();
                 WeatherIconPath = _cachedIconPath;
 
                 Forecast.Clear();
@@ -778,8 +812,39 @@ namespace RetroBar.Controls
             {
                 WeatherTemp = "N/A";
                 WeatherBarTemp = "N/A";
+                WeatherDetailsText = "";
                 Forecast.Clear();
             }
+        }
+
+        // Under the temperature in the forecast popup: how it feels, the chance of rain today, the humidity and the wind (km/h, or mph
+        // with the Fahrenheit setting), in two lines.
+        private static string FormatDetails()
+        {
+            WeatherDetails details = _cachedDetails;
+            if (details == null)
+            {
+                return "";
+            }
+
+            static string Text(string key, string fallback) => System.Windows.Application.Current?.TryFindResource(key) as string ?? fallback;
+
+            bool imperial = Settings.Instance.WeatherUseFahrenheit;
+            double wind = imperial ? details.WindKmh * 0.621371 : details.WindKmh;
+
+            var first = new List<string> { string.Format(Text("weather_feels_like", "Feels like {0}"), FormatBarTemperature(details.FeelsLikeCelsius)) };
+            if (details.RainChance is int rain)
+            {
+                first.Add(string.Format(Text("weather_rain_chance", "Rain {0}%"), rain));
+            }
+
+            var second = new List<string>
+            {
+                string.Format(Text("weather_humidity", "Humidity {0}%"), details.Humidity),
+                string.Format(Text("weather_wind", "Wind {0} {1}"), Math.Round(wind), imperial ? "mph" : "km/h"),
+            };
+
+            return string.Join("  ·  ", first) + "\n" + string.Join("  ·  ", second);
         }
 
         private static async Task<bool> GeocodeAsync(string location)
@@ -856,6 +921,9 @@ namespace RetroBar.Controls
             PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(propertyName));
         }
     }
+
+    /// <summary>The current conditions beyond the temperature, as fetched (Celsius and km/h, so the units can be switched without refetching).</summary>
+    public record WeatherDetails(double FeelsLikeCelsius, int Humidity, double WindKmh, int? RainChance);
 
     /// <summary>One day of the forecast as fetched (raw Celsius, so °C/°F can be switched without refetching).</summary>
     public record DailyForecast(DateTime Date, int WeatherCode, double HighCelsius, double LowCelsius);
