@@ -155,6 +155,30 @@ namespace RetroBar.Tests
         }
     }
 
+    public class TitleTimelineTests
+    {
+        [Theory]
+        [InlineData("[1:23 / 3:45] The Beatles - Run for Your Life [foobar2000]", 83, 225)]
+        [InlineData("The Beatles - Run for Your Life  [0:07/3:45]", 7, 225)]
+        [InlineData("[1:02:03 / 1:30:00] Long mix", 3723, 5400)]
+        public void The_position_and_the_length_are_read_from_a_title(string title, int position, int length)
+        {
+            Assert.True(TitleTimeline.TryParse(title, out TimeSpan p, out TimeSpan l));
+            Assert.Equal(TimeSpan.FromSeconds(position), p);
+            Assert.Equal(TimeSpan.FromSeconds(length), l);
+        }
+
+        [Theory]
+        [InlineData("The Beatles - Run for Your Life [foobar2000]")]
+        [InlineData("Song 12:34")]
+        [InlineData("")]
+        [InlineData(null)]
+        public void A_title_without_the_times_gives_none(string title)
+        {
+            Assert.False(TitleTimeline.TryParse(title, out _, out _));
+        }
+    }
+
     public class LyricsTests
     {
         private const string Lrc = "[ti:Song]\n[00:03.50] first\n[00:10.00]\n[00:12.25] second\n[00:20.00][01:00.00] chorus\n";

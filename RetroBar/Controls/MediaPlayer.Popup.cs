@@ -394,7 +394,7 @@ namespace RetroBar.Controls
                 return;
             }
 
-            (TimeSpan position, TimeSpan duration) = _sessionManager.GetTimeline();
+            (TimeSpan position, TimeSpan duration) = GetTimeline();
 
             // Just after a seek the source still reports where it was: the position it is sought to stays shown until it catches up.
             if (DateTime.UtcNow < _seekHoldUntil && Math.Abs((position - _seekHoldPosition).TotalSeconds) > 1.5)
@@ -403,6 +403,19 @@ namespace RetroBar.Controls
             }
 
             SetSeekDisplay(position, duration);
+        }
+
+        // What the source reports to Windows; for one that reports no length (foobar2000), the times in its window's title if its format has
+        // them (see TitleTimeline) - the only exact ones there are.
+        private (TimeSpan Position, TimeSpan Duration) GetTimeline()
+        {
+            (TimeSpan position, TimeSpan duration) = _sessionManager.GetTimeline();
+            if (duration <= TimeSpan.Zero && TitleTimeline.TryParse(FindSourceAppWindow()?.Title, out TimeSpan titlePosition, out TimeSpan titleLength))
+            {
+                return (titlePosition, titleLength);
+            }
+
+            return (position, duration);
         }
 
         private DateTime _seekHoldUntil = DateTime.MinValue;
@@ -533,7 +546,7 @@ namespace RetroBar.Controls
                 return;
             }
 
-            (TimeSpan position, TimeSpan duration) = _sessionManager.GetTimeline();
+            (TimeSpan position, TimeSpan duration) = GetTimeline();
             TimeSpan target = position + delta;
             if (target < TimeSpan.Zero)
             {
