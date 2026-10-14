@@ -38,8 +38,8 @@ namespace RetroBar.Controls
         // nothing at all in the outermost row (what is cut off there is part of a line, which would be a stray mark), then growing to the
         // full look by the time it is this many rows from the edge. An edge fades by how much there is beyond it (all of it when there
         // are as many rows as that), so as the lyrics get to their end the fade goes away by degrees, with the lines drifting down.
-        private const double LyricEdgeClearRows = 1;
-        private const double LyricEdgeFadeRows = 2.2;
+        private const double LyricEdgeClearRows = 0.8;
+        private const double LyricEdgeFadeRows = 1.7;
         private LinearGradientBrush _lyricFadeMask;
         private GradientStop[] _lyricFadeTop;
         private GradientStop[] _lyricFadeBottom;
@@ -153,9 +153,18 @@ namespace RetroBar.Controls
             }
         }
 
+        // The cover's colour, a little lighter than the one the meter and the spectrum have, to read on the popup's dark ground at this size.
+        private const double LyricAccentLighten = 0.3;
+
         private SolidColorBrush AccentBrush()
         {
-            return _seekAccentColor is Color accent ? new SolidColorBrush(accent) : null;
+            if (_seekAccentColor is not Color accent)
+            {
+                return null;
+            }
+
+            static byte Lighter(byte channel) => (byte)Math.Round(channel + (255 - channel) * LyricAccentLighten);
+            return new SolidColorBrush(Color.FromRgb(Lighter(accent.R), Lighter(accent.G), Lighter(accent.B)));
         }
 
         // The colour the other lines have (the text's own).
