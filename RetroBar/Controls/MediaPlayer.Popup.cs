@@ -375,13 +375,9 @@ namespace RetroBar.Controls
             _seekPopupPinned = false;
             SeekPopupRoot.ClearValue(MonitorOffset.DeviceNameOverrideProperty);
 
-            // Only suppress the next click if it's plausibly the one that just caused this close
-            // (the mouse is still over the track text) - a dismissal from clicking elsewhere
-            // shouldn't eat a later, unrelated click on the text.
-            Point mousePos = Mouse.GetPosition(TrackTextCanvas);
-            _ignoreTrackTextClickUntil = DateTime.UtcNow + TimeSpan.FromMilliseconds(500);
-            _ignoreNextTrackTextClick = mousePos.X >= 0 && mousePos.Y >= 0
-                && mousePos.X <= TrackTextCanvas.ActualWidth && mousePos.Y <= TrackTextCanvas.ActualHeight;
+            // Nothing is set to ignore the next click on the text here: the click that closes the popup from outside it sets that itself
+            // when the button goes down (see SeekInput_OnMouseDown), and by the time the popup has finished closing that button is up -
+            // a flag set now would eat the click that opens it again.
         }
 
         private void SeekPopupTimer_OnTick(object sender, EventArgs e)

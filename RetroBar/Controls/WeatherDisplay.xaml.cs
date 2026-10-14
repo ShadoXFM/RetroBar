@@ -1,5 +1,6 @@
 using RetroBar.Utilities;
 using System;
+using System.Linq;
 using System.ComponentModel;
 using System.Globalization;
 using System.IO;
@@ -413,7 +414,7 @@ namespace RetroBar.Controls
         /// <summary>The next few days, for the forecast popup.</summary>
         public ObservableCollection<ForecastDay> Forecast { get; } = new();
 
-        /// <summary>The next hours (every second one), for the forecast popup.</summary>
+        /// <summary>The next times that are a multiple of three hours, for the forecast popup.</summary>
         public ObservableCollection<HourlyItem> Hourly { get; } = new();
 
         private bool _hasHourly;
@@ -730,7 +731,7 @@ namespace RetroBar.Controls
                 }
 
                 string url = string.Format(CultureInfo.InvariantCulture,
-                    "https://api.open-meteo.com/v1/forecast?latitude={0}&longitude={1}&current=temperature_2m,apparent_temperature,relative_humidity_2m,wind_speed_10m,weather_code,is_day&hourly=temperature_2m,weather_code,is_day&forecast_hours=13&daily=weather_code,temperature_2m_max,temperature_2m_min,precipitation_probability_max,sunrise,sunset&forecast_days=7&timezone=auto&temperature_unit=celsius",
+                    "https://api.open-meteo.com/v1/forecast?latitude={0}&longitude={1}&current=temperature_2m,apparent_temperature,relative_humidity_2m,wind_speed_10m,weather_code,is_day&hourly=temperature_2m,weather_code,is_day&forecast_hours=24&daily=weather_code,temperature_2m_max,temperature_2m_min,precipitation_probability_max,sunrise,sunset&forecast_days=7&timezone=auto&temperature_unit=celsius",
                     _latitude, _longitude);
 
                 string json = await _httpClient.GetStringAsync(url);
@@ -844,11 +845,12 @@ namespace RetroBar.Controls
                 WeatherDetailsText = FormatDetails();
                 WeatherIconPath = _cachedIconPath;
 
-                // The next hours, every second one, a half day in all.
+                // The next times that are a multiple of three hours (0h, 3h, 6h...): the same times of the day whenever it is looked at,
+                // an eighteen hours ahead in all.
                 Hourly.Clear();
-                for (int i = 2; i < _cachedHourly.Count; i += 2)
+                DateTime now = _cachedHourly.Count > 0 ? _cachedHourly[0].Time : DateTime.MinValue;
+                foreach (HourlyForecast hour in _cachedHourly.Where(h => h.Time > now && h.Time.Hour % 3 == 0).Take(6))
                 {
-                    HourlyForecast hour = _cachedHourly[i];
                     string label = CultureInfo.CurrentCulture.DateTimeFormat.ShortTimePattern.Contains("tt")
                         ? hour.Time.ToString("h tt", CultureInfo.CurrentCulture)
                         : hour.Time.Hour + "h";
