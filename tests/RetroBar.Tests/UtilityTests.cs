@@ -155,6 +155,36 @@ namespace RetroBar.Tests
         }
     }
 
+    public class Foobar2000SeekerTests
+    {
+        [Fact]
+        public void A_seek_is_the_longest_steps_first_to_the_nearest_five_seconds()
+        {
+            Assert.Equal(new[] { "Ahead by 1 minute", "Ahead by 1 minute", "Ahead by 30 seconds", "Ahead by 10 seconds", "Ahead by 5 seconds" },
+                Foobar2000Seeker.CommandsFor(TimeSpan.FromSeconds(167)));
+            Assert.Equal(new[] { "Back by 10 seconds", "Back by 5 seconds" }, Foobar2000Seeker.CommandsFor(TimeSpan.FromSeconds(-14)));
+            Assert.Equal(new[] { "Ahead by 5 seconds" }, Foobar2000Seeker.CommandsFor(TimeSpan.FromSeconds(5)));
+        }
+
+        [Fact]
+        public void Less_than_two_and_a_half_seconds_is_no_seek_and_a_very_long_one_is_limited()
+        {
+            Assert.Empty(Foobar2000Seeker.CommandsFor(TimeSpan.FromSeconds(2)));
+            Assert.Empty(Foobar2000Seeker.CommandsFor(TimeSpan.Zero));
+            Assert.Equal(30, Foobar2000Seeker.CommandsFor(TimeSpan.FromHours(3)).Count);
+        }
+
+        [Theory]
+        [InlineData("foobar2000.exe", true)]
+        [InlineData("Foobar2000", true)]
+        [InlineData("Spotify.exe", false)]
+        [InlineData(null, false)]
+        public void The_player_is_found_by_its_name(string aumid, bool expected)
+        {
+            Assert.Equal(expected, Foobar2000Seeker.IsFoobar2000(aumid));
+        }
+    }
+
     public class TitleTimelineTests
     {
         [Theory]

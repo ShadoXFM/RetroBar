@@ -116,7 +116,7 @@ namespace RetroBar.Controls
         // over the popup. The album art and the buttons are in adorners, which this control does not get the wheel from: they call it too.
         private void MediaPlayer_OnMouseWheel(object sender, MouseWheelEventArgs e)
         {
-            if (e.Delta != 0 && _sessionManager?.CanSeek == true)
+            if (e.Delta != 0 && CanSeekSource)
             {
                 _ = SeekRelativeAsync(TimeSpan.FromSeconds(5 * Math.Sign(e.Delta)));
                 e.Handled = true;
@@ -238,10 +238,32 @@ namespace RetroBar.Controls
             SeekTimeText.Margin = new Thickness(2, 0, 6, 4 / dpi.DpiScaleY);
         }
 
+        // Whether the source can be sought: it says so to Windows, or it is foobar2000, which is sought through its command line.
+        private bool CanSeekSource => _sessionManager != null
+            && (_sessionManager.CanSeek || Foobar2000Seeker.IsFoobar2000(_sessionManager.SourceAppUserModelId));
+
+        // Seeks the source to a position, which it is at now at `from`.
+        private async System.Threading.Tasks.Task SeekSourceAsync(TimeSpan target, TimeSpan from)
+        {
+            if (_sessionManager == null)
+            {
+                return;
+            }
+
+            if (_sessionManager.CanSeek)
+            {
+                await _sessionManager.SeekAsync(target);
+            }
+            else if (Foobar2000Seeker.IsFoobar2000(_sessionManager.SourceAppUserModelId))
+            {
+                await Foobar2000Seeker.SeekByAsync(target - from);
+            }
+        }
+
         // The wheel over the popup seeks 5 seconds a notch (up forward).
         private void SeekPopupRoot_OnPreviewMouseWheel(object sender, MouseWheelEventArgs e)
         {
-            if (e.Delta != 0 && _sessionManager?.CanSeek == true)
+            if (e.Delta != 0 && CanSeekSource)
             {
                 _ = SeekRelativeAsync(TimeSpan.FromSeconds(5 * Math.Sign(e.Delta)));
             }
@@ -331,8 +353,7 @@ namespace RetroBar.Controls
             ApplySeekGlyphs();
             Dispatcher.BeginInvoke(new Action(SyncMarquees), System.Windows.Threading.DispatcherPriority.Loaded);
 
-            bool canSeek = _sessionManager?.CanSeek ?? false;
-            SeekSlider.IsEnabled = canSeek;
+            SeekSlider.IsEnabled = CanSeekSource;
 
             RefreshSeekDisplay();
 
@@ -436,9 +457,10 @@ namespace RetroBar.Controls
                 return;
             }
 
+            TimeSpan from = _lastSeekPosition;
             SetSeekDisplay(target, _lastSeekDuration);
             HoldSeek(target);
-            await _sessionManager.SeekAsync(target);
+            await SeekSourceAsync(target, from);
         }
 
         // Separated from RefreshSeekDisplay so a skip/seek can paint the target position
@@ -533,10 +555,11 @@ namespace RetroBar.Controls
             }
 
             TimeSpan target = TimeSpan.FromSeconds(SeekSlider.Value);
+            TimeSpan from = _lastSeekPosition;
             SetSeekDisplay(target, TimeSpan.FromSeconds(SeekSlider.Maximum));
             HoldSeek(target);
 
-            await _sessionManager.SeekAsync(target);
+            await SeekSourceAsync(target, from);
         }
 
         private async System.Threading.Tasks.Task SeekRelativeAsync(TimeSpan delta)
@@ -562,7 +585,7 @@ namespace RetroBar.Controls
             SetSeekDisplay(target, duration);
             HoldSeek(target);
 
-            await _sessionManager.SeekAsync(target);
+            await SeekSourceAsync(target, position);
         }
     }
 }

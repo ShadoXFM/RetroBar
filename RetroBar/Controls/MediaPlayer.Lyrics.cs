@@ -183,7 +183,7 @@ namespace RetroBar.Controls
 
         private void LyricRow_OnClick(int line)
         {
-            if (_sessionManager?.CanSeek != true || _lyrics == null || line >= _lyrics.Length)
+            if (!CanSeekSource || _lyrics == null || line >= _lyrics.Length)
             {
                 return;
             }
