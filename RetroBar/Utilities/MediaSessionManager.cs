@@ -381,8 +381,13 @@ namespace RetroBar.Utilities
             }
 
             // A new track's own position starts fresh - don't let GetTimeline's smooth-position
-            // estimate keep extrapolating forward from whatever the previous track was doing.
-            _hasPositionEstimateBase = false;
+            // estimate keep extrapolating forward from whatever the previous track was doing. It starts now, at 0:00, not when the
+            // position is first read (which for a source that never reports one, as foobar2000, is when the popup is opened, and would
+            // lose all the track has played by then); a source that does report a position gives its own as soon as it is read.
+            _positionEstimateBase = TimeSpan.Zero;
+            _positionEstimateBaseTime = DateTimeOffset.Now;
+            _lastRawPosition = TimeSpan.Zero;
+            _hasPositionEstimateBase = true;
 
             try
             {
