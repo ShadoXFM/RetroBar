@@ -532,6 +532,7 @@ namespace RetroBar.Controls
                 };
                 RenderOptions.SetBitmapScalingMode(_albumArtVisual, BitmapScalingMode.HighQuality);
                 _albumArtVisual.MouseLeftButtonUp += ActivateSourceApp;
+                _albumArtVisual.MouseWheel += MediaPlayer_OnMouseWheel;
 
                 // The explicit size lives on this wrapping Border - a plain Rectangle sizes
                 // itself from whatever space it's arranged into, so the Border is what actually
@@ -678,12 +679,15 @@ namespace RetroBar.Controls
             }
 
             _previousButton = CreateTransportButton("MediaButtonPrevious", "MediaGlyphPrevious", "MediaPlayerPreviousGeometry", "media_previous", PreviousButton_OnClick, out _);
+            _previousButton.MouseWheel += MediaPlayer_OnMouseWheel;
             _previousButtonSlide = AttachTransportButtonAdorner(PreviousButtonSpacer, _previousButton, ref _previousButtonAdorner);
 
             _playPauseButton = CreateTransportButton("MediaButtonPlayPause", "MediaGlyphPlayPause", "MediaPlayerPlayGeometry", "media_play_pause", PlayPauseButton_OnClick, out _playPauseGlyph);
+            _playPauseButton.MouseWheel += MediaPlayer_OnMouseWheel;
             _playPauseButtonSlide = AttachTransportButtonAdorner(PlayPauseButtonSpacer, _playPauseButton, ref _playPauseButtonAdorner);
 
             _nextButton = CreateTransportButton("MediaButtonNext", "MediaGlyphNext", "MediaPlayerNextGeometry", "media_next", NextButton_OnClick, out _);
+            _nextButton.MouseWheel += MediaPlayer_OnMouseWheel;
             _nextButtonSlide = AttachTransportButtonAdorner(NextButtonSpacer, _nextButton, ref _nextButtonAdorner);
 
             if (_sessionManager != null)

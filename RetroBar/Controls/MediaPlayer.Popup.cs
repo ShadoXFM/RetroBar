@@ -112,8 +112,9 @@ namespace RetroBar.Controls
             return new Separator { Style = MenuSeparator.Style };
         }
 
-        // The wheel over the track text on the taskbar seeks 5 seconds a notch (up forward), as it does over the popup.
-        private void TrackTextCanvas_OnMouseWheel(object sender, MouseWheelEventArgs e)
+        // The wheel over the media part of the taskbar (the text, the album art, the buttons) seeks 5 seconds a notch (up forward), as it does
+        // over the popup. The album art and the buttons are in adorners, which this control does not get the wheel from: they call it too.
+        private void MediaPlayer_OnMouseWheel(object sender, MouseWheelEventArgs e)
         {
             if (e.Delta != 0 && _sessionManager?.CanSeek == true)
             {

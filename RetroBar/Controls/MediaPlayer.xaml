@@ -5,6 +5,7 @@
              xmlns:converters="clr-namespace:RetroBar.Converters"
              xmlns:controls="clr-namespace:RetroBar.Controls"
              Loaded="UserControl_Loaded"
+             MouseWheel="MediaPlayer_OnMouseWheel"
              Unloaded="UserControl_Unloaded"
              UseLayoutRounding="True"
              SnapsToDevicePixels="True"
@@ -153,7 +154,6 @@
                         Background="Transparent"
                         Cursor="Hand"
                         MouseLeftButtonUp="TrackTextCanvas_OnMouseLeftButtonUp"
-                        MouseWheel="TrackTextCanvas_OnMouseWheel"
                         SizeChanged="TrackTextCanvas_OnSizeChanged"
                         MouseRightButtonUp="TrackTextCanvas_OnMouseRightButtonUp">
                     <TextBlock x:Name="TrackText"
