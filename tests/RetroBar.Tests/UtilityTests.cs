@@ -1,0 +1,166 @@
+using System;
+using System.Windows.Media;
+using System.Windows.Media.Imaging;
+using RetroBar.Utilities;
+using Xunit;
+
+namespace RetroBar.Tests
+{
+    public class CoverColorTests
+    {
+        private static BitmapSource Solid(byte red, byte green, byte blue, int size = 16)
+        {
+            var pixels = new byte[size * size * 4];
+            for (int i = 0; i < pixels.Length; i += 4)
+            {
+                pixels[i] = blue;
+                pixels[i + 1] = green;
+                pixels[i + 2] = red;
+                pixels[i + 3] = 255;
+            }
+
+            return BitmapSource.Create(size, size, 96, 96, PixelFormats.Bgra32, null, pixels, size * 4);
+        }
+
+        [Fact]
+        public void A_vivid_cover_gives_a_colour_of_its_hue()
+        {
+            Color? color = CoverColor.Vibrant(Solid(200, 30, 30));
+
+            Assert.NotNull(color);
+            Assert.True(color.Value.R > color.Value.G + 40 && color.Value.R > color.Value.B + 40, $"not red: {color}");
+        }
+
+        [Fact]
+        public void A_grey_cover_gives_a_light_grey()
+        {
+            Color? color = CoverColor.Vibrant(Solid(40, 40, 40));
+
+            Assert.NotNull(color);
+            Assert.InRange(Math.Abs(color.Value.R - color.Value.G), 0, 2);
+            Assert.InRange(Math.Abs(color.Value.G - color.Value.B), 0, 2);
+            Assert.True(color.Value.R > 140, $"not light: {color}");
+        }
+
+        [Fact]
+        public void The_vivid_part_wins_over_a_big_dull_one()
+        {
+            // 3/4 dark grey, 1/4 blue.
+            var pixels = new byte[16 * 16 * 4];
+            for (int y = 0; y < 16; y++)
+            {
+                for (int x = 0; x < 16; x++)
+                {
+                    int i = (y * 16 + x) * 4;
+                    bool blue = x >= 12;
+                    pixels[i] = blue ? (byte)220 : (byte)50;
+                    pixels[i + 1] = blue ? (byte)60 : (byte)50;
+                    pixels[i + 2] = blue ? (byte)20 : (byte)50;
+                    pixels[i + 3] = 255;
+                }
+            }
+
+            Color? color = CoverColor.Vibrant(BitmapSource.Create(16, 16, 96, 96, PixelFormats.Bgra32, null, pixels, 16 * 4));
+
+            Assert.NotNull(color);
+            Assert.True(color.Value.B > color.Value.R + 40, $"not blue: {color}");
+        }
+
+        [Fact]
+        public void No_image_gives_no_colour()
+        {
+            Assert.Null(CoverColor.Vibrant(null));
+        }
+    }
+
+    public class LevelTests
+    {
+        [Fact]
+        public void The_vu_level_is_empty_at_the_floor_and_full_at_full_scale()
+        {
+            Assert.Equal(1f, AudioSpectrumCapture.ToVuLevel(1.0), 3);
+            Assert.Equal(0f, AudioSpectrumCapture.ToVuLevel(0.001), 3);
+            Assert.Equal(0f, AudioSpectrumCapture.ToVuLevel(0));
+        }
+
+        [Fact]
+        public void The_vu_level_is_in_decibels()
+        {
+            // -30 dB is the middle of the 60 dB.
+            Assert.Equal(0.5f, AudioSpectrumCapture.ToVuLevel(Math.Pow(10, -30 / 20.0)), 3);
+        }
+
+        [Fact]
+        public void The_spectrum_level_is_empty_at_the_floor_and_full_at_the_ceiling()
+        {
+            Assert.Equal(0f, AudioSpectrumCapture.ToLevel(Math.Pow(10, -60 / 20.0)), 3);
+            Assert.Equal(1f, AudioSpectrumCapture.ToLevel(Math.Pow(10, -20 / 20.0)), 3);
+            Assert.Equal(1f, AudioSpectrumCapture.ToLevel(1.0));
+        }
+    }
+
+    public class MonitorAdjustmentsTests
+    {
+        [Theory]
+        [InlineData("MediaTrackTxt", "MediaTrackText")]
+        [InlineData("mediatracktext", "MediaTrackText")]
+        public void A_tag_a_letter_off_is_found(string typed, string expected)
+        {
+            Assert.Equal(expected, MonitorAdjustments.Closest(typed, KnownMonitorTags.Names));
+        }
+
+        [Fact]
+        public void A_tag_nothing_like_any_is_left_alone()
+        {
+            Assert.Null(MonitorAdjustments.Closest("SomethingEntirelyElse", KnownMonitorTags.Names));
+        }
+
+        [Theory]
+        [InlineData("", "", 0)]
+        [InlineData("abc", "abc", 0)]
+        [InlineData("abc", "abd", 1)]
+        [InlineData("kitten", "sitting", 3)]
+        public void The_edit_distance_counts_changes(string a, string b, int distance)
+        {
+            Assert.Equal(distance, MonitorAdjustments.EditDistance(a, b));
+        }
+    }
+
+    public class LyricsTests
+    {
+        private const string Lrc = "[ti:Song]\n[00:03.50] first\n[00:10.00]\n[00:12.25] second\n[00:20.00][01:00.00] chorus\n";
+
+        [Fact]
+        public void Lines_are_read_with_their_times_in_order()
+        {
+            LyricLine[] lines = LyricsClient.Parse(Lrc);
+
+            Assert.NotNull(lines);
+            Assert.Equal(5, lines.Length);
+            Assert.Equal(TimeSpan.FromSeconds(3.5), lines[0].Time);
+            Assert.Equal("first", lines[0].Text);
+            Assert.Equal("", lines[1].Text);
+            Assert.Equal("chorus", lines[3].Text);
+            Assert.Equal(TimeSpan.FromSeconds(60), lines[4].Time);
+            Assert.Equal("chorus", lines[4].Text);
+        }
+
+        [Fact]
+        public void Text_with_no_time_stamps_gives_no_lines()
+        {
+            Assert.Null(LyricsClient.Parse("just words\nand more words"));
+        }
+
+        [Fact]
+        public void The_line_being_sung_is_the_last_that_has_started()
+        {
+            LyricLine[] lines = LyricsClient.Parse(Lrc);
+
+            Assert.Null(LyricsClient.LineAt(lines, TimeSpan.FromSeconds(1)));
+            Assert.Equal("first", LyricsClient.LineAt(lines, TimeSpan.FromSeconds(3.5)).Text);
+            Assert.Equal("first", LyricsClient.LineAt(lines, TimeSpan.FromSeconds(9.9)).Text);
+            Assert.Equal("", LyricsClient.LineAt(lines, TimeSpan.FromSeconds(11)).Text);
+            Assert.Equal("chorus", LyricsClient.LineAt(lines, TimeSpan.FromSeconds(300)).Text);
+        }
+    }
+}

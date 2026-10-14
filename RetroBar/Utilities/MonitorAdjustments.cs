@@ -306,7 +306,7 @@ namespace RetroBar.Utilities
         }
 
         // The known name that is a letter or two off (or only in its case), if any.
-        private static string Closest(string name, IEnumerable<string> known)
+        internal static string Closest(string name, IEnumerable<string> known)
         {
             string best = null;
             int bestDistance = 3;
@@ -328,7 +328,7 @@ namespace RetroBar.Utilities
             return best;
         }
 
-        private static int EditDistance(string a, string b)
+        internal static int EditDistance(string a, string b)
         {
             var previous = new int[b.Length + 1];
             var current = new int[b.Length + 1];
@@ -349,28 +349,6 @@ namespace RetroBar.Utilities
             }
 
             return previous[b.Length];
-        }
-
-        /// <summary>Opens the file in the program that opens .json files.</summary>
-        public static void OpenFile()
-        {
-            EnsureFileExists();
-            System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo(FilePath) { UseShellExecute = true });
-        }
-
-        /// <summary>Empties the file (every monitor's adjustments), keeping what was in it beside it: monitor-adjustments.json.bak-DATE.
-        /// Returns the backup's path, or null if there was nothing to keep.</summary>
-        public static string Reset()
-        {
-            string backup = null;
-            if (File.Exists(FilePath))
-            {
-                backup = FilePath + ".bak-" + DateTime.Now.ToString("yyyyMMdd-HHmmss");
-                File.Copy(FilePath, backup, true);
-            }
-
-            File.WriteAllText(FilePath, Template);
-            return backup;
         }
 
         private static FileSystemWatcher CreateWatcher()

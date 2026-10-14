@@ -10,6 +10,7 @@
     <s:String x:Key="general_heading">General</s:String>
     <s:String x:Key="media_player_heading">Media Player</s:String>
     <s:String x:Key="show_vu_meter">Show the _VU meter behind the track text</s:String>
+    <s:String x:Key="show_media_popup_lyrics">Show the _lyrics in the media popup (from lrclib.net)</s:String>
     <s:String x:Key="show_media_player">Show media player _controls</s:String>
     <s:String x:Key="show_media_player_album_art">Show album _art</s:String>
     <s:String x:Key="weather_cpu_temp_heading">Weather and CPU temperature</s:String>
@@ -17,6 +18,10 @@
     <s:String x:Key="unpin_from_taskbar">Unpin from taskbar</s:String>
     <s:String x:Key="show_weather">Show _weather</s:String>
     <s:String x:Key="weather_use_fahrenheit">Use _Fahrenheit (°F)</s:String>
+    <s:String x:Key="weather_feels_like">Feels like {0}</s:String>
+    <s:String x:Key="weather_rain_chance">Rain {0}%</s:String>
+    <s:String x:Key="weather_humidity">Humidity {0}%</s:String>
+    <s:String x:Key="weather_wind">Wind {0} {1}</s:String>
     <s:String x:Key="media_source_automatic">Automatic (follow Windows)</s:String>
     <s:String x:Key="media_source_browser">Browser</s:String>
     <s:String x:Key="media_source_none">No media playing</s:String>
