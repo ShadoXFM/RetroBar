@@ -122,6 +122,10 @@ namespace RetroBar.Utilities
         // Reset (_hasPositionEstimateBase = false) whenever the track/session changes, so a new
         // track doesn't inherit a stale baseline from whatever the previous one was doing.
         private bool _hasPositionEstimateBase;
+
+        // The position the source reported when the estimate last started over: the estimate starts over when this changes (a seek, a source
+        // that reports its position), and runs on from where it is when it does not (a source that never reports one).
+        private TimeSpan _lastRawPosition;
         private TimeSpan _positionEstimateBase;
         private DateTimeOffset _positionEstimateBaseTime;
 
@@ -541,6 +545,19 @@ namespace RetroBar.Utilities
                 CanSeek = false;
             }
 
+            // The estimate of the position holds where it is while paused, and runs on from there when playing again (a source that never
+            // reports its position - foobar2000's - had its time back to 0:00 at every pause).
+            if (PlaybackState != previous && _hasPositionEstimateBase)
+            {
+                DateTimeOffset now = DateTimeOffset.Now;
+                if (previous == MediaPlaybackState.Playing)
+                {
+                    _positionEstimateBase += now - _positionEstimateBaseTime;
+                }
+
+                _positionEstimateBaseTime = now;
+            }
+
             // Polling calls this every 500ms regardless of whether anything changed - only
             // notify the UI (which would otherwise reset the marquee/tooltip) on a real change.
             if (PlaybackState != previous)
@@ -591,8 +608,9 @@ namespace RetroBar.Utilities
                 // from our own wall-clock time since we first saw that frozen value, which still
                 // advances smoothly. Reset on track/session change happens in
                 // RefreshPropertiesAsync, so a new track never inherits a stale baseline.
-                if (!_hasPositionEstimateBase || rawPosition != _positionEstimateBase)
+                if (!_hasPositionEstimateBase || rawPosition != _lastRawPosition)
                 {
+                    _lastRawPosition = rawPosition;
                     _positionEstimateBase = rawPosition;
                     _positionEstimateBaseTime = DateTimeOffset.Now;
                     _hasPositionEstimateBase = true;

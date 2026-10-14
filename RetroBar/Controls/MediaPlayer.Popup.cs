@@ -446,7 +446,8 @@ namespace RetroBar.Controls
             _lastSeekPosition = position;
             _lastSeekDuration = duration;
             SeekSlider.Maximum = duration.TotalSeconds > 0 ? duration.TotalSeconds : 1;
-            SeekSlider.Value = position.TotalSeconds;
+            // A source that does not say how long the track is (foobar2000's) leaves the thumb at the start, not pinned at the end.
+            SeekSlider.Value = duration.TotalSeconds > 0 ? position.TotalSeconds : 0;
 
             EnsureLyrics(duration);
             UpdateLyricLine(position);
