@@ -146,6 +146,24 @@ namespace RetroBar.Tests
         }
 
         [Fact]
+        public void The_result_with_synced_lyrics_and_the_closest_length_is_picked()
+        {
+            string json = """
+                [
+                  { "duration": 200, "syncedLyrics": null },
+                  { "duration": 250, "syncedLyrics": "[00:01.00] far" },
+                  { "duration": 301, "syncedLyrics": "[00:01.00] near" },
+                  { "duration": 300, "syncedLyrics": "[00:01.00] exact" }
+                ]
+                """;
+
+            Assert.Contains("exact", LyricsClient.PickSynced(json, TimeSpan.FromSeconds(300)));
+            Assert.Contains("far", LyricsClient.PickSynced(json, TimeSpan.FromSeconds(251)));
+            Assert.Null(LyricsClient.PickSynced(json, TimeSpan.FromSeconds(100)));
+            Assert.Null(LyricsClient.PickSynced("[]", TimeSpan.FromSeconds(100)));
+        }
+
+        [Fact]
         public void Text_with_no_time_stamps_gives_no_lines()
         {
             Assert.Null(LyricsClient.Parse("just words\nand more words"));

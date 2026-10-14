@@ -390,7 +390,37 @@ namespace RetroBar.Controls
             }
 
             (TimeSpan position, TimeSpan duration) = _sessionManager.GetTimeline();
+
+            // Just after a seek the source still reports where it was: the position it is sought to stays shown until it catches up.
+            if (DateTime.UtcNow < _seekHoldUntil && Math.Abs((position - _seekHoldPosition).TotalSeconds) > 1.5)
+            {
+                return;
+            }
+
             SetSeekDisplay(position, duration);
+        }
+
+        private DateTime _seekHoldUntil = DateTime.MinValue;
+
+        private TimeSpan _seekHoldPosition;
+
+        private void HoldSeek(TimeSpan target)
+        {
+            _seekHoldPosition = target;
+            _seekHoldUntil = DateTime.UtcNow.AddSeconds(2);
+        }
+
+        /// <summary>Seeks to a position (a line of the lyrics): shown at once, as the wheel and the slider do.</summary>
+        private async System.Threading.Tasks.Task SeekToAsync(TimeSpan target)
+        {
+            if (_sessionManager == null)
+            {
+                return;
+            }
+
+            SetSeekDisplay(target, _lastSeekDuration);
+            HoldSeek(target);
+            await _sessionManager.SeekAsync(target);
         }
 
         // Separated from RefreshSeekDisplay so a skip/seek can paint the target position
@@ -485,6 +515,7 @@ namespace RetroBar.Controls
 
             TimeSpan target = TimeSpan.FromSeconds(SeekSlider.Value);
             SetSeekDisplay(target, TimeSpan.FromSeconds(SeekSlider.Maximum));
+            HoldSeek(target);
 
             await _sessionManager.SeekAsync(target);
         }
@@ -510,6 +541,7 @@ namespace RetroBar.Controls
             // Paint the target position immediately rather than waiting for the seek command to
             // round-trip and the source app's own position to catch up - see SetSeekDisplay.
             SetSeekDisplay(target, duration);
+            HoldSeek(target);
 
             await _sessionManager.SeekAsync(target);
         }

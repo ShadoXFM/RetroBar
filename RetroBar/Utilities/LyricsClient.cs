@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Globalization;
+using System.IO;
 using System.Linq;
 using System.Net.Http;
 using System.Text.Json;
@@ -14,8 +15,9 @@ namespace RetroBar.Utilities
 
     /// <summary>
     /// Synced lyrics from lrclib.net (a free, open lyrics database): found by the track's title and artist (and the one whose length is
-    /// closest to the track's), as the lines with the time each starts. A track that has none gives null, and is not asked for again until
-    /// the app restarts; a request that fails (the service down, no connection) throws, and is not remembered.
+    /// closest to the track's), as the lines with the time each starts. The lyrics found are kept on disk (lyrics-cache.json), so a track
+    /// is asked for once, and its lyrics are there without a connection too. A track that has none gives null, and is not asked for again
+    /// until the app restarts; a request that fails (the service down, no connection) throws, and is not remembered.
     /// </summary>
     public static class LyricsClient
     {
@@ -29,6 +31,17 @@ namespace RetroBar.Utilities
         private static readonly TimeSpan LengthTolerance = TimeSpan.FromSeconds(4);
 
         private const int CacheLimit = 60;
+
+        // What is kept on disk: the LRC text of each track found, the oldest forgotten beyond the limit.
+        private const int DiskLimit = 300;
+        private static readonly string DiskPath = "lyrics-cache.json".InLocalAppData();
+        private static Dictionary<string, DiskEntry> _disk;
+
+        private sealed class DiskEntry
+        {
+            public string Lrc { get; set; }
+            public DateTime Saved { get; set; }
+        }
 
         private static HttpClient CreateClient()
         {
@@ -54,10 +67,19 @@ namespace RetroBar.Utilities
                 }
             }
 
-            string url = "https://lrclib.net/api/search?track_name=" + Uri.EscapeDataString(title)
-                + (string.IsNullOrWhiteSpace(artist) ? "" : "&artist_name=" + Uri.EscapeDataString(artist));
-            string json = await Http.GetStringAsync(url).ConfigureAwait(false);
-            LyricLine[] lines = Pick(json, duration);
+            LyricLine[] lines = ReadDisk(key) is string kept ? Parse(kept) : null;
+            if (lines == null)
+            {
+                string url = "https://lrclib.net/api/search?track_name=" + Uri.EscapeDataString(title)
+                    + (string.IsNullOrWhiteSpace(artist) ? "" : "&artist_name=" + Uri.EscapeDataString(artist));
+                string json = await Http.GetStringAsync(url).ConfigureAwait(false);
+                string lrc = PickSynced(json, duration);
+                lines = lrc == null ? null : Parse(lrc);
+                if (lrc != null && lines != null)
+                {
+                    WriteDisk(key, lrc);
+                }
+            }
 
             lock (Cache)
             {
@@ -72,8 +94,62 @@ namespace RetroBar.Utilities
             return lines;
         }
 
-        // The result with synced lyrics whose length is the closest to the track's (the first one when the length is not known).
-        private static LyricLine[] Pick(string json, TimeSpan duration)
+        private static void LoadDisk()
+        {
+            if (_disk != null)
+            {
+                return;
+            }
+
+            try
+            {
+                if (File.Exists(DiskPath))
+                {
+                    _disk = JsonSerializer.Deserialize<Dictionary<string, DiskEntry>>(File.ReadAllText(DiskPath));
+                }
+            }
+            catch (Exception ex) when (ex is IOException or JsonException or UnauthorizedAccessException)
+            {
+                // A damaged file is the same as none: it is written again.
+            }
+
+            _disk = _disk == null ? new Dictionary<string, DiskEntry>(StringComparer.OrdinalIgnoreCase) : new Dictionary<string, DiskEntry>(_disk, StringComparer.OrdinalIgnoreCase);
+        }
+
+        private static string ReadDisk(string key)
+        {
+            lock (Cache)
+            {
+                LoadDisk();
+                return _disk.TryGetValue(key, out DiskEntry entry) ? entry?.Lrc : null;
+            }
+        }
+
+        private static void WriteDisk(string key, string lrc)
+        {
+            lock (Cache)
+            {
+                LoadDisk();
+                _disk[key] = new DiskEntry { Lrc = lrc, Saved = DateTime.UtcNow };
+                foreach (string oldest in _disk.OrderByDescending(pair => pair.Value?.Saved ?? DateTime.MinValue).Skip(DiskLimit).Select(pair => pair.Key).ToList())
+                {
+                    _disk.Remove(oldest);
+                }
+
+                try
+                {
+                    File.WriteAllText(DiskPath, JsonSerializer.Serialize(_disk));
+                }
+                catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+                {
+                    // Only a convenience: failing to save it changes nothing else.
+                }
+            }
+        }
+
+        // The LRC text of the result with synced lyrics whose length is the closest to the track's (the first one when the length is not
+        // known); null if none has.
+        internal static string PickSynced(string json, TimeSpan duration)
         {
             using JsonDocument document = JsonDocument.Parse(json);
             if (document.RootElement.ValueKind != JsonValueKind.Array)
@@ -108,7 +184,7 @@ namespace RetroBar.Utilities
                 }
             }
 
-            return best == null ? null : Parse(best);
+            return best;
         }
 
         /// <summary>The lines of an LRC text ("[01:23.45] words", several stamps allowed on a line), in time order; null if it has none.</summary>

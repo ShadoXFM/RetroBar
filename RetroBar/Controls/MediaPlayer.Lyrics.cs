@@ -136,8 +136,12 @@ namespace RetroBar.Controls
             _lyricRows = new TextBlock[lines.Length];
             for (int i = 0; i < lines.Length; i++)
             {
+                int line = i;
                 var row = new TextBlock
                 {
+                    // A click on a line goes to it; the whole of its row takes the click, not only its letters.
+                    Background = Brushes.Transparent,
+                    Cursor = System.Windows.Input.Cursors.Hand,
                     HorizontalAlignment = HorizontalAlignment.Stretch,
                     TextAlignment = TextAlignment.Center,
                     TextWrapping = TextWrapping.Wrap,
@@ -148,6 +152,8 @@ namespace RetroBar.Controls
                     Text = string.IsNullOrWhiteSpace(lines[i].Text) ? "♪" : lines[i].Text,
                 };
                 row.SetResourceReference(StyleProperty, "MediaPlayerTrackTextStyle");
+                row.MouseLeftButtonDown += (s, e) => GetCursorPos(out _lyricClickStart);
+                row.MouseLeftButtonUp += (s, e) => LyricRow_OnClick(line);
                 _lyricRows[i] = row;
                 SeekLyricsPanel.Children.Add(row);
             }
@@ -171,6 +177,25 @@ namespace RetroBar.Controls
         private Color? NeutralColor()
         {
             return _lyricRows is { Length: > 0 } && _lyricRows[0].Foreground is SolidColorBrush brush ? brush.Color : null;
+        }
+
+        // A press and release that moved less than a drag is a click (not the end of a drag of the popup).
+        private POINT _lyricClickStart;
+
+        private void LyricRow_OnClick(int line)
+        {
+            if (_sessionManager?.CanSeek != true || _lyrics == null || line >= _lyrics.Length)
+            {
+                return;
+            }
+
+            GetCursorPos(out POINT now);
+            if (Math.Abs(now.X - _lyricClickStart.X) + Math.Abs(now.Y - _lyricClickStart.Y) >= DragThreshold)
+            {
+                return;
+            }
+
+            _ = SeekToAsync(_lyrics[line].Time);
         }
 
         // The line being sung is in the colour taken from the cover (see UpdateSeekAccent); the text's own colour when there is none.
