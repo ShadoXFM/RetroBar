@@ -349,9 +349,12 @@
                 </StackPanel>
             </TabItem>
             <TabItem Header="{DynamicResource notification_area}">
+                <!-- As tall as the first tab; what does not fit is scrolled to. -->
+                <ScrollViewer Margin="0,10"
+                              Height="{Binding ElementName=FirstTabContent, Path=ActualHeight}"
+                              VerticalScrollBarVisibility="Auto">
                 <StackPanel Orientation="Vertical"
-                            Margin="10"
-                            Height="{Binding ElementName=FirstTabContent, Path=ActualHeight}">
+                            Margin="10,0">
                     <Border Style="{StaticResource PreviewBorder}">
                         <ContentControl x:Name="NotificationAreaPreviewControl"
                                         IsHitTestVisible="False"
@@ -565,6 +568,7 @@
                         </StackPanel>
                     </GroupBox>
                 </StackPanel>
+                </ScrollViewer>
             </TabItem>
             <TabItem Header="{DynamicResource advanced_tab}">
                 <DockPanel Margin="10"
