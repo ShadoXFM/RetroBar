@@ -372,6 +372,17 @@
                                                        Visibility="Collapsed" />
                                             </Grid>
                                         </Border>
+                                        <!-- The line of the lyrics being sung (see MediaPlayer.Lyrics.cs): its room is kept from when they are
+                                             asked for, so the popup does not change height when they arrive. -->
+                                        <TextBlock x:Name="SeekLyricsText"
+                                                   Margin="0,3,0,0"
+                                                   MinHeight="{Binding ActualHeight, ElementName=SeekArtistText}"
+                                                   Style="{DynamicResource MediaPlayerTrackTextStyle}"
+                                                   FontStyle="Italic"
+                                                   Opacity="0.8"
+                                                   TextTrimming="CharacterEllipsis"
+                                                   Visibility="Collapsed"
+                                                   utilities:MonitorOffset.Tag="MediaSeekLyricsText" />
                                     </StackPanel>
                                                                         <Grid x:Name="SeekSpectrumHost"
                                           Grid.Column="1"

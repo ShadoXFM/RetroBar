@@ -33,6 +33,7 @@ namespace RetroBar.Utilities
             "MediaSeekGlyphPlayPause",
             "MediaSeekGlyphSkipNext",
             "MediaSeekGlyphSkipPrevious",
+            "MediaSeekLyricsText",
             "MediaSeekSlider",
             "MediaSeekSpectrum",
             "MediaSeekTimeText",

@@ -436,6 +436,11 @@
                                       IsEnabled="{Binding Source={x:Static Settings:Settings.Instance}, Path=ShowMediaPlayer, UpdateSourceTrigger=PropertyChanged}">
                                 <Label Content="{DynamicResource show_media_player_album_art}" />
                             </CheckBox>
+                            <CheckBox x:Name="cbShowMediaPopupLyrics"
+                                      IsChecked="{Binding Source={x:Static Settings:Settings.Instance}, Path=ShowMediaPopupLyrics, UpdateSourceTrigger=PropertyChanged}"
+                                      IsEnabled="{Binding Source={x:Static Settings:Settings.Instance}, Path=ShowMediaPlayer, UpdateSourceTrigger=PropertyChanged}">
+                                <Label Content="{DynamicResource show_media_popup_lyrics}" />
+                            </CheckBox>
                             <CheckBox x:Name="cbShowVuMeter"
                                       IsChecked="{Binding Source={x:Static Settings:Settings.Instance}, Path=ShowVuMeter, UpdateSourceTrigger=PropertyChanged}"
                                       IsEnabled="{Binding Source={x:Static Settings:Settings.Instance}, Path=ShowMediaPlayer, UpdateSourceTrigger=PropertyChanged}">

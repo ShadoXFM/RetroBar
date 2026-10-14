@@ -413,6 +413,9 @@ namespace RetroBar.Controls
             SeekSlider.Maximum = duration.TotalSeconds > 0 ? duration.TotalSeconds : 1;
             SeekSlider.Value = position.TotalSeconds;
 
+            EnsureLyrics(duration);
+            UpdateLyricLine(position);
+
             string first = _seekShowRemaining && duration > position ? "-" + FormatTime(duration - position) : FormatTime(position);
             SeekTimeText.Text = $"{first} / {FormatTime(duration)}";
         }
