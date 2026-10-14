@@ -112,6 +112,17 @@ namespace RetroBar.Controls
             return new Separator { Style = MenuSeparator.Style };
         }
 
+        // The wheel over the media part of the taskbar (the text, the album art, the buttons) seeks 5 seconds a notch (up forward), as it does
+        // over the popup. The album art and the buttons are in adorners, which this control does not get the wheel from: they call it too.
+        private void MediaPlayer_OnMouseWheel(object sender, MouseWheelEventArgs e)
+        {
+            if (e.Delta != 0 && _sessionManager?.CanSeek == true)
+            {
+                _ = SeekRelativeAsync(TimeSpan.FromSeconds(5 * Math.Sign(e.Delta)));
+                e.Handled = true;
+            }
+        }
+
         private void TrackTextCanvas_OnMouseLeftButtonUp(object sender, MouseButtonEventArgs e)
         {
             // Only the click that closed the popup (its mouse-up arrives right after): a popup closed some other way - by this very click
@@ -275,8 +286,17 @@ namespace RetroBar.Controls
 
         private void SeekPopup_OnOpened(object sender, EventArgs e)
         {
+            // The spectrum starts as it is when nothing has been heard for a while: no bars, no dashes (not the last popup's bars sinking
+            // and its dashes going again). Sound brings the bars up from there.
+            Array.Clear(_seekSpectrumLevels);
+            Array.Clear(_seekSpectrumPeaks);
+            _seekSpectrumQuietSince = DateTime.UtcNow - TimeSpan.FromHours(1);
+            _lastSeekSpectrumUpdate = DateTime.UtcNow;
+            SeekSpectrum.Data = null;
+            Array.Fill(_seekBarGone, true);
+            _seekSpectrumSkipAppear = _sessionManager?.PlaybackState == MediaPlaybackState.Playing;
+
             StartSeekWatching();
-            ApplyMediaPopupSettings();
             UpdateVisualizerCapture(_sessionManager?.PlaybackState == MediaPlaybackState.Playing);
 
             // One popup at a time, whichever monitor's player it belongs to.

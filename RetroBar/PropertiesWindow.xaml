@@ -69,7 +69,8 @@
                 <Setter Property="Padding"
                         Value="5,5,5,0" />
             </Style>
-            <Style TargetType="{x:Type Button}">
+            <Style TargetType="{x:Type Button}"
+                   BasedOn="{StaticResource DialogButton}">
                 <Setter Property="MinHeight"
                         Value="21" />
                 <Setter Property="MinWidth"
@@ -435,11 +436,6 @@
                                       IsEnabled="{Binding Source={x:Static Settings:Settings.Instance}, Path=ShowMediaPlayer, UpdateSourceTrigger=PropertyChanged}">
                                 <Label Content="{DynamicResource show_media_player_album_art}" />
                             </CheckBox>
-                            <CheckBox x:Name="cbShowMediaPopupSpectrum"
-                                      IsChecked="{Binding Source={x:Static Settings:Settings.Instance}, Path=ShowMediaPopupSpectrum, UpdateSourceTrigger=PropertyChanged}"
-                                      IsEnabled="{Binding Source={x:Static Settings:Settings.Instance}, Path=ShowMediaPlayer, UpdateSourceTrigger=PropertyChanged}">
-                                <Label Content="{DynamicResource show_media_popup_spectrum}" />
-                            </CheckBox>
                             <CheckBox x:Name="cbShowVuMeter"
                                       IsChecked="{Binding Source={x:Static Settings:Settings.Instance}, Path=ShowVuMeter, UpdateSourceTrigger=PropertyChanged}"
                                       IsEnabled="{Binding Source={x:Static Settings:Settings.Instance}, Path=ShowMediaPlayer, UpdateSourceTrigger=PropertyChanged}">
@@ -447,41 +443,19 @@
                             </CheckBox>
                         </StackPanel>
                     </GroupBox>
-                    <GroupBox Header="{DynamicResource monitor_adjustments_heading}">
-                        <StackPanel Orientation="Vertical">
-                            <DockPanel>
-                                <Button x:Name="btnOpenMonitorAdjustments"
-                                        DockPanel.Dock="Left"
-                                        Content="{DynamicResource open_monitor_adjustments}"
-                                        Click="OpenMonitorAdjustments_OnClick" />
-                                <Button x:Name="btnResetMonitorAdjustments"
-                                        HorizontalAlignment="Right"
-                                        Content="{DynamicResource reset_monitor_adjustments}"
-                                        Click="ResetMonitorAdjustments_OnClick" />
-                            </DockPanel>
-                            <TextBlock x:Name="txtMonitorAdjustmentsProblems"
-                                       TextWrapping="Wrap"
-                                       Visibility="Collapsed" />
-                        </StackPanel>
-                    </GroupBox>
-                    <GroupBox Header="{DynamicResource weather_heading}">
+                    <GroupBox Header="{DynamicResource weather_cpu_temp_heading}">
                         <StackPanel Orientation="Vertical">
                             <CheckBox x:Name="cbShowWeather"
                                       IsChecked="{Binding Source={x:Static Settings:Settings.Instance}, Path=ShowWeather, UpdateSourceTrigger=PropertyChanged}">
                                 <Label Content="{DynamicResource show_weather}" />
                             </CheckBox>
-                            <CheckBox x:Name="cbWeatherUseFahrenheit"
-                                      IsEnabled="{Binding Source={x:Static Settings:Settings.Instance}, Path=ShowWeather, UpdateSourceTrigger=PropertyChanged}"
-                                      IsChecked="{Binding Source={x:Static Settings:Settings.Instance}, Path=WeatherUseFahrenheit, UpdateSourceTrigger=PropertyChanged}">
-                                <Label Content="{DynamicResource weather_use_fahrenheit}" />
-                            </CheckBox>
-                        </StackPanel>
-                    </GroupBox>
-                    <GroupBox Header="{DynamicResource cpu_temp_heading}">
-                        <StackPanel Orientation="Vertical">
                             <CheckBox x:Name="cbShowCpuTemp"
                                       IsChecked="{Binding Source={x:Static Settings:Settings.Instance}, Path=ShowCpuTemp, UpdateSourceTrigger=PropertyChanged}">
                                 <Label Content="{DynamicResource show_cpu_temp}" />
+                            </CheckBox>
+                            <CheckBox x:Name="cbWeatherUseFahrenheit"
+                                      IsChecked="{Binding Source={x:Static Settings:Settings.Instance}, Path=WeatherUseFahrenheit, UpdateSourceTrigger=PropertyChanged}">
+                                <Label Content="{DynamicResource weather_use_fahrenheit}" />
                             </CheckBox>
                         </StackPanel>
                     </GroupBox>
@@ -562,11 +536,6 @@
                                     </DockPanel>
                                 </UniformGrid>
                             </DockPanel>
-                            <TextBlock Text="{DynamicResource clock_format_warning}"
-                                       TextWrapping="Wrap"
-                                       TextAlignment="Center"
-                                       Width="300"
-                                       Margin="0,3" />
                         </StackPanel>
                     </GroupBox>
                 </StackPanel>

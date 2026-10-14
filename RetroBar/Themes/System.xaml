@@ -715,6 +715,86 @@
         </Setter>
     </Style>
 
+    <!-- The buttons of the Properties windows: the classic 2-pixel raised bevel (sunken while pressed) as four nested borders, whose
+         thicknesses and padding are snapped to whole device pixels (see ButtonChromeDpiSnap's own remarks: SnapBorder1-4) - the
+         stock button draws the bevel in DIPs, which at 125% leaves one side of it a pixel thicker than the other. -->
+    <Style TargetType="Button"
+           x:Key="DialogButton">
+        <Setter Property="OverridesDefaultStyle"
+                Value="True" />
+        <Setter Property="utilities:ButtonChromeDpiSnap.Enabled"
+                Value="True" />
+        <Setter Property="Background"
+                Value="{DynamicResource {x:Static SystemColors.ControlBrushKey}}" />
+        <Setter Property="Foreground"
+                Value="{DynamicResource {x:Static SystemColors.ControlTextBrushKey}}" />
+        <Setter Property="HorizontalContentAlignment"
+                Value="Center" />
+        <Setter Property="VerticalContentAlignment"
+                Value="Center" />
+        <Setter Property="Template">
+            <Setter.Value>
+                <ControlTemplate TargetType="Button">
+                    <Border BorderThickness="0,0,1,1"
+                            BorderBrush="{DynamicResource ButtonDarkShadow}"
+                            UseLayoutRounding="True"
+                            SnapsToDevicePixels="True"
+                            x:Name="SnapBorder1">
+                        <Border BorderThickness="1,1,0,0"
+                                BorderBrush="{DynamicResource ButtonLight}"
+                                UseLayoutRounding="True"
+                                SnapsToDevicePixels="True"
+                                x:Name="SnapBorder2">
+                            <Border BorderThickness="0,0,1,1"
+                                    BorderBrush="{DynamicResource ButtonShadow}"
+                                    UseLayoutRounding="True"
+                                    SnapsToDevicePixels="True"
+                                    x:Name="SnapBorder3">
+                                <Border BorderThickness="1,1,0,0"
+                                        BorderBrush="{DynamicResource ButtonHighlight}"
+                                        Background="{TemplateBinding Background}"
+                                        Padding="{TemplateBinding Padding}"
+                                        UseLayoutRounding="True"
+                                        SnapsToDevicePixels="True"
+                                        x:Name="SnapBorder4">
+                                    <ContentPresenter x:Name="Content"
+                                                      RecognizesAccessKey="True"
+                                                      HorizontalAlignment="{TemplateBinding HorizontalContentAlignment}"
+                                                      VerticalAlignment="{TemplateBinding VerticalContentAlignment}" />
+                                </Border>
+                            </Border>
+                        </Border>
+                    </Border>
+                    <ControlTemplate.Triggers>
+                        <Trigger Property="IsPressed"
+                                 Value="True">
+                            <Setter TargetName="SnapBorder1"
+                                    Property="BorderBrush"
+                                    Value="{DynamicResource ButtonLight}" />
+                            <Setter TargetName="SnapBorder2"
+                                    Property="BorderBrush"
+                                    Value="{DynamicResource ButtonDarkShadow}" />
+                            <Setter TargetName="SnapBorder3"
+                                    Property="BorderBrush"
+                                    Value="{DynamicResource ButtonHighlight}" />
+                            <Setter TargetName="SnapBorder4"
+                                    Property="BorderBrush"
+                                    Value="{DynamicResource ButtonShadow}" />
+                            <Setter TargetName="Content"
+                                    Property="Margin"
+                                    Value="1,1,-1,-1" />
+                        </Trigger>
+                        <Trigger Property="IsEnabled"
+                                 Value="False">
+                            <Setter Property="Foreground"
+                                    Value="{DynamicResource {x:Static SystemColors.GrayTextBrushKey}}" />
+                        </Trigger>
+                    </ControlTemplate.Triggers>
+                </ControlTemplate>
+            </Setter.Value>
+        </Setter>
+    </Style>
+
     <Style x:Key="TaskListScrollButton"
            TargetType="RepeatButton">
         <Setter Property="OverridesDefaultStyle"

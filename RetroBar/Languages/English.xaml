@@ -9,16 +9,10 @@
     <s:String x:Key="notification_area">Notification area</s:String>
     <s:String x:Key="general_heading">General</s:String>
     <s:String x:Key="media_player_heading">Media Player</s:String>
-    <s:String x:Key="show_media_popup_spectrum">Show a _spectrum in the media popup</s:String>
     <s:String x:Key="show_vu_meter">Show the _VU meter behind the track text</s:String>
-    <s:String x:Key="monitor_adjustments_heading">Per-monitor adjustments</s:String>
-    <s:String x:Key="open_monitor_adjustments">_Open the file</s:String>
-    <s:String x:Key="reset_monitor_adjustments">_Reset (keeps a copy)</s:String>
-    <s:String x:Key="reset_monitor_adjustments_question">Remove every per-monitor adjustment? What is in the file now is kept beside it.</s:String>
-    <s:String x:Key="monitor_adjustments_problems">{0} problem(s) in monitor-adjustments.json, the first: {1}</s:String>
     <s:String x:Key="show_media_player">Show media player _controls</s:String>
     <s:String x:Key="show_media_player_album_art">Show album _art</s:String>
-    <s:String x:Key="weather_heading">Weather</s:String>
+    <s:String x:Key="weather_cpu_temp_heading">Weather and CPU temperature</s:String>
     <s:String x:Key="pin_to_taskbar">Pin to taskbar</s:String>
     <s:String x:Key="unpin_from_taskbar">Unpin from taskbar</s:String>
     <s:String x:Key="show_weather">Show _weather</s:String>
@@ -27,7 +21,6 @@
     <s:String x:Key="media_source_browser">Browser</s:String>
     <s:String x:Key="media_source_none">No media playing</s:String>
     <s:String x:Key="media_popup_always_on_top">_Always on top</s:String>
-    <s:String x:Key="cpu_temp_heading">CPU Temperature</s:String>
     <s:String x:Key="show_cpu_temp">Show _CPU temperature</s:String>
     <s:String x:Key="media_previous">Previous</s:String>
     <s:String x:Key="media_play_pause">Play/Pause</s:String>
@@ -125,7 +118,6 @@
     <s:String x:Key="ok_dialog">OK</s:String>
 
     <s:String x:Key="clock_format_help">View available formatting options</s:String>
-    <s:String x:Key="clock_format_warning">Note: Custom clock formatting may not work as expected if your selected theme specifies its own format.</s:String>
     <s:String x:Key="override_clock_format">Custom clock _format:</s:String>
     <s:String x:Key="override_ampm_designators">Custom d_esignators:</s:String>
     <s:String x:Key="am_designator">AM:</s:String>
