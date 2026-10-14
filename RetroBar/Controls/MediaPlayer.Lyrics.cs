@@ -19,9 +19,10 @@ namespace RetroBar.Controls
         private const double LyricWindowLines = 8;
         private const double LyricRowGap = 2;
 
-        // How far a line is from the current one gives its look; further than the last is not shown anyway (the window shows about four on
-        // each side), and has the last one's look.
-        private const int LyricStyledDistance = 5;
+        // How far a line is from the current one gives its look; the last look is for every line further than that. The window shows eight
+        // lines, and at the first and last lines all of them are on one side of the current one, so the blur goes that far; the lines
+        // beyond are not shown (and do not get an effect, which would cost for nothing).
+        private const int LyricStyledDistance = 9;
         private static readonly double[] LyricOpacity = { 1, 0.55, 0.38, 0.25 };
         private static readonly double[] LyricBlur = { 0, 1.5, 2.5, 3.5 };
 
