@@ -275,9 +275,9 @@
                                         </MultiBinding>
                                     </Image.Height>
                                 </Image>
-                                <!-- The lyrics (see MediaPlayer.Lyrics.cs), under the art, as wide as the controls row: the line being sung with three
-                                     lines before it and three after it, whose rows are added in code. Their room is kept from when the lyrics are
-                                     asked for, so the popup does not change height when they arrive or when a line wraps. -->
+                                <!-- The lyrics (see MediaPlayer.Lyrics.cs), under the art, as wide as the controls row: a window of a fixed height
+                                     (set in code) onto the lines, whose rows are added in code and which is scrolled by moving the panel up. Its room is
+                                     kept from when the lyrics are asked for, so the popup does not change height when they arrive. -->
                                 <Grid x:Name="SeekLyricsHost"
                                       HorizontalAlignment="Center"
                                       Width="{Binding ActualWidth, ElementName=SeekControlsRow}"
@@ -285,7 +285,11 @@
                                       ClipToBounds="True"
                                       Visibility="Collapsed"
                                       utilities:MonitorOffset.Tag="MediaSeekLyricsText">
-                                    <StackPanel x:Name="SeekLyricsPanel" />
+                                    <Canvas>
+                                        <StackPanel x:Name="SeekLyricsPanel"
+                                                    Canvas.Top="0"
+                                                    Width="{Binding ActualWidth, ElementName=SeekLyricsHost}" />
+                                    </Canvas>
                                 </Grid>
                                 <!-- The title and artist on the left, a spectrum (SeekSpectrum, drawn by UpdateSeekSpectrum) on the right, as wide as
                                      the controls row below. The margins give the text room above and below. -->
