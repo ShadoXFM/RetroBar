@@ -34,13 +34,17 @@ namespace RetroBar.Controls
         private static readonly Duration LyricScroll = new(TimeSpan.FromMilliseconds(320));
         private static readonly TimeSpan LyricsRetry = TimeSpan.FromSeconds(30);
 
-        // The window fades out at its top and bottom edges, where there are more lines beyond them, so a line is not cut off sharply there
-        // (at the first and last lines, where there is nothing beyond, the edge is left as it is): nothing at all in the outermost part of
-        // the edge (what is cut off there is a few pixels of a line, which would be a stray mark), then growing to the full look.
-        private const double LyricEdgeClear = 0.08;
-        private const double LyricEdgeFade = 0.26;
+        // The window fades out at its top and bottom edges, where there are more lines beyond them, so a line is not cut off sharply there:
+        // nothing at all in the outermost row (what is cut off there is part of a line, which would be a stray mark), then growing to the
+        // full look over the next two. The edge fades by how much there is beyond it, up to a row: with only a little (the last lines of the
+        // song, a few pixels short of the end), the lines there are still shown.
+        private const double LyricEdgeClearRows = 1;
+        private const double LyricEdgeFadeRows = 3;
         private GradientStop[] _lyricFadeTop;
         private GradientStop[] _lyricFadeBottom;
+        private GradientStop _lyricFadeTopInner;
+        private GradientStop _lyricFadeBottomInner;
+        private double _lyricRowUnit;
         private double _lyricScrollMax;
 
         private LyricLine[] _lyrics;
@@ -60,35 +64,51 @@ namespace RetroBar.Controls
             if (line > 0)
             {
                 SeekLyricsHost.Height = Math.Round((line + LyricRowGap) * LyricWindowLines);
+                _lyricRowUnit = line + LyricRowGap;
             }
 
             if (_lyricFadeTop == null)
             {
-                _lyricFadeTop = new[] { new GradientStop(Colors.Black, 0), new GradientStop(Colors.Black, LyricEdgeClear) };
-                _lyricFadeBottom = new[] { new GradientStop(Colors.Black, 1 - LyricEdgeClear), new GradientStop(Colors.Black, 1) };
+                _lyricFadeTop = new[] { new GradientStop(Colors.Black, 0), new GradientStop(Colors.Black, 0.1) };
+                _lyricFadeBottom = new[] { new GradientStop(Colors.Black, 0.9), new GradientStop(Colors.Black, 1) };
+                _lyricFadeTopInner = new GradientStop(Colors.Black, 0.3);
+                _lyricFadeBottomInner = new GradientStop(Colors.Black, 0.7);
                 var mask = new LinearGradientBrush(new GradientStopCollection
                 {
                     _lyricFadeTop[0],
                     _lyricFadeTop[1],
-                    new GradientStop(Colors.Black, LyricEdgeFade),
-                    new GradientStop(Colors.Black, 1 - LyricEdgeFade),
+                    _lyricFadeTopInner,
+                    _lyricFadeBottomInner,
                     _lyricFadeBottom[0],
                     _lyricFadeBottom[1],
                 }, new Point(0, 0), new Point(0, 1));
                 SeekLyricsHost.OpacityMask = mask;
             }
+
+            // The rows' share of the window.
+            double window = SeekLyricsHost.Height;
+            if (window > 0 && _lyricRowUnit > 0)
+            {
+                double clear = Math.Min(0.2, LyricEdgeClearRows * _lyricRowUnit / window);
+                double fade = Math.Min(0.45, LyricEdgeFadeRows * _lyricRowUnit / window);
+                _lyricFadeTop[1].Offset = clear;
+                _lyricFadeTopInner.Offset = fade;
+                _lyricFadeBottomInner.Offset = 1 - fade;
+                _lyricFadeBottom[0].Offset = 1 - clear;
+            }
         }
 
-        // An edge is faded when the lines are scrolled so that there is more beyond it.
+        // An edge fades by how much there is beyond it (up to a row).
         private void UpdateLyricEdges(double scroll, bool animate)
         {
-            SetLyricEdge(_lyricFadeTop, scroll > 0.5, animate);
-            SetLyricEdge(_lyricFadeBottom, scroll < _lyricScrollMax - 0.5, animate);
+            double unit = _lyricRowUnit > 0 ? _lyricRowUnit : 15;
+            SetLyricEdge(_lyricFadeTop, Math.Clamp(scroll / unit, 0, 1), animate);
+            SetLyricEdge(_lyricFadeBottom, Math.Clamp((_lyricScrollMax - scroll) / unit, 0, 1), animate);
         }
 
-        private static void SetLyricEdge(GradientStop[] edge, bool faded, bool animate)
+        private static void SetLyricEdge(GradientStop[] edge, double strength, bool animate)
         {
-            Color target = faded ? Color.FromArgb(0, 0, 0, 0) : Colors.Black;
+            Color target = Color.FromArgb((byte)Math.Round(255 * (1 - strength)), 0, 0, 0);
             foreach (GradientStop stop in edge)
             {
                 Color from = stop.Color;
