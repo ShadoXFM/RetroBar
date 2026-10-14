@@ -460,6 +460,13 @@ namespace RetroBar.Controls
                 }
             };
 
+            var lyrics = new MenuItem
+            {
+                Header = TryFindResource("media_popup_show_lyrics") as string ?? "Show _lyrics",
+                IsChecked = Settings.Instance.ShowMediaPopupLyrics,
+            };
+            lyrics.Click += (s, args) => Settings.Instance.ShowMediaPopupLyrics = !Settings.Instance.ShowMediaPopupLyrics;
+
             var close = new MenuItem { Header = TryFindResource("close") as string ?? "_Close" };
             close.Click += (s, args) => CloseSeekPopupNow();
 
@@ -468,6 +475,7 @@ namespace RetroBar.Controls
                 PlacementTarget = SeekPopupRoot,
                 Placement = System.Windows.Controls.Primitives.PlacementMode.MousePoint,
             };
+            menu.Items.Add(lyrics);
             menu.Items.Add(onTop);
             menu.Items.Add(MakeMenuSeparator());
             menu.Items.Add(close);
