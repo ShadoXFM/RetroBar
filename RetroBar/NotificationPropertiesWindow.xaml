@@ -29,7 +29,8 @@
                 <Setter Property="Height"
                         Value="16" />
             </Style>
-            <Style TargetType="{x:Type Button}">
+            <Style TargetType="{x:Type Button}"
+                   BasedOn="{StaticResource DialogButton}">
                 <Setter Property="MinHeight"
                         Value="21" />
                 <Setter Property="MinWidth"
