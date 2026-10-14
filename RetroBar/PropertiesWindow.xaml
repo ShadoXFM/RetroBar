@@ -448,14 +448,13 @@
                                       IsChecked="{Binding Source={x:Static Settings:Settings.Instance}, Path=ShowWeather, UpdateSourceTrigger=PropertyChanged}">
                                 <Label Content="{DynamicResource show_weather}" />
                             </CheckBox>
-                            <CheckBox x:Name="cbWeatherUseFahrenheit"
-                                      IsEnabled="{Binding Source={x:Static Settings:Settings.Instance}, Path=ShowWeather, UpdateSourceTrigger=PropertyChanged}"
-                                      IsChecked="{Binding Source={x:Static Settings:Settings.Instance}, Path=WeatherUseFahrenheit, UpdateSourceTrigger=PropertyChanged}">
-                                <Label Content="{DynamicResource weather_use_fahrenheit}" />
-                            </CheckBox>
                             <CheckBox x:Name="cbShowCpuTemp"
                                       IsChecked="{Binding Source={x:Static Settings:Settings.Instance}, Path=ShowCpuTemp, UpdateSourceTrigger=PropertyChanged}">
                                 <Label Content="{DynamicResource show_cpu_temp}" />
+                            </CheckBox>
+                            <CheckBox x:Name="cbWeatherUseFahrenheit"
+                                      IsChecked="{Binding Source={x:Static Settings:Settings.Instance}, Path=WeatherUseFahrenheit, UpdateSourceTrigger=PropertyChanged}">
+                                <Label Content="{DynamicResource weather_use_fahrenheit}" />
                             </CheckBox>
                         </StackPanel>
                     </GroupBox>
@@ -536,11 +535,6 @@
                                     </DockPanel>
                                 </UniformGrid>
                             </DockPanel>
-                            <TextBlock Text="{DynamicResource clock_format_warning}"
-                                       TextWrapping="Wrap"
-                                       TextAlignment="Center"
-                                       Width="300"
-                                       Margin="0,3" />
                         </StackPanel>
                     </GroupBox>
                 </StackPanel>

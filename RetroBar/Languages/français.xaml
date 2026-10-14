@@ -16,7 +16,7 @@
     <s:String x:Key="pin_to_taskbar">Épingler à la barre des tâches</s:String>
     <s:String x:Key="unpin_from_taskbar">Détacher de la barre des tâches</s:String>
     <s:String x:Key="show_weather">Afficher la _météo</s:String>
-    <s:String x:Key="weather_use_fahrenheit">Utiliser les degrés _Fahrenheit (°F)</s:String>
+    <s:String x:Key="weather_use_fahrenheit">Utiliser les degrés _Fahrenheit (°F) pour les températures</s:String>
     <s:String x:Key="media_source_automatic">Automatique (suivre Windows)</s:String>
     <s:String x:Key="media_source_browser">Navigateur</s:String>
     <s:String x:Key="media_source_none">Aucun média en cours</s:String>
@@ -117,7 +117,6 @@
     <s:String x:Key="ok_dialog">OK</s:String>
 
     <s:String x:Key="clock_format_help">Voir les options de formatage disponibles</s:String>
-    <s:String x:Key="clock_format_warning">Remarque : le format d'horloge personnalisé peut ne pas fonctionner comme prévu si le thème sélectionné spécifie son propre format.</s:String>
     <s:String x:Key="override_clock_format">_Format d'horloge personnalisé:</s:String>
     <s:String x:Key="override_ampm_designators">_Indicateurs personnalisés:</s:String>
     <s:String x:Key="am_designator">AM:</s:String>

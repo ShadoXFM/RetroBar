@@ -22,6 +22,7 @@ namespace RetroBar.Controls
     {
         private readonly CpuTemperatureMonitor _monitor = new CpuTemperatureMonitor();
         private DispatcherTimer _timer;
+        private double? _celsius;
 
         public CpuTempDisplay()
         {
@@ -40,6 +41,16 @@ namespace RetroBar.Controls
 
         private void Settings_PropertyChanged(object sender, PropertyChangedEventArgs e)
         {
+            if (e.PropertyName == nameof(Settings.WeatherUseFahrenheit))
+            {
+                if (_timer != null)
+                {
+                    ShowTemperature();
+                }
+
+                return;
+            }
+
             if (e.PropertyName != nameof(Settings.ShowCpuTemp))
             {
                 return;
@@ -81,11 +92,17 @@ namespace RetroBar.Controls
 
         private void UpdateTemperature()
         {
-            double? temperature = _monitor.ReadTemperature();
+            _celsius = _monitor.ReadTemperature();
+            ShowTemperature();
+        }
 
-            if (temperature.HasValue)
+        // In the unit of the weather's setting (Settings.WeatherUseFahrenheit, "Use Fahrenheit" for both temperatures).
+        private void ShowTemperature()
+        {
+            if (_celsius.HasValue)
             {
-                CpuTempText.Text = $"{Math.Round(temperature.Value)}°";
+                double value = Settings.Instance.WeatherUseFahrenheit ? _celsius.Value * 9 / 5 + 32 : _celsius.Value;
+                CpuTempText.Text = $"{Math.Round(value)}°";
                 Visibility = Visibility.Visible;
             }
             else

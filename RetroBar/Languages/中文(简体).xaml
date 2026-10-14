@@ -99,7 +99,6 @@
     <s:String x:Key="ok_dialog">确定</s:String>
 
     <s:String x:Key="clock_format_help">查看可用的格式选项</s:String>
-    <s:String x:Key="clock_format_warning">注意: 如果您选择的主题指定了自己的格式，自定义时钟格式可能不会按预期工作。</s:String>
     <s:String x:Key="override_clock_format">自定义时钟格式(_F):</s:String>
     <s:String x:Key="override_ampm_designators">自定义设计符(_E):</s:String>
     <s:String x:Key="am_designator">上午:</s:String>
