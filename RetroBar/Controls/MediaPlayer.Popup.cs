@@ -138,7 +138,16 @@ namespace RetroBar.Controls
             {
                 if (SeekPopup.IsOpen)
                 {
-                    CloseSeekPopupAnimated();
+                    // A popup that has been moved or is always on top is a window of its own, not up from the taskbar: it just goes, as
+                    // it does from its menu.
+                    if (_seekPopupMovedTo != null || _seekPopupPinned)
+                    {
+                        CloseSeekPopupNow();
+                    }
+                    else
+                    {
+                        CloseSeekPopupAnimated();
+                    }
                 }
                 else
                 {
