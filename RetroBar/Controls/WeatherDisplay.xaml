@@ -86,10 +86,32 @@
                                        FontWeight="Bold"
                                        FontSize="20"
                                        Margin="0,6,0,0" />
-                            <TextBlock Text="{Binding WeatherDetailsText}"
-                                       Style="{DynamicResource GlobalFonts}"
-                                       Foreground="{DynamicResource ButtonForeground}"
-                                       Margin="0,4,0,0" />
+                            <!-- Two to a row, in equal columns. -->
+                            <ItemsControl ItemsSource="{Binding DetailItems}"
+                                          Margin="0,4,0,0">
+                                <ItemsControl.ItemsPanel>
+                                    <ItemsPanelTemplate>
+                                        <UniformGrid Columns="2" />
+                                    </ItemsPanelTemplate>
+                                </ItemsControl.ItemsPanel>
+                                <ItemsControl.ItemTemplate>
+                                    <DataTemplate>
+                                        <StackPanel Orientation="Horizontal"
+                                                    Margin="0,0,12,1">
+                                            <TextBlock Text="{Binding Prefix}"
+                                                       Style="{DynamicResource GlobalFonts}"
+                                                       Foreground="{DynamicResource ButtonForeground}" />
+                                            <TextBlock Text="{Binding Value}"
+                                                       Style="{DynamicResource GlobalFonts}"
+                                                       Foreground="{DynamicResource ButtonForeground}"
+                                                       FontWeight="Bold" />
+                                            <TextBlock Text="{Binding Suffix}"
+                                                       Style="{DynamicResource GlobalFonts}"
+                                                       Foreground="{DynamicResource ButtonForeground}" />
+                                        </StackPanel>
+                                    </DataTemplate>
+                                </ItemsControl.ItemTemplate>
+                            </ItemsControl>
                         </StackPanel>
                         <Rectangle Grid.Column="1"
                                    Width="40"

@@ -404,6 +404,11 @@ namespace RetroBar.Controls
                 // °C <-> °F is just a display choice: reformat the reading we already have.
                 System.Windows.Application.Current?.Dispatcher.BeginInvoke(new Action(ApplyShared));
             }
+            else if (e.PropertyName == nameof(Settings.Language))
+            {
+                // The days and the times of the day are written in the language chosen.
+                System.Windows.Application.Current?.Dispatcher.BeginInvoke(new Action(ApplyShared), System.Windows.Threading.DispatcherPriority.ApplicationIdle);
+            }
             else if (e.PropertyName == nameof(Settings.WeatherLocation))
             {
                 // A new location is shown as soon as it's fetched, not on the next minute tick.
@@ -494,19 +499,8 @@ namespace RetroBar.Controls
             }
         }
 
-        private string _weatherDetailsText;
-        public string WeatherDetailsText
-        {
-            get => _weatherDetailsText;
-            set
-            {
-                if (_weatherDetailsText != value)
-                {
-                    _weatherDetailsText = value;
-                    OnPropertyChanged();
-                }
-            }
-        }
+        /// <summary>The conditions under the temperature in the forecast popup, two to a row.</summary>
+        public ObservableCollection<DetailItem> DetailItems { get; } = new();
 
         private string _weatherIconPath;
         public string WeatherIconPath
@@ -842,7 +836,7 @@ namespace RetroBar.Controls
 
                 WeatherTemp = FormatTemperature(_cachedCelsius.Value);
                 WeatherBarTemp = FormatBarTemperature(_cachedCelsius.Value);
-                WeatherDetailsText = FormatDetails();
+                FillDetails();
                 WeatherIconPath = _cachedIconPath;
 
                 // The next times that are a multiple of three hours (0h, 3h, 6h...): the same times of the day whenever it is looked at,
@@ -851,9 +845,10 @@ namespace RetroBar.Controls
                 DateTime now = _cachedHourly.Count > 0 ? _cachedHourly[0].Time : DateTime.MinValue;
                 foreach (HourlyForecast hour in _cachedHourly.Where(h => h.Time > now && h.Time.Hour % 3 == 0).Take(6))
                 {
-                    string label = CultureInfo.CurrentCulture.DateTimeFormat.ShortTimePattern.Contains("tt")
-                        ? hour.Time.ToString("h tt", CultureInfo.CurrentCulture)
-                        : hour.Time.Hour + "h";
+                    CultureInfo culture = LanguageCulture.Current;
+                    string label = culture.DateTimeFormat.ShortTimePattern.Contains("tt")
+                        ? hour.Time.ToString("h tt", culture)
+                        : hour.Time.ToString("t", culture);
                     Hourly.Add(new HourlyItem(label, GetImagePath(GetIconFileName(hour.WeatherCode, hour.IsDay)), FormatBarTemperature(hour.Celsius)));
                 }
 
@@ -863,10 +858,10 @@ namespace RetroBar.Controls
                 foreach (DailyForecast day in _cachedForecast)
                 {
                     // The day's name as the culture writes it ("ven. 9" in French), with its first letter capitalized.
-                    string dayName = day.Date.ToString("ddd d", CultureInfo.CurrentUICulture);
+                    string dayName = day.Date.ToString("ddd d", LanguageCulture.Current);
                     if (dayName.Length > 0)
                     {
-                        dayName = char.ToUpper(dayName[0], CultureInfo.CurrentUICulture) + dayName.Substring(1);
+                        dayName = char.ToUpper(dayName[0], LanguageCulture.Current) + dayName.Substring(1);
                     }
 
                     Forecast.Add(new ForecastDay(
@@ -880,48 +875,48 @@ namespace RetroBar.Controls
             {
                 WeatherTemp = "N/A";
                 WeatherBarTemp = "N/A";
-                WeatherDetailsText = "";
+                DetailItems.Clear();
                 Hourly.Clear();
                 HasHourly = false;
                 Forecast.Clear();
             }
         }
 
-        // Under the temperature in the forecast popup: how it feels, the chance of rain today, the humidity and the wind (km/h, or mph
-        // with the Fahrenheit setting), in two lines.
-        private static string FormatDetails()
+        // Under the temperature in the forecast popup, two to a row: how it feels and the humidity, the wind and the chance of rain today,
+        // the sunrise and the sunset. The number of each is in bold.
+        private void FillDetails()
         {
+            DetailItems.Clear();
             WeatherDetails details = _cachedDetails;
             if (details == null)
             {
-                return "";
+                return;
             }
 
-            static string Text(string key, string fallback) => System.Windows.Application.Current?.TryFindResource(key) as string ?? fallback;
-
+            CultureInfo culture = LanguageCulture.Current;
             bool imperial = Settings.Instance.WeatherUseFahrenheit;
             double wind = imperial ? details.WindKmh * 0.621371 : details.WindKmh;
 
-            var first = new List<string> { string.Format(Text("weather_feels_like", "Feels like {0}"), FormatBarTemperature(details.FeelsLikeCelsius)) };
-            if (details.RainChance is int rain)
-            {
-                first.Add(string.Format(Text("weather_rain_chance", "Rain {0}%"), rain));
-            }
-
-            var second = new List<string>
-            {
-                string.Format(Text("weather_humidity", "Humidity {0}%"), details.Humidity),
-                string.Format(Text("weather_wind", "Wind {0} {1}"), Math.Round(wind), imperial ? "mph" : "km/h"),
-            };
-
-            string text = string.Join("  ·  ", first) + "\n" + string.Join("  ·  ", second);
+            DetailItems.Add(Detail("weather_feels_like", "Feels like {0}", FormatBarTemperature(details.FeelsLikeCelsius)));
+            DetailItems.Add(Detail("weather_humidity", "Humidity {0}", details.Humidity + "%"));
+            DetailItems.Add(Detail("weather_wind", "Wind {0}", Math.Round(wind) + (imperial ? " mph" : " km/h")));
+            DetailItems.Add(details.RainChance is int rain
+                ? Detail("weather_rain_chance", "Rain {0}", rain + "%")
+                : new DetailItem("", "", ""));
             if (details.Sunrise is DateTime sunrise && details.Sunset is DateTime sunset)
             {
-                text += "\n" + string.Format(Text("weather_sunrise", "Sunrise {0}"), sunrise.ToString("t", CultureInfo.CurrentCulture))
-                        + "  ·  " + string.Format(Text("weather_sunset", "Sunset {0}"), sunset.ToString("t", CultureInfo.CurrentCulture));
+                DetailItems.Add(Detail("weather_sunrise", "Sunrise {0}", sunrise.ToString("t", culture)));
+                DetailItems.Add(Detail("weather_sunset", "Sunset {0}", sunset.ToString("t", culture)));
             }
+        }
 
-            return text;
+        // The text of a language string with the value in it, as what is before the value, the value, and what is after it.
+        private static DetailItem Detail(string key, string fallback, string value)
+        {
+            string format = System.Windows.Application.Current?.TryFindResource(key) as string ?? fallback;
+            char mark = (char)1;
+            string[] parts = string.Format(format, mark).Split(mark);
+            return new DetailItem(parts[0], value, parts.Length > 1 ? parts[1] : "");
         }
 
         private static async Task<bool> GeocodeAsync(string location)
@@ -1004,6 +999,9 @@ namespace RetroBar.Controls
 
     /// <summary>One hour of the forecast as fetched (raw Celsius).</summary>
     public record HourlyForecast(DateTime Time, int WeatherCode, double Celsius, bool IsDay);
+
+    /// <summary>One of the conditions under the temperature: what is before its value, the value (in bold), what is after it.</summary>
+    public record DetailItem(string Prefix, string Value, string Suffix);
 
     /// <summary>One hour as the forecast popup shows it.</summary>
     public record HourlyItem(string Label, string IconPath, string Temp);

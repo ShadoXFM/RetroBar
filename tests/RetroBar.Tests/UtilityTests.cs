@@ -126,6 +126,35 @@ namespace RetroBar.Tests
         }
     }
 
+    public class LanguageCultureTests
+    {
+        [Theory]
+        [InlineData("français", "fr")]
+        [InlineData("English (United Kingdom)", "en-GB")]
+        [InlineData("Deutsch", "de")]
+        [InlineData("Norsk (bokmål)", "nb")]
+        public void A_language_file_name_is_the_culture_called_that(string language, string culturePrefix)
+        {
+            Assert.StartsWith(culturePrefix, LanguageCulture.For(language).Name);
+        }
+
+        [Fact]
+        public void English_has_the_12_hour_clock_and_english_in_the_united_kingdom_the_24_hour_one()
+        {
+            Assert.Contains("tt", LanguageCulture.For("English").DateTimeFormat.ShortTimePattern);
+            Assert.DoesNotContain("tt", LanguageCulture.For("English (United Kingdom)").DateTimeFormat.ShortTimePattern);
+        }
+
+        [Theory]
+        [InlineData("System")]
+        [InlineData("")]
+        [InlineData("No Such Language")]
+        public void System_or_an_unknown_language_is_the_system_culture(string language)
+        {
+            Assert.Equal(System.Globalization.CultureInfo.CurrentCulture, LanguageCulture.For(language));
+        }
+    }
+
     public class LyricsTests
     {
         private const string Lrc = "[ti:Song]\n[00:03.50] first\n[00:10.00]\n[00:12.25] second\n[00:20.00][01:00.00] chorus\n";
