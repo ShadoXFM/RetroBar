@@ -86,8 +86,8 @@
                             <TextBlock Text="{Binding WeatherTemp}"
                                        Style="{DynamicResource GlobalFonts}"
                                        Foreground="{DynamicResource ButtonForeground}"
-                                       FontWeight="Bold"
-                                       FontSize="20"
+                                       FontFamily="Tahoma"
+                                       FontSize="12"
                                        Margin="0,6,0,0" />
                         </StackPanel>
                         <!-- The drawing only, at the top right: no room round it but the widget's own. -->
