@@ -9,7 +9,6 @@
     <s:String x:Key="notification_area">Zone de notifications</s:String>
     <s:String x:Key="general_heading">Généralités</s:String>
     <s:String x:Key="media_player_heading">Media Player</s:String>
-    <s:String x:Key="show_media_popup_spectrum">Afficher un _spectre dans la fenêtre du lecteur</s:String>
     <s:String x:Key="show_vu_meter">Afficher le _vu-mètre derrière le titre</s:String>
     <s:String x:Key="monitor_adjustments_heading">Réglages par écran</s:String>
     <s:String x:Key="open_monitor_adjustments">_Ouvrir le fichier</s:String>

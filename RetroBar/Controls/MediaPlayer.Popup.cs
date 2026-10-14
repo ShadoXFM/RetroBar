@@ -297,7 +297,6 @@ namespace RetroBar.Controls
             _seekSpectrumSkipAppear = _sessionManager?.PlaybackState == MediaPlaybackState.Playing;
 
             StartSeekWatching();
-            ApplyMediaPopupSettings();
             UpdateVisualizerCapture(_sessionManager?.PlaybackState == MediaPlaybackState.Playing);
 
             // One popup at a time, whichever monitor's player it belongs to.

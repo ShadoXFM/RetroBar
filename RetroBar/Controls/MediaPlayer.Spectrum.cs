@@ -248,12 +248,6 @@ namespace RetroBar.Controls
 
         private DateTime _lastSeekSpectrumUpdate = DateTime.MinValue;
 
-        // The popup's setting (Properties window): the spectrum.
-        private void ApplyMediaPopupSettings()
-        {
-            SeekSpectrumHost.Visibility = Settings.Instance.ShowMediaPopupSpectrum ? Visibility.Visible : Visibility.Collapsed;
-        }
-
         // The VU meter (Properties window): behind the track text while a track plays. The audio is captured while the meter shows or the
         // popup is open (for its spectrum).
         private void ApplyVuMeterSetting()
@@ -277,7 +271,7 @@ namespace RetroBar.Controls
 
         private void UpdateSeekSpectrum(float[] bands)
         {
-            if (!SeekPopup.IsOpen || !Settings.Instance.ShowMediaPopupSpectrum)
+            if (!SeekPopup.IsOpen)
             {
                 return;
             }

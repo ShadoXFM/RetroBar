@@ -272,12 +272,6 @@ namespace RetroBar.Controls
                 return;
             }
 
-            if (e.PropertyName == nameof(Settings.ShowMediaPopupSpectrum))
-            {
-                Dispatcher.BeginInvoke(new Action(ApplyMediaPopupSettings));
-                return;
-            }
-
             if (e.PropertyName == nameof(Settings.ShowVuMeter))
             {
                 Dispatcher.BeginInvoke(new Action(ApplyVuMeterSetting));
@@ -644,8 +638,11 @@ namespace RetroBar.Controls
             // every other MonitorOffset-tagged Width.
             double textWidth = Math.Min(TrackText.ActualWidth, GetTrackTextMaxWidth());
             double naturalWidth = leftOffset + Math.Max(0, textWidth);
-            // X nudges the meter's left edge only: the width absorbs it, so the right edge stays on the end of the text.
-            _vuMeterMaxWidth = offset.Width ?? Math.Max(0, naturalWidth - offset.X);
+            // X nudges the meter's left edge only: the width absorbs it, so the right edge stays on the end of the text. It is tuned for the album
+            // art, which the meter starts behind; without art there is nothing to nudge past (the meter starts at the first button), so X is
+            // 0 unless "VuMeterContainerNoArt" says otherwise.
+            double nudgeX = Settings.Instance.ShowMediaPlayerAlbumArt ? offset.X : MonitorAdjustments.Get(deviceName, "VuMeterContainerNoArt").X;
+            _vuMeterMaxWidth = offset.Width ?? Math.Max(0, naturalWidth - nudgeX);
 
             VuMeterContainer.Width = _vuMeterMaxWidth;
 
@@ -656,7 +653,7 @@ namespace RetroBar.Controls
             VuMeterContainer.Height = meterHeight;
             Canvas.SetLeft(VuMeterContainer, 0);
             Canvas.SetTop(VuMeterContainer, (rowHeight - meterHeight) / 2);
-            VuMeterContainer.RenderTransform = new TranslateTransform(offset.X - leftOffset, offset.Y);
+            VuMeterContainer.RenderTransform = new TranslateTransform(nudgeX - leftOffset, offset.Y);
         }
 
         /// <summary>

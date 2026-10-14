@@ -9,7 +9,6 @@
     <s:String x:Key="notification_area">Notification area</s:String>
     <s:String x:Key="general_heading">General</s:String>
     <s:String x:Key="media_player_heading">Media Player</s:String>
-    <s:String x:Key="show_media_popup_spectrum">Show a _spectrum in the media popup</s:String>
     <s:String x:Key="show_vu_meter">Show the _VU meter behind the track text</s:String>
     <s:String x:Key="monitor_adjustments_heading">Per-monitor adjustments</s:String>
     <s:String x:Key="open_monitor_adjustments">_Open the file</s:String>
