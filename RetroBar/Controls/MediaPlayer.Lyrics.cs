@@ -33,6 +33,13 @@ namespace RetroBar.Controls
         private static readonly Duration LyricScroll = new(TimeSpan.FromMilliseconds(320));
         private static readonly TimeSpan LyricsRetry = TimeSpan.FromSeconds(30);
 
+        // The window fades out at its top and bottom edges, where there are more lines beyond them, so a line is not cut off sharply there
+        // (at the first and last lines, where there is nothing beyond, the edge is left as it is).
+        private const double LyricEdgeFade = 0.16;
+        private GradientStop _lyricFadeTop;
+        private GradientStop _lyricFadeBottom;
+        private double _lyricScrollMax;
+
         private LyricLine[] _lyrics;
         private string _lyricsKey;
         private int _shownLyricIndex = int.MinValue;
@@ -50,6 +57,39 @@ namespace RetroBar.Controls
             if (line > 0)
             {
                 SeekLyricsHost.Height = Math.Round((line + LyricRowGap) * LyricWindowLines);
+            }
+
+            if (_lyricFadeTop == null)
+            {
+                _lyricFadeTop = new GradientStop(Colors.Black, 0);
+                _lyricFadeBottom = new GradientStop(Colors.Black, 1);
+                var mask = new LinearGradientBrush(new GradientStopCollection
+                {
+                    _lyricFadeTop,
+                    new GradientStop(Colors.Black, LyricEdgeFade),
+                    new GradientStop(Colors.Black, 1 - LyricEdgeFade),
+                    _lyricFadeBottom,
+                }, new Point(0, 0), new Point(0, 1));
+                SeekLyricsHost.OpacityMask = mask;
+            }
+        }
+
+        // An edge is faded when the lines are scrolled so that there is more beyond it.
+        private void UpdateLyricEdges(double scroll, bool animate)
+        {
+            SetLyricEdge(_lyricFadeTop, scroll > 0.5, animate);
+            SetLyricEdge(_lyricFadeBottom, scroll < _lyricScrollMax - 0.5, animate);
+        }
+
+        private static void SetLyricEdge(GradientStop edge, bool faded, bool animate)
+        {
+            Color target = faded ? Color.FromArgb(0, 0, 0, 0) : Colors.Black;
+            Color from = edge.Color;
+            edge.BeginAnimation(GradientStop.ColorProperty, null);
+            edge.Color = target;
+            if (animate && from != target)
+            {
+                edge.BeginAnimation(GradientStop.ColorProperty, new ColorAnimation(from, target, LyricScroll) { FillBehavior = FillBehavior.Stop });
             }
         }
 
@@ -221,6 +261,7 @@ namespace RetroBar.Controls
             SeekLyricsPanel.UpdateLayout();
             double window = SeekLyricsHost.Height;
             double maximum = Math.Max(0, SeekLyricsPanel.ActualHeight - window);
+            _lyricScrollMax = maximum;
             if (index < 0 || double.IsNaN(window))
             {
                 return 0;
@@ -333,7 +374,9 @@ namespace RetroBar.Controls
                 StyleLyricRow(i, index, previous, animate, token);
             }
 
-            double top = -LyricScrollFor(index);
+            double scroll = LyricScrollFor(index);
+            UpdateLyricEdges(scroll, animate);
+            double top = -scroll;
             SeekLyricsPanel.BeginAnimation(Canvas.TopProperty, null);
             double from = Canvas.GetTop(SeekLyricsPanel);
             Canvas.SetTop(SeekLyricsPanel, top);
