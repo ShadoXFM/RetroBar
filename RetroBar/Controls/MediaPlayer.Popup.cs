@@ -418,6 +418,12 @@ namespace RetroBar.Controls
         // their drag - RefreshSeekDisplay resumes updating the moment they let go.
         private void RefreshSeekDisplay()
         {
+            // A button release the slider never saw (the pointer let go over something else) must not leave the display frozen, nor lose the seek.
+            if (_seekSliderDragging && (GetAsyncKeyState(VK_LBUTTON) & 0x8000) == 0)
+            {
+                FinishSliderSeek();
+            }
+
             if (_sessionManager == null || _seekSliderDragging)
             {
                 return;
@@ -593,13 +599,25 @@ namespace RetroBar.Controls
                 : $"{time.Minutes}:{time.Seconds:D2}";
         }
 
+        // Where the thumb was when the button went down: a click on the thumb itself changes nothing, and is not a seek (to where the
+        // thumb was a moment ago).
+        private double _seekSliderDownValue;
+
         private void SeekSlider_OnPreviewMouseDown(object sender, MouseButtonEventArgs e)
         {
             _seekSliderDragging = true;
+            _seekSliderDownValue = SeekSlider.Value;
         }
 
-        private async void SeekSlider_OnPreviewMouseUp(object sender, MouseButtonEventArgs e)
+        private void SeekSlider_OnPreviewMouseUp(object sender, MouseButtonEventArgs e) => FinishSliderSeek();
+
+        private async void FinishSliderSeek()
         {
+            if (!_seekSliderDragging)
+            {
+                return;
+            }
+
             _seekSliderDragging = false;
 
             if (_sessionManager == null)
@@ -607,8 +625,14 @@ namespace RetroBar.Controls
                 return;
             }
 
+            if (Math.Abs(SeekSlider.Value - _seekSliderDownValue) < 0.5)
+            {
+                return;
+            }
+
+            // Where the source is now, not where it was when the display was last updated (the button may have been down a while).
             TimeSpan target = TimeSpan.FromSeconds(SeekSlider.Value);
-            TimeSpan from = _lastSeekPosition;
+            TimeSpan from = GetTimeline().Position;
             SetSeekDisplay(target, TimeSpan.FromSeconds(SeekSlider.Maximum));
             HoldSeek(target);
 

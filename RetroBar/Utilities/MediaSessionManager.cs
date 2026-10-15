@@ -657,7 +657,17 @@ namespace RetroBar.Utilities
                     position = TimeSpan.Zero;
                 }
 
-                await _session.TryChangePlaybackPositionAsync(position.Ticks);
+                // The player now and then answers that it did not (while it is busy with the track, or with an earlier seek): a click
+                // on the slider that did nothing. Tried again a moment later, a few times.
+                for (int attempt = 0; attempt < 3; attempt++)
+                {
+                    if (await _session.TryChangePlaybackPositionAsync(position.Ticks))
+                    {
+                        break;
+                    }
+
+                    await Task.Delay(150);
+                }
             }
             catch (Exception e)
             {
