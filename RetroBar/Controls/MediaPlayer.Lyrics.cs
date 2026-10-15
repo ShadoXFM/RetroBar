@@ -36,10 +36,9 @@ namespace RetroBar.Controls
         private static readonly Duration LyricScroll = new(TimeSpan.FromMilliseconds(320));
         private static readonly TimeSpan LyricsRetry = TimeSpan.FromSeconds(30);
 
-        // Only whole lines are shown: the lines scroll by a line at a time (the first line shown is at the top of the window), and what is
-        // left below the last line that fits (less than a line) is not drawn. A line cut across by the edge was always a stray mark, however
-        // it was faded. The mask below is opaque from the top of the first whole line to the bottom of the last, and nothing outside.
-        private const double LyricMaskFeather = 1.5;
+        // The window fades out at its top and bottom edges, so a line cut off there reads as scrolled out of view, not as a stray mark.
+        // There is no fade at the top while the first lines are shown, or at the bottom while the last ones are.
+        private const double LyricMaskFeather = 14;
         private LinearGradientBrush _lyricMask;
         private GradientStop[] _lyricMaskStops;
         private double _lyricRowUnit;
@@ -99,10 +98,14 @@ namespace RetroBar.Controls
                 return;
             }
 
-            double feather = LyricMaskFeather / window;
-            double top = Math.Clamp(visibleTop / window, 0, 1);
-            double bottom = Math.Clamp(visibleBottom / window, 0, 1);
-            double[] offsets = { 0, Math.Max(0, top - feather), top, bottom, Math.Min(1, bottom + feather), 1 };
+            double feather = Math.Min(LyricMaskFeather, window / 4) / window;
+            double top = visibleTop / window;
+            double bottom = visibleBottom / window;
+            double[] offsets = { top, top, top + feather, bottom - feather, bottom, bottom };
+            for (int i = 0; i < offsets.Length; i++)
+            {
+                offsets[i] = Math.Clamp(offsets[i], 0, 1);
+            }
 
             for (int i = 0; i < _lyricMaskStops.Length; i++)
             {
@@ -325,82 +328,15 @@ namespace RetroBar.Controls
                 return 0;
             }
 
-            double[] tops = new double[_lyricRows.Length];
-            double[] heights = new double[_lyricRows.Length];
-            int from = Math.Max(0, index - 14);
-            int to = Math.Min(_lyricRows.Length - 1, index + 14);
-            for (int i = from; i <= to; i++)
-            {
-                tops[i] = _lyricRows[i].TranslatePoint(new Point(0, 0), SeekLyricsPanel).Y;
-                heights[i] = _lyricRows[i].ActualHeight;
-            }
-
-            double middle = tops[index] + heights[index] / 2;
+            // The current line in the middle of the window (or as near as the first and last lines allow). The line that doesn't fit whole
+            // at an edge is shown cut off and faded out (see UpdateLyricMask).
+            TextBlock row = _lyricRows[index];
+            double middle = row.TranslatePoint(new Point(0, row.ActualHeight / 2), SeekLyricsPanel).Y;
             double scale = GetSeekDpi().DpiScaleY;
-
-            // The whole lines in the window when it is scrolled to `scroll`.
-            bool Whole(double scroll, out double first, out double last)
-            {
-                first = double.MaxValue;
-                last = 0;
-                for (int i = from; i <= to; i++)
-                {
-                    double top = tops[i] - scroll;
-                    double bottom = top + heights[i];
-                    if (top >= -0.5 && bottom <= window + 0.5)
-                    {
-                        first = Math.Min(first, top);
-                        last = Math.Max(last, bottom);
-                    }
-                }
-
-                return first < double.MaxValue;
-            }
-
-            // The scroll puts a line at the top of the window (so that no line is cut there), or the last lines at the bottom: of those, the
-            // one with the current line in the middle of the whole lines that are shown.
-            var candidates = new List<double> { 0, maximum };
-            for (int i = from; i <= index; i++)
-            {
-                candidates.Add(Math.Min(tops[i], maximum));
-            }
-
-            double best = 0;
-            double bestError = double.MaxValue;
-            foreach (double candidate in candidates.Select(c => Math.Round(c * scale) / scale))
-            {
-                if (!Whole(candidate, out double first, out double last))
-                {
-                    continue;
-                }
-
-                double top = tops[index] - candidate;
-                if (top < first - 0.5 || top + heights[index] > last + 0.5)
-                {
-                    continue;
-                }
-
-                // Centred, and without much of the window left empty (the space a cut-off line leaves is not drawn).
-                double error = Math.Abs(middle - candidate - (first + last) / 2) + (first + window - last) / 2;
-                if (error < bestError - 0.01)
-                {
-                    bestError = error;
-                    best = candidate;
-                }
-            }
-
-            if (bestError == double.MaxValue)
-            {
-                best = Math.Round(Math.Clamp(middle - window / 2, 0, maximum) * scale) / scale;
-            }
-
-            if (Whole(best, out double visibleFirst, out double visibleLast))
-            {
-                visibleTop = Math.Max(0, visibleFirst - 1);
-                visibleBottom = Math.Min(window, visibleLast + 1);
-            }
-
-            return best;
+            double scroll = Math.Round(Math.Clamp(middle - window / 2, 0, maximum) * scale) / scale;
+            visibleTop = scroll <= 0 ? -LyricMaskFeather : 0;
+            visibleBottom = scroll >= maximum ? window + LyricMaskFeather : window;
+            return scroll;
         }
 
         // Puts the look of its distance from the current line on a row, from the look of its distance from the previous one.
