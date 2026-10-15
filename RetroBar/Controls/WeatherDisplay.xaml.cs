@@ -534,33 +534,8 @@ namespace RetroBar.Controls
                     _weatherIconPath = value;
                     OnPropertyChanged();
                     OnPropertyChanged(nameof(WeatherIconBounds));
-                    OnPropertyChanged(nameof(WeatherBarIconPath));
                 }
             }
-        }
-
-        /// <summary>The icon for the taskbar's own, small size: the same as the one in the forecast, except the partly cloudy ones at night, which
-        /// have a version drawn for it (their moon behind the cloud is lost when the big one is shrunk to this size).</summary>
-        public string WeatherBarIconPath => SmallIcon(_weatherIconPath);
-
-        private static string SmallIcon(string path)
-        {
-            if (path != null && (path.EndsWith("/partly_cloudy_night.png", StringComparison.Ordinal) || path.EndsWith("/partly_cloudy_rain_night.png", StringComparison.Ordinal)))
-            {
-                string small = path.Substring(0, path.Length - ".png".Length) + "_sm.png";
-                try
-                {
-                    if (File.Exists(new Uri(small).LocalPath))
-                    {
-                        return small;
-                    }
-                }
-                catch (UriFormatException)
-                {
-                }
-            }
-
-            return path;
         }
 
         // Where the drawing is in the icon's picture, as a share of it: the picture has some room round the drawing, which the big icon in
