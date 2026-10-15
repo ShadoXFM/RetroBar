@@ -45,6 +45,10 @@ namespace RetroBar.Controls
         // changing, from the taskbar's buttons), so every move of its window is kept there instead (see SeekPopupHook).
         private POINT? _seekPopupMovedTo;
 
+        // Where an ordinary popup (not moved, not on top) is once it has opened. When the track changes, WPF places it again above the
+        // track text, which has changed width, so it would slide sideways: it keeps this X until it is opened next.
+        private int? _seekPopupHeldX;
+
         [StructLayout(LayoutKind.Sequential)]
         private struct WINDOWPOS
         {
@@ -57,6 +61,16 @@ namespace RetroBar.Controls
 
         private IntPtr SeekPopupHook(IntPtr hwnd, int msg, IntPtr wParam, IntPtr lParam, ref bool handled)
         {
+            if (msg == WM_WINDOWPOSCHANGING && _seekPopupHeldX is int heldX && _seekPopupMovedTo == null && !_seekPopupPinned)
+            {
+                WINDOWPOS held = Marshal.PtrToStructure<WINDOWPOS>(lParam);
+                if ((held.Flags & SWP_NOMOVE) == 0 && held.X != heldX)
+                {
+                    held.X = heldX;
+                    Marshal.StructureToPtr(held, lParam, false);
+                }
+            }
+
             if (msg == WM_WINDOWPOSCHANGING && (_seekPopupMovedTo != null || _seekPopupPinned))
             {
                 WINDOWPOS position = Marshal.PtrToStructure<WINDOWPOS>(lParam);
@@ -433,6 +447,7 @@ namespace RetroBar.Controls
 
         private void SeekPopupSource_OnDpiChanged(object sender, HwndDpiChangedEventArgs e)
         {
+            _seekPopupHeldX = null;
             ReapplySeekPopupForMonitor();
         }
 

@@ -391,6 +391,7 @@ namespace RetroBar.Controls
 
             _seekPopupMonitor = null;
             _seekPopupMovedTo = null;
+            _seekPopupHeldX = null;
 
             // Moved or on top is for the one opening: the next one starts as an ordinary popup again.
             _seekPopupPinned = false;
@@ -403,6 +404,13 @@ namespace RetroBar.Controls
 
         private void SeekPopupTimer_OnTick(object sender, EventArgs e)
         {
+            // The popup has settled above the track text by now: that is where it stays while it is open.
+            if (_seekPopupHeldX == null && _seekPopupMovedTo == null && !_seekPopupPinned
+                && PresentationSource.FromVisual(SeekPopupRoot) is HwndSource source && GetWindowRect(source.Handle, out RECT window))
+            {
+                _seekPopupHeldX = window.Left;
+            }
+
             RefreshSeekDisplay();
         }
 
