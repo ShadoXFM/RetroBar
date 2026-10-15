@@ -492,10 +492,119 @@ namespace RetroBar.Controls
                 return;
             }
 
+            // Dragged onto another monitor that has a player of its own: that one's popup takes over, as it is on its own taskbar (drawn at
+            // that monitor's DPI), where scaling this one would blur it.
+            if (_seekPopupDragging && ScreenDeviceName is string own && own != info.DeviceName && PlayerOn(info.DeviceName) is MediaPlayer other)
+            {
+                HandOffSeekPopup(other, source);
+                return;
+            }
+
             _seekPopupMonitor = info.DeviceName;
             MonitorOffset.SetDeviceNameOverride(SeekPopupRoot, info.DeviceName);
             ApplySeekPopupDpi(source, MonitorFromWindow(source.Handle, MONITOR_DEFAULTTONEAREST));
             ReapplySeekPopupForMonitor();
+        }
+
+        // Every media player that is shown, one to a taskbar.
+        private static readonly System.Collections.Generic.List<MediaPlayer> Players = new();
+
+        private string ScreenDeviceName => (Window.GetWindow(this) as Taskbar)?.Screen.DeviceName;
+
+        private MediaPlayer PlayerOn(string deviceName)
+        {
+            foreach (MediaPlayer player in Players)
+            {
+                if (player != this && player.ScreenDeviceName == deviceName && player.IsVisible && player.TrackTextCanvas.ActualWidth > 0 && player._sessionManager?.HasSession == true)
+                {
+                    return player;
+                }
+            }
+
+            return null;
+        }
+
+        // The popup being dragged goes to the player of the monitor it is over, which opens its own, and the drag goes on with that: the
+        // pointer keeps the same place on it. The old popup goes once the new one is in place.
+        private void HandOffSeekPopup(MediaPlayer other, HwndSource source)
+        {
+            if (!GetWindowRect(source.Handle, out RECT window))
+            {
+                return;
+            }
+
+            GetCursorPos(out POINT cursor);
+            double relativeX = Math.Clamp((double)(cursor.X - window.Left) / Math.Max(1, window.Right - window.Left), 0, 1);
+            double relativeY = Math.Clamp((double)(cursor.Y - window.Top) / Math.Max(1, window.Bottom - window.Top), 0, 1);
+
+            lock (_seekPopupDragLock)
+            {
+                _seekPopupDragging = false;
+            }
+
+            other.TakeOverSeekPopup(this, new POINT { X = window.Left, Y = window.Top }, cursor, relativeX, relativeY);
+        }
+
+        private void TakeOverSeekPopup(MediaPlayer from, POINT firstPlace, POINT cursor, double relativeX, double relativeY)
+        {
+            bool pinned = _seekPopupPinned;
+
+            lock (_seekPopupDragLock)
+            {
+                _seekPopupMovedTo = firstPlace;
+            }
+
+            // Opened at once, with no slide, and the one that was open not told to close (it goes below).
+            _seekSlide.Reset();
+            _openSeekPlayer = null;
+            SeekPopup.IsOpen = true;
+
+            int attempts = 0;
+            Action finish = null;
+            finish = () =>
+            {
+                if (!SeekPopup.IsOpen)
+                {
+                    return;
+                }
+
+                // Its window is not there until the popup has opened: tried again a few times.
+                if (PresentationSource.FromVisual(SeekPopupRoot) is not HwndSource source || !GetWindowRect(source.Handle, out RECT window))
+                {
+                    if (++attempts < 20)
+                    {
+                        Dispatcher.BeginInvoke(finish, DispatcherPriority.Background);
+                    }
+
+                    return;
+                }
+
+                GetCursorPos(out POINT now);
+                var place = new POINT
+                {
+                    X = now.X - (int)Math.Round(relativeX * (window.Right - window.Left)),
+                    Y = now.Y - (int)Math.Round(relativeY * (window.Bottom - window.Top)),
+                };
+                lock (_seekPopupDragLock)
+                {
+                    _seekPopupMovedTo = place;
+                }
+
+                from.CloseSeekPopupNow();
+
+                // Closing the other one has put the shared settings back as they are for an ordinary popup.
+                _seekPopupPinned = pinned;
+                _openSeekPlayer = this;
+                ApplySeekPopupTopmost();
+                SetWindowPos(source.Handle, IntPtr.Zero, place.X, place.Y, 0, 0, SWP_NOSIZE | SWP_NOZORDER | SWP_NOACTIVATE);
+
+                _seekPopupDragStart = now;
+                _seekPopupDragWindow = place;
+                _seekPopupDragging = true;
+                new System.Threading.Thread(PaceDrag) { IsBackground = true, Name = "SeekPopupDrag" }.Start();
+                RefreshSeekPopupMonitor(source);
+            };
+            Dispatcher.BeginInvoke(finish, DispatcherPriority.Loaded);
         }
 
         [DllImport("shcore.dll")]
