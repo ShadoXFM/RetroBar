@@ -61,7 +61,7 @@
                             MouseLeave="ForecastPopup_OnMouseLeave">
                 <!-- Room round what is in the frame, as the media popup has: 10.4 DIP from the frame's edge to the text and the icons (the frame
                      pads 3, the header 2 at the sides). -->
-                <StackPanel Margin="5.4,7.4,5.4,0.8"
+                <StackPanel Margin="5.4,5.8,5.4,0.8"
                             MinWidth="216">
                     <!-- Top: "Perpignan, France" + the country's flag, with the current temperature (bold)
                          beneath it on the left, and the weather icon large on the right across both lines. -->
