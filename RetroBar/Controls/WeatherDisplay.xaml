@@ -157,7 +157,7 @@
                     </StackPanel>
                     <!-- The next hours: the time, the weather and the temperature of each, in equal columns. -->
                     <ItemsControl ItemsSource="{Binding Hourly}"
-                                  Margin="0,0,0,2"
+                                  Margin="0,0,0,2.4"
                                   Visibility="{Binding HasHourly, Converter={StaticResource boolToVisibilityConverter}}">
                         <ItemsControl.ItemsPanel>
                             <ItemsPanelTemplate>
