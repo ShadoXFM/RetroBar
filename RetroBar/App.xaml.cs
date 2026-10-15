@@ -61,6 +61,8 @@ namespace RetroBar
             EventManager.RegisterClassHandler(typeof(System.Windows.Controls.ContextMenu), FrameworkElement.LoadedEvent, new RoutedEventHandler(ContextMenu_OnLoaded));
             EventManager.RegisterClassHandler(typeof(System.Windows.Controls.ContextMenu), System.Windows.Controls.ContextMenu.OpenedEvent, new RoutedEventHandler(ContextMenu_OnOpened));
 
+            ToastHostWorkaround.Start();
+
             _dictionaryManager.SetLanguageFromSettings();
             loadTheme();
             _windowManager = new WindowManager(_dictionaryManager, _explorerMonitor, _shellManager, _startMenuMonitor, _updater, _hotkeyManager);
