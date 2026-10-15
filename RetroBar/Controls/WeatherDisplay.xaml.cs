@@ -708,7 +708,7 @@ namespace RetroBar.Controls
 
                 _cachedLocation = reading.Location;
                 _cachedCelsius = reading.Celsius;
-                _cachedIconPath = GetImagePath(reading.IconFile.StartsWith("moon_", StringComparison.Ordinal) ? "moon.png" : reading.IconFile);
+                _cachedIconPath = GetImagePath(PersistedIconFile(reading.IconFile));
                 _cachedForecast = reading.Forecast ?? new List<DailyForecast>();
                 _cachedDetails = reading.Details;
                 _cachedHourly = reading.Hourly ?? new List<HourlyForecast>();
@@ -729,6 +729,16 @@ namespace RetroBar.Controls
                 // A missing or damaged file is the same as none.
             }
         }
+
+        // The name of an icon as an earlier version kept it with the reading: the moon phases are one moon now, and the partly cloudy icons
+        // have a day and a night one (the reading did not say which, and it is replaced by the next fetch).
+        private static string PersistedIconFile(string iconFile) => iconFile switch
+        {
+            _ when iconFile.StartsWith("moon_", StringComparison.Ordinal) => "moon.png",
+            "partly_cloudy.png" => "partly_cloudy_day.png",
+            "partly_cloudy_rain.png" => "partly_cloudy_rain_day.png",
+            _ => iconFile,
+        };
 
         private static string GetImagePath(string fileName)
         {
@@ -1114,21 +1124,22 @@ namespace RetroBar.Controls
         // live via WPF Path - live vector rendering came out visibly aliased on at least one
         // real system regardless of EdgeMode/rendering-tier/software-rendering settings (a
         // WPF/driver-level quirk outside the app's control), while bitmap rendering has always
-        // been reliably smooth, so the shapes are delivered as bitmaps instead. Only clear sky
-        // (0/1) gets a night variant, a single moon whatever the phase (the phases were tried: the
-        // new moon has nothing to draw, and the others only their lit part), and
-        // overcast/rain/snow/fog/thunder icons don't have a sun/moon in them to begin with, so
-        // there's nothing for a "night" version to change. Falls back to cloud.png for any
+        // been reliably smooth, so the shapes are delivered as bitmaps instead. The icons with a
+        // sun in them have a night variant: clear sky (0/1) shows a single moon whatever the phase
+        // (the phases were tried: the new moon has nothing to draw, and the others only their lit
+        // part), and partly cloudy (2) and the showers (80) have a day and a night icon of their
+        // own. The overcast/rain/snow/fog/thunder icons don't have a sun/moon in them to begin
+        // with, so there's nothing for a "night" version to change. Falls back to cloud.png for any
         // WMO code Open-Meteo might add later that isn't one of the above.
         private static string GetIconFileName(int weatherCode, bool isDay) => weatherCode switch
         {
             0 or 1 => isDay ? "sun.png" : "moon.png",
-            2 => "partly_cloudy.png",
+            2 => isDay ? "partly_cloudy_day.png" : "partly_cloudy_night.png",
             3 => "cloud.png",
             45 or 48 => "fog.png",
             51 or 53 or 55 or 61 or 63 or 65 or 81 or 82 => "rain.png",
             56 or 57 or 66 or 67 or 71 or 73 or 75 or 77 or 85 or 86 => "snow.png",
-            80 => "partly_cloudy_rain.png",
+            80 => isDay ? "partly_cloudy_rain_day.png" : "partly_cloudy_rain_night.png",
             95 or 96 or 99 => "thunder.png",
             _ => "cloud.png",
         };
