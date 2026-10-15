@@ -342,8 +342,10 @@ namespace RetroBar.Controls
             _openSeekPlayer = this;
             Dispatcher.BeginInvoke(new Action(ApplySeekPopupTopmost), DispatcherPriority.Loaded);
             _seekPopupSource = PresentationSource.FromVisual(SeekPopupRoot) as HwndSource;
+            SeekPopupRoot.ClearValue(LayoutTransformProperty);
             if (_seekPopupSource != null)
             {
+                _seekPopupHwndDpi = _seekPopupSource.CompositionTarget?.TransformToDevice.M11 ?? 0;
                 _seekPopupSource.DpiChanged += SeekPopupSource_OnDpiChanged;
                 _seekPopupSource.AddHook(SeekPopupHook);
             }

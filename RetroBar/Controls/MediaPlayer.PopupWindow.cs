@@ -481,6 +481,9 @@ namespace RetroBar.Controls
         // that monitor's DPI (which WPF has already given the popup's window by now, or does when it raises DpiChanged below).
         private string _seekPopupMonitor;
 
+        // The DPI the popup's window draws at (the monitor it opened on), which it keeps whatever monitor it is dragged to.
+        private double _seekPopupHwndDpi;
+
         private void RefreshSeekPopupMonitor(HwndSource source)
         {
             var info = new MONITORINFOEX { Size = Marshal.SizeOf<MONITORINFOEX>() };
@@ -491,7 +494,27 @@ namespace RetroBar.Controls
 
             _seekPopupMonitor = info.DeviceName;
             MonitorOffset.SetDeviceNameOverride(SeekPopupRoot, info.DeviceName);
+            ApplySeekPopupDpi(source, MonitorFromWindow(source.Handle, MONITOR_DEFAULTTONEAREST));
             ReapplySeekPopupForMonitor();
+        }
+
+        [DllImport("shcore.dll")]
+        private static extern int GetDpiForMonitor(IntPtr monitor, int type, out uint x, out uint y);
+
+        // The popup is laid out for the DPI of the monitor it is on. WPF does not do that for a popup's window when it is dragged to another
+        // monitor: the window goes on turning what it draws into pixels at the DPI it was opened at (a popup of display 1's size on a
+        // display of another DPI). So it is scaled by the difference, which makes it the size it has on that monitor's own taskbar.
+        private void ApplySeekPopupDpi(HwndSource source, IntPtr monitor)
+        {
+            if (source.RootVisual == null || _seekPopupHwndDpi <= 0 || GetDpiForMonitor(monitor, 0, out uint dpiX, out uint dpiY) != 0)
+            {
+                return;
+            }
+
+            double dpi = dpiX / 96.0;
+            VisualTreeHelper.SetRootDpi(source.RootVisual, new DpiScale(dpi, dpiY / 96.0));
+            double scale = dpi / _seekPopupHwndDpi;
+            SeekPopupRoot.LayoutTransform = Math.Abs(scale - 1) < 0.001 ? Transform.Identity : new ScaleTransform(scale, scale);
         }
 
         private void ReapplySeekPopupForMonitor()
@@ -511,6 +534,12 @@ namespace RetroBar.Controls
         private void SeekPopupSource_OnDpiChanged(object sender, HwndDpiChangedEventArgs e)
         {
             _seekPopupHeldX = null;
+            if (sender is HwndSource source)
+            {
+                _seekPopupMonitor = null;
+                RefreshSeekPopupMonitor(source);
+            }
+
             ReapplySeekPopupForMonitor();
         }
 
