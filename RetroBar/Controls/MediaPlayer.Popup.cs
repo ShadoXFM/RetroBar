@@ -225,12 +225,33 @@ namespace RetroBar.Controls
             double closer = dpi.DpiScaleX < 1.125 ? 4 * pixel : 0;
             // The slider reaches 2 pixels further at each end, into what was the gaps (so they are 2 pixels smaller) - it is 4 pixels
             // longer: its width is the same binding as in the XAML, with that much less deducted.
-            SeekSlider.Margin = new Thickness(4 + 2 * pull + shift - closer, 0, 6 + closer, 2 * pixel);
+            var sliderMargin = new Thickness(4 + 2 * pull + shift - closer, 0, 6 + closer, 2 * pixel);
+
+            // A monitor can give the slider its own margin ("MediaSeekSlider" in monitor-adjustments.json): the gap to the buttons, and to
+            // the time. The slider takes up what that gives or takes (its width is what is left of the row), so the popup keeps its size.
+            double sliderMarginChange = 0;
+            string deviceName = MonitorOffset.GetDeviceNameOverride(SeekPopupRoot) ?? (Window.GetWindow(this) as Taskbar)?.Screen.DeviceName;
+            string sliderMarginText = MonitorAdjustments.Get(deviceName, "MediaSeekSlider").Margin;
+            if (!string.IsNullOrWhiteSpace(sliderMarginText))
+            {
+                try
+                {
+                    var custom = (Thickness)new ThicknessConverter().ConvertFromString(null, System.Globalization.CultureInfo.InvariantCulture, sliderMarginText);
+                    sliderMarginChange = custom.Left + custom.Right - sliderMargin.Left - sliderMargin.Right;
+                    sliderMargin = custom;
+                }
+                catch (Exception ex) when (ex is FormatException or NotSupportedException)
+                {
+                    // An invalid one is ignored, as for every other Margin in that file.
+                }
+            }
+
+            SeekSlider.Margin = sliderMargin;
 
             var width = new MultiBinding
             {
                 Converter = (IMultiValueConverter)FindResource("remainingWidthConverter"),
-                ConverterParameter = string.Create(System.Globalization.CultureInfo.InvariantCulture, $"{12.8 - 4 * pixel + previousToPlay},30"),
+                ConverterParameter = string.Create(System.Globalization.CultureInfo.InvariantCulture, $"{12.8 - 4 * pixel + previousToPlay + sliderMarginChange},30"),
             };
             foreach (FrameworkElement source in new FrameworkElement[] { SeekAlbumArtImage, SeekPlayPauseButton, SeekPreviousButton, SeekNextButton, SeekTimeText })
             {
