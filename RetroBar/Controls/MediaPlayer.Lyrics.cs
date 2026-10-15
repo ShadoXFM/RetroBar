@@ -380,7 +380,8 @@ namespace RetroBar.Controls
                     continue;
                 }
 
-                double error = Math.Abs(middle - candidate - (first + last) / 2);
+                // Centred, and without much of the window left empty (the space a cut-off line leaves is not drawn).
+                double error = Math.Abs(middle - candidate - (first + last) / 2) + (first + window - last) / 2;
                 if (error < bestError - 0.01)
                 {
                     bestError = error;
@@ -395,38 +396,6 @@ namespace RetroBar.Controls
 
             if (Whole(best, out double visibleFirst, out double visibleLast))
             {
-                // With the current line in the middle of the window, the whole lines shown can still have more above it than below (or the
-                // other way round): the farthest line on the heavier side is left out, if that makes the two sides closer.
-                // Not when the lighter side is short because the lyrics start or end there.
-                if (best > 0 && best < maximum)
-                {
-                    int lo = from;
-                    int hi = to;
-                    while (lo < index && tops[lo] - best < visibleFirst - 0.5) lo++;
-                    while (hi > index && tops[hi] + heights[hi] - best > visibleLast + 0.5) hi--;
-                    double center = middle - best;
-                    while (true)
-                    {
-                        double above = center - (tops[lo] - best);
-                        double below = tops[hi] + heights[hi] - best - center;
-                        if (above > below && lo < index && hi < _lyricRows.Length - 1 && Math.Abs(center - (tops[lo + 1] - best) - below) < above - below)
-                        {
-                            lo++;
-                        }
-                        else if (below > above && hi > index && lo > 0 && Math.Abs(above - (tops[hi - 1] + heights[hi - 1] - best - center)) < below - above)
-                        {
-                            hi--;
-                        }
-                        else
-                        {
-                            break;
-                        }
-                    }
-
-                    visibleFirst = tops[lo] - best;
-                    visibleLast = tops[hi] + heights[hi] - best;
-                }
-
                 visibleTop = Math.Max(0, visibleFirst - 1);
                 visibleBottom = Math.Min(window, visibleLast + 1);
             }
