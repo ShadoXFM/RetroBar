@@ -34,21 +34,13 @@ namespace RetroBar.Controls
         private static readonly Duration LyricScroll = new(TimeSpan.FromMilliseconds(320));
         private static readonly TimeSpan LyricsRetry = TimeSpan.FromSeconds(30);
 
-        // The window fades out at its top and bottom edges, where there are more lines beyond them, so a line is not cut off sharply there:
-        // nothing at all in the outermost row (what is cut off there is part of a line, which would be a stray mark), then growing to the
-        // full look by the time it is this many rows from the edge. An edge fades by how much there is beyond it (all of it when there
-        // are as many rows as that), so as the lyrics get to their end the fade goes away by degrees, with the lines drifting down.
-        // At the edge itself a line is still seen, this much of what it would be (not nothing).
-        private const double LyricEdgeLeast = 0.35;
-        private const double LyricEdgeClearRows = 0.4;
-        private const double LyricEdgeFadeRows = 1.4;
-        private LinearGradientBrush _lyricFadeMask;
-        private GradientStop[] _lyricFadeTop;
-        private GradientStop[] _lyricFadeBottom;
-        private GradientStop _lyricFadeTopInner;
-        private GradientStop _lyricFadeBottomInner;
+        // Only whole lines are shown: the lines scroll by a line at a time (the first line shown is at the top of the window), and what is
+        // left below the last line that fits (less than a line) is not drawn. A line cut across by the edge was always a stray mark, however
+        // it was faded. The mask below is opaque from the top of the first whole line to the bottom of the last, and nothing outside.
+        private const double LyricMaskFeather = 1.5;
+        private LinearGradientBrush _lyricMask;
+        private GradientStop[] _lyricMaskStops;
         private double _lyricRowUnit;
-        private double _lyricScrollMax;
 
         private LyricLine[] _lyrics;
         private string _lyricsKey;
@@ -70,63 +62,55 @@ namespace RetroBar.Controls
                 _lyricRowUnit = line + LyricRowGap;
             }
 
-            if (_lyricFadeTop == null)
+            if (_lyricMask == null)
             {
-                _lyricFadeTop = new[] { new GradientStop(Colors.Black, 0), new GradientStop(Colors.Black, 0.1) };
-                _lyricFadeBottom = new[] { new GradientStop(Colors.Black, 0.9), new GradientStop(Colors.Black, 1) };
-                _lyricFadeTopInner = new GradientStop(Colors.Black, 0.3);
-                _lyricFadeBottomInner = new GradientStop(Colors.Black, 0.7);
-
                 // In the window's own units: a mask relative to the element's bounds would be spread over all the lines the window is
                 // scrolled over, which are all inside it.
-                _lyricFadeMask = new LinearGradientBrush(new GradientStopCollection
+                _lyricMaskStops = new[]
                 {
-                    _lyricFadeTop[0],
-                    _lyricFadeTop[1],
-                    _lyricFadeTopInner,
-                    _lyricFadeBottomInner,
-                    _lyricFadeBottom[0],
-                    _lyricFadeBottom[1],
-                }, new Point(0, 0), new Point(0, 1))
+                    new GradientStop(Colors.Transparent, 0),
+                    new GradientStop(Colors.Transparent, 0),
+                    new GradientStop(Colors.Black, 0.0001),
+                    new GradientStop(Colors.Black, 0.9999),
+                    new GradientStop(Colors.Transparent, 1),
+                    new GradientStop(Colors.Transparent, 1),
+                };
+                _lyricMask = new LinearGradientBrush(new GradientStopCollection(_lyricMaskStops), new Point(0, 0), new Point(0, 1))
                 {
                     MappingMode = BrushMappingMode.Absolute,
                 };
-                SeekLyricsHost.OpacityMask = _lyricFadeMask;
+                SeekLyricsHost.OpacityMask = _lyricMask;
             }
 
-            // The rows' share of the window.
+            if (SeekLyricsHost.Height > 0)
+            {
+                _lyricMask.EndPoint = new Point(0, SeekLyricsHost.Height);
+            }
+        }
+
+        // The mask shows what is between the top of the first whole line and the bottom of the last.
+        private void UpdateLyricMask(double visibleTop, double visibleBottom, bool animate)
+        {
             double window = SeekLyricsHost.Height;
-            if (window > 0 && _lyricRowUnit > 0)
+            if (window <= 0)
             {
-                _lyricFadeMask.EndPoint = new Point(0, window);
-                double clear = Math.Min(0.2, LyricEdgeClearRows * _lyricRowUnit / window);
-                double fade = Math.Min(0.45, LyricEdgeFadeRows * _lyricRowUnit / window);
-                _lyricFadeTop[1].Offset = clear;
-                _lyricFadeTopInner.Offset = fade;
-                _lyricFadeBottomInner.Offset = 1 - fade;
-                _lyricFadeBottom[0].Offset = 1 - clear;
+                return;
             }
-        }
 
-        // An edge fades by how much there is beyond it.
-        private void UpdateLyricEdges(double scroll, bool animate)
-        {
-            double fade = LyricEdgeFadeRows * (_lyricRowUnit > 0 ? _lyricRowUnit : 15);
-            SetLyricEdge(_lyricFadeTop, Math.Clamp(scroll / fade, 0, 1), animate);
-            SetLyricEdge(_lyricFadeBottom, Math.Clamp((_lyricScrollMax - scroll) / fade, 0, 1), animate);
-        }
+            double feather = LyricMaskFeather / window;
+            double top = Math.Clamp(visibleTop / window, 0, 1);
+            double bottom = Math.Clamp(visibleBottom / window, 0, 1);
+            double[] offsets = { 0, Math.Max(0, top - feather), top, bottom, Math.Min(1, bottom + feather), 1 };
 
-        private static void SetLyricEdge(GradientStop[] edge, double strength, bool animate)
-        {
-            Color target = Color.FromArgb((byte)Math.Round(255 * (1 - strength * (1 - LyricEdgeLeast))), 0, 0, 0);
-            foreach (GradientStop stop in edge)
+            for (int i = 0; i < _lyricMaskStops.Length; i++)
             {
-                Color from = stop.Color;
-                stop.BeginAnimation(GradientStop.ColorProperty, null);
-                stop.Color = target;
-                if (animate && from != target)
+                GradientStop stop = _lyricMaskStops[i];
+                double from = stop.Offset;
+                stop.BeginAnimation(GradientStop.OffsetProperty, null);
+                stop.Offset = offsets[i];
+                if (animate && Math.Abs(from - offsets[i]) > 1e-6)
                 {
-                    stop.BeginAnimation(GradientStop.ColorProperty, new ColorAnimation(from, target, LyricScroll) { FillBehavior = FillBehavior.Stop });
+                    stop.BeginAnimation(GradientStop.OffsetProperty, new DoubleAnimation(from, offsets[i], LyricScroll) { FillBehavior = FillBehavior.Stop });
                 }
             }
         }
@@ -327,12 +311,13 @@ namespace RetroBar.Controls
 
         // How far the lines are scrolled (up) to show the one: its middle in the middle of the window, as far as there are lines to fill
         // the window - the first lines are at the top and the last at the bottom. A whole number of the screen's pixels, so the text is sharp.
-        private double LyricScrollFor(int index)
+        private double LyricScrollFor(int index, out double visibleTop, out double visibleBottom)
         {
             SeekLyricsPanel.UpdateLayout();
             double window = SeekLyricsHost.Height;
             double maximum = Math.Max(0, SeekLyricsPanel.ActualHeight - window);
-            _lyricScrollMax = maximum;
+            visibleTop = 0;
+            visibleBottom = window;
             if (index < 0 || double.IsNaN(window))
             {
                 return 0;
@@ -342,8 +327,48 @@ namespace RetroBar.Controls
             double middle = row.TranslatePoint(new Point(0, row.ActualHeight / 2), SeekLyricsPanel).Y;
             double scroll = Math.Clamp(middle - window / 2, 0, maximum);
 
+            // At the top of a line, unless the last lines are at the bottom of the window (there the line cut off at the top is not drawn).
+            if (scroll < maximum)
+            {
+                double snapped = 0;
+                for (int i = 0; i < _lyricRows.Length; i++)
+                {
+                    double top = _lyricRows[i].TranslatePoint(new Point(0, 0), SeekLyricsPanel).Y;
+                    if (top > scroll + 0.5)
+                    {
+                        break;
+                    }
+
+                    snapped = top;
+                }
+
+                scroll = Math.Min(snapped, maximum);
+            }
+
             double scale = GetSeekDpi().DpiScaleY;
-            return Math.Round(scroll * scale) / scale;
+            scroll = Math.Round(scroll * scale) / scale;
+
+            // The lines that fit whole in the window.
+            double first = double.MaxValue;
+            double last = 0;
+            for (int i = Math.Max(0, index - 12); i <= Math.Min(_lyricRows.Length - 1, index + 12); i++)
+            {
+                double top = _lyricRows[i].TranslatePoint(new Point(0, 0), SeekLyricsPanel).Y - scroll;
+                double bottom = top + _lyricRows[i].ActualHeight;
+                if (top >= -0.5 && bottom <= window + 0.5)
+                {
+                    first = Math.Min(first, top);
+                    last = Math.Max(last, bottom);
+                }
+            }
+
+            if (first < double.MaxValue)
+            {
+                visibleTop = Math.Max(0, first - 1);
+                visibleBottom = Math.Min(window, last + 1);
+            }
+
+            return scroll;
         }
 
         // Puts the look of its distance from the current line on a row, from the look of its distance from the previous one.
@@ -447,8 +472,8 @@ namespace RetroBar.Controls
                 StyleLyricRow(i, index, previous, animate, token);
             }
 
-            double scroll = LyricScrollFor(index);
-            UpdateLyricEdges(scroll, animate);
+            double scroll = LyricScrollFor(index, out double visibleTop, out double visibleBottom);
+            UpdateLyricMask(visibleTop, visibleBottom, animate);
             double top = -scroll;
             SeekLyricsPanel.BeginAnimation(Canvas.TopProperty, null);
             double from = Canvas.GetTop(SeekLyricsPanel);
