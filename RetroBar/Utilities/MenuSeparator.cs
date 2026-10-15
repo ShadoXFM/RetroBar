@@ -102,11 +102,17 @@ namespace RetroBar.Utilities
             return new Size(0, 4 * PixelSize);
         }
 
+        /// <summary>How much of the highlight line shows: a darker shade of it, over what is behind (the weather forecast's separators, in
+        /// WeatherDisplay.xaml, have the same).</summary>
+        public const double HighlightOpacity = 0.5;
+
         protected override void OnRender(System.Windows.Media.DrawingContext drawingContext)
         {
             double pixel = PixelSize;
             drawingContext.DrawRectangle(TryFindResource("ButtonShadow") as System.Windows.Media.Brush, null, new Rect(0, pixel, ActualWidth, pixel));
+            drawingContext.PushOpacity(HighlightOpacity);
             drawingContext.DrawRectangle(TryFindResource("ButtonHighlight") as System.Windows.Media.Brush, null, new Rect(0, 2 * pixel, ActualWidth, pixel));
+            drawingContext.Pop();
         }
     }
 }

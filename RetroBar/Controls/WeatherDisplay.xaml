@@ -152,7 +152,9 @@
                                 SnapsToDevicePixels="True">
                         <Rectangle Height="1"
                                    Fill="{DynamicResource ButtonShadow}" />
+                        <!-- The highlight line is a darker shade of it (the same as the menus' separators, see MenuSeparatorLine). -->
                         <Rectangle Height="1"
+                                   Opacity="0.5"
                                    Fill="{DynamicResource ButtonHighlight}" />
                     </StackPanel>
                     <!-- The next hours: the time, the weather and the temperature of each, in equal columns. -->
@@ -197,7 +199,9 @@
                                 Visibility="{Binding HasHourly, Converter={StaticResource boolToVisibilityConverter}}">
                         <Rectangle Height="1"
                                    Fill="{DynamicResource ButtonShadow}" />
+                        <!-- The highlight line is a darker shade of it (the same as the menus' separators, see MenuSeparatorLine). -->
                         <Rectangle Height="1"
+                                   Opacity="0.5"
                                    Fill="{DynamicResource ButtonHighlight}" />
                     </StackPanel>
                     <ItemsControl ItemsSource="{Binding Forecast}"
