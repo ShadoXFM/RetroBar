@@ -417,7 +417,8 @@
                                      get. -->
                                 <StackPanel x:Name="SeekControlsRow"
                                             Orientation="Horizontal"
-                                            HorizontalAlignment="Center">
+                                            HorizontalAlignment="Center"
+                                            Margin="0,0,0,2">
                                     <!-- VerticalAlignment="Top" + Margin-Top=5 on the three
                                          transport buttons only (not the slider/time text) -
                                          top-aligning (instead of the style's own Center) means
@@ -502,7 +503,6 @@
                                                Margin="2,0,6,0"
                                                TextAlignment="Right"
                                                Background="Transparent"
-                                               Cursor="Hand"
                                                MouseLeftButtonUp="SeekTimeText_OnMouseLeftButtonUp"
                                                MinWidth="{Binding ActualWidth, ElementName=SeekTimeWidthRef}"
                                                Text="0:00 / 0:00"
