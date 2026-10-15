@@ -209,8 +209,11 @@ namespace RetroBar.Controls
             double pull = dpi.DpiScaleX < 1.125 ? pixel : 0;
             // The row starts 6 pixels in, less 1 at 125% and 2 at 100% (the slider takes up what that gives up).
             double shift = (dpi.DpiScaleX < 1.125 ? 2 : 1) * pixel;
+            // The gap from the previous glyph to the play/pause one is the taskbar's own (8 pixels at 125% and 7 at 100%, 2 more than it was
+            // here); the one from the play/pause glyph to the next was the same already.
+            double previousToPlay = 2 * pixel;
             SeekPreviousButton.Margin = new Thickness(6 * pixel - shift, 0, 0, 0);
-            SeekPlayPauseButton.Margin = new Thickness(-pull, 0, 0, 0);
+            SeekPlayPauseButton.Margin = new Thickness(-pull + previousToPlay, 0, 0, 0);
             SeekNextButton.Margin = new Thickness(-pull, 0, 0, 0);
 
             // The slider takes up the width the buttons' margins gave up (2 pixels each side, and the pulled-in gaps), so the row,
@@ -225,7 +228,7 @@ namespace RetroBar.Controls
             var width = new MultiBinding
             {
                 Converter = (IMultiValueConverter)FindResource("remainingWidthConverter"),
-                ConverterParameter = string.Create(System.Globalization.CultureInfo.InvariantCulture, $"{12.8 - 4 * pixel},30"),
+                ConverterParameter = string.Create(System.Globalization.CultureInfo.InvariantCulture, $"{12.8 - 4 * pixel + previousToPlay},30"),
             };
             foreach (FrameworkElement source in new FrameworkElement[] { SeekAlbumArtImage, SeekPlayPauseButton, SeekPreviousButton, SeekNextButton, SeekTimeText })
             {
