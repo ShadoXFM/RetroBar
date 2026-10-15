@@ -30,10 +30,6 @@ namespace RetroBar.Controls
         private static readonly double[] LyricOpacity = { 1, 0.45, 0.3, 0.2 };
         private static readonly double[] LyricBlur = { 0, 2.2, 3, 3.8 };
 
-        // A line is shown a little before its time (the position that is read is a poll behind what is heard), the way the apps' own
-        // lyrics lead.
-        private static readonly TimeSpan LyricsLead = TimeSpan.FromMilliseconds(350);
-
         // The scroll and the colour take the same time: the line is in its colour when it is in its place.
         private static readonly Duration LyricScroll = new(TimeSpan.FromMilliseconds(320));
         private static readonly TimeSpan LyricsRetry = TimeSpan.FromSeconds(30);
@@ -47,7 +43,6 @@ namespace RetroBar.Controls
 
         // Lyrics synced by word: the current line's words light up in the colour of the cover as they are sung (the timer follows the
         // position between the popup's polls, which are too far apart for words).
-        private static readonly TimeSpan LyricWordLead = TimeSpan.FromMilliseconds(200);
         private static readonly Duration LyricWordFade = new(TimeSpan.FromMilliseconds(140));
         private Run[][] _lyricRuns;
         private Run[] _activeRuns;
@@ -272,8 +267,6 @@ namespace RetroBar.Controls
             ResetLyrics();
             _lyricsKey = key;
             SeekLyricsHost.Visibility = Visibility.Visible;
-            SeekLyricsCredit.Inlines.Clear();
-            SeekLyricsCredit.Visibility = SpicyLyricsClient.IsConfigured ? Visibility.Hidden : Visibility.Collapsed;
             ApplyLyricsHeight();
             _ = LoadLyricsAsync(key, _sessionManager.Artist, _sessionManager.Title, duration);
         }
@@ -341,49 +334,12 @@ namespace RetroBar.Controls
             if (lines == null)
             {
                 SeekLyricsHost.Visibility = Visibility.Collapsed;
-                SeekLyricsCredit.Visibility = Visibility.Collapsed;
             }
             else
             {
                 BuildLyricRows(lines);
-                ShowLyricsCredit(spicy);
                 UpdateLyricLine(_lastSeekPosition);
             }
-        }
-
-        // Who the lyrics are from, under them (the room for it is there already); a link to the uploader when there is one.
-        private void ShowLyricsCredit(LyricsResult result)
-        {
-            SeekLyricsCredit.Inlines.Clear();
-            if (result?.Credit == null)
-            {
-                return;
-            }
-
-            if (result.CreditUrl != null)
-            {
-                var link = new Hyperlink(new Run(result.Credit)) { NavigateUri = new Uri(result.CreditUrl), TextDecorations = null };
-                link.SetBinding(TextElement.ForegroundProperty, new System.Windows.Data.Binding(nameof(Foreground)) { Source = SeekLyricsCredit });
-                link.RequestNavigate += (s, e) =>
-                {
-                    try
-                    {
-                        System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo(e.Uri.AbsoluteUri) { UseShellExecute = true });
-                    }
-                    catch (Exception ex) when (ex is System.ComponentModel.Win32Exception or InvalidOperationException)
-                    {
-                    }
-
-                    e.Handled = true;
-                };
-                SeekLyricsCredit.Inlines.Add(link);
-            }
-            else
-            {
-                SeekLyricsCredit.Inlines.Add(new Run(result.Credit));
-            }
-
-            SeekLyricsCredit.Visibility = Visibility.Visible;
         }
 
         private void UpdateLyricLine(TimeSpan position)
@@ -393,7 +349,7 @@ namespace RetroBar.Controls
                 return;
             }
 
-            int index = LyricsClient.IndexAt(_lyrics, position + LyricsLead);
+            int index = LyricsClient.IndexAt(_lyrics, position);
             if (index == _shownLyricIndex)
             {
                 // The popup was closed and opened again, which stopped the words.
@@ -645,7 +601,7 @@ namespace RetroBar.Controls
                 return;
             }
 
-            TimeSpan position = EstimatedSeekPosition() + LyricWordLead;
+            TimeSpan position = EstimatedSeekPosition();
             Color unsung = UnsungColor();
             Color lit = AccentBrush()?.Color ?? NeutralColor() ?? Colors.White;
             for (int i = 0; i < _activeRuns.Length; i++)

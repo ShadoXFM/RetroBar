@@ -291,19 +291,6 @@
                                                     Width="{Binding ActualWidth, ElementName=SeekLyricsHost}" />
                                     </Canvas>
                                 </Grid>
-                                <!-- Who the lyrics are from (the Spicy Lyrics API's terms ask for it wherever the lyrics are); its room is kept from when
-                                     the lyrics are asked for, like theirs. -->
-                                <TextBlock x:Name="SeekLyricsCredit"
-                                           Style="{DynamicResource MediaPlayerTrackTextStyle}"
-                                           FontSize="8"
-                                           Opacity="0.55"
-                                           HorizontalAlignment="Center"
-                                           TextAlignment="Center"
-                                           TextWrapping="NoWrap"
-                                           TextTrimming="CharacterEllipsis"
-                                           MaxWidth="{Binding ActualWidth, ElementName=SeekControlsRow}"
-                                           Margin="0,0,0,2"
-                                           Visibility="Collapsed" />
                                 <!-- The title and artist on the left, a spectrum (SeekSpectrum, drawn by UpdateSeekSpectrum) on the right, as wide as
                                      the controls row below. The margins give the text room above and below. -->
                                 <!-- The width of "0:00 / 0:00" in the time text's own font (same tag, so the same monitor settings), which the art's

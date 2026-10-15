@@ -16,5 +16,5 @@ the player, so the id is found with Spotify's search (client credentials: no use
 
 Ids and lyrics found are kept in `%LOCALAPPDATA%\RetroBar` (`spotify-track-ids.json`, `spicy-lyrics\`), so a track is asked for once.
 
-The terms of the API ask for the provider (and the uploader of community lyrics) to be shown wherever the lyrics are: it is the small
-line under the lyrics in the popup. Read their terms before using it.
+The terms of the API ask for the provider (and the uploader of community lyrics) to be shown wherever the lyrics are. The popup does
+not show a credit line (it was taken out on purpose), so check their terms for what that means for your use.

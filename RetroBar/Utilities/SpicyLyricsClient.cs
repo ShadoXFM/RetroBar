@@ -233,7 +233,7 @@ namespace RetroBar.Utilities
                 {
                     foreach (JsonElement line in content.EnumerateArray())
                     {
-                        lines.Add(new LyricLine(Time(line, "StartTime", unit), (Text(line, "Text") ?? "").Trim()));
+                        lines.Add(new LyricLine(Time(line, "StartTime", unit), (Text(line, "Text") ?? "").Trim(), null, Time(line, "EndTime", unit)));
                     }
                 }
                 else
@@ -246,10 +246,33 @@ namespace RetroBar.Utilities
                     return null;
                 }
 
-                LyricLine[] ordered = lines.OrderBy(line => line.Time).ToArray();
+                LyricLine[] ordered = WithPauses(lines.OrderBy(line => line.Time).ToList());
                 (string credit, string url) = Credit(body);
                 return new LyricsResult(ordered, credit, url);
             }
+        }
+
+        // A pause longer than this (before the first line, or between two) is a line of its own with no words: shown as a note.
+        private static readonly TimeSpan PauseLength = TimeSpan.FromSeconds(4);
+
+        internal static LyricLine[] WithPauses(List<LyricLine> lines)
+        {
+            var result = new List<LyricLine>();
+            if (lines[0].Time >= PauseLength)
+            {
+                result.Add(new LyricLine(TimeSpan.Zero, ""));
+            }
+
+            for (int i = 0; i < lines.Count; i++)
+            {
+                result.Add(lines[i]);
+                if (i + 1 < lines.Count && lines[i].End is TimeSpan end && lines[i + 1].Time - end >= PauseLength)
+                {
+                    result.Add(new LyricLine(end, ""));
+                }
+            }
+
+            return result.ToArray();
         }
 
         // A line of syllables: the lead vocals, and the background ones (in brackets) after them. The timing of every syllable is kept.
@@ -276,7 +299,7 @@ namespace RetroBar.Utilities
             }
 
             TimeSpan start = TryGet(lead, "StartTime", out _) ? Time(lead, "StartTime", unit) : words[0].Start;
-            return new LyricLine(start, string.Concat(words.Select(word => word.Text)).Trim(), words.ToArray());
+            return new LyricLine(start, string.Concat(words.Select(word => word.Text)).Trim(), words.ToArray(), words.Max(word => word.End));
         }
 
         private static void AddSyllables(JsonElement group, double unit, List<LyricWord> words, bool brackets)

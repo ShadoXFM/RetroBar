@@ -239,7 +239,7 @@ namespace RetroBar.Controls
         private const double ShadowRoom = 6;
 
         // The frame's style (TaskButtonThumbnail) has a margin of its own inside that: the bevel's edge is this much further in.
-        private const double FrameStyleMargin = 3.2;
+        private const double FrameStyleMargin = 2.4;
 
         private CustomPopupPlacement[] PlaceForecast(Size popupSize, Size targetSize, Point offset)
         {

@@ -321,8 +321,8 @@ namespace RetroBar.Tests
         {
             const string json = """{"Body":{"Type":"Line","Content":[{"Type":"Vocal","Text":"one","StartTime":2000,"EndTime":3000},{"Type":"Vocal","Text":"two","StartTime":4000,"EndTime":5000}]}}""";
 
-            Assert.Equal(TimeSpan.FromSeconds(2), SpicyLyricsClient.Parse(json, TimeSpan.FromSeconds(10)).Lines[0].Time);
-            Assert.Equal(TimeSpan.FromSeconds(2000), SpicyLyricsClient.Parse(json, TimeSpan.FromSeconds(3000)).Lines[0].Time);
+            Assert.Equal(TimeSpan.FromSeconds(2), SpicyLyricsClient.Parse(json, TimeSpan.FromSeconds(10)).Lines.First(line => line.Text == "one").Time);
+            Assert.Equal(TimeSpan.FromSeconds(2000), SpicyLyricsClient.Parse(json, TimeSpan.FromSeconds(3000)).Lines.First(line => line.Text == "one").Time);
         }
 
         [Fact]
@@ -336,6 +336,18 @@ namespace RetroBar.Tests
             Assert.Null(result.Lines[0].Words);
             Assert.Equal("Spicy Lyrics (Apple Music)", result.Credit);
             Assert.Null(result.CreditUrl);
+        }
+
+        [Fact]
+        public void A_long_pause_before_or_between_lines_is_a_line_with_no_words()
+        {
+            const string json = """{"Body":{"Type":"Line","Content":[{"Type":"Vocal","Text":"one","StartTime":10,"EndTime":12},{"Type":"Vocal","Text":"two","StartTime":14,"EndTime":16},{"Type":"Vocal","Text":"three","StartTime":30,"EndTime":32}]}}""";
+
+            LyricLine[] lines = SpicyLyricsClient.Parse(json).Lines;
+
+            Assert.Equal(new[] { "", "one", "two", "", "three" }, lines.Select(line => line.Text).ToArray());
+            Assert.Equal(TimeSpan.Zero, lines[0].Time);
+            Assert.Equal(TimeSpan.FromSeconds(16), lines[3].Time);
         }
 
         [Fact]

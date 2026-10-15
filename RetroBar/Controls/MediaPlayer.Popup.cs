@@ -279,6 +279,12 @@ namespace RetroBar.Controls
         // margin for the shadow, which is part of the popup's window. The weather forecast puts its own frame's bottom here too.
         private const double SeekFrameShadowRoom = 10;
 
+        // The popup is this many device pixels above where it would sit on the taskbar's edge (as many on every monitor, so the offset is
+        // in DIPs of this one's DPI). The weather forecast is placed from the same frame bottom, so it is as high.
+        private const double SeekPopupLiftPixels = 6;
+
+        private double SeekPopupOffset => 2 - SeekPopupLiftPixels / VisualTreeHelper.GetDpi(this).DpiScaleY;
+
         private double? _lastSeekFrameBottom;
 
         public double? GetSeekFrameBottom(Visual relativeTo)
@@ -287,7 +293,7 @@ namespace RetroBar.Controls
             {
                 if (IsVisible && TrackTextCanvas.ActualWidth > 0)
                 {
-                    _lastSeekFrameBottom = TrackTextCanvas.TransformToAncestor(relativeTo).Transform(new Point(0, 0)).Y + SeekPopup.VerticalOffset - SeekFrameShadowRoom;
+                    _lastSeekFrameBottom = TrackTextCanvas.TransformToAncestor(relativeTo).Transform(new Point(0, 0)).Y + SeekPopupOffset - SeekFrameShadowRoom;
                 }
             }
             catch (InvalidOperationException)
@@ -311,7 +317,11 @@ namespace RetroBar.Controls
             });
         }
 
-        private void OpenSeekPopupAnimated() => _seekSlide.Show();
+        private void OpenSeekPopupAnimated()
+        {
+            SeekPopup.VerticalOffset = SeekPopupOffset;
+            _seekSlide.Show();
+        }
 
         // Gone at once, with no slide.
         private void CloseSeekPopupNow() => _seekSlide.CloseNow();

@@ -15,7 +15,7 @@ namespace RetroBar.Utilities
 
     /// <summary>One line of synced lyrics: what is sung from <see cref="Time"/> on (empty between the verses). Lyrics synced by word also
     /// have the timing of each word.</summary>
-    public record LyricLine(TimeSpan Time, string Text, LyricWord[] Words = null);
+    public record LyricLine(TimeSpan Time, string Text, LyricWord[] Words = null, TimeSpan? End = null);
 
     /// <summary>The lyrics of a track and who they are from, to be shown with them (a web address of the credit, or null, goes with it).</summary>
     public record LyricsResult(LyricLine[] Lines, string Credit, string CreditUrl);
