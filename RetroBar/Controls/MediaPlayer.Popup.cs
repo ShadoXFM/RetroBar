@@ -542,11 +542,14 @@ namespace RetroBar.Controls
 
         private TimeSpan _lastSeekPosition;
 
+        private DateTime _lastSeekPositionAt;
+
         private TimeSpan _lastSeekDuration;
 
         private void SetSeekDisplay(TimeSpan position, TimeSpan duration)
         {
             _lastSeekPosition = position;
+            _lastSeekPositionAt = DateTime.UtcNow;
             _lastSeekDuration = duration;
             SeekSlider.Maximum = duration.TotalSeconds > 0 ? duration.TotalSeconds : 1;
             // A source that does not say how long the track is (foobar2000's) leaves the thumb at the start, not pinned at the end.

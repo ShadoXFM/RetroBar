@@ -10,8 +10,15 @@ using System.Threading.Tasks;
 
 namespace RetroBar.Utilities
 {
-    /// <summary>One line of synced lyrics: what is sung from <see cref="Time"/> on (empty between the verses).</summary>
-    public record LyricLine(TimeSpan Time, string Text);
+    /// <summary>One word (or part of a word) of a line, sung from <see cref="Start"/> to <see cref="End"/>; its text has the space after it.</summary>
+    public record LyricWord(TimeSpan Start, TimeSpan End, string Text);
+
+    /// <summary>One line of synced lyrics: what is sung from <see cref="Time"/> on (empty between the verses). Lyrics synced by word also
+    /// have the timing of each word.</summary>
+    public record LyricLine(TimeSpan Time, string Text, LyricWord[] Words = null);
+
+    /// <summary>The lyrics of a track and who they are from, to be shown with them (a web address of the credit, or null, goes with it).</summary>
+    public record LyricsResult(LyricLine[] Lines, string Credit, string CreditUrl);
 
     /// <summary>
     /// Synced lyrics from lrclib.net (a free, open lyrics database): found by the track's title and artist (and the one whose length is

@@ -126,6 +126,29 @@ namespace RetroBar.Utilities
             set => Set(ref _showMediaPopupLyrics, value);
         }
 
+        // Word-by-word lyrics from the Spicy Lyrics API (developers.spicylyrics.org), found through Spotify's search (the client credentials of
+        // a free developer app). They are kept in this file only, which is in the user's own profile and is never part of the program.
+        private string _spicyLyricsKey = "";
+        public string SpicyLyricsKey
+        {
+            get => _spicyLyricsKey;
+            set => Set(ref _spicyLyricsKey, value ?? "");
+        }
+
+        private string _spotifyClientId = "";
+        public string SpotifyClientId
+        {
+            get => _spotifyClientId;
+            set => Set(ref _spotifyClientId, value ?? "");
+        }
+
+        private string _spotifyClientSecret = "";
+        public string SpotifyClientSecret
+        {
+            get => _spotifyClientSecret;
+            set => Set(ref _spotifyClientSecret, value ?? "");
+        }
+
         private bool _showVuMeter = true;
         public bool ShowVuMeter
         {

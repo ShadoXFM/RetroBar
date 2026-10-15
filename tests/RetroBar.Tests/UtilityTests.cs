@@ -1,4 +1,5 @@
 using System;
+using System.Linq;
 using System.Windows.Media;
 using System.Windows.Media.Imaging;
 using RetroBar.Utilities;
@@ -273,6 +274,90 @@ namespace RetroBar.Tests
             Assert.Equal("first", LyricsClient.LineAt(lines, TimeSpan.FromSeconds(9.9)).Text);
             Assert.Equal("", LyricsClient.LineAt(lines, TimeSpan.FromSeconds(11)).Text);
             Assert.Equal("chorus", LyricsClient.LineAt(lines, TimeSpan.FromSeconds(300)).Text);
+        }
+    }
+
+    public class SpicyLyricsTests
+    {
+        private const string Syllables = """
+            {"Body":{"Type":"Syllable","id":"abc","source":"spicy_lyrics","StartTime":0,"EndTime":10,
+             "UploadAttribution":{"Uploader":{"id":"1","username":"alice","url":"https://example.com/alice"},"Maker":{"id":"2","username":"bob","url":"http://insecure.example"}},
+             "Content":[
+              {"Type":"Vocal","Lead":{"StartTime":1.0,"EndTime":2.5,"Syllables":[
+                {"Text":"Hel","StartTime":1.0,"EndTime":1.4,"IsPartOfWord":true},
+                {"Text":"lo","StartTime":1.4,"EndTime":1.8,"IsPartOfWord":false},
+                {"Text":"you","StartTime":1.8,"EndTime":2.5,"IsPartOfWord":false}]},
+               "Background":[{"StartTime":2.0,"EndTime":2.5,"Syllables":[{"Text":"oh","StartTime":2.0,"EndTime":2.5,"IsPartOfWord":false}]}]},
+              {"Type":"Vocal","Lead":{"StartTime":4.0,"EndTime":5.0,"Syllables":[{"Text":"again","StartTime":4.0,"EndTime":5.0,"IsPartOfWord":false}]}}
+             ]},"Status":200,"Type":"object"}
+            """;
+
+        [Fact]
+        public void Syllables_become_lines_with_the_timing_of_each_word()
+        {
+            LyricsResult result = SpicyLyricsClient.Parse(Syllables, TimeSpan.FromSeconds(10));
+
+            Assert.NotNull(result);
+            Assert.Equal(2, result.Lines.Length);
+            LyricLine first = result.Lines[0];
+            Assert.Equal(TimeSpan.FromSeconds(1), first.Time);
+            Assert.Equal("Hello you (oh)", first.Text);
+            Assert.Equal(new[] { "Hel", "lo ", "you ", "(oh) " }, first.Words.Select(word => word.Text).ToArray());
+            Assert.Equal(TimeSpan.FromSeconds(1.4), first.Words[1].Start);
+            Assert.Equal(TimeSpan.FromSeconds(1.8), first.Words[1].End);
+        }
+
+        [Fact]
+        public void The_credit_names_the_provider_and_the_uploader_and_keeps_only_a_secure_link()
+        {
+            LyricsResult result = SpicyLyricsClient.Parse(Syllables, TimeSpan.FromSeconds(10));
+
+            Assert.Equal("Spicy Lyrics · uploaded by alice · made by bob", result.Credit);
+            Assert.Equal("https://example.com/alice", result.CreditUrl);
+        }
+
+        [Fact]
+        public void Times_in_milliseconds_are_told_by_the_length_of_the_track()
+        {
+            const string json = """{"Body":{"Type":"Line","Content":[{"Type":"Vocal","Text":"one","StartTime":2000,"EndTime":3000},{"Type":"Vocal","Text":"two","StartTime":4000,"EndTime":5000}]}}""";
+
+            Assert.Equal(TimeSpan.FromSeconds(2), SpicyLyricsClient.Parse(json, TimeSpan.FromSeconds(10)).Lines[0].Time);
+            Assert.Equal(TimeSpan.FromSeconds(2000), SpicyLyricsClient.Parse(json, TimeSpan.FromSeconds(3000)).Lines[0].Time);
+        }
+
+        [Fact]
+        public void Line_synced_lyrics_have_no_words()
+        {
+            const string json = """{"Body":{"Type":"Line","source":"apple_music","Content":[{"Type":"Vocal","Text":"one","StartTime":2,"EndTime":3},{"Type":"Vocal","Text":"two","StartTime":4,"EndTime":5}]}}""";
+
+            LyricsResult result = SpicyLyricsClient.Parse(json);
+
+            Assert.Equal(2, result.Lines.Length);
+            Assert.Null(result.Lines[0].Words);
+            Assert.Equal("Spicy Lyrics (Apple Music)", result.Credit);
+            Assert.Null(result.CreditUrl);
+        }
+
+        [Fact]
+        public void Lyrics_without_timing_or_unreadable_ones_give_none()
+        {
+            Assert.Null(SpicyLyricsClient.Parse("""{"Body":{"Type":"Static","Lines":[{"Text":"a"}]}}"""));
+            Assert.Null(SpicyLyricsClient.Parse("not json"));
+            Assert.Null(SpicyLyricsClient.Parse("""{"Body":{"Type":"Line","Content":[]}}"""));
+        }
+
+        [Fact]
+        public void The_track_is_the_result_of_the_same_length_and_name()
+        {
+            const string json = """
+                {"tracks":{"items":[
+                  {"id":"live","name":"Song","duration_ms":300000},
+                  {"id":"remaster","name":"Song","duration_ms":241000},
+                  {"id":"other","name":"Other","duration_ms":240000}]}}
+                """;
+
+            Assert.Equal("remaster", SpotifyTrackLookup.Pick(json, "song", TimeSpan.FromSeconds(240)));
+            Assert.Null(SpotifyTrackLookup.Pick(json, "song", TimeSpan.FromSeconds(100)));
         }
     }
 }

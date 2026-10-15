@@ -4,9 +4,11 @@ using System.Collections.Generic;
 using System.Threading.Tasks;
 using System.Windows;
 using System.Windows.Controls;
+using System.Windows.Documents;
 using System.Windows.Media;
 using System.Windows.Media.Animation;
 using System.Windows.Media.Effects;
+using System.Windows.Threading;
 using RetroBar.Utilities;
 
 namespace RetroBar.Controls
@@ -42,6 +44,16 @@ namespace RetroBar.Controls
         private LinearGradientBrush _lyricMask;
         private GradientStop[] _lyricMaskStops;
         private double _lyricRowUnit;
+
+        // Lyrics synced by word: the current line's words light up in the colour of the cover as they are sung (the timer follows the
+        // position between the popup's polls, which are too far apart for words).
+        private static readonly TimeSpan LyricWordLead = TimeSpan.FromMilliseconds(200);
+        private static readonly Duration LyricWordFade = new(TimeSpan.FromMilliseconds(140));
+        private Run[][] _lyricRuns;
+        private Run[] _activeRuns;
+        private LyricWord[] _activeWords;
+        private bool[] _activeLit;
+        private DispatcherTimer _lyricWordTimer;
 
         private LyricLine[] _lyrics;
         private string _lyricsKey;
@@ -125,6 +137,7 @@ namespace RetroBar.Controls
         {
             SeekLyricsPanel.Children.Clear();
             _lyricRows = new TextBlock[lines.Length];
+            _lyricRuns = new Run[lines.Length][];
             for (int i = 0; i < lines.Length; i++)
             {
                 int line = i;
@@ -138,10 +151,25 @@ namespace RetroBar.Controls
                     Margin = new Thickness(0, LyricRowGap / 2, 0, LyricRowGap / 2),
                     Opacity = LyricOpacityAt(LyricStyledDistance + 1),
 
-                    // A pause in the singing is a note.
-                    Text = string.IsNullOrWhiteSpace(lines[i].Text) ? "♪" : lines[i].Text,
                 };
                 row.SetResourceReference(StyleProperty, "MediaPlayerTrackTextStyle");
+                if (lines[i].Words is { Length: > 0 } words && !string.IsNullOrWhiteSpace(lines[i].Text))
+                {
+                    var runs = new Run[words.Length];
+                    for (int j = 0; j < words.Length; j++)
+                    {
+                        runs[j] = new Run(j == words.Length - 1 ? words[j].Text.TrimEnd() : words[j].Text);
+                        row.Inlines.Add(runs[j]);
+                    }
+
+                    _lyricRuns[i] = runs;
+                }
+                else
+                {
+                    // A pause in the singing is a note.
+                    row.Text = string.IsNullOrWhiteSpace(lines[i].Text) ? "♪" : lines[i].Text;
+                }
+
                 row.MouseLeftButtonDown += (s, e) => GetCursorPos(out _lyricClickStart);
                 row.MouseLeftButtonUp += (s, e) => LyricRow_OnClick(line);
                 _lyricRows[i] = row;
@@ -197,6 +225,13 @@ namespace RetroBar.Controls
             }
 
             TextBlock current = _lyricRows[_shownLyricIndex];
+            if (_lyricRuns?[_shownLyricIndex] != null)
+            {
+                // Its words take the colour as they are sung (see BeginLyricWords).
+                BeginLyricWords(_shownLyricIndex);
+                return;
+            }
+
             if (AccentBrush() is SolidColorBrush brush)
             {
                 brush.Freeze();
@@ -217,7 +252,6 @@ namespace RetroBar.Controls
                 return;
             }
 
-            if (!IsSpotify(_sessionManager.SourceAppUserModelId))
             {
                 if (_lyricsKey != null)
                 {
@@ -237,6 +271,8 @@ namespace RetroBar.Controls
             ResetLyrics();
             _lyricsKey = key;
             SeekLyricsHost.Visibility = Visibility.Visible;
+            SeekLyricsCredit.Inlines.Clear();
+            SeekLyricsCredit.Visibility = SpicyLyricsClient.IsConfigured ? Visibility.Hidden : Visibility.Collapsed;
             ApplyLyricsHeight();
             _ = LoadLyricsAsync(key, _sessionManager.Artist, _sessionManager.Title, duration);
         }
@@ -251,14 +287,30 @@ namespace RetroBar.Controls
             Canvas.SetTop(SeekLyricsPanel, 0);
             SeekLyricsPanel.Children.Clear();
             _lyricRows = null;
+            _lyricRuns = null;
+            StopLyricWords();
         }
 
         private async Task LoadLyricsAsync(string key, string artist, string title, TimeSpan duration)
         {
+            LyricsResult spicy = null;
+            if (SpicyLyricsClient.IsConfigured)
+            {
+                try
+                {
+                    spicy = await SpicyLyricsClient.GetAsync(artist, title, duration);
+                }
+                catch (Exception ex) when (ex is System.Net.Http.HttpRequestException or TaskCanceledException or System.Text.Json.JsonException or InvalidOperationException)
+                {
+                    // Not there for now: the other source gives the lyrics (line by line).
+                    ManagedShell.Common.Logging.ShellLogger.Debug($"MediaPlayer: Spicy Lyrics not available now: {ex.Message}");
+                }
+            }
+
             LyricLine[] lines;
             try
             {
-                lines = await LyricsClient.GetAsync(artist, title, duration);
+                lines = spicy?.Lines ?? await LyricsClient.GetAsync(artist, title, duration);
             }
             catch (Exception ex) when (ex is System.Net.Http.HttpRequestException or TaskCanceledException or System.Text.Json.JsonException)
             {
@@ -288,12 +340,49 @@ namespace RetroBar.Controls
             if (lines == null)
             {
                 SeekLyricsHost.Visibility = Visibility.Collapsed;
+                SeekLyricsCredit.Visibility = Visibility.Collapsed;
             }
             else
             {
                 BuildLyricRows(lines);
+                ShowLyricsCredit(spicy);
                 UpdateLyricLine(_lastSeekPosition);
             }
+        }
+
+        // Who the lyrics are from, under them (the room for it is there already); a link to the uploader when there is one.
+        private void ShowLyricsCredit(LyricsResult result)
+        {
+            SeekLyricsCredit.Inlines.Clear();
+            if (result?.Credit == null)
+            {
+                return;
+            }
+
+            if (result.CreditUrl != null)
+            {
+                var link = new Hyperlink(new Run(result.Credit)) { NavigateUri = new Uri(result.CreditUrl), TextDecorations = null };
+                link.SetBinding(TextElement.ForegroundProperty, new System.Windows.Data.Binding(nameof(Foreground)) { Source = SeekLyricsCredit });
+                link.RequestNavigate += (s, e) =>
+                {
+                    try
+                    {
+                        System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo(e.Uri.AbsoluteUri) { UseShellExecute = true });
+                    }
+                    catch (Exception ex) when (ex is System.ComponentModel.Win32Exception or InvalidOperationException)
+                    {
+                    }
+
+                    e.Handled = true;
+                };
+                SeekLyricsCredit.Inlines.Add(link);
+            }
+            else
+            {
+                SeekLyricsCredit.Inlines.Add(new Run(result.Credit));
+            }
+
+            SeekLyricsCredit.Visibility = Visibility.Visible;
         }
 
         private void UpdateLyricLine(TimeSpan position)
@@ -306,6 +395,12 @@ namespace RetroBar.Controls
             int index = LyricsClient.IndexAt(_lyrics, position + LyricsLead);
             if (index == _shownLyricIndex)
             {
+                // The popup was closed and opened again, which stopped the words.
+                if (_activeRuns == null && index >= 0 && _lyricRuns?[index] != null)
+                {
+                    BeginLyricWords(index);
+                }
+
                 return;
             }
 
@@ -401,9 +496,23 @@ namespace RetroBar.Controls
                 row.Effect = null;
             }
 
-            // The colour: the current line fades into the cover's colour, the one that was current out of it.
+            // The colour: the current line fades into the cover's colour, the one that was current out of it. (A line synced by word has its
+            // words lit one by one instead, see BeginLyricWords; the one that was current, all lit, fades out whole.)
             Color? neutral = NeutralColor();
-            if (i == index && AccentBrush() is SolidColorBrush accent && neutral is Color rest)
+            Run[] runs = _lyricRuns?[i];
+            if (runs != null)
+            {
+                foreach (Run run in runs)
+                {
+                    run.ClearValue(TextElement.ForegroundProperty);
+                }
+            }
+
+            if (i == index && runs != null)
+            {
+                row.ClearValue(TextBlock.ForegroundProperty);
+            }
+            else if (i == index && AccentBrush() is SolidColorBrush accent && neutral is Color rest)
             {
                 if (animate)
                 {
@@ -453,6 +562,12 @@ namespace RetroBar.Controls
                 StyleLyricRow(i, index, previous, animate, token);
             }
 
+            StopLyricWords();
+            if (index >= 0 && _lyricRuns?[index] != null)
+            {
+                BeginLyricWords(index);
+            }
+
             double scroll = LyricScrollFor(index, out double visibleTop, out double visibleBottom);
             UpdateLyricMask(visibleTop, visibleBottom, animate);
             double top = -scroll;
@@ -466,6 +581,88 @@ namespace RetroBar.Controls
                     EasingFunction = new QuadraticEase { EasingMode = EasingMode.EaseOut },
                     FillBehavior = FillBehavior.Stop,
                 });
+            }
+        }
+
+        // The words of the current line start dim, and light up (fade into the colour of the cover) when they are sung.
+        private void BeginLyricWords(int line)
+        {
+            StopLyricWords();
+            _activeRuns = _lyricRuns[line];
+            _activeWords = _lyrics[line].Words;
+            _activeLit = new bool[_activeRuns.Length];
+            if (_activeRuns.Length != _activeWords.Length)
+            {
+                StopLyricWords();
+                return;
+            }
+
+            Color unsung = UnsungColor();
+            foreach (Run run in _activeRuns)
+            {
+                run.Foreground = new SolidColorBrush(unsung);
+            }
+
+            _lyricWordTimer ??= new DispatcherTimer(DispatcherPriority.Render) { Interval = TimeSpan.FromMilliseconds(33) };
+            _lyricWordTimer.Tick -= LyricWordTimer_OnTick;
+            _lyricWordTimer.Tick += LyricWordTimer_OnTick;
+            _lyricWordTimer.Start();
+            LyricWordTimer_OnTick(null, EventArgs.Empty);
+        }
+
+        private void StopLyricWords()
+        {
+            _lyricWordTimer?.Stop();
+            _activeRuns = null;
+            _activeWords = null;
+            _activeLit = null;
+        }
+
+        private Color UnsungColor()
+        {
+            Color rest = NeutralColor() ?? Colors.White;
+            return Color.FromArgb(150, rest.R, rest.G, rest.B);
+        }
+
+        // Where the song is now: the last position read, and the time since if it is playing (the polls are a quarter of a second apart).
+        private TimeSpan EstimatedSeekPosition()
+        {
+            TimeSpan position = _lastSeekPosition;
+            if (_sessionManager?.PlaybackState == MediaPlaybackState.Playing)
+            {
+                position += DateTime.UtcNow - _lastSeekPositionAt;
+            }
+
+            return _lastSeekDuration > TimeSpan.Zero && position > _lastSeekDuration ? _lastSeekDuration : position;
+        }
+
+        private void LyricWordTimer_OnTick(object sender, EventArgs e)
+        {
+            if (_activeRuns == null || _activeWords == null || !SeekPopup.IsOpen)
+            {
+                _lyricWordTimer?.Stop();
+                return;
+            }
+
+            TimeSpan position = EstimatedSeekPosition() + LyricWordLead;
+            Color unsung = UnsungColor();
+            Color lit = AccentBrush()?.Color ?? NeutralColor() ?? Colors.White;
+            for (int i = 0; i < _activeRuns.Length; i++)
+            {
+                bool sung = position >= _activeWords[i].Start;
+                if (sung && !_activeLit[i])
+                {
+                    _activeLit[i] = true;
+                    var brush = new SolidColorBrush(unsung);
+                    _activeRuns[i].Foreground = brush;
+                    brush.BeginAnimation(SolidColorBrush.ColorProperty, new ColorAnimation(unsung, lit, LyricWordFade));
+                }
+                else if (_activeLit[i] && position < _activeWords[i].Start - TimeSpan.FromMilliseconds(300))
+                {
+                    // Sought back before it.
+                    _activeLit[i] = false;
+                    _activeRuns[i].Foreground = new SolidColorBrush(unsung);
+                }
             }
         }
 
