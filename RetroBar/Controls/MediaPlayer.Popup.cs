@@ -299,6 +299,9 @@ namespace RetroBar.Controls
 
         private void InitializeSeekSlide()
         {
+            // The slider handles the press itself (it moves the thumb to the point) and marks it handled, so an ordinary handler never hears of
+            // it: without this the display was not held still while the button was down, and the release seeked to the old position.
+            SeekSlider.AddHandler(UIElement.PreviewMouseLeftButtonDownEvent, new MouseButtonEventHandler(SeekSlider_OnPreviewMouseDown), true);
             _seekSlide = new PopupSlide(SeekPopup, SeekPopupRoot, SeekSlideHost, () => SlideDirection.Down, () =>
             {
                 // How far the popup's window reaches below the taskbar's top (the shadow's room under the frame).
@@ -606,7 +609,9 @@ namespace RetroBar.Controls
         private void SeekSlider_OnPreviewMouseDown(object sender, MouseButtonEventArgs e)
         {
             _seekSliderDragging = true;
-            _seekSliderDownValue = SeekSlider.Value;
+
+            // The slider has already moved the thumb to the point pressed by now: the position shown before is the one to compare with.
+            _seekSliderDownValue = _lastSeekDuration > TimeSpan.Zero ? _lastSeekPosition.TotalSeconds : SeekSlider.Value;
         }
 
         private void SeekSlider_OnPreviewMouseUp(object sender, MouseButtonEventArgs e) => FinishSliderSeek();

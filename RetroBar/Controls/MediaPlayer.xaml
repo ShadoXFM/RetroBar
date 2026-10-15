@@ -482,7 +482,6 @@
                                             Minimum="0"
                                             Maximum="1"
                                             IsMoveToPointEnabled="True"
-                                            PreviewMouseDown="SeekSlider_OnPreviewMouseDown"
                                             PreviewMouseUp="SeekSlider_OnPreviewMouseUp"
                                             utilities:MonitorOffset.Tag="MediaSeekSlider">
                                         <Slider.Width>
