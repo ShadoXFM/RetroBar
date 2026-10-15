@@ -23,7 +23,7 @@ namespace RetroBar.Controls
         // lines, and at the first and last lines all of them are on one side of the current one, so the blur goes that far; the lines
         // beyond are not shown (and do not get an effect, which would cost for nothing).
         private const int LyricStyledDistance = 9;
-        private static readonly double[] LyricOpacity = { 1, 0.5, 0.38, 0.3 };
+        private static readonly double[] LyricOpacity = { 1, 0.45, 0.3, 0.2 };
         private static readonly double[] LyricBlur = { 0, 2.2, 3, 3.8 };
 
         // A line is shown a little before its time (the position that is read is a poll behind what is heard), the way the apps' own
