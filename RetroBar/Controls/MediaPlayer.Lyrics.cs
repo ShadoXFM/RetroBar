@@ -23,6 +23,9 @@ namespace RetroBar.Controls
         private const double LyricWindowLines = 8;
         private const double LyricRowGap = 2;
 
+        // The room at each side of the lines, so they do not run to the edges of the row of controls.
+        private const double LyricSidePadding = 8;
+
         // How far a line is from the current one gives its look; the last look is for every line further than that. The window shows eight
         // lines, and at the first and last lines all of them are on one side of the current one, so the blur goes that far; the lines
         // beyond are not shown (and do not get an effect, which would cost for nothing).
@@ -143,7 +146,7 @@ namespace RetroBar.Controls
                     HorizontalAlignment = HorizontalAlignment.Stretch,
                     TextAlignment = TextAlignment.Center,
                     TextWrapping = TextWrapping.Wrap,
-                    Margin = new Thickness(0, LyricRowGap / 2, 0, LyricRowGap / 2),
+                    Margin = new Thickness(LyricSidePadding, LyricRowGap / 2, LyricSidePadding, LyricRowGap / 2),
                     Opacity = LyricOpacityAt(LyricStyledDistance + 1),
 
                 };
