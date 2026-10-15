@@ -198,7 +198,9 @@ namespace RetroBar.Controls
             Apply(SeekPreviousGlyph, previous, Math.Max(0, boxWidth - previous[0].Length - 1 - skipOut));
             Apply(SeekNextGlyph, next, Math.Min(1 + skipOut, boxWidth - next[0].Length));
             Apply(SeekBackGlyph, rewind, 0);
-            Apply(SeekPlayPauseGlyph, middle, (boxWidth - middle[0].Length) / 2);
+            // The pause glyph (narrower than the play one) is a pixel nearer to the previous glyph than the centered one is, as on the taskbar,
+            // where the gaps to either side of it are the same.
+            Apply(SeekPlayPauseGlyph, middle, Math.Max(0, (boxWidth - middle[0].Length) / 2 - (playing ? 1 : 0)));
             Apply(SeekForwardGlyph, forward, boxWidth - forward[0].Length);
 
             // The buttons' margins are whole pixels too (a DIP at 125% is a pixel and a quarter, which rounded differently from
