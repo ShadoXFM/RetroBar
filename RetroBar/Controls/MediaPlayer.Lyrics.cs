@@ -252,6 +252,7 @@ namespace RetroBar.Controls
                 return;
             }
 
+            if (!IsSpotify(_sessionManager.SourceAppUserModelId))
             {
                 if (_lyricsKey != null)
                 {
