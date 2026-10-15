@@ -224,7 +224,7 @@ namespace RetroBar.Controls
                 }
             }
 
-            return Math.Max(0, frameBottom.Value + ShadowRoom);
+            return Math.Max(0, frameBottom.Value + ShadowRoom + FrameStyleMargin);
         }
 
         private bool _forecastClosing => _slide.Closing;
@@ -237,6 +237,9 @@ namespace RetroBar.Controls
 
         // The margin (DIPs) the forecast frame has all round for its shadow - see WeatherDisplay.xaml.
         private const double ShadowRoom = 6;
+
+        // The frame's style (TaskButtonThumbnail) has a margin of its own inside that: the bevel's edge is this much further in.
+        private const double FrameStyleMargin = 3.2;
 
         private CustomPopupPlacement[] PlaceForecast(Size popupSize, Size targetSize, Point offset)
         {
@@ -265,7 +268,7 @@ namespace RetroBar.Controls
                 ManagedShell.AppBar.AppBarEdge.Left => new[] { new CustomPopupPlacement(new Point(targetSize.Width + offset.X - ShadowRoom, centeredY), PopupPrimaryAxis.Vertical) },
                 ManagedShell.AppBar.AppBarEdge.Right => new[] { new CustomPopupPlacement(new Point(-popupSize.Width + offset.X + ShadowRoom, centeredY), PopupPrimaryAxis.Vertical) },
                 ManagedShell.AppBar.AppBarEdge.Top => new[] { new CustomPopupPlacement(new Point(centeredX, targetSize.Height + offset.Y - ShadowRoom), PopupPrimaryAxis.Horizontal) },
-                _ => new[] { new CustomPopupPlacement(new Point(centeredX, -popupSize.Height + offset.Y + ShadowRoom + sameAsMedia), PopupPrimaryAxis.Horizontal) },
+                _ => new[] { new CustomPopupPlacement(new Point(centeredX, -popupSize.Height + offset.Y + ShadowRoom + FrameStyleMargin + sameAsMedia), PopupPrimaryAxis.Horizontal) },
             };
         }
 
