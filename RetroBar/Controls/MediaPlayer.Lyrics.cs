@@ -358,13 +358,10 @@ namespace RetroBar.Controls
             TextBlock row = _lyricRows[i];
             int distance = Math.Abs(i - index);
             double opacity = LyricOpacityAt(distance);
-
-            // The first and the last line of the song are never blurred, wherever the current line is.
-            bool sharp = i == 0 || i == _lyricRows.Length - 1;
-            double blur = sharp ? 0 : LyricBlurAt(distance);
+            double blur = LyricBlurAt(distance);
             int oldDistance = previous == int.MinValue ? distance : Math.Abs(i - previous);
             double oldOpacity = LyricOpacityAt(oldDistance);
-            double oldBlur = sharp ? 0 : LyricBlurAt(oldDistance);
+            double oldBlur = LyricBlurAt(oldDistance);
 
             row.BeginAnimation(OpacityProperty, null);
             row.Opacity = opacity;
