@@ -113,7 +113,7 @@
                     <!-- The two columns reach the edges of the widget's content (the items' own room, which makes the gap between the columns, is
                          taken back at the sides): each has its label at its left and its value at its right. -->
                     <ItemsControl ItemsSource="{Binding DetailItems}"
-                                  Margin="-4,0,-3.2,4">
+                                  Margin="-4,0,-3.2,6.4">
                         <ItemsControl.ItemsPanel>
                             <ItemsPanelTemplate>
                                 <UniformGrid Columns="2" />
