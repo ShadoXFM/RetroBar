@@ -23,7 +23,7 @@ namespace RetroBar.Controls
         // lines, and at the first and last lines all of them are on one side of the current one, so the blur goes that far; the lines
         // beyond are not shown (and do not get an effect, which would cost for nothing).
         private const int LyricStyledDistance = 9;
-        private static readonly double[] LyricOpacity = { 1, 0.5, 0.36, 0.25 };
+        private static readonly double[] LyricOpacity = { 1, 0.5, 0.38, 0.3 };
         private static readonly double[] LyricBlur = { 0, 2.2, 3, 3.8 };
 
         // A line is shown a little before its time (the position that is read is a poll behind what is heard), the way the apps' own
@@ -38,6 +38,8 @@ namespace RetroBar.Controls
         // nothing at all in the outermost row (what is cut off there is part of a line, which would be a stray mark), then growing to the
         // full look by the time it is this many rows from the edge. An edge fades by how much there is beyond it (all of it when there
         // are as many rows as that), so as the lyrics get to their end the fade goes away by degrees, with the lines drifting down.
+        // At the edge itself a line is still seen, this much of what it would be (not nothing).
+        private const double LyricEdgeLeast = 0.35;
         private const double LyricEdgeClearRows = 0.4;
         private const double LyricEdgeFadeRows = 1.4;
         private LinearGradientBrush _lyricFadeMask;
@@ -116,7 +118,7 @@ namespace RetroBar.Controls
 
         private static void SetLyricEdge(GradientStop[] edge, double strength, bool animate)
         {
-            Color target = Color.FromArgb((byte)Math.Round(255 * (1 - strength)), 0, 0, 0);
+            Color target = Color.FromArgb((byte)Math.Round(255 * (1 - strength * (1 - LyricEdgeLeast))), 0, 0, 0);
             foreach (GradientStop stop in edge)
             {
                 Color from = stop.Color;
