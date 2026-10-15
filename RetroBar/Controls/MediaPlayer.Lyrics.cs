@@ -333,9 +333,22 @@ namespace RetroBar.Controls
             TextBlock row = _lyricRows[index];
             double middle = row.TranslatePoint(new Point(0, row.ActualHeight / 2), SeekLyricsPanel).Y;
             double scale = GetSeekDpi().DpiScaleY;
-            double scroll = Math.Round(Math.Clamp(middle - window / 2, 0, maximum) * scale) / scale;
-            visibleTop = scroll <= 0 ? -LyricMaskFeather : 0;
-            visibleBottom = scroll >= maximum ? window + LyricMaskFeather : window;
+            double scroll = Math.Clamp(middle - window / 2, 0, maximum);
+
+            // The first and the last line are never left cut off or faded at the edge: near either end of the lyrics the window goes all the
+            // way to it (the current line is a little off the middle for that).
+            if (maximum - scroll < _lyricRows[^1].ActualHeight + LyricRowGap)
+            {
+                scroll = maximum;
+            }
+            else if (scroll < _lyricRows[0].ActualHeight + LyricRowGap)
+            {
+                scroll = 0;
+            }
+
+            scroll = Math.Round(scroll * scale) / scale;
+            visibleTop = scroll <= 0.5 ? -LyricMaskFeather : 0;
+            visibleBottom = scroll >= maximum - 0.5 ? window + LyricMaskFeather : window;
             return scroll;
         }
 
