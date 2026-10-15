@@ -33,6 +33,9 @@ namespace RetroBar.Controls
         private static readonly double[] LyricOpacity = { 1, 0.45, 0.3, 0.2 };
         private static readonly double[] LyricBlur = { 0, 2.2, 3, 3.8 };
 
+        // The lines and the words come this much before their time (the lyrics are ahead of what is heard).
+        private static readonly TimeSpan LyricsLead = TimeSpan.FromMilliseconds(250);
+
         // The scroll and the colour take the same time: the line is in its colour when it is in its place.
         private static readonly Duration LyricScroll = new(TimeSpan.FromMilliseconds(320));
         private static readonly TimeSpan LyricsRetry = TimeSpan.FromSeconds(30);
@@ -352,7 +355,7 @@ namespace RetroBar.Controls
                 return;
             }
 
-            int index = LyricsClient.IndexAt(_lyrics, position);
+            int index = LyricsClient.IndexAt(_lyrics, position + LyricsLead);
             if (index == _shownLyricIndex)
             {
                 // The popup was closed and opened again, which stopped the words.
@@ -604,7 +607,7 @@ namespace RetroBar.Controls
                 return;
             }
 
-            TimeSpan position = EstimatedSeekPosition();
+            TimeSpan position = EstimatedSeekPosition() + LyricsLead;
             Color unsung = UnsungColor();
             Color lit = AccentBrush()?.Color ?? NeutralColor() ?? Colors.White;
             for (int i = 0; i < _activeRuns.Length; i++)
