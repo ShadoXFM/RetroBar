@@ -418,7 +418,8 @@
                                 <StackPanel x:Name="SeekControlsRow"
                                             Orientation="Horizontal"
                                             HorizontalAlignment="Center"
-                                            Margin="0,0,0,2">
+                                            Margin="0,0,0,2"
+                                            utilities:MonitorOffset.Tag="MediaSeekControlsRow">
                                     <!-- VerticalAlignment="Top" + Margin-Top=5 on the three
                                          transport buttons only (not the slider/time text) -
                                          top-aligning (instead of the style's own Center) means

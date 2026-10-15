@@ -30,6 +30,7 @@ namespace RetroBar.Utilities
             "MediaSeekButtonNext",
             "MediaSeekButtonPlayPause",
             "MediaSeekButtonPrevious",
+            "MediaSeekControlsRow",
             "MediaSeekGlyphPlayPause",
             "MediaSeekGlyphSkipNext",
             "MediaSeekGlyphSkipPrevious",
