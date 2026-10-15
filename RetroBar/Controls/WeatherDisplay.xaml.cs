@@ -321,6 +321,7 @@ namespace RetroBar.Controls
         private static List<DailyForecast> _cachedForecast = new();
         private static WeatherDetails _cachedDetails;
         private static List<HourlyForecast> _cachedHourly = new();
+        private static int? _cachedWeatherCode;
 
         // Set when the network comes back (see OnNetworkAvailabilityChanged): the next update refetches
         // even though the cached reading isn't old yet, since the last attempt may have failed offline.
@@ -500,6 +501,22 @@ namespace RetroBar.Controls
             }
         }
 
+        private string _weatherHeadline;
+
+        /// <summary>The line under the location in the forecast popup: the temperature and the weather in words ("17°C · Clear").</summary>
+        public string WeatherHeadline
+        {
+            get => _weatherHeadline;
+            set
+            {
+                if (_weatherHeadline != value)
+                {
+                    _weatherHeadline = value;
+                    OnPropertyChanged();
+                }
+            }
+        }
+
         /// <summary>The conditions under the temperature in the forecast popup, two to a row.</summary>
         public ObservableCollection<DetailItem> DetailItems { get; } = new();
 
@@ -626,6 +643,7 @@ namespace RetroBar.Controls
             public List<DailyForecast> Forecast { get; set; }
             public WeatherDetails Details { get; set; }
             public List<HourlyForecast> Hourly { get; set; }
+            public int? WeatherCode { get; set; }
             public string GeocodedDisplayName { get; set; }
             public string GeocodedCountryCode { get; set; }
             public double Latitude { get; set; }
@@ -644,6 +662,7 @@ namespace RetroBar.Controls
                     Forecast = _cachedForecast,
                     Details = _cachedDetails,
                     Hourly = _cachedHourly,
+                    WeatherCode = _cachedWeatherCode,
                     GeocodedDisplayName = _geocodedDisplayName,
                     GeocodedCountryCode = _geocodedCountryCode,
                     Latitude = _latitude,
@@ -690,6 +709,7 @@ namespace RetroBar.Controls
                 _cachedForecast = reading.Forecast ?? new List<DailyForecast>();
                 _cachedDetails = reading.Details;
                 _cachedHourly = reading.Hourly ?? new List<HourlyForecast>();
+                _cachedWeatherCode = reading.WeatherCode;
 
                 // Without these a later fetch would skip geocoding (the location "is" geocoded) and use no coordinates.
                 if (reading.Latitude != 0 || reading.Longitude != 0)
@@ -847,6 +867,7 @@ namespace RetroBar.Controls
                 _cachedLocation = location;
                 _cachedDetails = details;
                 _cachedHourly = hourly;
+                _cachedWeatherCode = weatherCode;
                 _cachedCelsius = temperature;
                 _cachedForecast = forecast;
                 _cachedIconPath = GetImagePath(iconFile);
@@ -894,6 +915,7 @@ namespace RetroBar.Controls
                 }
 
                 WeatherTemp = FormatTemperature(_cachedCelsius.Value);
+                WeatherHeadline = FormatHeadline(_cachedCelsius.Value, _cachedWeatherCode);
                 WeatherBarTemp = FormatBarTemperature(_cachedCelsius.Value);
                 FillDetails();
                 WeatherIconPath = _cachedIconPath;
@@ -930,6 +952,7 @@ namespace RetroBar.Controls
             else
             {
                 WeatherTemp = "N/A";
+                WeatherHeadline = "N/A";
                 WeatherBarTemp = "N/A";
                 DetailItems.Clear();
                 Hourly.Clear();
@@ -1039,6 +1062,40 @@ namespace RetroBar.Controls
             int rounded = (int)Math.Round(fahrenheit ? celsius * 9 / 5 + 32 : celsius, MidpointRounding.AwayFromZero);
             string sign = rounded > 0 ? "+" : rounded < 0 ? "-" : "";
             return $"{sign}{Math.Abs(rounded)}\u00B0{(fahrenheit ? 'F' : 'C')}";
+        }
+
+        // The temperature with its unit, and the weather in words after it when it is known.
+        private static string FormatHeadline(double celsius, int? weatherCode)
+        {
+            bool fahrenheit = Settings.Instance.WeatherUseFahrenheit;
+            int rounded = (int)Math.Round(fahrenheit ? celsius * 9 / 5 + 32 : celsius, MidpointRounding.AwayFromZero);
+            string temperature = $"{rounded}\u00B0{(fahrenheit ? 'F' : 'C')}";
+            string description = weatherCode is int code ? DescribeWeather(code) : null;
+            return description == null ? temperature : temperature + "  \u00B7  " + description;
+        }
+
+        // The weather in words, in the language chosen (WMO codes: https://open-meteo.com/en/docs).
+        private static string DescribeWeather(int code)
+        {
+            (string key, string fallback)? words = code switch
+            {
+                0 => ("weather_clear", "Clear"),
+                1 => ("weather_mostly_clear", "Mostly clear"),
+                2 => ("weather_partly_cloudy", "Partly cloudy"),
+                3 => ("weather_overcast", "Overcast"),
+                45 or 48 => ("weather_fog", "Fog"),
+                51 or 53 or 55 => ("weather_drizzle", "Drizzle"),
+                56 or 57 or 66 or 67 => ("weather_freezing_rain", "Freezing rain"),
+                61 or 63 => ("weather_rain", "Rain"),
+                65 => ("weather_heavy_rain", "Heavy rain"),
+                71 or 73 or 75 or 77 => ("weather_snow", "Snow"),
+                80 or 81 or 82 => ("weather_showers", "Showers"),
+                85 or 86 => ("weather_snow_showers", "Snow showers"),
+                95 or 96 or 99 => ("weather_thunderstorm", "Thunderstorm"),
+                _ => null,
+            };
+
+            return words is { } known ? System.Windows.Application.Current?.TryFindResource(known.key) as string ?? known.fallback : null;
         }
 
         // Without the sign or unit letter, for the forecast's "high / low" column.

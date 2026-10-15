@@ -65,7 +65,7 @@
                             MinWidth="216">
                     <!-- Top: "Perpignan, France" + the country's flag, with the current temperature (bold)
                          beneath it on the left, and the weather icon large on the right across both lines. -->
-                    <Grid Margin="2,0,1.2,3">
+                    <Grid Margin="2,0,1.2,9">
                         <Grid.ColumnDefinitions>
                             <ColumnDefinition Width="*" />
                             <ColumnDefinition Width="Auto" />
@@ -83,7 +83,7 @@
                                            Foreground="{DynamicResource ButtonForeground}"
                                            VerticalAlignment="Center" />
                             </StackPanel>
-                            <TextBlock Text="{Binding WeatherTemp}"
+                            <TextBlock Text="{Binding WeatherHeadline}"
                                        Style="{DynamicResource GlobalFonts}"
                                        Foreground="{DynamicResource ButtonForeground}"
                                        FontFamily="Tahoma"
