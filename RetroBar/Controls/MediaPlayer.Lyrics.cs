@@ -397,6 +397,7 @@ namespace RetroBar.Controls
             {
                 // With the current line in the middle of the window, the whole lines shown can still have more above it than below (or the
                 // other way round): the farthest line on the heavier side is left out, if that makes the two sides closer.
+                // Not when the lighter side is short because the lyrics start or end there.
                 if (best > 0 && best < maximum)
                 {
                     int lo = from;
@@ -408,11 +409,11 @@ namespace RetroBar.Controls
                     {
                         double above = center - (tops[lo] - best);
                         double below = tops[hi] + heights[hi] - best - center;
-                        if (above > below && lo < index && Math.Abs(center - (tops[lo + 1] - best) - below) < above - below)
+                        if (above > below && lo < index && hi < _lyricRows.Length - 1 && Math.Abs(center - (tops[lo + 1] - best) - below) < above - below)
                         {
                             lo++;
                         }
-                        else if (below > above && hi > index && Math.Abs(above - (tops[hi - 1] + heights[hi - 1] - best - center)) < below - above)
+                        else if (below > above && hi > index && lo > 0 && Math.Abs(above - (tops[hi - 1] + heights[hi - 1] - best - center)) < below - above)
                         {
                             hi--;
                         }
