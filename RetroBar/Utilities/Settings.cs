@@ -393,16 +393,6 @@ namespace RetroBar.Utilities
             set => Set(ref _taskbarWidthLimit, value);
         }
 
-        // The user's own arrangement of the taskbar tabs, as application keys (see TaskOpenOrderComparer)
-        // from leftmost to rightmost. Saved whenever they drag a tab, and applied whenever the tab list
-        // loads or a window appears - so a restart or theme change keeps their order.
-        private List<string> _taskOrder = [];
-        public List<string> TaskOrder
-        {
-            get => _taskOrder;
-            set => Set(ref _taskOrder, value);
-        }
-
         private List<string> _quickLaunchOrder = [];
         public List<string> QuickLaunchOrder
         {
