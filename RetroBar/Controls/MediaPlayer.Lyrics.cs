@@ -1,4 +1,6 @@
 using System;
+using System.Linq;
+using System.Collections.Generic;
 using System.Threading.Tasks;
 using System.Windows;
 using System.Windows.Controls;
@@ -323,52 +325,81 @@ namespace RetroBar.Controls
                 return 0;
             }
 
-            TextBlock row = _lyricRows[index];
-            double middle = row.TranslatePoint(new Point(0, row.ActualHeight / 2), SeekLyricsPanel).Y;
-            double scroll = Math.Clamp(middle - window / 2, 0, maximum);
-
-            // At the top of a line, unless the last lines are at the bottom of the window (there the line cut off at the top is not drawn).
-            if (scroll < maximum)
+            double[] tops = new double[_lyricRows.Length];
+            double[] heights = new double[_lyricRows.Length];
+            int from = Math.Max(0, index - 14);
+            int to = Math.Min(_lyricRows.Length - 1, index + 14);
+            for (int i = from; i <= to; i++)
             {
-                double snapped = 0;
-                for (int i = 0; i < _lyricRows.Length; i++)
-                {
-                    double top = _lyricRows[i].TranslatePoint(new Point(0, 0), SeekLyricsPanel).Y;
-                    if (top > scroll + 0.5)
-                    {
-                        break;
-                    }
-
-                    snapped = top;
-                }
-
-                scroll = Math.Min(snapped, maximum);
+                tops[i] = _lyricRows[i].TranslatePoint(new Point(0, 0), SeekLyricsPanel).Y;
+                heights[i] = _lyricRows[i].ActualHeight;
             }
 
+            double middle = tops[index] + heights[index] / 2;
             double scale = GetSeekDpi().DpiScaleY;
-            scroll = Math.Round(scroll * scale) / scale;
 
-            // The lines that fit whole in the window.
-            double first = double.MaxValue;
-            double last = 0;
-            for (int i = Math.Max(0, index - 12); i <= Math.Min(_lyricRows.Length - 1, index + 12); i++)
+            // The whole lines in the window when it is scrolled to `scroll`.
+            bool Whole(double scroll, out double first, out double last)
             {
-                double top = _lyricRows[i].TranslatePoint(new Point(0, 0), SeekLyricsPanel).Y - scroll;
-                double bottom = top + _lyricRows[i].ActualHeight;
-                if (top >= -0.5 && bottom <= window + 0.5)
+                first = double.MaxValue;
+                last = 0;
+                for (int i = from; i <= to; i++)
                 {
-                    first = Math.Min(first, top);
-                    last = Math.Max(last, bottom);
+                    double top = tops[i] - scroll;
+                    double bottom = top + heights[i];
+                    if (top >= -0.5 && bottom <= window + 0.5)
+                    {
+                        first = Math.Min(first, top);
+                        last = Math.Max(last, bottom);
+                    }
+                }
+
+                return first < double.MaxValue;
+            }
+
+            // The scroll puts a line at the top of the window (so that no line is cut there), or the last lines at the bottom: of those, the
+            // one with the current line in the middle of the whole lines that are shown.
+            var candidates = new List<double> { 0, maximum };
+            for (int i = from; i <= index; i++)
+            {
+                candidates.Add(Math.Min(tops[i], maximum));
+            }
+
+            double best = 0;
+            double bestError = double.MaxValue;
+            foreach (double candidate in candidates.Select(c => Math.Round(c * scale) / scale))
+            {
+                if (!Whole(candidate, out double first, out double last))
+                {
+                    continue;
+                }
+
+                double top = tops[index] - candidate;
+                if (top < first - 0.5 || top + heights[index] > last + 0.5)
+                {
+                    continue;
+                }
+
+                double error = Math.Abs(middle - candidate - (first + last) / 2);
+                if (error < bestError - 0.01)
+                {
+                    bestError = error;
+                    best = candidate;
                 }
             }
 
-            if (first < double.MaxValue)
+            if (bestError == double.MaxValue)
             {
-                visibleTop = Math.Max(0, first - 1);
-                visibleBottom = Math.Min(window, last + 1);
+                best = Math.Round(Math.Clamp(middle - window / 2, 0, maximum) * scale) / scale;
             }
 
-            return scroll;
+            if (Whole(best, out double visibleFirst, out double visibleLast))
+            {
+                visibleTop = Math.Max(0, visibleFirst - 1);
+                visibleBottom = Math.Min(window, visibleLast + 1);
+            }
+
+            return best;
         }
 
         // Puts the look of its distance from the current line on a row, from the look of its distance from the previous one.
