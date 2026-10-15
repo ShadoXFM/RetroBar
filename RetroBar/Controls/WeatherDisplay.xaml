@@ -89,7 +89,7 @@
                                        FontFamily="Tahoma"
                                        FontSize="12"
                                        FontWeight="Bold"
-                                       Margin="0,3,0,0" />
+                                       Margin="0,4.5,0,0" />
                         </StackPanel>
                         <!-- The drawing only, at the top right: no room round it but the widget's own. -->
                         <Rectangle Grid.Column="1"
