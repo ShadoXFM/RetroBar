@@ -393,7 +393,11 @@ namespace RetroBar.Controls
             }
 
             _seekPopupMonitor = null;
-            _seekPopupMovedTo = null;
+            lock (_seekPopupDragLock)
+            {
+                _seekPopupDragging = false;
+                _seekPopupMovedTo = null;
+            }
             _seekPopupHeldX = null;
 
             // Moved or on top is for the one opening: the next one starts as an ordinary popup again.

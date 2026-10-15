@@ -27,7 +27,13 @@ namespace RetroBar.Controls
         // Dragging the popup: anywhere on it except the buttons and the slider. Its window is moved directly (a Popup's own offsets
         // keep it on the monitor of the track text), to any monitor; it takes that monitor's DPI and adjustments (see
         // RefreshSeekPopupMonitor). It goes back above the track text when it opens next.
-        private bool _seekPopupDragging;
+        private volatile bool _seekPopupDragging;
+
+        // Guards _seekPopupMovedTo and _seekPopupDragging between the dragging thread and the closing of the popup.
+        private readonly object _seekPopupDragLock = new();
+
+        [DllImport("dwmapi.dll")]
+        private static extern int DwmFlush();
 
         private POINT _seekPopupDragStart;
 
@@ -61,7 +67,13 @@ namespace RetroBar.Controls
 
         private IntPtr SeekPopupHook(IntPtr hwnd, int msg, IntPtr wParam, IntPtr lParam, ref bool handled)
         {
-            if (msg == WM_WINDOWPOSCHANGING && _seekPopupHeldX is int heldX && _seekPopupMovedTo == null && !_seekPopupPinned)
+            POINT? movedTo;
+            lock (_seekPopupDragLock)
+            {
+                movedTo = _seekPopupMovedTo;
+            }
+
+            if (msg == WM_WINDOWPOSCHANGING && _seekPopupHeldX is int heldX && movedTo == null && !_seekPopupPinned)
             {
                 WINDOWPOS held = Marshal.PtrToStructure<WINDOWPOS>(lParam);
                 if ((held.Flags & SWP_NOMOVE) == 0 && held.X != heldX)
@@ -71,12 +83,12 @@ namespace RetroBar.Controls
                 }
             }
 
-            if (msg == WM_WINDOWPOSCHANGING && (_seekPopupMovedTo != null || _seekPopupPinned))
+            if (msg == WM_WINDOWPOSCHANGING && (movedTo != null || _seekPopupPinned))
             {
                 WINDOWPOS position = Marshal.PtrToStructure<WINDOWPOS>(lParam);
                 bool changed = false;
 
-                if (_seekPopupMovedTo is POINT moved && (position.Flags & SWP_NOMOVE) == 0 && (position.X != moved.X || position.Y != moved.Y))
+                if (movedTo is POINT moved && (position.Flags & SWP_NOMOVE) == 0 && (position.X != moved.X || position.Y != moved.Y))
                 {
                     position.X = moved.X;
                     position.Y = moved.Y;
@@ -239,9 +251,70 @@ namespace RetroBar.Controls
                 ApplySeekPopupTopmost();
             }
 
-            _seekPopupMovedTo = new POINT { X = _seekPopupDragWindow.X + dx, Y = _seekPopupDragWindow.Y + dy };
-            SetWindowPos(source.Handle, IntPtr.Zero, _seekPopupMovedTo.Value.X, _seekPopupMovedTo.Value.Y, 0, 0, SWP_NOSIZE | SWP_NOZORDER | SWP_NOACTIVATE);
-            RefreshSeekPopupMonitor(source);
+            // From here the window follows the pointer on a thread of its own, once for every refresh of the screen: a timer on this thread
+            // runs at the system timer's resolution (about 64 times a second), which showed on a 165 Hz screen.
+            _seekPopupDragTimer.Stop();
+            IntPtr handle = source.Handle;
+            POINT origin = _seekPopupDragWindow;
+            POINT start = _seekPopupDragStart;
+            var thread = new System.Threading.Thread(() => FollowPointer(handle, origin, start)) { IsBackground = true, Name = "SeekPopupDrag" };
+            thread.Start();
+        }
+
+        private void FollowPointer(IntPtr handle, POINT origin, POINT start)
+        {
+            DateTime lastMonitorCheck = DateTime.MinValue;
+            bool wasMoved = false;
+            while (_seekPopupDragging && (GetAsyncKeyState(VK_LBUTTON) & 0x8000) != 0)
+            {
+                if (DwmFlush() != 0)
+                {
+                    System.Threading.Thread.Sleep(4);
+                }
+
+                GetCursorPos(out POINT now);
+                var target = new POINT { X = origin.X + now.X - start.X, Y = origin.Y + now.Y - start.Y };
+                lock (_seekPopupDragLock)
+                {
+                    if (!_seekPopupDragging)
+                    {
+                        break;
+                    }
+
+                    _seekPopupMovedTo = target;
+                }
+
+                SetWindowPos(handle, IntPtr.Zero, target.X, target.Y, 0, 0, SWP_NOSIZE | SWP_NOZORDER | SWP_NOACTIVATE);
+                wasMoved = true;
+
+                if (DateTime.UtcNow - lastMonitorCheck > TimeSpan.FromMilliseconds(100))
+                {
+                    lastMonitorCheck = DateTime.UtcNow;
+                    Dispatcher.BeginInvoke(new Action(() =>
+                    {
+                        if (SeekPopup.IsOpen && PresentationSource.FromVisual(SeekPopupRoot) is HwndSource source)
+                        {
+                            RefreshSeekPopupMonitor(source);
+                        }
+                    }), DispatcherPriority.Background);
+                }
+            }
+
+            if (wasMoved)
+            {
+                Dispatcher.BeginInvoke(new Action(() =>
+                {
+                    if (SeekPopup.IsOpen && PresentationSource.FromVisual(SeekPopupRoot) is HwndSource source)
+                    {
+                        RefreshSeekPopupMonitor(source);
+                    }
+                }), DispatcherPriority.Background);
+            }
+
+            lock (_seekPopupDragLock)
+            {
+                _seekPopupDragging = false;
+            }
         }
 
         // A popup's window is above every other window by default. Once it has been moved or set to be on top it is a window of its own
