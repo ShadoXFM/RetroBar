@@ -1,6 +1,7 @@
 using System;
 using System.Linq;
 using System.Collections.Generic;
+using System.Diagnostics;
 using System.Threading.Tasks;
 using System.Windows;
 using System.Windows.Controls;
@@ -57,6 +58,11 @@ namespace RetroBar.Controls
         // and dimmer.
         private const double LyricWordSoftEdge = 0.12;
         private const double LyricBackgroundScale = 0.85;
+
+        // The word being sung is brighter, up to this much of the way to white, which comes quickly as it starts and goes slowly after it.
+        private const double LyricGlowAmount = 0.5;
+        private const double LyricGlowRiseSeconds = 0.15;
+        private const double LyricGlowFallSeconds = 0.5;
         private Run[][] _lyricRuns;
 
         // A line being sung by word: its words, and how far each has got (not sung yet 0, being sung 1, sung 2).
@@ -67,6 +73,8 @@ namespace RetroBar.Controls
             public TextBlock Block;
             public byte[] States;
             public LinearGradientBrush[] Sweeps;
+            public double[] Glows;
+            public long LastTicks;
         }
 
         private readonly List<ActiveWordLine> _activeLines = new();
@@ -775,6 +783,8 @@ namespace RetroBar.Controls
                     Block = _lyricRows[line],
                     States = new byte[runs.Length],
                     Sweeps = new LinearGradientBrush[runs.Length],
+                    Glows = new double[runs.Length],
+                    LastTicks = Stopwatch.GetTimestamp(),
                 };
                 for (int i = 0; i < runs.Length; i++)
                 {
@@ -832,6 +842,17 @@ namespace RetroBar.Controls
             return Color.FromArgb((byte)(background ? 90 : 150), rest.R, rest.G, rest.B);
         }
 
+        // A colour part of the way to white (the transparency it has is kept).
+        private static Color Brightened(Color color, double glow)
+        {
+            double amount = glow * LyricGlowAmount;
+            return Color.FromArgb(
+                color.A,
+                (byte)Math.Round(color.R + (255 - color.R) * amount),
+                (byte)Math.Round(color.G + (255 - color.G) * amount),
+                (byte)Math.Round(color.B + (255 - color.B) * amount));
+        }
+
         private Color SungColor(bool background)
         {
             Color lit = AccentBrush()?.Color ?? NeutralColor() ?? Colors.White;
@@ -861,8 +882,11 @@ namespace RetroBar.Controls
             }
 
             TimeSpan position = EstimatedSeekPosition() + LyricsLead;
+            long now = Stopwatch.GetTimestamp();
             foreach (ActiveWordLine active in _activeLines)
             {
+                double elapsed = (now - active.LastTicks) / (double)Stopwatch.Frequency;
+                active.LastTicks = now;
                 for (int i = 0; i < active.Runs.Length; i++)
                 {
                     LyricWord word = active.Words[i];
@@ -870,11 +894,17 @@ namespace RetroBar.Controls
 
                     // Not sung yet (0), being sung (1), or sung (2).
                     byte state = position >= word.End ? (byte)2 : position >= word.Start ? (byte)1 : (byte)0;
+
+                    // How bright the word is: up while it is sung, back down after.
+                    double glow = active.Glows[i];
+                    double glowBefore = glow;
+                    glow = state == 1 ? Math.Min(1, glow + elapsed / LyricGlowRiseSeconds) : Math.Max(0, glow - elapsed / LyricGlowFallSeconds);
+                    active.Glows[i] = glow;
                     if (state == 1)
                     {
                         double progress = word.End > word.Start ? (position - word.Start).TotalSeconds / (word.End - word.Start).TotalSeconds : 1;
                         progress = Math.Clamp(progress, 0, 1);
-                        Color sung = SungColor(background);
+                        Color sung = Brightened(SungColor(background), glow);
                         Color unsung = UnsungColor(background);
                         LinearGradientBrush sweep = active.Sweeps[i] ??= new LinearGradientBrush
                         {
@@ -897,9 +927,9 @@ namespace RetroBar.Controls
                             active.Runs[i].Foreground = sweep;
                         }
                     }
-                    else if (active.States[i] != state)
+                    else if (active.States[i] != state || glow != glowBefore)
                     {
-                        active.Runs[i].Foreground = new SolidColorBrush(state == 2 ? SungColor(background) : UnsungColor(background));
+                        active.Runs[i].Foreground = new SolidColorBrush(state == 2 ? Brightened(SungColor(background), glow) : UnsungColor(background));
                     }
 
                     active.States[i] = state;
