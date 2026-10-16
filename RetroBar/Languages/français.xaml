@@ -9,6 +9,7 @@
     <s:String x:Key="notification_area">Zone de notifications</s:String>
     <s:String x:Key="general_heading">Généralités</s:String>
     <s:String x:Key="media_player_heading">Media Player</s:String>
+    <s:String x:Key="media_lyrics_lines">Lignes de _paroles affichées dans la fenêtre :</s:String>
     <s:String x:Key="show_vu_meter">Afficher le _vu-mètre derrière le titre</s:String>
     <s:String x:Key="show_media_player">Montrer les contrôles du lecteur media</s:String>
     <s:String x:Key="show_media_player_album_art">Afficher la p_ochette de l'album</s:String>

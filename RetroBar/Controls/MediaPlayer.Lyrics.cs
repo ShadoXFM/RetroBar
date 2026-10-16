@@ -21,7 +21,6 @@ namespace RetroBar.Controls
     public partial class MediaPlayer
     {
         // How many lines the window shows, and the room between them.
-        private const double LyricWindowLines = 8;
         private const double LyricRowGap = 2;
 
         // The room at each side of the lines, so they do not run to the edges of the row of controls.
@@ -30,7 +29,7 @@ namespace RetroBar.Controls
         // How far a line is from the current one gives its look; the last look is for every line further than that. The window shows eight
         // lines, and at the first and last lines all of them are on one side of the current one, so the blur goes that far; the lines
         // beyond are not shown (and do not get an effect, which would cost for nothing).
-        private const int LyricStyledDistance = 9;
+        private static int LyricStyledDistance => Settings.Instance.LyricLines + 1;
         private static readonly double[] LyricOpacity = { 1, 0.45, 0.3, 0.2 };
         private static readonly double[] LyricBlur = { 0, 2.2, 3, 3.8 };
 
@@ -112,7 +111,7 @@ namespace RetroBar.Controls
             double line = SeekArtistText.ActualHeight;
             if (line > 0)
             {
-                SeekLyricsHost.Height = Math.Round((line + LyricRowGap) * LyricWindowLines);
+                SeekLyricsHost.Height = Math.Round((line + LyricRowGap) * Settings.Instance.LyricLines);
                 _lyricRowUnit = line + LyricRowGap;
             }
 

@@ -282,6 +282,12 @@ namespace RetroBar.Controls
                 return;
             }
 
+            if (e.PropertyName == nameof(Settings.LyricLines))
+            {
+                Dispatcher.BeginInvoke(new Action(ApplyLyricsSetting));
+                return;
+            }
+
             if (e.PropertyName == nameof(Settings.ShowVuMeter))
             {
                 Dispatcher.BeginInvoke(new Action(ApplyVuMeterSetting));

@@ -158,6 +158,14 @@ namespace RetroBar.Utilities
             set => Set(ref _lyricsLeadMs, Math.Clamp(value, -3000, 3000));
         }
 
+        // How many lines of lyrics the media popup shows.
+        private int _lyricLines = 8;
+        public int LyricLines
+        {
+            get => _lyricLines;
+            set => Set(ref _lyricLines, Math.Clamp(value, 3, 14));
+        }
+
         private bool _showVuMeter = true;
         public bool ShowVuMeter
         {

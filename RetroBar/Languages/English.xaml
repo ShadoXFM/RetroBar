@@ -9,6 +9,7 @@
     <s:String x:Key="notification_area">Notification area</s:String>
     <s:String x:Key="general_heading">General</s:String>
     <s:String x:Key="media_player_heading">Media Player</s:String>
+    <s:String x:Key="media_lyrics_lines">Lines of _lyrics shown in the popup:</s:String>
     <s:String x:Key="show_vu_meter">Show the _VU meter behind the track text</s:String>
     <s:String x:Key="show_media_player">Show media player _controls</s:String>
     <s:String x:Key="show_media_player_album_art">Show album _art</s:String>

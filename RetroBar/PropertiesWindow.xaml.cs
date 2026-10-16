@@ -83,6 +83,7 @@ namespace RetroBar
             LoadLanguages();
             LoadOSSupport();
             LoadRows();
+            LoadLyricLines();
             LoadThemes();
             LoadWidth();
             LoadAppInfo();
@@ -189,6 +190,24 @@ namespace RetroBar
             for (int i = 1; i <= Settings.Instance.RowLimit; i++)
             {
                 cboRowCount.Items.Add(i.ToString());
+            }
+        }
+
+        private void LoadLyricLines()
+        {
+            for (int i = 3; i <= 14; i++)
+            {
+                cboLyricLines.Items.Add(i);
+            }
+
+            cboLyricLines.SelectedItem = Settings.Instance.LyricLines;
+        }
+
+        private void CboLyricLines_SelectionChanged(object sender, System.Windows.Controls.SelectionChangedEventArgs e)
+        {
+            if (cboLyricLines.SelectedItem is int lines)
+            {
+                Settings.Instance.LyricLines = lines;
             }
         }
 
