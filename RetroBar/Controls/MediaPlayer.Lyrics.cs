@@ -34,6 +34,11 @@ namespace RetroBar.Controls
         private static readonly double[] LyricOpacity = { 1, 0.45, 0.3, 0.2 };
         private static readonly double[] LyricBlur = { 0, 2.2, 3, 3.8 };
 
+        // The lines still to come have a darker shade of the cover's colour, which each line further away has less of: it goes into the dim
+        // gray the lines are (the first is the line next, and the share is of the colour, before the line is dimmed).
+        private const double LyricUpcomingDarken = 0.7;
+        private static readonly double[] LyricUpcomingShare = { 0, 0.8, 0.55, 0.35, 0.2, 0.1 };
+
         // The lines and the words come this much before their time (the lyrics are ahead of what is heard): a setting for every song,
         // which the media popup's right-click menu moves.
         private static TimeSpan LyricsLead => TimeSpan.FromMilliseconds(Settings.Instance.LyricsLeadMs);
@@ -301,6 +306,7 @@ namespace RetroBar.Controls
                 return;
             }
 
+            ApplyUpcomingColor();
             bool byWord = false;
             foreach (int line in _focusLines)
             {
@@ -640,6 +646,24 @@ namespace RetroBar.Controls
             }
         }
 
+        // The colour of a line that is the given number of lines ahead of the one sung: the text's own, or with a share of a darker shade of the
+        // cover's colour.
+        private static Color UpcomingColor(Color rest, SolidColorBrush accent, int ahead)
+        {
+            if (accent == null || ahead < 1)
+            {
+                return rest;
+            }
+
+            double share = LyricUpcomingShare[Math.Min(ahead, LyricUpcomingShare.Length - 1)];
+            Color a = accent.Color;
+            double dark = LyricUpcomingDarken;
+            return Color.FromRgb(
+                (byte)Math.Round(rest.R + (a.R * dark - rest.R) * share),
+                (byte)Math.Round(rest.G + (a.G * dark - rest.G) * share),
+                (byte)Math.Round(rest.B + (a.B * dark - rest.B) * share));
+        }
+
         // Puts the look of its distance from the lines in focus on a row, from the look of its distance from the ones that were.
         private void StyleLyricRow(int i, int index, int previous, int[] before, bool animate, int token)
         {
@@ -704,7 +728,7 @@ namespace RetroBar.Controls
             else if (fadingIn)
             {
                 // The blurred copy of what the row was fades out, and the sharp text fades in.
-                TextBlock ghost = AddLyricGhost(i, rest, oldBlur, oldOpacity);
+                TextBlock ghost = AddLyricGhost(i, UpcomingColor(rest, accentNow, previous != int.MinValue ? i - previous : 0), oldBlur, oldOpacity);
                 var ghostOut = new DoubleAnimation(oldOpacity, 0, LyricScroll);
                 ghostOut.Completed += (s, e) =>
                 {
@@ -765,9 +789,10 @@ namespace RetroBar.Controls
             {
                 if (animate && !wasFocus)
                 {
-                    var fade = new SolidColorBrush(rowRest);
+                    Color from = UpcomingColor(rowRest, accentNow, previous != int.MinValue ? i - previous : 0);
+                    var fade = new SolidColorBrush(from);
                     row.Foreground = fade;
-                    fade.BeginAnimation(SolidColorBrush.ColorProperty, new ColorAnimation(rowRest, accentNow.Color, LyricScroll));
+                    fade.BeginAnimation(SolidColorBrush.ColorProperty, new ColorAnimation(from, accentNow.Color, LyricScroll));
                 }
                 else
                 {
@@ -796,9 +821,32 @@ namespace RetroBar.Controls
                     fade.BeginAnimation(SolidColorBrush.ColorProperty, new ColorAnimation(accentNow.Color, dimmed, LyricColorFadeOut));
                 }
             }
+            else if (i > index && accentNow != null && neutral is Color upcomingRest)
+            {
+                row.Foreground = new SolidColorBrush(UpcomingColor(upcomingRest, accentNow, i - index));
+            }
             else
             {
                 row.ClearValue(TextBlock.ForegroundProperty);
+            }
+        }
+
+        // The lines to come take the shade of the cover's colour (it comes after the lines were styled, or changes with the track).
+        private void ApplyUpcomingColor()
+        {
+            if (_lyricRows == null || _shownLyricIndex == int.MinValue || NeutralColor() is not Color rest)
+            {
+                return;
+            }
+
+            SolidColorBrush accent = AccentBrush();
+            int last = Math.Min(_lyricRows.Length - 1, _shownLyricIndex + LyricStyledDistance + 1);
+            for (int i = Math.Max(0, _shownLyricIndex + 1); i <= last; i++)
+            {
+                if (!IsInFocus(i) && _lyricGhosts?[i] == null)
+                {
+                    _lyricRows[i].Foreground = new SolidColorBrush(UpcomingColor(rest, accent, i - _shownLyricIndex));
+                }
             }
         }
 
