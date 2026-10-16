@@ -349,8 +349,12 @@ namespace RetroBar.Controls
 
         private void OpenSeekPopupAnimated()
         {
-            SeekPopup.VerticalOffset = SeekPopupOffset;
-            _seekSlide.Show();
+            // The weather's forecast or the CPU temperature's graph, if one is open, slides away first (see HoverPopups).
+            HoverPopups.CloseThen(() =>
+            {
+                SeekPopup.VerticalOffset = SeekPopupOffset;
+                _seekSlide.Show();
+            });
         }
 
         // Gone at once, with no slide.

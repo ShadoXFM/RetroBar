@@ -43,6 +43,23 @@ namespace RetroBar.Utilities
             show();
         }
 
+        /// <summary>
+        /// For a popup that is not one of these (the media popup, opened by a click): if one of them is open it slides away first, and show
+        /// runs when it has gone, so they are not over one another.
+        /// </summary>
+        public static void CloseThen(Action show)
+        {
+            if (_open != null && _open.IsOpen)
+            {
+                _waiting = (null, show);
+                _waitingFor = _open;
+                _open.Hide();
+                return;
+            }
+
+            show();
+        }
+
         private static void OnClosed(PopupSlide closed)
         {
             if (_open == closed)
