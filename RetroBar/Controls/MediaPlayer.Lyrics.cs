@@ -481,12 +481,14 @@ namespace RetroBar.Controls
             return scroll;
         }
 
-        // How far a row is from the lines in focus (from the nearest of them): its look.
+        // How far a row is from the lines in focus (from the nearest of them): its look. The lines that have been sung (above) are one step
+        // further than the ones that are to come (below) at the same distance, so a line that loses focus goes to the dark, blurred look
+        // directly, not by the lighter one the next line has.
         private static int DistanceToFocus(int[] focus, int row, int fallback)
         {
             if (focus == null || focus.Length == 0)
             {
-                return Math.Abs(row - fallback);
+                return Math.Abs(row - fallback) + (row < fallback ? 1 : 0);
             }
 
             int nearest = int.MaxValue;
@@ -495,7 +497,7 @@ namespace RetroBar.Controls
                 nearest = Math.Min(nearest, Math.Abs(row - line));
             }
 
-            return nearest;
+            return nearest + (row < focus[0] ? 1 : 0);
         }
 
         private bool IsInFocus(int row) => Array.IndexOf(_focusLines, row) >= 0;
