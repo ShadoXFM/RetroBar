@@ -1,6 +1,7 @@
 using System;
 using System.Linq;
 using System.Collections.Generic;
+using System.Diagnostics;
 using System.Threading.Tasks;
 using System.Windows;
 using System.Windows.Controls;
@@ -56,6 +57,7 @@ namespace RetroBar.Controls
         // each, and the one being sung is a pixel higher (the timer follows the position between the popup's polls, which are too far apart for
         // words). Background vocals are smaller and dimmer.
         private const double LyricWordSoftEdge = 0.12;
+        private const double LyricLiftSeconds = 0.12;
         private const double LyricBackgroundScale = 0.85;
         private Run[][] _lyricRuns;
         private int[][] _lyricRunOffsets;
@@ -69,9 +71,9 @@ namespace RetroBar.Controls
             public TextBlock Block;
             public byte[] States;
             public LinearGradientBrush[] Sweeps;
-            public TextEffect Lift;
-            public TranslateTransform Move;
-            public int Lifted = -1;
+            public TextEffect[] Lifts;
+            public double[] Levels;
+            public long LastTicks;
         }
 
         private readonly List<ActiveWordLine> _activeLines = new();
@@ -786,15 +788,15 @@ namespace RetroBar.Controls
                     Block = _lyricRows[line],
                     States = new byte[runs.Length],
                     Sweeps = new LinearGradientBrush[runs.Length],
+                    Lifts = new TextEffect[runs.Length],
+                    Levels = new double[runs.Length],
+                    LastTicks = Stopwatch.GetTimestamp(),
                 };
                 for (int i = 0; i < runs.Length; i++)
                 {
                     runs[i].Foreground = new SolidColorBrush(UnsungColor(words[i].IsBackground));
                 }
 
-                // The word being sung is a pixel higher: a text effect over its letters, which moves as the singing does.
-                active.Move = new TranslateTransform();
-                active.Lift = new TextEffect { Transform = active.Move, PositionStart = 0, PositionCount = 0 };
                 _activeLines.Add(active);
             }
 
@@ -814,9 +816,12 @@ namespace RetroBar.Controls
             CompositionTarget.Rendering -= LyricWordTimer_OnTick;
             foreach (ActiveWordLine active in _activeLines)
             {
-                if (active.Lifted >= 0)
+                for (int i = 0; i < active.Lifts.Length; i++)
                 {
-                    active.Runs[active.Lifted].TextEffects.Remove(active.Lift);
+                    if (active.Lifts[i] != null)
+                    {
+                        active.Runs[i].TextEffects.Remove(active.Lifts[i]);
+                    }
                 }
             }
 
@@ -883,9 +888,12 @@ namespace RetroBar.Controls
             }
 
             TimeSpan position = EstimatedSeekPosition() + LyricsLead;
+            long now = Stopwatch.GetTimestamp();
             foreach (ActiveWordLine active in _activeLines)
             {
-                int lifted = -1;
+                double step = (now - active.LastTicks) / (double)Stopwatch.Frequency / LyricLiftSeconds;
+                active.LastTicks = now;
+                bool lifting = false;
                 for (int i = 0; i < active.Runs.Length; i++)
                 {
                     LyricWord word = active.Words[i];
@@ -919,11 +927,6 @@ namespace RetroBar.Controls
                         {
                             active.Runs[i].Foreground = sweep;
                         }
-
-                        if (!background)
-                        {
-                            lifted = i;
-                        }
                     }
                     else if (active.States[i] != state)
                     {
@@ -931,32 +934,56 @@ namespace RetroBar.Controls
                     }
 
                     active.States[i] = state;
+
+                    // The word being sung is a pixel higher: it rises as it starts and settles back as it ends.
+                    double target = state == 1 && !background ? 1 : 0;
+                    double level = active.Levels[i];
+                    if (level != target)
+                    {
+                        level = target > level ? Math.Min(target, level + step) : Math.Max(target, level - step);
+                        active.Levels[i] = level;
+                        LiftWord(active, i, level);
+                        lifting = true;
+                    }
                 }
 
-                if (lifted != active.Lifted)
+                if (lifting)
                 {
-                    int previousLifted = active.Lifted;
-                    active.Lifted = lifted;
-                    if (previousLifted >= 0)
-                    {
-                        active.Runs[previousLifted].TextEffects.Remove(active.Lift);
-                    }
-
-                    if (lifted >= 0)
-                    {
-                        // On the run of the word itself (a text effect on the block is ignored by a block made of runs), and at once: a
-                        // single pixel is not eased in. Its positions count from the start of the block as text pointers do, which count
-                        // the start and the end of every run too: the letters of run n begin 2n + 1 after where they are in the text.
-                        active.Move.Y = -1 / GetSeekDpi().DpiScaleY;
-                        active.Lift.PositionStart = active.Offsets[lifted] + 2 * lifted + 1;
-                        active.Lift.PositionCount = active.Runs[lifted].Text.Length;
-                        active.Runs[lifted].TextEffects.Add(active.Lift);
-                    }
-
-                    // A change of the effects is not drawn until the block is laid out again.
+                    // A change of a text effect is not drawn until the block is laid out again.
                     active.Block.InvalidateMeasure();
                 }
             }
+        }
+
+        // The lift of a word (0 to 1): a text effect on the run of the word itself (one on the block is ignored by a block made of runs).
+        // Its positions count from the start of the block as text pointers do, which count the start and the end of every run too: the
+        // letters of run n begin 2n + 1 after where they are in the text.
+        private void LiftWord(ActiveWordLine active, int word, double level)
+        {
+            if (level <= 0)
+            {
+                if (active.Lifts[word] != null)
+                {
+                    active.Runs[word].TextEffects.Remove(active.Lifts[word]);
+                    active.Lifts[word] = null;
+                }
+
+                return;
+            }
+
+            if (active.Lifts[word] == null)
+            {
+                active.Lifts[word] = new TextEffect
+                {
+                    Transform = new TranslateTransform(),
+                    PositionStart = active.Offsets[word] + 2 * word + 1,
+                    PositionCount = active.Runs[word].Text.Length,
+                };
+                active.Runs[word].TextEffects.Add(active.Lifts[word]);
+            }
+
+            double eased = level * level * (3 - 2 * level);
+            ((TranslateTransform)active.Lifts[word].Transform).Y = -eased / GetSeekDpi().DpiScaleY;
         }
 
         // The setting (Properties window, right-click menu): off takes the lyrics away; on asks for those of what is playing.
