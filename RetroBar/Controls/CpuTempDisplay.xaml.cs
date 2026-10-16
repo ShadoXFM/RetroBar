@@ -172,6 +172,9 @@ namespace RetroBar.Controls
 
             _graphOpenTimer ??= MakeTimer(GraphOpenDelay, OpenGraph);
             _graphOpenTimer.Stop();
+
+            // Going from the weather's forecast to this is quick; it is the rest on the widget that waits.
+            _graphOpenTimer.Interval = HoverPopups.AnyOpen ? HoverPopups.SwitchDelay : GraphOpenDelay;
             _graphOpenTimer.Start();
         }
 

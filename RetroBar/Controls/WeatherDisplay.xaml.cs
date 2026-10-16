@@ -133,6 +133,9 @@ namespace RetroBar.Controls
 
             _forecastOpenTimer ??= MakeTimer(ForecastOpenDelay, () => OpenForecast());
             _forecastOpenTimer.Stop();
+
+            // Going from the CPU temperature's graph to this is quick; it is the rest on the widget that waits.
+            _forecastOpenTimer.Interval = HoverPopups.AnyOpen ? HoverPopups.SwitchDelay : ForecastOpenDelay;
             _forecastOpenTimer.Start();
         }
 

@@ -15,6 +15,12 @@ namespace RetroBar.Utilities
         private static PopupSlide _waitingFor;
         private static readonly HashSet<PopupSlide> Known = new();
 
+        /// <summary>The delay before a popup opens when another one is open: the pointer went from one widget to the other, so it is quick.</summary>
+        public static readonly TimeSpan SwitchDelay = TimeSpan.FromMilliseconds(30);
+
+        /// <summary>True while one of the popups is open (sliding in or away included).</summary>
+        public static bool AnyOpen => _open != null && _open.IsOpen;
+
         /// <summary>Opens the popup of a slide (show does it: places it and calls Show), after the one that is open has slid away.</summary>
         public static void Open(PopupSlide slide, Action show)
         {

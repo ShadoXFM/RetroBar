@@ -336,10 +336,14 @@ namespace RetroBar.Controls
             SeekSlider.AddHandler(UIElement.PreviewMouseLeftButtonDownEvent, new MouseButtonEventHandler(SeekSlider_OnPreviewMouseDown), true);
             _seekSlide = new PopupSlide(SeekPopup, SeekPopupRoot, SeekSlideHost, () => SlideDirection.Down, () =>
             {
-                // How far the popup's window reaches below the taskbar's top (the shadow's room under the frame).
-                return Window.GetWindow(this) is Taskbar taskbar
-                    ? Math.Max(0, (GetSeekFrameBottom(taskbar) ?? 0) + SeekFrameShadowRoom)
-                    : null;
+                if (Window.GetWindow(this) is not Taskbar taskbar)
+                {
+                    return null;
+                }
+
+                // How far the popup's window reaches below the taskbar's top: measured from the two windows on the screen (the popup is
+                // placed in whole pixels, so the layout can be a pixel out), or else from the layout (the shadow's room under the frame).
+                return PopupSlide.MeasureOverlap(SeekPopupRoot, taskbar) ?? Math.Max(0, (GetSeekFrameBottom(taskbar) ?? 0) + SeekFrameShadowRoom);
             });
         }
 
