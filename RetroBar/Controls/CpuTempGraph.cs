@@ -64,7 +64,8 @@ namespace RetroBar.Controls
 
             Brush faint = foreground.Clone();
             faint.Opacity = 0.3;
-            var gridPen = new Pen(faint, 1);
+            // One device pixel thick, and on whole pixels whatever the DPI: at 125% a line of one DIP, or one at half a DIP, is smeared over two.
+            var gridPen = new Pen(faint, 1 / dpi);
             gridPen.Freeze();
 
             double right = width - Pad;
@@ -103,7 +104,7 @@ namespace RetroBar.Controls
             double left = Math.Ceiling((LabelMargin + widest + LabelGap) * dpi) / dpi;
             foreach ((double value, FormattedText label) in marks)
             {
-                double y = Math.Round(Y(value)) + 0.5;
+                double y = (Math.Round(Y(value) * dpi) + 0.5) / dpi;
                 dc.DrawLine(gridPen, new Point(left, y), new Point(right, y));
                 dc.DrawText(label, new Point(Snap(LabelMargin + widest - label.Width), Snap(y - label.Height / 2)));
             }
@@ -117,22 +118,22 @@ namespace RetroBar.Controls
             double plotLeft = Math.Round(left * dpi) / dpi;
             double X(DateTime utc) => plotLeft + (1 - (now - utc).TotalSeconds / CpuTemperatureHistory.Span.TotalSeconds) * plot;
 
-            // The time, at the third minutes of the clock that are in the span.
+            // The time, at the minutes of the clock that are in the span (and the one before, whose label is still partly in, and the one
+            // next, whose label comes in from the right edge before its time): the labels scroll with the time and are cut at the left edge
+            // of the graph and at its right edge (now), not left out once they do not fit.
             DateTime nowLocal = now.ToLocalTime();
-            DateTime tick = new DateTime(nowLocal.Year, nowLocal.Month, nowLocal.Day, nowLocal.Hour, nowLocal.Minute / TickMinutes * TickMinutes, 0, DateTimeKind.Local);
+            DateTime tick = new DateTime(nowLocal.Year, nowLocal.Month, nowLocal.Day, nowLocal.Hour, nowLocal.Minute / TickMinutes * TickMinutes, 0, DateTimeKind.Local)
+                .AddMinutes(TickMinutes);
             double labelHalf = Text("00:00").Width / 2;
-            for (; (nowLocal - tick) <= CpuTemperatureHistory.Span; tick = tick.AddMinutes(-TickMinutes))
+            dc.PushClip(new RectangleGeometry(new Rect(plotLeft, bottom, plot, height - bottom)));
+            for (; (nowLocal - tick) <= CpuTemperatureHistory.Span + TimeSpan.FromMinutes(TickMinutes); tick = tick.AddMinutes(-TickMinutes))
             {
                 double x = (Math.Round(X(tick.ToUniversalTime()) * dpi) + 0.5) / dpi;
-                if (x < plotLeft)
-                {
-                    continue;
-                }
-
-                FormattedText label = Text(TimeText(tick));
                 dc.DrawLine(gridPen, new Point(x, bottom), new Point(x, bottom + 3));
-                dc.DrawText(label, new Point(Math.Min(Snap(x - labelHalf), width - label.Width), Snap(bottom + 4)));
+                dc.DrawText(Text(TimeText(tick)), new Point(Snap(x - labelHalf), Snap(bottom + 4)));
             }
+
+            dc.Pop();
 
             var line = new StreamGeometry();
             using (StreamGeometryContext context = line.Open())
