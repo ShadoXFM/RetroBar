@@ -57,7 +57,7 @@ namespace RetroBar.Controls
         // each, and the one being sung is two pixels higher (the timer follows the position between the popup's polls, which are too far apart for
         // words). Background vocals are smaller and dimmer.
         private const double LyricWordSoftEdge = 0.12;
-        private const double LyricLiftSeconds = 0.25;
+        private const double LyricLiftSeconds = 0.5;
         private const double LyricLiftPixels = 2;
         private const double LyricBackgroundScale = 0.85;
         private Run[][] _lyricRuns;
