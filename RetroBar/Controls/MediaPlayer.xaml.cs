@@ -515,6 +515,52 @@ namespace RetroBar.Controls
 
         private bool _albumArtIsAppIcon;
 
+        private static readonly System.Runtime.CompilerServices.ConditionalWeakTable<ImageSource, object> LogoImages = new();
+
+        // A cover is opaque; a logo has a good part of it clear (a tenth of its pixels, at the least).
+        private static bool IsTransparentLogo(ImageSource image)
+        {
+            if (image is not System.Windows.Media.Imaging.BitmapSource bitmap)
+            {
+                return false;
+            }
+
+            if (LogoImages.TryGetValue(bitmap, out object known))
+            {
+                return known != null;
+            }
+
+            bool logo = false;
+            try
+            {
+                var converted = new System.Windows.Media.Imaging.FormatConvertedBitmap(bitmap, PixelFormats.Pbgra32, null, 0);
+                int width = converted.PixelWidth;
+                int height = converted.PixelHeight;
+                if (width > 0 && height > 0 && width * height <= 512 * 512)
+                {
+                    var pixels = new byte[width * height * 4];
+                    converted.CopyPixels(pixels, width * 4, 0);
+                    int clear = 0;
+                    for (int i = 3; i < pixels.Length; i += 4)
+                    {
+                        if (pixels[i] < 200)
+                        {
+                            clear++;
+                        }
+                    }
+
+                    logo = clear * 10 >= width * height;
+                }
+            }
+            catch (Exception ex) when (ex is NotSupportedException or InvalidOperationException or ArgumentException)
+            {
+                // Taken as a cover.
+            }
+
+            LogoImages.Add(bitmap, logo ? new object() : null);
+            return logo;
+        }
+
         private static readonly System.Runtime.CompilerServices.ConditionalWeakTable<ImageSource, object> BlankImages = new();
 
         // The image, or null if it has nothing to see (all its pixels clear).
@@ -573,8 +619,9 @@ namespace RetroBar.Controls
             ImageSource cover = Settings.Instance.ShowMediaPlayerAlbumArt ? Visible(_sessionManager?.Thumbnail) : null;
             ImageSource art = cover ?? (Settings.Instance.ShowMediaPlayerAlbumArt ? Visible(sourceWindow?.Icon) : null);
 
-            // The app's icon in place of a cover (VLC's cone, foobar2000's logo): it has clear parts, which the VU meter shows behind.
-            _albumArtIsAppIcon = cover == null && art != null;
+            // The app's icon in place of a cover, or a logo the player gives as the cover (VLC's cone, foobar2000's logo): it has clear parts,
+            // which the VU meter shows behind.
+            _albumArtIsAppIcon = art != null && (cover == null || IsTransparentLogo(cover));
 
             AlbumArtImage.Source = art;
             // Hidden, not Visible/Collapsed: it still reserves its normal layout slot (used
