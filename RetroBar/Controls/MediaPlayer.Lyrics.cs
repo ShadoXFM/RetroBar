@@ -515,21 +515,28 @@ namespace RetroBar.Controls
             double oldOpacity = LyricOpacityAt(oldDistance);
             double oldBlur = LyricBlurAt(oldDistance);
 
+            // A line that loses focus keeps its brightness while it fades (the colour goes from the cover's to the dimmed gray it ends up as,
+            // directly, as an opaque colour: a colour and a brightness changing together pass by a lighter gray on the way), and takes
+            // its new brightness when the fade is done.
+            bool fadingOut = animate && wasFocus && !nowFocus && AccentBrush() != null && NeutralColor() != null;
             row.BeginAnimation(OpacityProperty, null);
-            row.Opacity = opacity;
+            row.Opacity = fadingOut ? 1 : opacity;
 
             if (blur > 0 || oldBlur > 0)
 
             {
                 bool moves = animate && (oldBlur != blur || oldOpacity != opacity);
-                bool fadingOut = wasFocus && !nowFocus;
                 Duration time = fadingOut ? LyricColorFadeOut : LyricScroll;
                 var effect = new BlurEffect { Radius = moves ? oldBlur : blur, RenderingBias = RenderingBias.Performance };
                 row.Effect = effect;
                 if (moves)
                 {
                     IEasingFunction ease = fadingOut ? null : new QuadraticEase { EasingMode = EasingMode.EaseOut };
-                    row.BeginAnimation(OpacityProperty, new DoubleAnimation(oldOpacity, opacity, time) { EasingFunction = ease });
+                    if (!fadingOut)
+                    {
+                        row.BeginAnimation(OpacityProperty, new DoubleAnimation(oldOpacity, opacity, time) { EasingFunction = ease });
+                    }
+
                     var radius = new DoubleAnimation(oldBlur, blur, time) { EasingFunction = ease };
                     if (blur == 0)
                     {
@@ -585,15 +592,22 @@ namespace RetroBar.Controls
                     row.Foreground = accent;
                 }
             }
-            else if (wasFocus && !nowFocus && animate && AccentBrush() is SolidColorBrush beforeBrush && neutral is Color back)
+            else if (fadingOut && AccentBrush() is SolidColorBrush beforeBrush && neutral is Color back)
             {
+                // What the text will look like when it has its new brightness: its color over the popup's ground.
+                Color ground = (TryFindResource("ButtonFace") as SolidColorBrush)?.Color ?? Color.FromRgb(18, 16, 20);
+                Color end = Color.FromRgb(
+                    (byte)Math.Round(ground.R + (back.R - ground.R) * opacity),
+                    (byte)Math.Round(ground.G + (back.G - ground.G) * opacity),
+                    (byte)Math.Round(ground.B + (back.B - ground.B) * opacity));
                 var fade = new SolidColorBrush(beforeBrush.Color);
                 row.Foreground = fade;
-                var animation = new ColorAnimation(beforeBrush.Color, back, LyricColorFadeOut);
+                var animation = new ColorAnimation(beforeBrush.Color, end, LyricColorFadeOut);
                 animation.Completed += (s, e) =>
                 {
                     if (token == _lyricScrollToken && !IsInFocus(i))
                     {
+                        row.Opacity = opacity;
                         row.ClearValue(TextBlock.ForegroundProperty);
                     }
                 };
