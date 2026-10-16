@@ -584,7 +584,11 @@ namespace RetroBar.Controls
             // one by one instead, see BeginLyricWords; the one that was in focus, all lit, fades out whole.)
             Color? neutral = NeutralColor();
             Run[] runs = _lyricRuns?[i];
-            if (runs != null)
+
+            // A line synced by word that loses focus fades from the look each of its words has at that moment (the background vocals dimmer
+            // than the others, a word that is being sung half way), not from its whole being in the cover's colour.
+            ActiveWordLine fadingWords = fadingOut && runs != null ? _activeLines.FirstOrDefault(active => ReferenceEquals(active.Block, row)) : null;
+            if (runs != null && fadingWords == null)
             {
                 foreach (Run run in runs)
                 {
@@ -618,18 +622,46 @@ namespace RetroBar.Controls
                     (byte)Math.Round(ground.R + (back.R - ground.R) * opacity),
                     (byte)Math.Round(ground.G + (back.G - ground.G) * opacity),
                     (byte)Math.Round(ground.B + (back.B - ground.B) * opacity));
-                var fade = new SolidColorBrush(beforeBrush.Color);
-                row.Foreground = fade;
-                var animation = new ColorAnimation(beforeBrush.Color, end, LyricColorFadeOut);
-                animation.Completed += (s, e) =>
+                if (fadingWords != null)
                 {
-                    if (token == _lyricScrollToken && !IsInFocus(i))
+                    row.ClearValue(TextBlock.ForegroundProperty);
+                    TimeSpan now = EstimatedSeekPosition() + LyricsLead;
+                    for (int w = 0; w < runs.Length; w++)
                     {
-                        row.Opacity = opacity;
-                        row.ClearValue(TextBlock.ForegroundProperty);
+                        int word = w;
+                        Color from = WordColor(fadingWords, word, now);
+                        var wordBrush = new SolidColorBrush(from);
+                        runs[word].Foreground = wordBrush;
+                        var wordFade = new ColorAnimation(from, end, LyricColorFadeOut);
+                        wordFade.Completed += (s, e) =>
+                        {
+                            if (token == _lyricScrollToken && !IsInFocus(i))
+                            {
+                                runs[word].ClearValue(TextElement.ForegroundProperty);
+                                if (word == 0)
+                                {
+                                    row.Opacity = opacity;
+                                }
+                            }
+                        };
+                        wordBrush.BeginAnimation(SolidColorBrush.ColorProperty, wordFade);
                     }
-                };
-                fade.BeginAnimation(SolidColorBrush.ColorProperty, animation);
+                }
+                else
+                {
+                    var fade = new SolidColorBrush(beforeBrush.Color);
+                    row.Foreground = fade;
+                    var animation = new ColorAnimation(beforeBrush.Color, end, LyricColorFadeOut);
+                    animation.Completed += (s, e) =>
+                    {
+                        if (token == _lyricScrollToken && !IsInFocus(i))
+                        {
+                            row.Opacity = opacity;
+                            row.ClearValue(TextBlock.ForegroundProperty);
+                        }
+                    };
+                    fade.BeginAnimation(SolidColorBrush.ColorProperty, animation);
+                }
             }
             else
             {
@@ -737,6 +769,30 @@ namespace RetroBar.Controls
             }
 
             _activeLines.Clear();
+        }
+
+        // The colour a word of a line being sung has at a moment: not sung yet, sung, or part of the way (the colour the sweep has there).
+        private Color WordColor(ActiveWordLine active, int word, TimeSpan position)
+        {
+            LyricWord w = active.Words[word];
+            Color unsung = UnsungColor(w.IsBackground);
+            Color sung = SungColor(w.IsBackground);
+            if (position >= w.End)
+            {
+                return sung;
+            }
+
+            if (position < w.Start || w.End <= w.Start)
+            {
+                return position < w.Start ? unsung : sung;
+            }
+
+            double progress = Math.Clamp((position - w.Start).TotalSeconds / (w.End - w.Start).TotalSeconds, 0, 1);
+            return Color.FromArgb(
+                (byte)Math.Round(unsung.A + (sung.A - unsung.A) * progress),
+                (byte)Math.Round(unsung.R + (sung.R - unsung.R) * progress),
+                (byte)Math.Round(unsung.G + (sung.G - unsung.G) * progress),
+                (byte)Math.Round(unsung.B + (sung.B - unsung.B) * progress));
         }
 
         // What is not sung yet is the text's own colour a little faded, what has been the cover's colour: the background vocals both dimmer.
