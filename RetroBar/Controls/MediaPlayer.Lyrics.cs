@@ -41,7 +41,7 @@ namespace RetroBar.Controls
         private static readonly Duration LyricScroll = new(TimeSpan.FromMilliseconds(320));
         // A line that loses focus fades out - the cover's colour to its dimmed gray, and the blur, which is stepped (a blur that is drawn again
         // for every frame made the fade choppy) - in a straight line, shortly.
-        private static readonly Duration LyricColorFadeOut = new(TimeSpan.FromMilliseconds(350));
+        private static readonly Duration LyricColorFadeOut = new(TimeSpan.FromMilliseconds(600));
         private static readonly TimeSpan LyricsRetry = TimeSpan.FromSeconds(30);
 
         // The window fades out at its top and bottom edges, so a line cut off there reads as scrolled out of view, not as a stray mark.
@@ -539,13 +539,13 @@ namespace RetroBar.Controls
                     AnimationTimeline radius;
                     if (fadingOut)
                     {
-                        // The blur grows in a few steps, so that it is drawn again a few times and not for every frame.
-                        const int steps = 5;
+                        // The blur grows in small steps, so that it is drawn again a dozen times and not for every frame.
+                        const int steps = 12;
                         var keyed = new DoubleAnimationUsingKeyFrames();
                         keyed.KeyFrames.Add(new DiscreteDoubleKeyFrame(oldBlur, KeyTime.FromPercent(0)));
                         for (int step = 1; step <= steps; step++)
                         {
-                            keyed.KeyFrames.Add(new DiscreteDoubleKeyFrame(oldBlur + (blur - oldBlur) * step / steps, KeyTime.FromPercent((step - 1) / (double)steps + 0.0001)));
+                            keyed.KeyFrames.Add(new DiscreteDoubleKeyFrame(oldBlur + (blur - oldBlur) * step / steps, KeyTime.FromPercent((step - 1) / (double)steps * 0.92 + 0.0001)));
                         }
 
                         keyed.Duration = time;
