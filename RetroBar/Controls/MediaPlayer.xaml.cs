@@ -353,6 +353,7 @@ namespace RetroBar.Controls
 
             Visibility = Visibility.Visible;
             SetIsMediaPlaying(true);
+            PrefetchLyrics();
             bool isPlaying = _sessionManager.PlaybackState == MediaPlaybackState.Playing;
             UpdateVisualizerActiveState(isPlaying);
 

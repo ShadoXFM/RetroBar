@@ -382,7 +382,69 @@ namespace RetroBar.Controls
             StopLyricWords();
         }
 
-        private async Task LoadLyricsAsync(string key, string artist, string title, TimeSpan duration)
+        // What asking for the lyrics of a track gave: the lines (none if the track has none), or that the asking failed.
+        private sealed record LyricsFetch(LyricLine[] Lines, bool Failed);
+
+        private string _lyricsFetchKey;
+        private Task<LyricsFetch> _lyricsFetch;
+
+        // The lyrics are asked for as soon as a track plays (see UpdateFromSession), not when the popup is first opened for it, which left a
+        // moment with nothing or the last track's lyrics. What is asked for is kept for the track, whether the popup is open or not.
+        private Task<LyricsFetch> GetLyricsFetch(string key, string artist, string title, TimeSpan duration)
+        {
+            bool failed = _lyricsFetch is { IsCompleted: true } done && done.Result.Failed;
+            if (key != _lyricsFetchKey || _lyricsFetch == null || failed)
+            {
+                _lyricsFetchKey = key;
+                _lyricsFetch = FetchLyricsAsync(artist, title, duration);
+            }
+
+            return _lyricsFetch;
+        }
+
+        private int _lyricsPrefetchAttempts;
+
+        // Called when what plays changes. The search needs the length of the track, which the source may give a moment after its title.
+        private void PrefetchLyrics()
+        {
+            if (!Settings.Instance.ShowMediaPopupLyrics || _sessionManager == null || !_sessionManager.HasSession
+                || string.IsNullOrEmpty(_sessionManager.Title) || !IsSpotify(_sessionManager.SourceAppUserModelId))
+            {
+                return;
+            }
+
+            string artist = _sessionManager.Artist;
+            string title = _sessionManager.Title;
+            string key = $"{artist}|{title}";
+            if (key == _lyricsFetchKey)
+            {
+                _lyricsPrefetchAttempts = 0;
+                return;
+            }
+
+            TimeSpan duration = _sessionManager.GetTimeline().Duration;
+            if (duration <= TimeSpan.Zero)
+            {
+                if (_lyricsPrefetchAttempts++ < 20)
+                {
+                    _ = Task.Delay(500).ContinueWith(_ => Dispatcher.BeginInvoke(new Action(PrefetchLyrics)));
+                }
+
+                return;
+            }
+
+            _lyricsPrefetchAttempts = 0;
+
+            // The last track's lyrics are not shown for this one, if the popup is opened before these arrive.
+            if (_lyricsKey != null && _lyricsKey != key)
+            {
+                ResetLyrics();
+            }
+
+            _ = GetLyricsFetch(key, artist, title, duration);
+        }
+
+        private static async Task<LyricsFetch> FetchLyricsAsync(string artist, string title, TimeSpan duration)
         {
             LyricsResult spicy = null;
             if (SpicyLyricsClient.IsConfigured)
@@ -398,15 +460,23 @@ namespace RetroBar.Controls
                 }
             }
 
-            LyricLine[] lines;
             try
             {
-                lines = spicy?.Lines ?? await LyricsClient.GetAsync(artist, title, duration);
+                return new LyricsFetch(spicy?.Lines ?? await LyricsClient.GetAsync(artist, title, duration), false);
             }
             catch (Exception ex) when (ex is System.Net.Http.HttpRequestException or TaskCanceledException or System.Text.Json.JsonException)
             {
                 // The service is down, or there is no connection: nothing is shown, and it is asked again in a while.
                 ManagedShell.Common.Logging.ShellLogger.Debug($"MediaPlayer: lyrics not available now: {ex.Message}");
+                return new LyricsFetch(null, true);
+            }
+        }
+
+        private async Task LoadLyricsAsync(string key, string artist, string title, TimeSpan duration)
+        {
+            LyricsFetch fetch = await GetLyricsFetch(key, artist, title, duration);
+            if (fetch.Failed)
+            {
                 if (key == _lyricsKey)
                 {
                     SeekLyricsHost.Visibility = Visibility.Collapsed;
@@ -420,6 +490,8 @@ namespace RetroBar.Controls
 
                 return;
             }
+
+            LyricLine[] lines = fetch.Lines;
 
             // Back on the UI thread; the track may have changed while it was asked for.
             if (key != _lyricsKey)
@@ -1045,6 +1117,7 @@ namespace RetroBar.Controls
 
             if (Settings.Instance.ShowMediaPopupLyrics)
             {
+                PrefetchLyrics();
                 EnsureLyrics(_lastSeekDuration);
             }
             else
