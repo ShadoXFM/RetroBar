@@ -6,6 +6,7 @@
              xmlns:controls="clr-namespace:RetroBar.Controls">
     <UserControl.Resources>
         <converters:CpuTempShownToMonitorTagConverter x:Key="cpuTempShownToMonitorTagConverter" />
+        <converters:BoolToVisibilityConverter x:Key="boolToVisibilityConverter" />
     </UserControl.Resources>
     <Grid>
     <!-- Transparent background so the whole widget (not just its icon and text) takes the click that
@@ -58,10 +59,13 @@
                             Style="{DynamicResource TaskButtonThumbnail}"
                             MouseEnter="ForecastPopup_OnMouseEnter"
                             MouseLeave="ForecastPopup_OnMouseLeave">
-                <StackPanel>
+                <!-- Room round what is in the frame, as the media popup has: 10.4 DIP from the frame's edge to the text and the icons (the frame
+                     pads 3, the header 2 at the sides). -->
+                <StackPanel Margin="5.4,5.8,5.4,0.8"
+                            MinWidth="216">
                     <!-- Top: "Perpignan, France" + the country's flag, with the current temperature (bold)
                          beneath it on the left, and the weather icon large on the right across both lines. -->
-                    <Grid Margin="2,0,2,3">
+                    <Grid Margin="2,0,1.2,9">
                         <Grid.ColumnDefinitions>
                             <ColumnDefinition Width="*" />
                             <ColumnDefinition Width="Auto" />
@@ -79,25 +83,68 @@
                                            Foreground="{DynamicResource ButtonForeground}"
                                            VerticalAlignment="Center" />
                             </StackPanel>
-                            <TextBlock Text="{Binding WeatherTemp}"
+                            <TextBlock Text="{Binding WeatherHeadline}"
                                        Style="{DynamicResource GlobalFonts}"
                                        Foreground="{DynamicResource ButtonForeground}"
+                                       FontFamily="Tahoma"
+                                       FontSize="12"
                                        FontWeight="Bold"
-                                       FontSize="20"
-                                       Margin="0,6,0,0" />
+                                       Margin="0,4.5,0,0" />
                         </StackPanel>
+                        <!-- The drawing only, at the top right: no room round it but the widget's own. -->
                         <Rectangle Grid.Column="1"
-                                   Width="40"
-                                   Height="40"
-                                   Margin="12,0,-2,0"
+                                   Width="34"
+                                   Height="34"
+                                   Margin="12,0,0,0"
                                    Fill="{DynamicResource ButtonForeground}"
-                                   VerticalAlignment="Center"
+                                   VerticalAlignment="Top"
                                    RenderOptions.BitmapScalingMode="HighQuality">
                             <Rectangle.OpacityMask>
-                                <ImageBrush ImageSource="{Binding WeatherIconPath}" Stretch="Uniform" />
+                                <ImageBrush ImageSource="{Binding WeatherIconPath}"
+                                            Viewbox="{Binding WeatherIconBounds}"
+                                            ViewboxUnits="RelativeToBoundingBox"
+                                            Stretch="Uniform"
+                                            AlignmentX="Right"
+                                            AlignmentY="Top" />
                             </Rectangle.OpacityMask>
                         </Rectangle>
                     </Grid>
+            <!-- Two to a row, in two equal columns across the popup, like the columns of a table. -->
+                    <!-- The two columns reach the edges of the widget's content (the items' own room, which makes the gap between the columns, is
+                         taken back at the sides): each has its label at its left and its value at its right. -->
+                    <ItemsControl ItemsSource="{Binding DetailItems}"
+                                  Margin="-4,0,-3.2,6.4">
+                        <ItemsControl.ItemsPanel>
+                            <ItemsPanelTemplate>
+                                <UniformGrid Columns="2" />
+                            </ItemsPanelTemplate>
+                        </ItemsControl.ItemsPanel>
+                        <ItemsControl.ItemTemplate>
+                            <DataTemplate>
+                                <Grid Margin="6,0,6,1">
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="Auto" />
+                                        <ColumnDefinition Width="*" />
+                                    </Grid.ColumnDefinitions>
+                                    <TextBlock Grid.Column="0"
+                                               Text="{Binding Prefix}"
+                                               Style="{DynamicResource GlobalFonts}"
+                                               Foreground="{DynamicResource ButtonForeground}" />
+                                    <StackPanel Grid.Column="1"
+                                                Orientation="Horizontal"
+                                                HorizontalAlignment="Right">
+                                        <TextBlock Text="{Binding Value}"
+                                                   Style="{DynamicResource GlobalFonts}"
+                                                   Foreground="{DynamicResource ButtonForeground}"
+                                                   FontWeight="Bold" />
+                                        <TextBlock Text="{Binding Suffix}"
+                                                   Style="{DynamicResource GlobalFonts}"
+                                                   Foreground="{DynamicResource ButtonForeground}" />
+                                    </StackPanel>
+                                </Grid>
+                            </DataTemplate>
+                        </ItemsControl.ItemTemplate>
+                    </ItemsControl>
                     <!-- Etched separator between the current conditions and the forecast: a shadow line over a
                          highlight line, in the theme's own colors. -->
                     <StackPanel Margin="0,0,0,6"
@@ -105,24 +152,76 @@
                                 SnapsToDevicePixels="True">
                         <Rectangle Height="1"
                                    Fill="{DynamicResource ButtonShadow}" />
+                        <!-- The highlight line is a darker shade of it (the same as the menus' separators, see MenuSeparatorLine). -->
                         <Rectangle Height="1"
+                                   Opacity="0.5"
                                    Fill="{DynamicResource ButtonHighlight}" />
                     </StackPanel>
-                    <ItemsControl ItemsSource="{Binding Forecast}">
+                    <!-- The next hours: the time, the weather and the temperature of each, in equal columns. -->
+                    <ItemsControl ItemsSource="{Binding Hourly}"
+                                  Margin="0,0,0,2.4"
+                                  Visibility="{Binding HasHourly, Converter={StaticResource boolToVisibilityConverter}}">
+                        <ItemsControl.ItemsPanel>
+                            <ItemsPanelTemplate>
+                                <UniformGrid Rows="1" />
+                            </ItemsPanelTemplate>
+                        </ItemsControl.ItemsPanel>
                         <ItemsControl.ItemTemplate>
                             <DataTemplate>
-                                <DockPanel Margin="0,1">
-                                    <TextBlock DockPanel.Dock="Right"
-                                               Text="{Binding Range}"
+                                <StackPanel HorizontalAlignment="Center">
+                                    <TextBlock Text="{Binding Label}"
+                                               Style="{DynamicResource GlobalFonts}"
+                                               Foreground="{DynamicResource ButtonForeground}"
+                                               HorizontalAlignment="Center" />
+                                    <Rectangle Width="20"
+                                               Height="20"
+                                               Margin="0,2"
+                                               Fill="{DynamicResource ButtonForeground}"
+                                               HorizontalAlignment="Center"
+                                               RenderOptions.BitmapScalingMode="HighQuality">
+                                        <Rectangle.OpacityMask>
+                                            <ImageBrush ImageSource="{Binding IconPath}" Stretch="Uniform" />
+                                        </Rectangle.OpacityMask>
+                                    </Rectangle>
+                                    <TextBlock Text="{Binding Temp}"
                                                Style="{DynamicResource GlobalFonts}"
                                                Foreground="{DynamicResource ButtonForeground}"
                                                FontFamily="Tahoma"
                                                FontWeight="Bold"
-                                               TextAlignment="Left"
-                                               MinWidth="54"
-                                               Margin="4,0,2,0"
+                                               HorizontalAlignment="Center" />
+                                </StackPanel>
+                            </DataTemplate>
+                        </ItemsControl.ItemTemplate>
+                    </ItemsControl>
+                    <StackPanel Margin="0,4,0,6"
+                                UseLayoutRounding="True"
+                                SnapsToDevicePixels="True"
+                                Visibility="{Binding HasHourly, Converter={StaticResource boolToVisibilityConverter}}">
+                        <Rectangle Height="1"
+                                   Fill="{DynamicResource ButtonShadow}" />
+                        <!-- The highlight line is a darker shade of it (the same as the menus' separators, see MenuSeparatorLine). -->
+                        <Rectangle Height="1"
+                                   Opacity="0.5"
+                                   Fill="{DynamicResource ButtonHighlight}" />
+                    </StackPanel>
+                    <ItemsControl ItemsSource="{Binding Forecast}"
+                                  Grid.IsSharedSizeScope="True">
+                        <ItemsControl.ItemTemplate>
+                            <DataTemplate>
+                                <Grid Margin="0,1,1.6,1">
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="*" />
+                                        <ColumnDefinition Width="Auto" />
+                                        <ColumnDefinition Width="Auto" SharedSizeGroup="ForecastRange" />
+                                    </Grid.ColumnDefinitions>
+                                    <TextBlock x:Name="DayNameText"
+                                               Grid.Column="0"
+                                               Text="{Binding DayName}"
+                                               Style="{DynamicResource GlobalFonts}"
+                                               Foreground="{DynamicResource ButtonForeground}"
+                                               Margin="2,0,8,0"
                                                VerticalAlignment="Center" />
-                                    <Rectangle DockPanel.Dock="Right"
+                                    <Rectangle Grid.Column="1"
                                                Width="20"
                                                Height="20"
                                                Margin="0,0,8,0"
@@ -133,13 +232,15 @@
                                             <ImageBrush ImageSource="{Binding IconPath}" Stretch="Uniform" />
                                         </Rectangle.OpacityMask>
                                     </Rectangle>
-                                    <TextBlock x:Name="DayNameText"
-                                               Text="{Binding DayName}"
+                                    <TextBlock Grid.Column="2"
+                                               Text="{Binding Range}"
                                                Style="{DynamicResource GlobalFonts}"
                                                Foreground="{DynamicResource ButtonForeground}"
-                                               Margin="2,0,8,0"
+                                               FontFamily="Tahoma"
+                                               FontWeight="Bold"
+                                               TextAlignment="Left"
                                                VerticalAlignment="Center" />
-                                </DockPanel>
+                                </Grid>
                                 <DataTemplate.Triggers>
                                     <!-- Today's row is the bold one. -->
                                     <DataTrigger Binding="{Binding IsToday}" Value="True">

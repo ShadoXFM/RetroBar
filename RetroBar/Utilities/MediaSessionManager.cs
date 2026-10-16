@@ -122,6 +122,13 @@ namespace RetroBar.Utilities
         // Reset (_hasPositionEstimateBase = false) whenever the track/session changes, so a new
         // track doesn't inherit a stale baseline from whatever the previous one was doing.
         private bool _hasPositionEstimateBase;
+
+        // The estimate is read by the popup (the UI thread) and by the poll of the playback state (a timer's thread).
+        private readonly object _positionLock = new();
+
+        // The position the source reported when the estimate last started over: the estimate starts over when this changes (a seek, a source
+        // that reports its position), and runs on from where it is when it does not (a source that never reports one).
+        private TimeSpan _lastRawPosition;
         private TimeSpan _positionEstimateBase;
         private DateTimeOffset _positionEstimateBaseTime;
 
@@ -377,8 +384,16 @@ namespace RetroBar.Utilities
             }
 
             // A new track's own position starts fresh - don't let GetTimeline's smooth-position
-            // estimate keep extrapolating forward from whatever the previous track was doing.
-            _hasPositionEstimateBase = false;
+            // estimate keep extrapolating forward from whatever the previous track was doing. It starts now, at 0:00, not when the
+            // position is first read (which for a source that never reports one, as foobar2000, is when the popup is opened, and would
+            // lose all the track has played by then); a source that does report a position gives its own as soon as it is read.
+            lock (_positionLock)
+            {
+                _positionEstimateBase = TimeSpan.Zero;
+                _positionEstimateBaseTime = DateTimeOffset.Now;
+                _lastRawPosition = TimeSpan.Zero;
+                _hasPositionEstimateBase = true;
+            }
 
             try
             {
@@ -541,6 +556,30 @@ namespace RetroBar.Utilities
                 CanSeek = false;
             }
 
+            // The estimate of the position holds where it is while paused, and runs on from there when playing again (a source that never
+            // reports its position - foobar2000's - had its time back to 0:00 at every pause).
+            if (PlaybackState != previous && _hasPositionEstimateBase)
+            {
+                lock (_positionLock)
+                {
+                    DateTimeOffset now = DateTimeOffset.Now;
+                    if (previous == MediaPlaybackState.Playing)
+                    {
+                        _positionEstimateBase += now - _positionEstimateBaseTime;
+                    }
+
+                    _positionEstimateBaseTime = now;
+                }
+            }
+
+            // The position is read on every poll, not only while a popup shows it: its estimate runs on from the moments the source's own
+            // position changes, which are only seen when it is read (a popup opened a few seconds on found the source's last position,
+            // behind, and moved to the right one when it next changed).
+            if (_session != null && PlaybackState != MediaPlaybackState.None)
+            {
+                GetTimeline();
+            }
+
             // Polling calls this every 500ms regardless of whether anything changed - only
             // notify the UI (which would otherwise reset the marquee/tooltip) on a real change.
             if (PlaybackState != previous)
@@ -591,16 +630,21 @@ namespace RetroBar.Utilities
                 // from our own wall-clock time since we first saw that frozen value, which still
                 // advances smoothly. Reset on track/session change happens in
                 // RefreshPropertiesAsync, so a new track never inherits a stale baseline.
-                if (!_hasPositionEstimateBase || rawPosition != _positionEstimateBase)
+                TimeSpan position;
+                lock (_positionLock)
                 {
-                    _positionEstimateBase = rawPosition;
-                    _positionEstimateBaseTime = DateTimeOffset.Now;
-                    _hasPositionEstimateBase = true;
-                }
+                    if (!_hasPositionEstimateBase || rawPosition != _lastRawPosition)
+                    {
+                        _lastRawPosition = rawPosition;
+                        _positionEstimateBase = rawPosition;
+                        _positionEstimateBaseTime = DateTimeOffset.Now;
+                        _hasPositionEstimateBase = true;
+                    }
 
-                TimeSpan position = PlaybackState == MediaPlaybackState.Playing
-                    ? _positionEstimateBase + (DateTimeOffset.Now - _positionEstimateBaseTime)
-                    : _positionEstimateBase;
+                    position = PlaybackState == MediaPlaybackState.Playing
+                        ? _positionEstimateBase + (DateTimeOffset.Now - _positionEstimateBaseTime)
+                        : _positionEstimateBase;
+                }
 
                 if (position < TimeSpan.Zero)
                 {
@@ -634,7 +678,17 @@ namespace RetroBar.Utilities
                     position = TimeSpan.Zero;
                 }
 
-                await _session.TryChangePlaybackPositionAsync(position.Ticks);
+                // The player now and then answers that it did not (while it is busy with the track, or with an earlier seek): a click
+                // on the slider that did nothing. Tried again a moment later, a few times.
+                for (int attempt = 0; attempt < 3; attempt++)
+                {
+                    if (await _session.TryChangePlaybackPositionAsync(position.Ticks))
+                    {
+                        break;
+                    }
+
+                    await Task.Delay(150);
+                }
             }
             catch (Exception e)
             {

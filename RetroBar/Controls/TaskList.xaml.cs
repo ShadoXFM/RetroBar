@@ -121,9 +121,7 @@ namespace RetroBar.Controls
                 taskbarItems = Tasks.CreateGroupedWindowsCollection();
                 if (taskbarItems != null)
                 {
-                    // Tabs start out in the order their windows were opened (see TaskOpenOrderComparer).
-                    // Applied to the underlying list during startup only, so later drag-rearranging
-                    // isn't sorted back.
+                    // Tabs start out with the pinned programs' first, in the order of the pins (see TaskOpenOrderComparer).
                     if (taskbarItems is ListCollectionView listView && listView.SourceCollection is ObservableCollection<ApplicationWindow> source)
                     {
                         startupSortSource = source;
@@ -407,18 +405,15 @@ namespace RetroBar.Controls
                 ItemSlideAnimation.Play(TasksList, ItemSlideAnimation.Capture(TasksList));
             }
 
-            // Windows trickle in while RetroBar is starting, and new ones appear later: put each where the
-            // user's saved arrangement says (or on the right, if its app isn't in it) once they stop arriving.
+            // Windows trickle in while RetroBar is starting, and new ones appear later: the pinned programs' go in the order of the pins,
+            // the others on the right.
             if (e.Action == System.Collections.Specialized.NotifyCollectionChangedAction.Add)
             {
                 ScheduleStartupSort();
 
-                // A window opened after startup goes to its place at once (before the next frame is drawn), instead of
-                // showing up on the right and jumping there when the debounce above ends.
-                if (!TaskOpenOrderComparer.InStartupGrace)
-                {
-                    Dispatcher.BeginInvoke(new Action(() => TaskOpenOrderComparer.SortSource(startupSortSource)), DispatcherPriority.Normal);
-                }
+                // A window goes to its place at once (before the next frame is drawn), instead of showing up on the right and
+                // jumping there when the debounce above ends.
+                Dispatcher.BeginInvoke(new Action(() => TaskOpenOrderComparer.SortSource(startupSortSource)), DispatcherPriority.Normal);
             }
         }
 

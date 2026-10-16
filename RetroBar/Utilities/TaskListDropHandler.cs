@@ -50,7 +50,7 @@ namespace RetroBar.Utilities
 
             GongSolutions.Wpf.DragDrop.DragDrop.DefaultDropHandler.Drop(dropInfo);
 
-            // Remember the arrangement, so it survives a restart or theme change.
+            // The tab stays where it was dropped until the list is sorted again (see TaskOpenOrderComparer); nothing is kept.
             if (_list.ItemsSource is System.Windows.Data.ListCollectionView view &&
                 view.SourceCollection is System.Collections.ObjectModel.ObservableCollection<ManagedShell.WindowsTasks.ApplicationWindow> source)
             {
@@ -58,8 +58,6 @@ namespace RetroBar.Utilities
                 {
                     TaskOpenOrderComparer.KeepAppWindowsTogether(source, dropInfo.Data as ManagedShell.WindowsTasks.ApplicationWindow);
                 }
-
-                TaskOpenOrderComparer.SaveOrder(source);
             }
 
             // After the new layout is in, slide each tab from its old position to its new one.

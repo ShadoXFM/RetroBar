@@ -131,6 +131,10 @@ namespace RetroBar.Controls
             }
 
             _isLoaded = true;
+            if (!Players.Contains(this))
+            {
+                Players.Add(this);
+            }
 
             InitializeVuMeterAccentBrush();
 
@@ -272,6 +276,18 @@ namespace RetroBar.Controls
                 return;
             }
 
+            if (e.PropertyName == nameof(Settings.ShowMediaPopupLyrics))
+            {
+                Dispatcher.BeginInvoke(new Action(ApplyLyricsSetting));
+                return;
+            }
+
+            if (e.PropertyName == nameof(Settings.LyricLines))
+            {
+                Dispatcher.BeginInvoke(new Action(ApplyLyricsSetting));
+                return;
+            }
+
             if (e.PropertyName == nameof(Settings.ShowVuMeter))
             {
                 Dispatcher.BeginInvoke(new Action(ApplyVuMeterSetting));
@@ -343,6 +359,7 @@ namespace RetroBar.Controls
 
             Visibility = Visibility.Visible;
             SetIsMediaPlaying(true);
+            PrefetchLyrics();
             bool isPlaying = _sessionManager.PlaybackState == MediaPlaybackState.Playing;
             UpdateVisualizerActiveState(isPlaying);
 
@@ -1036,6 +1053,7 @@ namespace RetroBar.Controls
             MonitorAdjustments.Changed -= MonitorAdjustments_Changed;
             Stop();
             _isLoaded = false;
+            Players.Remove(this);
         }
 
         // The control itself is a few pixels taller than the tray box's inner area on some taskbar heights;

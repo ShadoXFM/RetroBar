@@ -1,5 +1,6 @@
 using RetroBar.Utilities;
 using System;
+using System.Linq;
 using System.ComponentModel;
 using System.Globalization;
 using System.IO;
@@ -223,7 +224,7 @@ namespace RetroBar.Controls
                 }
             }
 
-            return Math.Max(0, frameBottom.Value + ShadowRoom);
+            return Math.Max(0, frameBottom.Value + ShadowRoom + FrameStyleMargin);
         }
 
         private bool _forecastClosing => _slide.Closing;
@@ -236,6 +237,9 @@ namespace RetroBar.Controls
 
         // The margin (DIPs) the forecast frame has all round for its shadow - see WeatherDisplay.xaml.
         private const double ShadowRoom = 6;
+
+        // The frame's style (TaskButtonThumbnail) has a margin of its own inside that: the bevel's edge is this much further in.
+        private const double FrameStyleMargin = 2.4;
 
         private CustomPopupPlacement[] PlaceForecast(Size popupSize, Size targetSize, Point offset)
         {
@@ -264,7 +268,7 @@ namespace RetroBar.Controls
                 ManagedShell.AppBar.AppBarEdge.Left => new[] { new CustomPopupPlacement(new Point(targetSize.Width + offset.X - ShadowRoom, centeredY), PopupPrimaryAxis.Vertical) },
                 ManagedShell.AppBar.AppBarEdge.Right => new[] { new CustomPopupPlacement(new Point(-popupSize.Width + offset.X + ShadowRoom, centeredY), PopupPrimaryAxis.Vertical) },
                 ManagedShell.AppBar.AppBarEdge.Top => new[] { new CustomPopupPlacement(new Point(centeredX, targetSize.Height + offset.Y - ShadowRoom), PopupPrimaryAxis.Horizontal) },
-                _ => new[] { new CustomPopupPlacement(new Point(centeredX, -popupSize.Height + offset.Y + ShadowRoom + sameAsMedia), PopupPrimaryAxis.Horizontal) },
+                _ => new[] { new CustomPopupPlacement(new Point(centeredX, -popupSize.Height + offset.Y + ShadowRoom + FrameStyleMargin + sameAsMedia), PopupPrimaryAxis.Horizontal) },
             };
         }
 
@@ -318,6 +322,9 @@ namespace RetroBar.Controls
         private static double? _cachedCelsius;
         private static string _cachedIconPath;
         private static List<DailyForecast> _cachedForecast = new();
+        private static WeatherDetails _cachedDetails;
+        private static List<HourlyForecast> _cachedHourly = new();
+        private static int? _cachedWeatherCode;
 
         // Set when the network comes back (see OnNetworkAvailabilityChanged): the next update refetches
         // even though the cached reading isn't old yet, since the last attempt may have failed offline.
@@ -401,6 +408,12 @@ namespace RetroBar.Controls
                 // °C <-> °F is just a display choice: reformat the reading we already have.
                 System.Windows.Application.Current?.Dispatcher.BeginInvoke(new Action(ApplyShared));
             }
+            else if (e.PropertyName is nameof(Settings.Language) or nameof(Settings.OverrideClockFormat) or nameof(Settings.ClockFormat)
+                     or nameof(Settings.OverrideAMPMDesignators) or nameof(Settings.AMDesignator) or nameof(Settings.PMDesignator))
+            {
+                // The days are written in the language chosen, and the times of the day as the clock's settings have them.
+                System.Windows.Application.Current?.Dispatcher.BeginInvoke(new Action(ApplyShared), System.Windows.Threading.DispatcherPriority.ApplicationIdle);
+            }
             else if (e.PropertyName == nameof(Settings.WeatherLocation))
             {
                 // A new location is shown as soon as it's fetched, not on the next minute tick.
@@ -410,6 +423,23 @@ namespace RetroBar.Controls
 
         /// <summary>The next few days, for the forecast popup.</summary>
         public ObservableCollection<ForecastDay> Forecast { get; } = new();
+
+        /// <summary>The next times that are a multiple of three hours, for the forecast popup.</summary>
+        public ObservableCollection<HourlyItem> Hourly { get; } = new();
+
+        private bool _hasHourly;
+        public bool HasHourly
+        {
+            get => _hasHourly;
+            set
+            {
+                if (_hasHourly != value)
+                {
+                    _hasHourly = value;
+                    OnPropertyChanged();
+                }
+            }
+        }
 
         private ImageSource _flagSource;
         public ImageSource FlagSource
@@ -474,6 +504,25 @@ namespace RetroBar.Controls
             }
         }
 
+        private string _weatherHeadline;
+
+        /// <summary>The line under the location in the forecast popup: the temperature and the weather in words ("17°C · Clear").</summary>
+        public string WeatherHeadline
+        {
+            get => _weatherHeadline;
+            set
+            {
+                if (_weatherHeadline != value)
+                {
+                    _weatherHeadline = value;
+                    OnPropertyChanged();
+                }
+            }
+        }
+
+        /// <summary>The conditions under the temperature in the forecast popup, two to a row.</summary>
+        public ObservableCollection<DetailItem> DetailItems { get; } = new();
+
         private string _weatherIconPath;
         public string WeatherIconPath
         {
@@ -484,8 +533,66 @@ namespace RetroBar.Controls
                 {
                     _weatherIconPath = value;
                     OnPropertyChanged();
+                    OnPropertyChanged(nameof(WeatherIconBounds));
                 }
             }
+        }
+
+        // Where the drawing is in the icon's picture, as a share of it: the picture has some room round the drawing, which the big icon in
+        // the forecast popup leaves out, so that the drawing is at the corner and not inset from it.
+        public Rect WeatherIconBounds => IconBounds(_weatherIconPath);
+
+        private static readonly Dictionary<string, Rect> IconBoundsCache = new();
+
+        private static Rect IconBounds(string path)
+        {
+            var whole = new Rect(0, 0, 1, 1);
+            if (string.IsNullOrEmpty(path))
+            {
+                return whole;
+            }
+
+            if (IconBoundsCache.TryGetValue(path, out Rect cached))
+            {
+                return cached;
+            }
+
+            Rect bounds = whole;
+            try
+            {
+                var bitmap = new System.Windows.Media.Imaging.FormatConvertedBitmap(
+                    new System.Windows.Media.Imaging.BitmapImage(new Uri(path)), PixelFormats.Bgra32, null, 0);
+                int width = bitmap.PixelWidth, height = bitmap.PixelHeight, stride = width * 4;
+                var pixels = new byte[stride * height];
+                bitmap.CopyPixels(pixels, stride, 0);
+
+                int left = width, top = height, right = -1, bottom = -1;
+                for (int y = 0; y < height; y++)
+                {
+                    for (int x = 0; x < width; x++)
+                    {
+                        if (pixels[y * stride + x * 4 + 3] > 20)
+                        {
+                            left = Math.Min(left, x);
+                            right = Math.Max(right, x);
+                            top = Math.Min(top, y);
+                            bottom = Math.Max(bottom, y);
+                        }
+                    }
+                }
+
+                if (right >= left && bottom >= top)
+                {
+                    bounds = new Rect((double)left / width, (double)top / height, (double)(right - left + 1) / width, (double)(bottom - top + 1) / height);
+                }
+            }
+            catch (Exception ex) when (ex is IOException or NotSupportedException or ArgumentException or InvalidOperationException)
+            {
+                // The whole picture, then.
+            }
+
+            IconBoundsCache[path] = bounds;
+            return bounds;
         }
 
         private string _weatherTemp;
@@ -537,6 +644,9 @@ namespace RetroBar.Controls
             public double Celsius { get; set; }
             public string IconFile { get; set; }
             public List<DailyForecast> Forecast { get; set; }
+            public WeatherDetails Details { get; set; }
+            public List<HourlyForecast> Hourly { get; set; }
+            public int? WeatherCode { get; set; }
             public string GeocodedDisplayName { get; set; }
             public string GeocodedCountryCode { get; set; }
             public double Latitude { get; set; }
@@ -553,6 +663,9 @@ namespace RetroBar.Controls
                     Celsius = _cachedCelsius.Value,
                     IconFile = iconFile,
                     Forecast = _cachedForecast,
+                    Details = _cachedDetails,
+                    Hourly = _cachedHourly,
+                    WeatherCode = _cachedWeatherCode,
                     GeocodedDisplayName = _geocodedDisplayName,
                     GeocodedCountryCode = _geocodedCountryCode,
                     Latitude = _latitude,
@@ -595,8 +708,11 @@ namespace RetroBar.Controls
 
                 _cachedLocation = reading.Location;
                 _cachedCelsius = reading.Celsius;
-                _cachedIconPath = GetImagePath(reading.IconFile.StartsWith("moon_", StringComparison.Ordinal) ? "moon.png" : reading.IconFile);
+                _cachedIconPath = GetImagePath(PersistedIconFile(reading.IconFile));
                 _cachedForecast = reading.Forecast ?? new List<DailyForecast>();
+                _cachedDetails = reading.Details;
+                _cachedHourly = reading.Hourly ?? new List<HourlyForecast>();
+                _cachedWeatherCode = reading.WeatherCode;
 
                 // Without these a later fetch would skip geocoding (the location "is" geocoded) and use no coordinates.
                 if (reading.Latitude != 0 || reading.Longitude != 0)
@@ -613,6 +729,16 @@ namespace RetroBar.Controls
                 // A missing or damaged file is the same as none.
             }
         }
+
+        // The name of an icon as an earlier version kept it with the reading: the moon phases are one moon now, and the partly cloudy icons
+        // have a day and a night one (the reading did not say which, and it is replaced by the next fetch).
+        private static string PersistedIconFile(string iconFile) => iconFile switch
+        {
+            _ when iconFile.StartsWith("moon_", StringComparison.Ordinal) => "moon.png",
+            "partly_cloudy.png" => "partly_cloudy_day.png",
+            "partly_cloudy_rain.png" => "partly_cloudy_rain_day.png",
+            _ => iconFile,
+        };
 
         private static string GetImagePath(string fileName)
         {
@@ -691,7 +817,7 @@ namespace RetroBar.Controls
                 }
 
                 string url = string.Format(CultureInfo.InvariantCulture,
-                    "https://api.open-meteo.com/v1/forecast?latitude={0}&longitude={1}&current=temperature_2m,weather_code,is_day&daily=weather_code,temperature_2m_max,temperature_2m_min&forecast_days=7&timezone=auto&temperature_unit=celsius",
+                    "https://api.open-meteo.com/v1/forecast?latitude={0}&longitude={1}&current=temperature_2m,apparent_temperature,relative_humidity_2m,wind_speed_10m,weather_code,is_day&hourly=temperature_2m,weather_code,is_day&forecast_hours=24&daily=weather_code,temperature_2m_max,temperature_2m_min,precipitation_probability_max,sunrise,sunset&forecast_days=7&timezone=auto&temperature_unit=celsius",
                     _latitude, _longitude);
 
                 string json = await _httpClient.GetStringAsync(url);
@@ -717,8 +843,44 @@ namespace RetroBar.Controls
                         lows[i].GetDouble()));
                 }
 
+                WeatherDetails details = null;
+                if (current.TryGetProperty("apparent_temperature", out JsonElement feels) && current.TryGetProperty("relative_humidity_2m", out JsonElement humidity)
+                    && current.TryGetProperty("wind_speed_10m", out JsonElement wind))
+                {
+                    int? rainChance = null;
+                    if (daily.TryGetProperty("precipitation_probability_max", out JsonElement chances) && chances.GetArrayLength() > 0
+                        && chances[0].ValueKind == JsonValueKind.Number)
+                    {
+                        rainChance = chances[0].GetInt32();
+                    }
+
+                    DateTime? sunrise = ReadLocalTime(daily, "sunrise");
+                    DateTime? sunset = ReadLocalTime(daily, "sunset");
+                    details = new WeatherDetails(feels.GetDouble(), (int)Math.Round(humidity.GetDouble()), wind.GetDouble(), rainChance, sunrise, sunset);
+                }
+
+                var hourly = new List<HourlyForecast>();
+                if (doc.RootElement.TryGetProperty("hourly", out JsonElement hours))
+                {
+                    JsonElement times = hours.GetProperty("time");
+                    JsonElement hourCodes = hours.GetProperty("weather_code");
+                    JsonElement temperatures = hours.GetProperty("temperature_2m");
+                    JsonElement daylight = hours.GetProperty("is_day");
+                    for (int i = 0; i < times.GetArrayLength(); i++)
+                    {
+                        hourly.Add(new HourlyForecast(
+                            DateTime.ParseExact(times[i].GetString(), "yyyy-MM-dd'T'HH:mm", CultureInfo.InvariantCulture),
+                            hourCodes[i].GetInt32(),
+                            temperatures[i].GetDouble(),
+                            daylight[i].GetInt32() != 0));
+                    }
+                }
+
                 string iconFile = GetIconFileName(weatherCode, isDay);
                 _cachedLocation = location;
+                _cachedDetails = details;
+                _cachedHourly = hourly;
+                _cachedWeatherCode = weatherCode;
                 _cachedCelsius = temperature;
                 _cachedForecast = forecast;
                 _cachedIconPath = GetImagePath(iconFile);
@@ -738,6 +900,18 @@ namespace RetroBar.Controls
             SharedStateChanged?.Invoke();
         }
 
+        // Today's sunrise or sunset, as the local time at the place that Open-Meteo gives it in ("2026-10-14T07:41").
+        private static DateTime? ReadLocalTime(JsonElement daily, string name)
+        {
+            if (daily.TryGetProperty(name, out JsonElement values) && values.GetArrayLength() > 0 && values[0].ValueKind == JsonValueKind.String
+                && DateTime.TryParseExact(values[0].GetString(), "yyyy-MM-dd'T'HH:mm", CultureInfo.InvariantCulture, DateTimeStyles.None, out DateTime time))
+            {
+                return time;
+            }
+
+            return null;
+        }
+
         // Shows the shared reading (or the one saved on disk) if it's for the location currently set; otherwise N/A.
         private void ApplyShared()
         {
@@ -754,17 +928,31 @@ namespace RetroBar.Controls
                 }
 
                 WeatherTemp = FormatTemperature(_cachedCelsius.Value);
+                WeatherHeadline = FormatHeadline(_cachedCelsius.Value, _cachedWeatherCode);
                 WeatherBarTemp = FormatBarTemperature(_cachedCelsius.Value);
+                FillDetails();
                 WeatherIconPath = _cachedIconPath;
+
+                // The next times that are a multiple of three hours (0h, 3h, 6h...): the same times of the day whenever it is looked at,
+                // an eighteen hours ahead in all.
+                Hourly.Clear();
+                DateTime now = _cachedHourly.Count > 0 ? _cachedHourly[0].Time : DateTime.MinValue;
+                foreach (HourlyForecast hour in _cachedHourly.Where(h => h.Time > now && h.Time.Hour % 3 == 0).Take(6))
+                {
+                    string label = FormatClockTime(hour.Time, true);
+                    Hourly.Add(new HourlyItem(label, GetImagePath(GetIconFileName(hour.WeatherCode, hour.IsDay)), FormatBarTemperature(hour.Celsius)));
+                }
+
+                HasHourly = Hourly.Count > 0;
 
                 Forecast.Clear();
                 foreach (DailyForecast day in _cachedForecast)
                 {
                     // The day's name as the culture writes it ("ven. 9" in French), with its first letter capitalized.
-                    string dayName = day.Date.ToString("ddd d", CultureInfo.CurrentUICulture);
+                    string dayName = day.Date.ToString("ddd d", LanguageCulture.Current);
                     if (dayName.Length > 0)
                     {
-                        dayName = char.ToUpper(dayName[0], CultureInfo.CurrentUICulture) + dayName.Substring(1);
+                        dayName = char.ToUpper(dayName[0], LanguageCulture.Current) + dayName.Substring(1);
                     }
 
                     Forecast.Add(new ForecastDay(
@@ -777,9 +965,81 @@ namespace RetroBar.Controls
             else
             {
                 WeatherTemp = "N/A";
+                WeatherHeadline = "N/A";
                 WeatherBarTemp = "N/A";
+                DetailItems.Clear();
+                Hourly.Clear();
+                HasHourly = false;
                 Forecast.Clear();
             }
+        }
+
+        // Under the temperature in the forecast popup, two to a row: how it feels and the humidity, the wind and the chance of rain today,
+        // the sunrise and the sunset. The number of each is in bold.
+        private void FillDetails()
+        {
+            DetailItems.Clear();
+            WeatherDetails details = _cachedDetails;
+            if (details == null)
+            {
+                return;
+            }
+
+            bool imperial = Settings.Instance.WeatherUseFahrenheit;
+            double wind = imperial ? details.WindKmh * 0.621371 : details.WindKmh;
+
+            DetailItems.Add(Detail("weather_feels_like", "Feels like {0}", FormatBarTemperature(details.FeelsLikeCelsius)));
+            DetailItems.Add(Detail("weather_humidity", "Humidity {0}", details.Humidity + "%"));
+            DetailItems.Add(Detail("weather_wind", "Wind {0}", Math.Round(wind) + (imperial ? " mph" : " km/h")));
+            DetailItems.Add(details.RainChance is int rain
+                ? Detail("weather_rain_chance", "Rain {0}", rain + "%")
+                : new DetailItem("", "", ""));
+            if (details.Sunrise is DateTime sunrise && details.Sunset is DateTime sunset)
+            {
+                DetailItems.Add(Detail("weather_sunrise", "Sunrise {0}", FormatClockTime(sunrise, false)));
+                DetailItems.Add(Detail("weather_sunset", "Sunset {0}", FormatClockTime(sunset, false)));
+            }
+        }
+
+        // A time of the day as the clock's settings (Properties, Clock) write it: with AM and PM (and the designators set there) if the
+        // clock's format has the 12-hour hour, on the 24-hour clock if it has not. Without a format of its own, the clock's is the one of the
+        // system's (regional) settings, as the clock has it. onTheHour: just the hour ("3 PM", "15:00"), not the minutes.
+        private static string FormatClockTime(DateTime time, bool onTheHour)
+        {
+            CultureInfo language = CultureInfo.CurrentCulture;
+            string pattern = Settings.Instance.OverrideClockFormat && !string.IsNullOrEmpty(Settings.Instance.ClockFormat)
+                ? Settings.Instance.ClockFormat
+                : language.DateTimeFormat.ShortTimePattern;
+
+            if (!pattern.Contains('h') && !pattern.Contains("tt"))
+            {
+                return time.ToString("HH:mm", language);
+            }
+
+            CultureInfo culture = (CultureInfo)language.Clone();
+            if (Settings.Instance.OverrideAMPMDesignators)
+            {
+                if (Settings.Instance.AMDesignator != "")
+                {
+                    culture.DateTimeFormat.AMDesignator = Settings.Instance.AMDesignator;
+                }
+
+                if (Settings.Instance.PMDesignator != "")
+                {
+                    culture.DateTimeFormat.PMDesignator = Settings.Instance.PMDesignator;
+                }
+            }
+
+            return time.ToString(onTheHour ? "h tt" : "h:mm tt", culture);
+        }
+
+        // The text of a language string with the value in it, as what is before the value, the value, and what is after it.
+        private static DetailItem Detail(string key, string fallback, string value)
+        {
+            string format = System.Windows.Application.Current?.TryFindResource(key) as string ?? fallback;
+            char mark = (char)1;
+            string[] parts = string.Format(format, mark).Split(mark);
+            return new DetailItem(parts[0], value, parts.Length > 1 ? parts[1] : "");
         }
 
         private static async Task<bool> GeocodeAsync(string location)
@@ -817,6 +1077,40 @@ namespace RetroBar.Controls
             return $"{sign}{Math.Abs(rounded)}\u00B0{(fahrenheit ? 'F' : 'C')}";
         }
 
+        // The temperature with its unit, and the weather in words after it when it is known.
+        private static string FormatHeadline(double celsius, int? weatherCode)
+        {
+            bool fahrenheit = Settings.Instance.WeatherUseFahrenheit;
+            int rounded = (int)Math.Round(fahrenheit ? celsius * 9 / 5 + 32 : celsius, MidpointRounding.AwayFromZero);
+            string temperature = $"{rounded}\u00B0{(fahrenheit ? 'F' : 'C')}";
+            string description = weatherCode is int code ? DescribeWeather(code) : null;
+            return description == null ? temperature : temperature + "  \u00B7  " + description;
+        }
+
+        // The weather in words, in the language chosen (WMO codes: https://open-meteo.com/en/docs).
+        private static string DescribeWeather(int code)
+        {
+            (string key, string fallback)? words = code switch
+            {
+                0 => ("weather_clear", "Clear"),
+                1 => ("weather_mostly_clear", "Mostly clear"),
+                2 => ("weather_partly_cloudy", "Partly cloudy"),
+                3 => ("weather_overcast", "Overcast"),
+                45 or 48 => ("weather_fog", "Fog"),
+                51 or 53 or 55 => ("weather_drizzle", "Drizzle"),
+                56 or 57 or 66 or 67 => ("weather_freezing_rain", "Freezing rain"),
+                61 or 63 => ("weather_rain", "Rain"),
+                65 => ("weather_heavy_rain", "Heavy rain"),
+                71 or 73 or 75 or 77 => ("weather_snow", "Snow"),
+                80 or 81 or 82 => ("weather_showers", "Showers"),
+                85 or 86 => ("weather_snow_showers", "Snow showers"),
+                95 or 96 or 99 => ("weather_thunderstorm", "Thunderstorm"),
+                _ => null,
+            };
+
+            return words is { } known ? System.Windows.Application.Current?.TryFindResource(known.key) as string ?? known.fallback : null;
+        }
+
         // Without the sign or unit letter, for the forecast's "high / low" column.
         private static string FormatShortTemperature(double celsius)
         {
@@ -830,21 +1124,22 @@ namespace RetroBar.Controls
         // live via WPF Path - live vector rendering came out visibly aliased on at least one
         // real system regardless of EdgeMode/rendering-tier/software-rendering settings (a
         // WPF/driver-level quirk outside the app's control), while bitmap rendering has always
-        // been reliably smooth, so the shapes are delivered as bitmaps instead. Only clear sky
-        // (0/1) gets a night variant, a single moon whatever the phase (the phases were tried: the
-        // new moon has nothing to draw, and the others only their lit part), and
-        // overcast/rain/snow/fog/thunder icons don't have a sun/moon in them to begin with, so
-        // there's nothing for a "night" version to change. Falls back to cloud.png for any
+        // been reliably smooth, so the shapes are delivered as bitmaps instead. The icons with a
+        // sun in them have a night variant: clear sky (0/1) shows a single moon whatever the phase
+        // (the phases were tried: the new moon has nothing to draw, and the others only their lit
+        // part), and partly cloudy (2) and the showers (80) have a day and a night icon of their
+        // own. The overcast/rain/snow/fog/thunder icons don't have a sun/moon in them to begin
+        // with, so there's nothing for a "night" version to change. Falls back to cloud.png for any
         // WMO code Open-Meteo might add later that isn't one of the above.
         private static string GetIconFileName(int weatherCode, bool isDay) => weatherCode switch
         {
             0 or 1 => isDay ? "sun.png" : "moon.png",
-            2 => "partly_cloudy.png",
+            2 => isDay ? "partly_cloudy_day.png" : "partly_cloudy_night.png",
             3 => "cloud.png",
             45 or 48 => "fog.png",
             51 or 53 or 55 or 61 or 63 or 65 or 81 or 82 => "rain.png",
             56 or 57 or 66 or 67 or 71 or 73 or 75 or 77 or 85 or 86 => "snow.png",
-            80 => "partly_cloudy_rain.png",
+            80 => isDay ? "partly_cloudy_rain_day.png" : "partly_cloudy_rain_night.png",
             95 or 96 or 99 => "thunder.png",
             _ => "cloud.png",
         };
@@ -856,6 +1151,18 @@ namespace RetroBar.Controls
             PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(propertyName));
         }
     }
+
+    /// <summary>The current conditions beyond the temperature, as fetched (Celsius and km/h, so the units can be switched without refetching).</summary>
+    public record WeatherDetails(double FeelsLikeCelsius, int Humidity, double WindKmh, int? RainChance, DateTime? Sunrise = null, DateTime? Sunset = null);
+
+    /// <summary>One hour of the forecast as fetched (raw Celsius).</summary>
+    public record HourlyForecast(DateTime Time, int WeatherCode, double Celsius, bool IsDay);
+
+    /// <summary>One of the conditions under the temperature: what is before its value, the value (in bold), what is after it.</summary>
+    public record DetailItem(string Prefix, string Value, string Suffix);
+
+    /// <summary>One hour as the forecast popup shows it.</summary>
+    public record HourlyItem(string Label, string IconPath, string Temp);
 
     /// <summary>One day of the forecast as fetched (raw Celsius, so °C/°F can be switched without refetching).</summary>
     public record DailyForecast(DateTime Date, int WeatherCode, double HighCelsius, double LowCelsius);

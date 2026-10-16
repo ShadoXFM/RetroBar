@@ -116,7 +116,7 @@ namespace RetroBar.Controls
         // over the popup. The album art and the buttons are in adorners, which this control does not get the wheel from: they call it too.
         private void MediaPlayer_OnMouseWheel(object sender, MouseWheelEventArgs e)
         {
-            if (e.Delta != 0 && _sessionManager?.CanSeek == true)
+            if (e.Delta != 0 && CanSeekSource)
             {
                 _ = SeekRelativeAsync(TimeSpan.FromSeconds(5 * Math.Sign(e.Delta)));
                 e.Handled = true;
@@ -138,7 +138,16 @@ namespace RetroBar.Controls
             {
                 if (SeekPopup.IsOpen)
                 {
-                    CloseSeekPopupAnimated();
+                    // A popup that has been moved or is always on top is a window of its own, not up from the taskbar: it just goes, as
+                    // it does from its menu.
+                    if (_seekPopupMovedTo != null || _seekPopupPinned)
+                    {
+                        CloseSeekPopupNow();
+                    }
+                    else
+                    {
+                        CloseSeekPopupAnimated();
+                    }
                 }
                 else
                 {
@@ -189,7 +198,9 @@ namespace RetroBar.Controls
             Apply(SeekPreviousGlyph, previous, Math.Max(0, boxWidth - previous[0].Length - 1 - skipOut));
             Apply(SeekNextGlyph, next, Math.Min(1 + skipOut, boxWidth - next[0].Length));
             Apply(SeekBackGlyph, rewind, 0);
-            Apply(SeekPlayPauseGlyph, middle, (boxWidth - middle[0].Length) / 2);
+            // The pause glyph (narrower than the play one) is a pixel nearer to the previous glyph than the centered one is, as on the taskbar,
+            // where the gaps to either side of it are the same.
+            Apply(SeekPlayPauseGlyph, middle, Math.Max(0, (boxWidth - middle[0].Length) / 2 - (playing ? 1 : 0)));
             Apply(SeekForwardGlyph, forward, boxWidth - forward[0].Length);
 
             // The buttons' margins are whole pixels too (a DIP at 125% is a pixel and a quarter, which rounded differently from
@@ -200,8 +211,11 @@ namespace RetroBar.Controls
             double pull = dpi.DpiScaleX < 1.125 ? pixel : 0;
             // The row starts 6 pixels in, less 1 at 125% and 2 at 100% (the slider takes up what that gives up).
             double shift = (dpi.DpiScaleX < 1.125 ? 2 : 1) * pixel;
+            // The gap from the previous glyph to the play/pause one is the taskbar's own (8 pixels at 125% and 7 at 100%, 2 more than it was
+            // here); the one from the play/pause glyph to the next was the same already.
+            double previousToPlay = 2 * pixel;
             SeekPreviousButton.Margin = new Thickness(6 * pixel - shift, 0, 0, 0);
-            SeekPlayPauseButton.Margin = new Thickness(-pull, 0, 0, 0);
+            SeekPlayPauseButton.Margin = new Thickness(-pull + previousToPlay, 0, 0, 0);
             SeekNextButton.Margin = new Thickness(-pull, 0, 0, 0);
 
             // The slider takes up the width the buttons' margins gave up (2 pixels each side, and the pulled-in gaps), so the row,
@@ -211,12 +225,33 @@ namespace RetroBar.Controls
             double closer = dpi.DpiScaleX < 1.125 ? 4 * pixel : 0;
             // The slider reaches 2 pixels further at each end, into what was the gaps (so they are 2 pixels smaller) - it is 4 pixels
             // longer: its width is the same binding as in the XAML, with that much less deducted.
-            SeekSlider.Margin = new Thickness(4 + 2 * pull + shift - closer, 0, 6 + closer, 2 * pixel);
+            var sliderMargin = new Thickness(4 + 2 * pull + shift - closer, 0, 6 + closer, 2 * pixel);
+
+            // A monitor can give the slider its own margin ("MediaSeekSlider" in monitor-adjustments.json): the gap to the buttons, and to
+            // the time. The slider takes up what that gives or takes (its width is what is left of the row), so the popup keeps its size.
+            double sliderMarginChange = 0;
+            string deviceName = MonitorOffset.GetDeviceNameOverride(SeekPopupRoot) ?? (Window.GetWindow(this) as Taskbar)?.Screen.DeviceName;
+            string sliderMarginText = MonitorAdjustments.Get(deviceName, "MediaSeekSlider").Margin;
+            if (!string.IsNullOrWhiteSpace(sliderMarginText))
+            {
+                try
+                {
+                    var custom = (Thickness)new ThicknessConverter().ConvertFromString(null, System.Globalization.CultureInfo.InvariantCulture, sliderMarginText);
+                    sliderMarginChange = custom.Left + custom.Right - sliderMargin.Left - sliderMargin.Right;
+                    sliderMargin = custom;
+                }
+                catch (Exception ex) when (ex is FormatException or NotSupportedException)
+                {
+                    // An invalid one is ignored, as for every other Margin in that file.
+                }
+            }
+
+            SeekSlider.Margin = sliderMargin;
 
             var width = new MultiBinding
             {
                 Converter = (IMultiValueConverter)FindResource("remainingWidthConverter"),
-                ConverterParameter = string.Create(System.Globalization.CultureInfo.InvariantCulture, $"{12.8 - 4 * pixel},30"),
+                ConverterParameter = string.Create(System.Globalization.CultureInfo.InvariantCulture, $"{12.8 - 4 * pixel + previousToPlay + sliderMarginChange},30"),
             };
             foreach (FrameworkElement source in new FrameworkElement[] { SeekAlbumArtImage, SeekPlayPauseButton, SeekPreviousButton, SeekNextButton, SeekTimeText })
             {
@@ -229,10 +264,32 @@ namespace RetroBar.Controls
             SeekTimeText.Margin = new Thickness(2, 0, 6, 4 / dpi.DpiScaleY);
         }
 
+        // Whether the source can be sought: it says so to Windows, or it is foobar2000, which is sought through its command line.
+        private bool CanSeekSource => _sessionManager != null
+            && (_sessionManager.CanSeek || Foobar2000Seeker.IsFoobar2000(_sessionManager.SourceAppUserModelId));
+
+        // Seeks the source to a position, which it is at now at `from`.
+        private async System.Threading.Tasks.Task SeekSourceAsync(TimeSpan target, TimeSpan from)
+        {
+            if (_sessionManager == null)
+            {
+                return;
+            }
+
+            if (_sessionManager.CanSeek)
+            {
+                await _sessionManager.SeekAsync(target);
+            }
+            else if (Foobar2000Seeker.IsFoobar2000(_sessionManager.SourceAppUserModelId))
+            {
+                await Foobar2000Seeker.SeekByAsync(target - from);
+            }
+        }
+
         // The wheel over the popup seeks 5 seconds a notch (up forward).
         private void SeekPopupRoot_OnPreviewMouseWheel(object sender, MouseWheelEventArgs e)
         {
-            if (e.Delta != 0 && _sessionManager?.CanSeek == true)
+            if (e.Delta != 0 && CanSeekSource)
             {
                 _ = SeekRelativeAsync(TimeSpan.FromSeconds(5 * Math.Sign(e.Delta)));
             }
@@ -248,6 +305,12 @@ namespace RetroBar.Controls
         // margin for the shadow, which is part of the popup's window. The weather forecast puts its own frame's bottom here too.
         private const double SeekFrameShadowRoom = 10;
 
+        // The popup is this many device pixels above where it would sit on the taskbar's edge (as many on every monitor, so the offset is
+        // in DIPs of this one's DPI). The weather forecast is placed from the same frame bottom, so it is as high.
+        private const double SeekPopupLiftPixels = 6;
+
+        private double SeekPopupOffset => 2 - SeekPopupLiftPixels / VisualTreeHelper.GetDpi(this).DpiScaleY;
+
         private double? _lastSeekFrameBottom;
 
         public double? GetSeekFrameBottom(Visual relativeTo)
@@ -256,7 +319,7 @@ namespace RetroBar.Controls
             {
                 if (IsVisible && TrackTextCanvas.ActualWidth > 0)
                 {
-                    _lastSeekFrameBottom = TrackTextCanvas.TransformToAncestor(relativeTo).Transform(new Point(0, 0)).Y + SeekPopup.VerticalOffset - SeekFrameShadowRoom;
+                    _lastSeekFrameBottom = TrackTextCanvas.TransformToAncestor(relativeTo).Transform(new Point(0, 0)).Y + SeekPopupOffset - SeekFrameShadowRoom;
                 }
             }
             catch (InvalidOperationException)
@@ -268,6 +331,9 @@ namespace RetroBar.Controls
 
         private void InitializeSeekSlide()
         {
+            // The slider handles the press itself (it moves the thumb to the point) and marks it handled, so an ordinary handler never hears of
+            // it: without this the display was not held still while the button was down, and the release seeked to the old position.
+            SeekSlider.AddHandler(UIElement.PreviewMouseLeftButtonDownEvent, new MouseButtonEventHandler(SeekSlider_OnPreviewMouseDown), true);
             _seekSlide = new PopupSlide(SeekPopup, SeekPopupRoot, SeekSlideHost, () => SlideDirection.Down, () =>
             {
                 // How far the popup's window reaches below the taskbar's top (the shadow's room under the frame).
@@ -277,7 +343,11 @@ namespace RetroBar.Controls
             });
         }
 
-        private void OpenSeekPopupAnimated() => _seekSlide.Show();
+        private void OpenSeekPopupAnimated()
+        {
+            SeekPopup.VerticalOffset = SeekPopupOffset;
+            _seekSlide.Show();
+        }
 
         // Gone at once, with no slide.
         private void CloseSeekPopupNow() => _seekSlide.CloseNow();
@@ -308,8 +378,10 @@ namespace RetroBar.Controls
             _openSeekPlayer = this;
             Dispatcher.BeginInvoke(new Action(ApplySeekPopupTopmost), DispatcherPriority.Loaded);
             _seekPopupSource = PresentationSource.FromVisual(SeekPopupRoot) as HwndSource;
+            SeekPopupRoot.ClearValue(LayoutTransformProperty);
             if (_seekPopupSource != null)
             {
+                _seekPopupHwndDpi = _seekPopupSource.CompositionTarget?.TransformToDevice.M11 ?? 0;
                 _seekPopupSource.DpiChanged += SeekPopupSource_OnDpiChanged;
                 _seekPopupSource.AddHook(SeekPopupHook);
             }
@@ -322,12 +394,11 @@ namespace RetroBar.Controls
             ApplySeekGlyphs();
             Dispatcher.BeginInvoke(new Action(SyncMarquees), System.Windows.Threading.DispatcherPriority.Loaded);
 
-            bool canSeek = _sessionManager?.CanSeek ?? false;
-            SeekSlider.IsEnabled = canSeek;
+            SeekSlider.IsEnabled = CanSeekSource;
 
             RefreshSeekDisplay();
 
-            _seekPopupTimer ??= new DispatcherTimer { Interval = TimeSpan.FromMilliseconds(500) };
+            _seekPopupTimer ??= new DispatcherTimer { Interval = TimeSpan.FromMilliseconds(250) };
             _seekPopupTimer.Tick -= SeekPopupTimer_OnTick;
             _seekPopupTimer.Tick += SeekPopupTimer_OnTick;
             _seekPopupTimer.Start();
@@ -354,29 +425,44 @@ namespace RetroBar.Controls
                 _seekPopupSource = null;
             }
 
+            // The popup that was dragged to another monitor's player closes after that one has opened (and taken the setting over): it is
+            // not the open one any more, and must not put the shared settings back.
+            bool theOpenOne = _openSeekPlayer == null || _openSeekPlayer == this;
             if (_openSeekPlayer == this)
             {
                 _openSeekPlayer = null;
             }
 
             _seekPopupMonitor = null;
-            _seekPopupMovedTo = null;
+            lock (_seekPopupDragLock)
+            {
+                _seekPopupDragging = false;
+                _seekPopupMovedTo = null;
+            }
+            _seekPopupHeldX = null;
 
             // Moved or on top is for the one opening: the next one starts as an ordinary popup again.
-            _seekPopupPinned = false;
+            if (theOpenOne)
+            {
+                _seekPopupPinned = false;
+            }
+
             SeekPopupRoot.ClearValue(MonitorOffset.DeviceNameOverrideProperty);
 
-            // Only suppress the next click if it's plausibly the one that just caused this close
-            // (the mouse is still over the track text) - a dismissal from clicking elsewhere
-            // shouldn't eat a later, unrelated click on the text.
-            Point mousePos = Mouse.GetPosition(TrackTextCanvas);
-            _ignoreTrackTextClickUntil = DateTime.UtcNow + TimeSpan.FromMilliseconds(500);
-            _ignoreNextTrackTextClick = mousePos.X >= 0 && mousePos.Y >= 0
-                && mousePos.X <= TrackTextCanvas.ActualWidth && mousePos.Y <= TrackTextCanvas.ActualHeight;
+            // Nothing is set to ignore the next click on the text here: the click that closes the popup from outside it sets that itself
+            // when the button goes down (see SeekInput_OnMouseDown), and by the time the popup has finished closing that button is up -
+            // a flag set now would eat the click that opens it again.
         }
 
         private void SeekPopupTimer_OnTick(object sender, EventArgs e)
         {
+            // The popup has settled above the track text by now: that is where it stays while it is open.
+            if (_seekPopupHeldX == null && _seekPopupMovedTo == null && !_seekPopupPinned
+                && PresentationSource.FromVisual(SeekPopupRoot) is HwndSource source && GetWindowRect(source.Handle, out RECT window))
+            {
+                _seekPopupHeldX = window.Left;
+            }
+
             RefreshSeekDisplay();
         }
 
@@ -384,13 +470,108 @@ namespace RetroBar.Controls
         // their drag - RefreshSeekDisplay resumes updating the moment they let go.
         private void RefreshSeekDisplay()
         {
+            // A button release the slider never saw (the pointer let go over something else) must not leave the display frozen, nor lose the seek.
+            if (_seekSliderDragging && (GetAsyncKeyState(VK_LBUTTON) & 0x8000) == 0)
+            {
+                FinishSliderSeek();
+            }
+
             if (_sessionManager == null || _seekSliderDragging)
             {
                 return;
             }
 
-            (TimeSpan position, TimeSpan duration) = _sessionManager.GetTimeline();
+            (TimeSpan position, TimeSpan duration) = GetTimeline();
+
+            // Just after a seek the source still reports where it was: the position it is sought to stays shown until it catches up.
+            if (DateTime.UtcNow < _seekHoldUntil && Math.Abs((position - _seekHoldPosition).TotalSeconds) > 1.5)
+            {
+                return;
+            }
+
             SetSeekDisplay(position, duration);
+        }
+
+        // What the source reports to Windows; for one that reports no length (foobar2000), the times in its window's title if its format has
+        // them (see TitleTimeline) - the only exact ones there are.
+        private (TimeSpan Position, TimeSpan Duration) GetTimeline()
+        {
+            (TimeSpan position, TimeSpan duration) = _sessionManager.GetTimeline();
+            if (duration <= TimeSpan.Zero && TitleTimeline.TryParse(FindSourceAppWindow()?.Title, out TimeSpan titlePosition, out TimeSpan titleLength))
+            {
+                return (SmoothTitlePosition(titlePosition), titleLength);
+            }
+
+            _titleHasEstimate = false;
+            return (position, duration);
+        }
+
+        // The title's time changes once a second, by whole seconds, and not at the moments the popup reads it: shown as it is, the slider
+        // stood still for a poll and then jumped two. The position runs on by the clock between the title's changes instead, and is only
+        // pulled towards the title (which shows the second that has begun, so the true time is half a second on from it) when it changes.
+        private bool _titleHasEstimate;
+        private TimeSpan _titleEstimate;
+        private TimeSpan _titleLastValue;
+        private DateTime _titleEstimateAt;
+
+        private TimeSpan SmoothTitlePosition(TimeSpan titlePosition)
+        {
+            DateTime now = DateTime.UtcNow;
+            bool playing = _sessionManager.PlaybackState == MediaPlaybackState.Playing;
+            TimeSpan estimate = _titleHasEstimate ? _titleEstimate + (playing ? now - _titleEstimateAt : TimeSpan.Zero) : titlePosition;
+
+            if (!_titleHasEstimate || titlePosition != _titleLastValue)
+            {
+                _titleLastValue = titlePosition;
+                TimeSpan error = titlePosition + TimeSpan.FromSeconds(0.5) - estimate;
+                if (!_titleHasEstimate || Math.Abs(error.TotalSeconds) > 1.5)
+                {
+                    // A seek, a new track, or the first reading: take the title's time.
+                    estimate = titlePosition + (playing ? TimeSpan.FromSeconds(0.5) : TimeSpan.Zero);
+                }
+                else
+                {
+                    estimate += TimeSpan.FromSeconds(error.TotalSeconds * 0.3);
+                }
+            }
+            else if (!playing)
+            {
+                estimate = titlePosition;
+            }
+
+            if (estimate < TimeSpan.Zero)
+            {
+                estimate = TimeSpan.Zero;
+            }
+
+            _titleHasEstimate = true;
+            _titleEstimate = estimate;
+            _titleEstimateAt = now;
+            return estimate;
+        }
+
+        private DateTime _seekHoldUntil = DateTime.MinValue;
+
+        private TimeSpan _seekHoldPosition;
+
+        private void HoldSeek(TimeSpan target)
+        {
+            _seekHoldPosition = target;
+            _seekHoldUntil = DateTime.UtcNow.AddSeconds(2);
+        }
+
+        /// <summary>Seeks to a position (a line of the lyrics): shown at once, as the wheel and the slider do.</summary>
+        private async System.Threading.Tasks.Task SeekToAsync(TimeSpan target)
+        {
+            if (_sessionManager == null)
+            {
+                return;
+            }
+
+            TimeSpan from = _lastSeekPosition;
+            SetSeekDisplay(target, _lastSeekDuration);
+            HoldSeek(target);
+            await SeekSourceAsync(target, from);
         }
 
         // Separated from RefreshSeekDisplay so a skip/seek can paint the target position
@@ -404,14 +585,21 @@ namespace RetroBar.Controls
 
         private TimeSpan _lastSeekPosition;
 
+        private DateTime _lastSeekPositionAt;
+
         private TimeSpan _lastSeekDuration;
 
         private void SetSeekDisplay(TimeSpan position, TimeSpan duration)
         {
             _lastSeekPosition = position;
+            _lastSeekPositionAt = DateTime.UtcNow;
             _lastSeekDuration = duration;
             SeekSlider.Maximum = duration.TotalSeconds > 0 ? duration.TotalSeconds : 1;
-            SeekSlider.Value = position.TotalSeconds;
+            // A source that does not say how long the track is (foobar2000's) leaves the thumb at the start, not pinned at the end.
+            SeekSlider.Value = duration.TotalSeconds > 0 ? position.TotalSeconds : 0;
+
+            EnsureLyrics(duration);
+            UpdateLyricLine(position);
 
             string first = _seekShowRemaining && duration > position ? "-" + FormatTime(duration - position) : FormatTime(position);
             SeekTimeText.Text = $"{first} / {FormatTime(duration)}";
@@ -466,13 +654,27 @@ namespace RetroBar.Controls
                 : $"{time.Minutes}:{time.Seconds:D2}";
         }
 
+        // Where the thumb was when the button went down: a click on the thumb itself changes nothing, and is not a seek (to where the
+        // thumb was a moment ago).
+        private double _seekSliderDownValue;
+
         private void SeekSlider_OnPreviewMouseDown(object sender, MouseButtonEventArgs e)
         {
             _seekSliderDragging = true;
+
+            // The slider has already moved the thumb to the point pressed by now: the position shown before is the one to compare with.
+            _seekSliderDownValue = _lastSeekDuration > TimeSpan.Zero ? _lastSeekPosition.TotalSeconds : SeekSlider.Value;
         }
 
-        private async void SeekSlider_OnPreviewMouseUp(object sender, MouseButtonEventArgs e)
+        private void SeekSlider_OnPreviewMouseUp(object sender, MouseButtonEventArgs e) => FinishSliderSeek();
+
+        private async void FinishSliderSeek()
         {
+            if (!_seekSliderDragging)
+            {
+                return;
+            }
+
             _seekSliderDragging = false;
 
             if (_sessionManager == null)
@@ -480,10 +682,18 @@ namespace RetroBar.Controls
                 return;
             }
 
-            TimeSpan target = TimeSpan.FromSeconds(SeekSlider.Value);
-            SetSeekDisplay(target, TimeSpan.FromSeconds(SeekSlider.Maximum));
+            if (Math.Abs(SeekSlider.Value - _seekSliderDownValue) < 0.5)
+            {
+                return;
+            }
 
-            await _sessionManager.SeekAsync(target);
+            // Where the source is now, not where it was when the display was last updated (the button may have been down a while).
+            TimeSpan target = TimeSpan.FromSeconds(SeekSlider.Value);
+            TimeSpan from = GetTimeline().Position;
+            SetSeekDisplay(target, TimeSpan.FromSeconds(SeekSlider.Maximum));
+            HoldSeek(target);
+
+            await SeekSourceAsync(target, from);
         }
 
         private async System.Threading.Tasks.Task SeekRelativeAsync(TimeSpan delta)
@@ -493,7 +703,14 @@ namespace RetroBar.Controls
                 return;
             }
 
-            (TimeSpan position, TimeSpan duration) = _sessionManager.GetTimeline();
+            // The source still reports where it was for a moment after a seek: a notch of the wheel that comes before it has caught up goes on
+            // from the position the last one sought to (else a fast wheel sought again and again from the same place, and stalled).
+            (TimeSpan position, TimeSpan duration) = GetTimeline();
+            if (DateTime.UtcNow < _seekHoldUntil)
+            {
+                position = _seekHoldPosition;
+            }
+
             TimeSpan target = position + delta;
             if (target < TimeSpan.Zero)
             {
@@ -507,8 +724,38 @@ namespace RetroBar.Controls
             // Paint the target position immediately rather than waiting for the seek command to
             // round-trip and the source app's own position to catch up - see SetSeekDisplay.
             SetSeekDisplay(target, duration);
+            HoldSeek(target);
 
-            await _sessionManager.SeekAsync(target);
+            await SeekLatestAsync(target, position);
+        }
+
+        // Seeks the wheel asked for, one at a time: a command sent while the one before is still on its way is dropped by the source, so only
+        // the last target wanted is kept to send when that one is done (from the position the first one that was held back started at, which
+        // is what a source that seeks by a difference needs).
+        private bool _seekSending;
+        private (TimeSpan Target, TimeSpan From)? _seekPending;
+
+        private async System.Threading.Tasks.Task SeekLatestAsync(TimeSpan target, TimeSpan from)
+        {
+            _seekPending = (target, _seekPending?.From ?? from);
+            if (_seekSending)
+            {
+                return;
+            }
+
+            _seekSending = true;
+            try
+            {
+                while (_seekPending is (TimeSpan next, TimeSpan start))
+                {
+                    _seekPending = null;
+                    await SeekSourceAsync(next, start);
+                }
+            }
+            finally
+            {
+                _seekSending = false;
+            }
         }
     }
 }

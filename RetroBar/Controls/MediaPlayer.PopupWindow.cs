@@ -27,7 +27,13 @@ namespace RetroBar.Controls
         // Dragging the popup: anywhere on it except the buttons and the slider. Its window is moved directly (a Popup's own offsets
         // keep it on the monitor of the track text), to any monitor; it takes that monitor's DPI and adjustments (see
         // RefreshSeekPopupMonitor). It goes back above the track text when it opens next.
-        private bool _seekPopupDragging;
+        private volatile bool _seekPopupDragging;
+
+        // Guards _seekPopupMovedTo and _seekPopupDragging between the dragging thread and the closing of the popup.
+        private readonly object _seekPopupDragLock = new();
+
+        [DllImport("dwmapi.dll")]
+        private static extern int DwmFlush();
 
         private POINT _seekPopupDragStart;
 
@@ -45,6 +51,10 @@ namespace RetroBar.Controls
         // changing, from the taskbar's buttons), so every move of its window is kept there instead (see SeekPopupHook).
         private POINT? _seekPopupMovedTo;
 
+        // Where an ordinary popup (not moved, not on top) is once it has opened. When the track changes, WPF places it again above the
+        // track text, which has changed width, so it would slide sideways: it keeps this X until it is opened next.
+        private int? _seekPopupHeldX;
+
         [StructLayout(LayoutKind.Sequential)]
         private struct WINDOWPOS
         {
@@ -57,12 +67,28 @@ namespace RetroBar.Controls
 
         private IntPtr SeekPopupHook(IntPtr hwnd, int msg, IntPtr wParam, IntPtr lParam, ref bool handled)
         {
-            if (msg == WM_WINDOWPOSCHANGING && (_seekPopupMovedTo != null || _seekPopupPinned))
+            POINT? movedTo;
+            lock (_seekPopupDragLock)
+            {
+                movedTo = _seekPopupMovedTo;
+            }
+
+            if (msg == WM_WINDOWPOSCHANGING && _seekPopupHeldX is int heldX && movedTo == null && !_seekPopupPinned)
+            {
+                WINDOWPOS held = Marshal.PtrToStructure<WINDOWPOS>(lParam);
+                if ((held.Flags & SWP_NOMOVE) == 0 && held.X != heldX)
+                {
+                    held.X = heldX;
+                    Marshal.StructureToPtr(held, lParam, false);
+                }
+            }
+
+            if (msg == WM_WINDOWPOSCHANGING && (movedTo != null || _seekPopupPinned))
             {
                 WINDOWPOS position = Marshal.PtrToStructure<WINDOWPOS>(lParam);
                 bool changed = false;
 
-                if (_seekPopupMovedTo is POINT moved && (position.Flags & SWP_NOMOVE) == 0 && (position.X != moved.X || position.Y != moved.Y))
+                if (movedTo is POINT moved && (position.Flags & SWP_NOMOVE) == 0 && (position.X != moved.X || position.Y != moved.Y))
                 {
                     position.X = moved.X;
                     position.Y = moved.Y;
@@ -225,8 +251,59 @@ namespace RetroBar.Controls
                 ApplySeekPopupTopmost();
             }
 
-            _seekPopupMovedTo = new POINT { X = _seekPopupDragWindow.X + dx, Y = _seekPopupDragWindow.Y + dy };
-            SetWindowPos(source.Handle, IntPtr.Zero, _seekPopupMovedTo.Value.X, _seekPopupMovedTo.Value.Y, 0, 0, SWP_NOSIZE | SWP_NOZORDER | SWP_NOACTIVATE);
+            // From here the window follows the pointer once for every refresh of the screen: a thread waits for each one and has this thread
+            // move the window (a timer here runs at the system timer's resolution, about 64 times a second, which showed on a 165 Hz screen).
+            // The window is only ever moved from this thread: moving it from another one froze the popup when it crossed to a monitor of
+            // another DPI, where this thread resizes it in the same moment.
+            _seekPopupDragTimer.Stop();
+            var thread = new System.Threading.Thread(PaceDrag) { IsBackground = true, Name = "SeekPopupDrag" };
+            thread.Start();
+        }
+
+        private int _seekPopupDragMovePending;
+
+        private void PaceDrag()
+        {
+            while (_seekPopupDragging && (GetAsyncKeyState(VK_LBUTTON) & 0x8000) != 0)
+            {
+                if (DwmFlush() != 0)
+                {
+                    System.Threading.Thread.Sleep(4);
+                }
+
+                // One move waiting at a time: a busy thread gets the latest position when it comes to it, not a queue of old ones.
+                if (System.Threading.Interlocked.Exchange(ref _seekPopupDragMovePending, 1) == 0)
+                {
+                    Dispatcher.BeginInvoke(new Action(MoveSeekPopupToPointer), DispatcherPriority.Send);
+                }
+            }
+
+            Dispatcher.BeginInvoke(new Action(() =>
+            {
+                MoveSeekPopupToPointer();
+                lock (_seekPopupDragLock)
+                {
+                    _seekPopupDragging = false;
+                }
+            }), DispatcherPriority.Send);
+        }
+
+        private void MoveSeekPopupToPointer()
+        {
+            _seekPopupDragMovePending = 0;
+            if (!_seekPopupDragging || !SeekPopup.IsOpen || PresentationSource.FromVisual(SeekPopupRoot) is not HwndSource source)
+            {
+                return;
+            }
+
+            GetCursorPos(out POINT now);
+            var target = new POINT { X = _seekPopupDragWindow.X + now.X - _seekPopupDragStart.X, Y = _seekPopupDragWindow.Y + now.Y - _seekPopupDragStart.Y };
+            lock (_seekPopupDragLock)
+            {
+                _seekPopupMovedTo = target;
+            }
+
+            SetWindowPos(source.Handle, IntPtr.Zero, target.X, target.Y, 0, 0, SWP_NOSIZE | SWP_NOZORDER | SWP_NOACTIVATE);
             RefreshSeekPopupMonitor(source);
         }
 
@@ -404,6 +481,9 @@ namespace RetroBar.Controls
         // that monitor's DPI (which WPF has already given the popup's window by now, or does when it raises DpiChanged below).
         private string _seekPopupMonitor;
 
+        // The DPI the popup's window draws at (the monitor it opened on), which it keeps whatever monitor it is dragged to.
+        private double _seekPopupHwndDpi;
+
         private void RefreshSeekPopupMonitor(HwndSource source)
         {
             var info = new MONITORINFOEX { Size = Marshal.SizeOf<MONITORINFOEX>() };
@@ -412,9 +492,138 @@ namespace RetroBar.Controls
                 return;
             }
 
+            // Dragged onto another monitor that has a player of its own: that one's popup takes over, as it is on its own taskbar (drawn at
+            // that monitor's DPI), where scaling this one would blur it.
+            if (_seekPopupDragging && ScreenDeviceName is string own && own != info.DeviceName && PlayerOn(info.DeviceName) is MediaPlayer other)
+            {
+                HandOffSeekPopup(other, source);
+                return;
+            }
+
             _seekPopupMonitor = info.DeviceName;
             MonitorOffset.SetDeviceNameOverride(SeekPopupRoot, info.DeviceName);
+            ApplySeekPopupDpi(source, MonitorFromWindow(source.Handle, MONITOR_DEFAULTTONEAREST));
             ReapplySeekPopupForMonitor();
+        }
+
+        // Every media player that is shown, one to a taskbar.
+        private static readonly System.Collections.Generic.List<MediaPlayer> Players = new();
+
+        private string ScreenDeviceName => (Window.GetWindow(this) as Taskbar)?.Screen.DeviceName;
+
+        private MediaPlayer PlayerOn(string deviceName)
+        {
+            foreach (MediaPlayer player in Players)
+            {
+                if (player != this && player.ScreenDeviceName == deviceName && player.IsVisible && player.TrackTextCanvas.ActualWidth > 0 && player._sessionManager?.HasSession == true)
+                {
+                    return player;
+                }
+            }
+
+            return null;
+        }
+
+        // The popup being dragged goes to the player of the monitor it is over, which opens its own, and the drag goes on with that: the
+        // pointer keeps the same place on it. The old popup goes once the new one is in place.
+        private void HandOffSeekPopup(MediaPlayer other, HwndSource source)
+        {
+            if (!GetWindowRect(source.Handle, out RECT window))
+            {
+                return;
+            }
+
+            GetCursorPos(out POINT cursor);
+            double relativeX = Math.Clamp((double)(cursor.X - window.Left) / Math.Max(1, window.Right - window.Left), 0, 1);
+            double relativeY = Math.Clamp((double)(cursor.Y - window.Top) / Math.Max(1, window.Bottom - window.Top), 0, 1);
+
+            lock (_seekPopupDragLock)
+            {
+                _seekPopupDragging = false;
+            }
+
+            other.TakeOverSeekPopup(this, new POINT { X = window.Left, Y = window.Top }, cursor, relativeX, relativeY);
+        }
+
+        private void TakeOverSeekPopup(MediaPlayer from, POINT firstPlace, POINT cursor, double relativeX, double relativeY)
+        {
+            bool pinned = _seekPopupPinned;
+
+            lock (_seekPopupDragLock)
+            {
+                _seekPopupMovedTo = firstPlace;
+            }
+
+            // Opened at once, with no slide, and the one that was open not told to close (it goes below).
+            _seekSlide.Reset();
+            _openSeekPlayer = null;
+            SeekPopup.IsOpen = true;
+
+            int attempts = 0;
+            Action finish = null;
+            finish = () =>
+            {
+                if (!SeekPopup.IsOpen)
+                {
+                    return;
+                }
+
+                // Its window is not there until the popup has opened: tried again a few times.
+                if (PresentationSource.FromVisual(SeekPopupRoot) is not HwndSource source || !GetWindowRect(source.Handle, out RECT window))
+                {
+                    if (++attempts < 20)
+                    {
+                        Dispatcher.BeginInvoke(finish, DispatcherPriority.Background);
+                    }
+
+                    return;
+                }
+
+                GetCursorPos(out POINT now);
+                var place = new POINT
+                {
+                    X = now.X - (int)Math.Round(relativeX * (window.Right - window.Left)),
+                    Y = now.Y - (int)Math.Round(relativeY * (window.Bottom - window.Top)),
+                };
+                lock (_seekPopupDragLock)
+                {
+                    _seekPopupMovedTo = place;
+                }
+
+                from.CloseSeekPopupNow();
+
+                // Closing the other one has put the shared settings back as they are for an ordinary popup.
+                _seekPopupPinned = pinned;
+                _openSeekPlayer = this;
+                ApplySeekPopupTopmost();
+                SetWindowPos(source.Handle, IntPtr.Zero, place.X, place.Y, 0, 0, SWP_NOSIZE | SWP_NOZORDER | SWP_NOACTIVATE);
+
+                _seekPopupDragStart = now;
+                _seekPopupDragWindow = place;
+                _seekPopupDragging = true;
+                new System.Threading.Thread(PaceDrag) { IsBackground = true, Name = "SeekPopupDrag" }.Start();
+                RefreshSeekPopupMonitor(source);
+            };
+            Dispatcher.BeginInvoke(finish, DispatcherPriority.Loaded);
+        }
+
+        [DllImport("shcore.dll")]
+        private static extern int GetDpiForMonitor(IntPtr monitor, int type, out uint x, out uint y);
+
+        // The popup is laid out for the DPI of the monitor it is on. WPF does not do that for a popup's window when it is dragged to another
+        // monitor: the window goes on turning what it draws into pixels at the DPI it was opened at (a popup of display 1's size on a
+        // display of another DPI). So it is scaled by the difference, which makes it the size it has on that monitor's own taskbar.
+        private void ApplySeekPopupDpi(HwndSource source, IntPtr monitor)
+        {
+            if (source.RootVisual == null || _seekPopupHwndDpi <= 0 || GetDpiForMonitor(monitor, 0, out uint dpiX, out uint dpiY) != 0)
+            {
+                return;
+            }
+
+            double dpi = dpiX / 96.0;
+            VisualTreeHelper.SetRootDpi(source.RootVisual, new DpiScale(dpi, dpiY / 96.0));
+            double scale = dpi / _seekPopupHwndDpi;
+            SeekPopupRoot.LayoutTransform = Math.Abs(scale - 1) < 0.001 ? Transform.Identity : new ScaleTransform(scale, scale);
         }
 
         private void ReapplySeekPopupForMonitor()
@@ -433,6 +642,13 @@ namespace RetroBar.Controls
 
         private void SeekPopupSource_OnDpiChanged(object sender, HwndDpiChangedEventArgs e)
         {
+            _seekPopupHeldX = null;
+            if (sender is HwndSource source)
+            {
+                _seekPopupMonitor = null;
+                RefreshSeekPopupMonitor(source);
+            }
+
             ReapplySeekPopupForMonitor();
         }
 
@@ -460,6 +676,33 @@ namespace RetroBar.Controls
                 }
             };
 
+            var lyrics = new MenuItem
+            {
+                Header = TryFindResource("media_popup_show_lyrics") as string ?? "Show _lyrics",
+                IsChecked = Settings.Instance.ShowMediaPopupLyrics,
+            };
+            lyrics.Click += (s, args) => Settings.Instance.ShowMediaPopupLyrics = !Settings.Instance.ShowMediaPopupLyrics;
+
+            // Global timing of the lyrics: a step earlier or later each time, for every song.
+            const int step = 50;
+            string Seconds(int ms) => (ms / 1000.0).ToString("0.00", System.Globalization.CultureInfo.CurrentCulture);
+            var timing = new MenuItem { Header = TryFindResource("media_popup_lyrics_timing") as string ?? "Lyrics _timing" };
+            timing.Items.Add(new MenuItem
+            {
+                Header = string.Format(TryFindResource("media_popup_lyrics_now") as string ?? "Now: {0} s ahead", Seconds(Settings.Instance.LyricsLeadMs)),
+                IsEnabled = false,
+            });
+            timing.Items.Add(MakeMenuSeparator());
+            var earlier = new MenuItem { Header = (TryFindResource("media_popup_lyrics_earlier") as string ?? "Show _earlier") + $" ({Seconds(step)} s)" };
+            earlier.Click += (s, args) => Settings.Instance.LyricsLeadMs += step;
+            var later = new MenuItem { Header = (TryFindResource("media_popup_lyrics_later") as string ?? "Show _later") + $" ({Seconds(step)} s)" };
+            later.Click += (s, args) => Settings.Instance.LyricsLeadMs -= step;
+            var reset = new MenuItem { Header = TryFindResource("media_popup_lyrics_reset") as string ?? "_Reset" };
+            reset.Click += (s, args) => Settings.Instance.LyricsLeadMs = 250;
+            timing.Items.Add(earlier);
+            timing.Items.Add(later);
+            timing.Items.Add(reset);
+
             var close = new MenuItem { Header = TryFindResource("close") as string ?? "_Close" };
             close.Click += (s, args) => CloseSeekPopupNow();
 
@@ -469,6 +712,8 @@ namespace RetroBar.Controls
                 Placement = System.Windows.Controls.Primitives.PlacementMode.MousePoint,
             };
             menu.Items.Add(onTop);
+            menu.Items.Add(lyrics);
+            menu.Items.Add(timing);
             menu.Items.Add(MakeMenuSeparator());
             menu.Items.Add(close);
             menu.Opened += (s, args) => _seekMenuOpen = true;

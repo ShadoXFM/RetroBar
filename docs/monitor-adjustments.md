@@ -67,9 +67,11 @@ A tag that is chosen by a state has variants: `Playing` (media is playing), `NoC
 | `MediaSeekButtonNext` | `Controls/MediaPlayer.xaml` |  |
 | `MediaSeekButtonPlayPause` | `Controls/MediaPlayer.xaml` |  |
 | `MediaSeekButtonPrevious` | `Controls/MediaPlayer.xaml` |  |
+| `MediaSeekControlsRow` | `Controls/MediaPlayer.xaml` |  |
 | `MediaSeekGlyphPlayPause` | `Controls/MediaPlayer.xaml` |  |
 | `MediaSeekGlyphSkipNext` | `Controls/MediaPlayer.xaml` |  |
 | `MediaSeekGlyphSkipPrevious` | `Controls/MediaPlayer.xaml` |  |
+| `MediaSeekLyricsText` | `Controls/MediaPlayer.xaml` |  |
 | `MediaSeekSlider` | `Controls/MediaPlayer.xaml` |  |
 | `MediaSeekSpectrum` | `Controls/MediaPlayer.xaml` |  |
 | `MediaSeekTimeText` | `Controls/MediaPlayer.xaml` |  |

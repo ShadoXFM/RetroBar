@@ -119,6 +119,53 @@ namespace RetroBar.Utilities
             set => Set(ref _showMediaPlayerAlbumArt, value);
         }
 
+        private bool _showMediaPopupLyrics = true;
+        public bool ShowMediaPopupLyrics
+        {
+            get => _showMediaPopupLyrics;
+            set => Set(ref _showMediaPopupLyrics, value);
+        }
+
+        // Word-by-word lyrics from the Spicy Lyrics API (developers.spicylyrics.org), found through Spotify's search (the client credentials of
+        // a free developer app). They are kept in this file only, which is in the user's own profile and is never part of the program.
+        private string _spicyLyricsKey = "";
+        public string SpicyLyricsKey
+        {
+            get => _spicyLyricsKey;
+            set => Set(ref _spicyLyricsKey, value ?? "");
+        }
+
+        private string _spotifyClientId = "";
+        public string SpotifyClientId
+        {
+            get => _spotifyClientId;
+            set => Set(ref _spotifyClientId, value ?? "");
+        }
+
+        private string _spotifyClientSecret = "";
+        public string SpotifyClientSecret
+        {
+            get => _spotifyClientSecret;
+            set => Set(ref _spotifyClientSecret, value ?? "");
+        }
+
+        // How many milliseconds before their time the lyrics' lines and words come (the lyrics are ahead of what is heard); negative for
+        // after. For every song: the right-click menu of the media popup moves it a step at a time.
+        private int _lyricsLeadMs = 250;
+        public int LyricsLeadMs
+        {
+            get => _lyricsLeadMs;
+            set => Set(ref _lyricsLeadMs, Math.Clamp(value, -3000, 3000));
+        }
+
+        // How many lines of lyrics the media popup shows.
+        private int _lyricLines = 8;
+        public int LyricLines
+        {
+            get => _lyricLines;
+            set => Set(ref _lyricLines, Math.Clamp(value, 3, 14));
+        }
+
         private bool _showVuMeter = true;
         public bool ShowVuMeter
         {
@@ -384,16 +431,6 @@ namespace RetroBar.Utilities
         {
             get => _taskbarWidthLimit;
             set => Set(ref _taskbarWidthLimit, value);
-        }
-
-        // The user's own arrangement of the taskbar tabs, as application keys (see TaskOpenOrderComparer)
-        // from leftmost to rightmost. Saved whenever they drag a tab, and applied whenever the tab list
-        // loads or a window appears - so a restart or theme change keeps their order.
-        private List<string> _taskOrder = [];
-        public List<string> TaskOrder
-        {
-            get => _taskOrder;
-            set => Set(ref _taskOrder, value);
         }
 
         private List<string> _quickLaunchOrder = [];

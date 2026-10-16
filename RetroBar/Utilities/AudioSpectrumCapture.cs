@@ -220,13 +220,13 @@ namespace RetroBar.Utilities
             return isFloat32 ? BitConverter.ToSingle(buffer, offset) : BitConverter.ToInt16(buffer, offset) / 32768f;
         }
 
-        private static float ToVuLevel(double peak)
+        internal static float ToVuLevel(double peak)
         {
             double db = 20 * Math.Log10(Math.Max(peak, 1e-6));
             return (float)Math.Clamp(1 - db / VuFloorDb, 0, 1);
         }
 
-        private static float ToLevel(double magnitude)
+        internal static float ToLevel(double magnitude)
         {
             double db = 20 * Math.Log10(Math.Max(magnitude, 1e-6));
             return (float)Math.Clamp((db - SpectrumFloorDb) / (SpectrumCeilingDb - SpectrumFloorDb), 0, 1);

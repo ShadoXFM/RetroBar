@@ -436,6 +436,103 @@
                                       IsEnabled="{Binding Source={x:Static Settings:Settings.Instance}, Path=ShowMediaPlayer, UpdateSourceTrigger=PropertyChanged}">
                                 <Label Content="{DynamicResource show_media_player_album_art}" />
                             </CheckBox>
+                            <DockPanel IsEnabled="{Binding Source={x:Static Settings:Settings.Instance}, Path=ShowMediaPlayer, UpdateSourceTrigger=PropertyChanged}">
+                                <Label VerticalAlignment="Center"
+                                       Target="{Binding ElementName=txtLyricLines}">
+                                    <AccessText Text="{DynamicResource media_lyrics_lines}" />
+                                </Label>
+                                <StackPanel DockPanel.Dock="Right"
+                                            Orientation="Horizontal"
+                                            HorizontalAlignment="Right"
+                                            Margin="5,5,0,5">
+                                    <TextBox x:Name="txtLyricLines"
+                                             Width="60"
+                                             MaxLength="2"
+                                             PreviewTextInput="NumberBox_PreviewTextInput"
+                                             LostFocus="LyricLines_LostFocus"
+                                             KeyDown="LyricsBox_KeyDown" />
+                                    <UniformGrid Columns="1"
+                                                 Width="18">
+                                        <Button Tag="1"
+                                                Padding="0"
+                                                MinWidth="0"
+                                                MinHeight="0"
+                                                Margin="1,0,0,0"
+                                                Click="LyricLinesStep_Click"
+                                                PreviewMouseLeftButtonDown="LyricLinesStep_MouseDown"
+                                                PreviewMouseLeftButtonUp="Spin_MouseUp"
+                                                MouseLeave="Spin_MouseUp">
+                                            <Path Data="M 0,3 L 3,0 L 6,3 Z"
+                                                  Fill="{Binding Foreground, RelativeSource={RelativeSource AncestorType=Button}}"
+                                                  HorizontalAlignment="Center"
+                                                  VerticalAlignment="Center" />
+                                        </Button>
+                                        <Button Tag="-1"
+                                                Padding="0"
+                                                MinWidth="0"
+                                                MinHeight="0"
+                                                Margin="1,0,0,0"
+                                                Click="LyricLinesStep_Click"
+                                                PreviewMouseLeftButtonDown="LyricLinesStep_MouseDown"
+                                                PreviewMouseLeftButtonUp="Spin_MouseUp"
+                                                MouseLeave="Spin_MouseUp">
+                                            <Path Data="M 0,0 L 6,0 L 3,3 Z"
+                                                  Fill="{Binding Foreground, RelativeSource={RelativeSource AncestorType=Button}}"
+                                                  HorizontalAlignment="Center"
+                                                  VerticalAlignment="Center" />
+                                        </Button>
+                                    </UniformGrid>
+                                </StackPanel>
+                            </DockPanel>
+                            <DockPanel IsEnabled="{Binding Source={x:Static Settings:Settings.Instance}, Path=ShowMediaPlayer, UpdateSourceTrigger=PropertyChanged}">
+                                <Label VerticalAlignment="Center"
+                                       Target="{Binding ElementName=txtLyricsDelay}">
+                                    <AccessText Text="{DynamicResource media_lyrics_delay}"
+                                                ToolTip="{DynamicResource media_lyrics_delay_tip}" />
+                                </Label>
+                                <StackPanel DockPanel.Dock="Right"
+                                            Orientation="Horizontal"
+                                            HorizontalAlignment="Right"
+                                            Margin="5,5,0,5">
+                                    <TextBox x:Name="txtLyricsDelay"
+                                             Width="60"
+                                             MaxLength="5"
+                                             PreviewTextInput="NumberBox_PreviewTextInput"
+                                             LostFocus="LyricsDelay_LostFocus"
+                                             KeyDown="LyricsBox_KeyDown" />
+                                    <UniformGrid Columns="1"
+                                                 Width="18">
+                                        <Button Tag="50"
+                                                Padding="0"
+                                                MinWidth="0"
+                                                MinHeight="0"
+                                                Margin="1,0,0,0"
+                                                Click="LyricsDelayStep_Click"
+                                                PreviewMouseLeftButtonDown="LyricsDelayStep_MouseDown"
+                                                PreviewMouseLeftButtonUp="Spin_MouseUp"
+                                                MouseLeave="Spin_MouseUp">
+                                            <Path Data="M 0,3 L 3,0 L 6,3 Z"
+                                                  Fill="{Binding Foreground, RelativeSource={RelativeSource AncestorType=Button}}"
+                                                  HorizontalAlignment="Center"
+                                                  VerticalAlignment="Center" />
+                                        </Button>
+                                        <Button Tag="-50"
+                                                Padding="0"
+                                                MinWidth="0"
+                                                MinHeight="0"
+                                                Margin="1,0,0,0"
+                                                Click="LyricsDelayStep_Click"
+                                                PreviewMouseLeftButtonDown="LyricsDelayStep_MouseDown"
+                                                PreviewMouseLeftButtonUp="Spin_MouseUp"
+                                                MouseLeave="Spin_MouseUp">
+                                            <Path Data="M 0,0 L 6,0 L 3,3 Z"
+                                                  Fill="{Binding Foreground, RelativeSource={RelativeSource AncestorType=Button}}"
+                                                  HorizontalAlignment="Center"
+                                                  VerticalAlignment="Center" />
+                                        </Button>
+                                    </UniformGrid>
+                                </StackPanel>
+                            </DockPanel>
                             <CheckBox x:Name="cbShowVuMeter"
                                       IsChecked="{Binding Source={x:Static Settings:Settings.Instance}, Path=ShowVuMeter, UpdateSourceTrigger=PropertyChanged}"
                                       IsEnabled="{Binding Source={x:Static Settings:Settings.Instance}, Path=ShowMediaPlayer, UpdateSourceTrigger=PropertyChanged}">

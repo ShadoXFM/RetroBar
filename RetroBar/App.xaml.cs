@@ -33,6 +33,7 @@ namespace RetroBar
 
         public App()
         {
+            AnimationFrameRate.Apply();
             _shellManager = SetupManagedShell();
 
             _explorerMonitor = new ExplorerMonitor();
@@ -61,6 +62,8 @@ namespace RetroBar
             EventManager.RegisterClassHandler(typeof(System.Windows.Controls.ContextMenu), FrameworkElement.LoadedEvent, new RoutedEventHandler(ContextMenu_OnLoaded));
             EventManager.RegisterClassHandler(typeof(System.Windows.Controls.ContextMenu), System.Windows.Controls.ContextMenu.OpenedEvent, new RoutedEventHandler(ContextMenu_OnOpened));
 
+            ToastHostWorkaround.Start();
+
             _dictionaryManager.SetLanguageFromSettings();
             loadTheme();
             _windowManager = new WindowManager(_dictionaryManager, _explorerMonitor, _shellManager, _startMenuMonitor, _updater, _hotkeyManager);
@@ -71,6 +74,7 @@ namespace RetroBar
         {
             if (sender is System.Windows.Controls.ContextMenu menu)
             {
+                BindMenuTextRendering(menu);
                 MenuSeparator.Apply(menu);
                 MenuItemStyle.Apply(menu);
                 MenuSeparator.Tidy(menu);
@@ -89,7 +93,17 @@ namespace RetroBar
                 MenuSeparator.Tidy(separated);
             }
 
-            if (sender is System.Windows.Controls.ContextMenu menu && menu.ReadLocalValue(TextOptions.TextRenderingModeProperty) == DependencyProperty.UnsetValue)
+            if (sender is System.Windows.Controls.ContextMenu loaded)
+            {
+                BindMenuTextRendering(loaded);
+            }
+        }
+
+        // The menus made in code take the text rendering the setting says too, not the one of whatever they are opened from (which is the
+        // taskbar's own smoothing setting): a menu that is not bound to it yet gets bound as it opens.
+        private static void BindMenuTextRendering(System.Windows.Controls.ContextMenu menu)
+        {
+            if (menu.ReadLocalValue(TextOptions.TextRenderingModeProperty) == DependencyProperty.UnsetValue)
             {
                 menu.SetBinding(TextOptions.TextRenderingModeProperty, new System.Windows.Data.Binding(nameof(Settings.AllowFontSmoothingMenu))
                 {

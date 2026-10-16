@@ -85,6 +85,7 @@ namespace RetroBar.Controls
             }
 
             ApplyVuMeterFill();
+            ApplyLyricsColor();
         }
 
         // The VU meter's bars go from the cover's colour at their left to a darker grey at their tip (as translucent as the accent they
