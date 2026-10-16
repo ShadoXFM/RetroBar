@@ -63,6 +63,10 @@ namespace RetroBar.Controls
         private const double LyricGlowAmount = 0.5;
         private const double LyricGlowRiseSeconds = 0.15;
         private const double LyricGlowFallSeconds = 0.5;
+
+        // And it has a halo: a blurred copy of it behind the line, in the colour of the cover, as strong as the word is bright.
+        private const double LyricHaloBlur = 7;
+        private const double LyricHaloOpacity = 0.9;
         private Run[][] _lyricRuns;
 
         // A line being sung by word: its words, and how far each has got (not sung yet 0, being sung 1, sung 2).
@@ -75,6 +79,8 @@ namespace RetroBar.Controls
             public LinearGradientBrush[] Sweeps;
             public double[] Glows;
             public long LastTicks;
+            public TextBlock Halo;
+            public Run[] HaloRuns;
         }
 
         private readonly List<ActiveWordLine> _activeLines = new();
@@ -791,6 +797,7 @@ namespace RetroBar.Controls
                     runs[i].Foreground = new SolidColorBrush(UnsungColor(words[i].IsBackground));
                 }
 
+                (active.Halo, active.HaloRuns) = AddLyricHalo(line);
                 _activeLines.Add(active);
             }
 
@@ -808,7 +815,52 @@ namespace RetroBar.Controls
         private void StopLyricWords()
         {
             CompositionTarget.Rendering -= LyricWordTimer_OnTick;
+            foreach (ActiveWordLine active in _activeLines)
+            {
+                // The halo of the word that was just sung goes out as the word's brightness does, not at once.
+                TextBlock halo = active.Halo;
+                if (halo?.Parent is Panel panel)
+                {
+                    if (SeekPopup.IsOpen)
+                    {
+                        var fade = new DoubleAnimation(halo.Opacity, 0, new Duration(TimeSpan.FromSeconds(LyricGlowFallSeconds)));
+                        fade.Completed += (s, e) => panel.Children.Remove(halo);
+                        halo.BeginAnimation(OpacityProperty, fade);
+                    }
+                    else
+                    {
+                        panel.Children.Remove(halo);
+                    }
+                }
+            }
+
             _activeLines.Clear();
+        }
+
+        // A copy of a row behind it, blurred, whose words are clear until they are sung (the tick gives them the colour of the cover).
+        private (TextBlock, Run[]) AddLyricHalo(int i)
+        {
+            TextBlock row = _lyricRows[i];
+            var halo = new TextBlock
+            {
+                TextAlignment = row.TextAlignment,
+                TextWrapping = row.TextWrapping,
+                HorizontalAlignment = row.HorizontalAlignment,
+                Margin = row.Margin,
+                IsHitTestVisible = false,
+                Effect = new BlurEffect { Radius = LyricHaloBlur, RenderingBias = RenderingBias.Performance },
+            };
+            halo.SetResourceReference(StyleProperty, "MediaPlayerTrackTextStyle");
+            var runs = new List<Run>();
+            foreach (Run run in row.Inlines.OfType<Run>())
+            {
+                var copy = new Run(run.Text) { FontSize = run.FontSize, Foreground = new SolidColorBrush(Colors.Transparent) };
+                halo.Inlines.Add(copy);
+                runs.Add(copy);
+            }
+
+            _lyricHosts[i].Children.Insert(0, halo);
+            return (halo, runs.ToArray());
         }
 
         // The colour a word of a line being sung has at a moment: not sung yet, sung, or part of the way (the colour the sweep has there).
@@ -900,6 +952,12 @@ namespace RetroBar.Controls
                     double glowBefore = glow;
                     glow = state == 1 ? Math.Min(1, glow + elapsed / LyricGlowRiseSeconds) : Math.Max(0, glow - elapsed / LyricGlowFallSeconds);
                     active.Glows[i] = glow;
+                    if (glow != glowBefore)
+                    {
+                        Color halo = SungColor(background);
+                        ((SolidColorBrush)active.HaloRuns[i].Foreground).Color = Color.FromArgb((byte)Math.Round(255 * glow * LyricHaloOpacity * (background ? 0.6 : 1)), halo.R, halo.G, halo.B);
+                    }
+
                     if (state == 1)
                     {
                         double progress = word.End > word.Start ? (position - word.Start).TotalSeconds / (word.End - word.Start).TotalSeconds : 1;
