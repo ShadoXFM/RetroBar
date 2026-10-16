@@ -30,9 +30,6 @@ namespace RetroBar.Controls
         {
             InitializeComponent();
             InitializeGraphSlide();
-            GraphTitle.Text = TryFindResource("cpu_temp_graph_title") as string ?? "CPU temperature";
-            GraphAgo.Text = string.Format(TryFindResource("cpu_temp_graph_ago") as string ?? "{0} min ago", (int)CpuTemperatureHistory.Span.TotalMinutes);
-            GraphEnd.Text = TryFindResource("cpu_temp_graph_now") as string ?? "now";
             Graph.CollectingText = TryFindResource("cpu_temp_graph_collecting") as string ?? "Collecting readings…";
         }
 
@@ -213,6 +210,34 @@ namespace RetroBar.Controls
             _slide.Show();
         }
 
+        // The name of the processor, as Windows has it in the registry, without the marks and the words that say nothing ("(R)", "Processor").
+        private static string _processorName;
+
+        private static string ProcessorName
+        {
+            get
+            {
+                if (_processorName != null)
+                {
+                    return _processorName;
+                }
+
+                string name = null;
+                try
+                {
+                    using Microsoft.Win32.RegistryKey key = Microsoft.Win32.Registry.LocalMachine.OpenSubKey(@"HARDWARE\DESCRIPTION\System\CentralProcessor\0");
+                    name = key?.GetValue("ProcessorNameString") as string;
+                }
+                catch (Exception ex) when (ex is System.Security.SecurityException or UnauthorizedAccessException or System.IO.IOException)
+                {
+                    // The name is not shown.
+                }
+
+                name = System.Text.RegularExpressions.Regex.Replace(name ?? "CPU", @"\((R|TM)\)|\bProcessor\b|\bCPU\b", " ", System.Text.RegularExpressions.RegexOptions.IgnoreCase);
+                return _processorName = System.Text.RegularExpressions.Regex.Replace(name, @"\s+", " ").Trim();
+            }
+        }
+
         private void RefreshGraph()
         {
             double InUnit(double celsius) => Settings.Instance.WeatherUseFahrenheit ? celsius * 9 / 5 + 32 : celsius;
@@ -222,7 +247,7 @@ namespace RetroBar.Controls
             CpuTemperatureHistory.Sample[] samples = CpuTemperatureHistory.Last();
             if (_celsius.HasValue)
             {
-                GraphNow.Text = Degrees(_celsius.Value);
+                GraphHeader.Text = $"{Degrees(_celsius.Value)} · {ProcessorName}";
             }
 
             GraphStats.Text = samples.Length == 0

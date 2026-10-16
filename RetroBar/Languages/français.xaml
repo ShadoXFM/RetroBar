@@ -12,9 +12,6 @@
     <s:String x:Key="media_lyrics_lines">Lignes de _paroles affichées dans la fenêtre (3 à 14) :</s:String>
     <s:String x:Key="media_lyrics_delay">_Décalage des paroles (ms d'avance) :</s:String>
     <s:String x:Key="media_lyrics_delay_tip">Combien de millisecondes avant leur moment les paroles apparaissent : plus les montre plus tôt, moins (ou négatif) plus tard. Pour toutes les chansons.</s:String>
-    <s:String x:Key="cpu_temp_graph_title">Température du processeur</s:String>
-    <s:String x:Key="cpu_temp_graph_ago">il y a {0} min</s:String>
-    <s:String x:Key="cpu_temp_graph_now">maintenant</s:String>
     <s:String x:Key="cpu_temp_graph_collecting">Relevés en cours…</s:String>
     <s:String x:Key="cpu_temp_graph_stats">Min {0}   Moyenne {1}   Max {2}</s:String>
     <s:String x:Key="show_vu_meter">Afficher le _vu-mètre derrière le titre</s:String>

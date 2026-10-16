@@ -8,13 +8,18 @@ using System.Windows.Media;
 namespace RetroBar.Controls
 {
     /// <summary>
-    /// A graph of the CPU temperature over the last fifteen minutes (see CpuTemperatureHistory): the time along the bottom, ending at now at the
-    /// right, the temperature up the side, in the unit of the weather's setting.
+    /// A graph of the CPU temperature over the last fifteen minutes (see CpuTemperatureHistory): the temperature up the side, in the unit of
+    /// the weather's setting, and along the bottom the time, at every third minute of the clock (8:00, 8:03, 8:06...), ending at now at the
+    /// right. Its text is Tahoma bold, hinted to the pixels (not smoothed).
     /// </summary>
     public class CpuTempGraph : FrameworkElement
     {
         private const double LabelWidth = 30;
         private const double Pad = 4;
+        private const double FontSize = 10;
+
+        // A mark and a label every this many minutes of the clock.
+        private const int TickMinutes = 3;
 
         private CpuTemperatureHistory.Sample[] _samples = Array.Empty<CpuTemperatureHistory.Sample>();
 
@@ -29,21 +34,30 @@ namespace RetroBar.Controls
 
         private static double InUnit(double celsius) => Settings.Instance.WeatherUseFahrenheit ? celsius * 9 / 5 + 32 : celsius;
 
+        // "8:03", or "08:03" where the clock has the hours in two digits.
+        private static string TimeText(DateTime local)
+        {
+            string pattern = CultureInfo.CurrentCulture.DateTimeFormat.ShortTimePattern.Contains('H') ? "HH:mm" : "h:mm";
+            return local.ToString(pattern, CultureInfo.CurrentCulture);
+        }
+
         protected override void OnRender(DrawingContext dc)
         {
             double width = ActualWidth;
             double height = ActualHeight;
-            if (width <= LabelWidth + 2 * Pad || height <= 2 * Pad)
+            if (width <= LabelWidth + 2 * Pad || height <= 2 * Pad + 2 * FontSize)
             {
                 return;
             }
 
             double dpi = VisualTreeHelper.GetDpi(this).PixelsPerDip;
-            Brush foreground = TryFindResource("ButtonForeground") as Brush ?? Brushes.Black;
-            var typeface = new Typeface(System.Windows.Documents.TextElement.GetFontFamily(this), FontStyles.Normal, FontWeights.Normal, FontStretches.Normal);
-            double fontSize = 10;
+            double Snap(double value) => Math.Round(value * dpi) / dpi;
 
-            FormattedText Text(string text, Brush brush) => new(text, CultureInfo.CurrentCulture, FlowDirection.LeftToRight, typeface, fontSize, brush, dpi);
+            Brush foreground = TryFindResource("ButtonForeground") as Brush ?? Brushes.Black;
+            var typeface = new Typeface(new FontFamily("Tahoma"), FontStyles.Normal, FontWeights.Bold, FontStretches.Normal);
+
+            FormattedText Text(string text) => new(text, CultureInfo.CurrentCulture, FlowDirection.LeftToRight, typeface, FontSize, foreground,
+                new NumberSubstitution(), TextFormattingMode.Display, dpi);
 
             Brush faint = foreground.Clone();
             faint.Opacity = 0.3;
@@ -52,13 +66,13 @@ namespace RetroBar.Controls
 
             double left = LabelWidth;
             double right = width - Pad;
-            double top = Pad + fontSize / 2;
-            double bottom = height - Pad - fontSize / 2;
+            double top = Pad + FontSize / 2;
+            double bottom = height - Pad - FontSize - 4;
 
             if (_samples.Length < 2)
             {
-                FormattedText waiting = Text(CollectingText, foreground);
-                dc.DrawText(waiting, new Point((width - waiting.Width) / 2, (height - waiting.Height) / 2));
+                FormattedText waiting = Text(CollectingText);
+                dc.DrawText(waiting, new Point(Snap((width - waiting.Width) / 2), Snap((height - waiting.Height) / 2)));
                 return;
             }
 
@@ -80,12 +94,30 @@ namespace RetroBar.Controls
             {
                 double y = Math.Round(Y(value)) + 0.5;
                 dc.DrawLine(gridPen, new Point(left, y), new Point(right, y));
-                FormattedText label = Text($"{value:0}°", foreground);
-                dc.DrawText(label, new Point(left - 4 - label.Width, y - label.Height / 2));
+                FormattedText label = Text($"{value:0}°");
+                dc.DrawText(label, new Point(Snap(left - 4 - label.Width), Snap(y - label.Height / 2)));
             }
 
             DateTime now = DateTime.UtcNow;
-            double X(DateTime utc) => left + (1 - (now - utc).TotalSeconds / CpuTemperatureHistory.Span.TotalSeconds) * (right - left);
+            double Seconds(DateTime utc) => (now - utc).TotalSeconds;
+            double X(DateTime utc) => left + (1 - Seconds(utc) / CpuTemperatureHistory.Span.TotalSeconds) * (right - left);
+
+            // The time, at the third minutes of the clock that are in the span.
+            DateTime nowLocal = now.ToLocalTime();
+            DateTime tick = new DateTime(nowLocal.Year, nowLocal.Month, nowLocal.Day, nowLocal.Hour, nowLocal.Minute / TickMinutes * TickMinutes, 0, DateTimeKind.Local);
+            for (; (nowLocal - tick) <= CpuTemperatureHistory.Span; tick = tick.AddMinutes(-TickMinutes))
+            {
+                double x = Math.Round(X(tick.ToUniversalTime())) + 0.5;
+                FormattedText label = Text(TimeText(tick));
+                double labelLeft = Math.Clamp(x - label.Width / 2, left - 2, width - label.Width);
+                if (x < left)
+                {
+                    continue;
+                }
+
+                dc.DrawLine(gridPen, new Point(x, bottom), new Point(x, bottom + 3));
+                dc.DrawText(label, new Point(Snap(labelLeft), Snap(bottom + 4)));
+            }
 
             var line = new StreamGeometry();
             using (StreamGeometryContext context = line.Open())
