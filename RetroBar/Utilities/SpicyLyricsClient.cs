@@ -233,7 +233,7 @@ namespace RetroBar.Utilities
                 {
                     foreach (JsonElement line in content.EnumerateArray())
                     {
-                        lines.Add(new LyricLine(Time(line, "StartTime", unit), (Text(line, "Text") ?? "").Trim(), null, Time(line, "EndTime", unit)));
+                        lines.Add(new LyricLine(Time(line, "StartTime", unit), (Text(line, "Text") ?? "").Trim(), null, Time(line, "EndTime", unit), IsOpposite(line)));
                     }
                 }
                 else
@@ -299,8 +299,12 @@ namespace RetroBar.Utilities
             }
 
             TimeSpan start = TryGet(lead, "StartTime", out _) ? Time(lead, "StartTime", unit) : words[0].Start;
-            return new LyricLine(start, string.Concat(words.Select(word => word.Text)).Trim(), words.ToArray(), words.Max(word => word.End));
+            return new LyricLine(start, string.Concat(words.Select(word => word.Text)).Trim(), words.ToArray(), words.Max(word => word.End), IsOpposite(line));
         }
+
+        // The second singer's lines of a duet.
+        private static bool IsOpposite(JsonElement line) =>
+            TryGet(line, "OppositeAligned", out JsonElement value) && value.ValueKind == JsonValueKind.True;
 
         private static void AddSyllables(JsonElement group, double unit, List<LyricWord> words, bool brackets)
         {
@@ -319,7 +323,7 @@ namespace RetroBar.Utilities
                 }
 
                 bool partOfWord = TryGet(syllable, "IsPartOfWord", out JsonElement part) && part.ValueKind == JsonValueKind.True;
-                words.Add(new LyricWord(Time(syllable, "StartTime", unit), Time(syllable, "EndTime", unit), partOfWord ? text : text + " "));
+                words.Add(new LyricWord(Time(syllable, "StartTime", unit), Time(syllable, "EndTime", unit), partOfWord ? text : text + " ", brackets));
             }
 
             if (brackets && words.Count > first)

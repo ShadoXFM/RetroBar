@@ -41,6 +41,11 @@
     <s:String x:Key="media_source_none">No media playing</s:String>
     <s:String x:Key="media_popup_always_on_top">_Always on top</s:String>
     <s:String x:Key="media_popup_show_lyrics">Show _lyrics</s:String>
+    <s:String x:Key="media_popup_lyrics_timing">Lyrics _timing</s:String>
+    <s:String x:Key="media_popup_lyrics_earlier">Show _earlier</s:String>
+    <s:String x:Key="media_popup_lyrics_later">Show _later</s:String>
+    <s:String x:Key="media_popup_lyrics_reset">_Reset</s:String>
+    <s:String x:Key="media_popup_lyrics_now">Now: {0} s ahead</s:String>
     <s:String x:Key="show_cpu_temp">Show _CPU temperature</s:String>
     <s:String x:Key="media_previous">Previous</s:String>
     <s:String x:Key="media_play_pause">Play/Pause</s:String>

@@ -351,6 +351,37 @@ namespace RetroBar.Tests
         }
 
         [Fact]
+        public void The_background_vocals_and_the_second_singers_lines_are_marked()
+        {
+            const string json = """
+                {"Body":{"Type":"Syllable","Content":[
+                  {"Type":"Vocal","OppositeAligned":false,"Lead":{"StartTime":1,"EndTime":3,"Syllables":[{"Text":"one","StartTime":1,"EndTime":2,"IsPartOfWord":false}]},
+                   "Background":[{"StartTime":2,"EndTime":3,"Syllables":[{"Text":"ooh","StartTime":2,"EndTime":3,"IsPartOfWord":false}]}]},
+                  {"Type":"Vocal","OppositeAligned":true,"Lead":{"StartTime":4,"EndTime":5,"Syllables":[{"Text":"two","StartTime":4,"EndTime":5,"IsPartOfWord":false}]}}
+                ]}}
+                """;
+
+            LyricLine[] lines = SpicyLyricsClient.Parse(json).Lines;
+
+            Assert.False(lines[0].OppositeAligned);
+            Assert.True(lines[1].OppositeAligned);
+            Assert.False(lines[0].Words[0].IsBackground);
+            Assert.True(lines[0].Words[1].IsBackground);
+            Assert.StartsWith("(", lines[0].Words[1].Text);
+        }
+
+        [Fact]
+        public void A_line_synced_lyric_marks_the_second_singers_lines_too()
+        {
+            const string json = """{"Body":{"Type":"Line","Content":[{"Type":"Vocal","Text":"a","StartTime":1,"EndTime":2,"OppositeAligned":true},{"Type":"Vocal","Text":"b","StartTime":3,"EndTime":4}]}}""";
+
+            LyricLine[] lines = SpicyLyricsClient.Parse(json).Lines;
+
+            Assert.True(lines[0].OppositeAligned);
+            Assert.False(lines[1].OppositeAligned);
+        }
+
+        [Fact]
         public void Lyrics_without_timing_or_unreadable_ones_give_none()
         {
             Assert.Null(SpicyLyricsClient.Parse("""{"Body":{"Type":"Static","Lines":[{"Text":"a"}]}}"""));

@@ -149,6 +149,15 @@ namespace RetroBar.Utilities
             set => Set(ref _spotifyClientSecret, value ?? "");
         }
 
+        // How many milliseconds before their time the lyrics' lines and words come (the lyrics are ahead of what is heard); negative for
+        // after. For every song: the right-click menu of the media popup moves it a step at a time.
+        private int _lyricsLeadMs = 250;
+        public int LyricsLeadMs
+        {
+            get => _lyricsLeadMs;
+            set => Set(ref _lyricsLeadMs, Math.Clamp(value, -3000, 3000));
+        }
+
         private bool _showVuMeter = true;
         public bool ShowVuMeter
         {

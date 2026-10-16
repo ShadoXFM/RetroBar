@@ -683,6 +683,26 @@ namespace RetroBar.Controls
             };
             lyrics.Click += (s, args) => Settings.Instance.ShowMediaPopupLyrics = !Settings.Instance.ShowMediaPopupLyrics;
 
+            // Global timing of the lyrics: a step earlier or later each time, for every song.
+            const int step = 50;
+            string Seconds(int ms) => (ms / 1000.0).ToString("0.00", System.Globalization.CultureInfo.CurrentCulture);
+            var timing = new MenuItem { Header = TryFindResource("media_popup_lyrics_timing") as string ?? "Lyrics _timing" };
+            timing.Items.Add(new MenuItem
+            {
+                Header = string.Format(TryFindResource("media_popup_lyrics_now") as string ?? "Now: {0} s ahead", Seconds(Settings.Instance.LyricsLeadMs)),
+                IsEnabled = false,
+            });
+            timing.Items.Add(MakeMenuSeparator());
+            var earlier = new MenuItem { Header = (TryFindResource("media_popup_lyrics_earlier") as string ?? "Show _earlier") + $" ({Seconds(step)} s)" };
+            earlier.Click += (s, args) => Settings.Instance.LyricsLeadMs += step;
+            var later = new MenuItem { Header = (TryFindResource("media_popup_lyrics_later") as string ?? "Show _later") + $" ({Seconds(step)} s)" };
+            later.Click += (s, args) => Settings.Instance.LyricsLeadMs -= step;
+            var reset = new MenuItem { Header = TryFindResource("media_popup_lyrics_reset") as string ?? "_Reset" };
+            reset.Click += (s, args) => Settings.Instance.LyricsLeadMs = 250;
+            timing.Items.Add(earlier);
+            timing.Items.Add(later);
+            timing.Items.Add(reset);
+
             var close = new MenuItem { Header = TryFindResource("close") as string ?? "_Close" };
             close.Click += (s, args) => CloseSeekPopupNow();
 
@@ -693,6 +713,7 @@ namespace RetroBar.Controls
             };
             menu.Items.Add(onTop);
             menu.Items.Add(lyrics);
+            menu.Items.Add(timing);
             menu.Items.Add(MakeMenuSeparator());
             menu.Items.Add(close);
             menu.Opened += (s, args) => _seekMenuOpen = true;
