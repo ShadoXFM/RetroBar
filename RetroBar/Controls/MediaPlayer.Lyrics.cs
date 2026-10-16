@@ -32,7 +32,7 @@ namespace RetroBar.Controls
         // beyond are not shown (and do not get an effect, which would cost for nothing).
         private const int LyricStyledDistance = 9;
         private static readonly double[] LyricOpacity = { 1, 0.45, 0.3, 0.2 };
-        private static readonly double[] LyricBlur = { 0, 2.2, 3, 3.8 };
+        private static readonly double[] LyricBlur = { 0, 2, 2.4, 3 };
 
         // The lines and the words come this much before their time (the lyrics are ahead of what is heard): a setting for every song,
         // which the media popup's right-click menu moves.
