@@ -73,6 +73,24 @@ namespace RetroBar.Controls
             private set { SetValue(IsGroupActiveProperty, value); }
         }
 
+        public static readonly DependencyProperty IsGroupFlashingProperty = DependencyProperty.Register(
+            nameof(IsGroupFlashing), typeof(bool), typeof(TaskButton), new PropertyMetadata(false));
+
+        /// <summary>
+        /// Whether one of the windows this tab stands for has asked for attention and has not been used since: the tab shows it, from the
+        /// first flash until that window is activated. A tab that stands for several windows read only its first one, so a flash of another
+        /// (a second window of Discord, say) was not shown at all; and the shell hook reports each blink as a flash and a redraw, so a tab
+        /// went back to normal between the blinks, and for any reason a redraw came last.
+        /// </summary>
+        public bool IsGroupFlashing
+        {
+            get { return (bool)GetValue(IsGroupFlashingProperty); }
+            private set { SetValue(IsGroupFlashingProperty, value); }
+        }
+
+        // The windows that have flashed and have not been activated since, for every taskbar.
+        private static readonly HashSet<IntPtr> NeedsAttention = new();
+
         private TaskList _groupHost;
 
         private void RefreshGroup()
@@ -137,6 +155,21 @@ namespace RetroBar.Controls
         {
             if (e.PropertyName == "State")
             {
+                if (sender is ApplicationWindow changed)
+                {
+                    lock (NeedsAttention)
+                    {
+                        if (changed.State == ApplicationWindow.WindowState.Flashing)
+                        {
+                            NeedsAttention.Add(changed.Handle);
+                        }
+                        else if (changed.State == ApplicationWindow.WindowState.Active)
+                        {
+                            NeedsAttention.Remove(changed.Handle);
+                        }
+                    }
+                }
+
                 UpdateGroupActive();
             }
         }
@@ -144,6 +177,10 @@ namespace RetroBar.Controls
         private void UpdateGroupActive()
         {
             IsGroupActive = GroupWindows.Count > 1 && GroupWindows.Any(w => w.State == ApplicationWindow.WindowState.Active);
+            lock (NeedsAttention)
+            {
+                IsGroupFlashing = GroupWindows.Any(w => w.State == ApplicationWindow.WindowState.Flashing || NeedsAttention.Contains(w.Handle));
+            }
         }
 
         // With window previews off, a click on a tab that stands for several windows goes to the next one
@@ -203,6 +240,7 @@ namespace RetroBar.Controls
             multiBinding.Bindings.Add(new Binding { RelativeSource = RelativeSource.Self });
             multiBinding.Bindings.Add(new Binding("State"));
             multiBinding.Bindings.Add(new Binding(nameof(IsGroupActive)) { Source = this });
+            multiBinding.Bindings.Add(new Binding(nameof(IsGroupFlashing)) { Source = this });
 
             AppButton.SetBinding(StyleProperty, multiBinding);
         }

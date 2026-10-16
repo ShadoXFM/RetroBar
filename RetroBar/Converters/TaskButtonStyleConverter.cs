@@ -30,6 +30,12 @@ namespace RetroBar.Converters
                 return fxElement.FindResource("TaskButtonActive");
             }
 
+            // Asked for attention and not used since: highlighted, between the blinks and after them (see TaskButton.IsGroupFlashing).
+            if (values.Length > 3 && values[3] is true && !(values[1] is ApplicationWindow.WindowState.Active))
+            {
+                return fxElement.FindResource("TaskButtonFlashing");
+            }
+
             if (values[1] is ApplicationWindow.WindowState state)
             {
                 switch (state)
