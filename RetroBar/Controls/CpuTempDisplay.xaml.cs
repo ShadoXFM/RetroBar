@@ -292,6 +292,11 @@ namespace RetroBar.Controls
                 return null;
             }
 
+            if (PopupSlide.MeasureOverlap(GraphFrame, taskbar) is double measured)
+            {
+                return measured;
+            }
+
             double? frameBottom = taskbar.MediaPlayerControl.GetSeekFrameBottom(taskbar);
             if (frameBottom == null)
             {

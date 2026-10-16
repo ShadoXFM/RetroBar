@@ -219,6 +219,11 @@ namespace RetroBar.Controls
                 try
                 {
                     frameBottom = WeatherPanel.TransformToAncestor(taskbar).Transform(new Point(0, 0)).Y;
+            if (PopupSlide.MeasureOverlap(ForecastFrame, taskbar) is double measured)
+            {
+                return measured;
+            }
+
                 }
                 catch (InvalidOperationException)
                 {
