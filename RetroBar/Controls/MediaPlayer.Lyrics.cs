@@ -875,7 +875,9 @@ namespace RetroBar.Controls
         {
             if (_activeLines.Count == 0 || !SeekPopup.IsOpen)
             {
-                CompositionTarget.Rendering -= LyricWordTimer_OnTick;
+                // Stopped for good, not only unhooked: with its lines kept, the popup opened again found words that were never moved on
+                // (UpdateLyricLine starts them again only when there are none).
+                StopLyricWords();
                 return;
             }
 
