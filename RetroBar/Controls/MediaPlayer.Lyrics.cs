@@ -39,9 +39,9 @@ namespace RetroBar.Controls
 
         // The scroll and the colour take the same time: the line is in its colour when it is in its place.
         private static readonly Duration LyricScroll = new(TimeSpan.FromMilliseconds(320));
-        // A line that loses focus fades out - the cover's colour, the brightness and the blur together, in a straight line - more slowly than
-        // it came in (the scroll takes its own time).
-        private static readonly Duration LyricColorFadeOut = new(TimeSpan.FromMilliseconds(1200));
+        // A line that loses focus fades out - the cover's colour to its dimmed gray, and the blur, which is stepped (a blur that is drawn again
+        // for every frame made the fade choppy) - in a straight line, shortly.
+        private static readonly Duration LyricColorFadeOut = new(TimeSpan.FromMilliseconds(350));
         private static readonly TimeSpan LyricsRetry = TimeSpan.FromSeconds(30);
 
         // The window fades out at its top and bottom edges, so a line cut off there reads as scrolled out of view, not as a stray mark.
@@ -537,7 +537,26 @@ namespace RetroBar.Controls
                         row.BeginAnimation(OpacityProperty, new DoubleAnimation(oldOpacity, opacity, time) { EasingFunction = ease });
                     }
 
-                    var radius = new DoubleAnimation(oldBlur, blur, time) { EasingFunction = ease };
+                    AnimationTimeline radius;
+                    if (fadingOut)
+                    {
+                        // The blur grows in a few steps, so that it is drawn again a few times and not for every frame.
+                        const int steps = 5;
+                        var keyed = new DoubleAnimationUsingKeyFrames();
+                        keyed.KeyFrames.Add(new DiscreteDoubleKeyFrame(oldBlur, KeyTime.FromPercent(0)));
+                        for (int step = 1; step <= steps; step++)
+                        {
+                            keyed.KeyFrames.Add(new DiscreteDoubleKeyFrame(oldBlur + (blur - oldBlur) * step / steps, KeyTime.FromPercent((step - 1) / (double)steps + 0.0001)));
+                        }
+
+                        keyed.Duration = time;
+                        radius = keyed;
+                    }
+                    else
+                    {
+                        radius = new DoubleAnimation(oldBlur, blur, time) { EasingFunction = ease };
+                    }
+
                     if (blur == 0)
                     {
                         // A blur effect, even of nothing, softens the text: the lines in focus have none at rest.
