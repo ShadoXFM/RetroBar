@@ -57,7 +57,6 @@ namespace RetroBar.Controls
         // words). Background vocals are smaller and dimmer.
         private const double LyricWordSoftEdge = 0.12;
         private const double LyricBackgroundScale = 0.85;
-        private static readonly Duration LyricLiftTime = new(TimeSpan.FromMilliseconds(110));
         private Run[][] _lyricRuns;
         private int[][] _lyricRunOffsets;
 
@@ -796,7 +795,6 @@ namespace RetroBar.Controls
                 // The word being sung is a pixel higher: a text effect over its letters, which moves as the singing does.
                 active.Move = new TranslateTransform();
                 active.Lift = new TextEffect { Transform = active.Move, PositionStart = 0, PositionCount = 0 };
-                active.Block.TextEffects.Add(active.Lift);
                 _activeLines.Add(active);
             }
 
@@ -816,7 +814,10 @@ namespace RetroBar.Controls
             CompositionTarget.Rendering -= LyricWordTimer_OnTick;
             foreach (ActiveWordLine active in _activeLines)
             {
-                active.Block.TextEffects.Clear();
+                if (active.Lifted >= 0)
+                {
+                    active.Runs[active.Lifted].TextEffects.Remove(active.Lift);
+                }
             }
 
             _activeLines.Clear();
@@ -934,19 +935,25 @@ namespace RetroBar.Controls
 
                 if (lifted != active.Lifted)
                 {
+                    int previousLifted = active.Lifted;
                     active.Lifted = lifted;
+                    if (previousLifted >= 0)
+                    {
+                        active.Runs[previousLifted].TextEffects.Remove(active.Lift);
+                    }
+
                     if (lifted >= 0)
                     {
+                        // On the run of the word itself (a text effect on the block is ignored by a block made of runs; its positions
+                        // count from the start of the block), and at once: a single pixel is not eased in.
+                        active.Move.Y = -1 / GetSeekDpi().DpiScaleY;
                         active.Lift.PositionStart = active.Offsets[lifted];
                         active.Lift.PositionCount = active.Runs[lifted].Text.Length;
-                        active.Move.BeginAnimation(TranslateTransform.YProperty, new DoubleAnimation(0, -1 / GetSeekDpi().DpiScaleY, LyricLiftTime));
+                        active.Runs[lifted].TextEffects.Add(active.Lift);
                     }
-                    else
-                    {
-                        active.Move.BeginAnimation(TranslateTransform.YProperty, null);
-                        active.Move.Y = 0;
-                        active.Lift.PositionCount = 0;
-                    }
+
+                    // A change of the effects is not drawn until the block is laid out again.
+                    active.Block.InvalidateMeasure();
                 }
             }
         }
