@@ -33,6 +33,7 @@ namespace RetroBar
 
         public App()
         {
+            AnimationFrameRate.Apply();
             _shellManager = SetupManagedShell();
 
             _explorerMonitor = new ExplorerMonitor();

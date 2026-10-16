@@ -60,7 +60,6 @@ namespace RetroBar.Controls
         private static readonly Duration LyricLiftTime = new(TimeSpan.FromMilliseconds(110));
         private Run[][] _lyricRuns;
         private int[][] _lyricRunOffsets;
-        private DispatcherTimer _lyricWordTimer;
 
         // A line being sung by word: its words, and how far each has got (not sung yet 0, being sung 1, sung 2).
         private sealed class ActiveWordLine
@@ -796,16 +795,15 @@ namespace RetroBar.Controls
                 return;
             }
 
-            _lyricWordTimer ??= new DispatcherTimer(DispatcherPriority.Render) { Interval = TimeSpan.FromMilliseconds(33) };
-            _lyricWordTimer.Tick -= LyricWordTimer_OnTick;
-            _lyricWordTimer.Tick += LyricWordTimer_OnTick;
-            _lyricWordTimer.Start();
+            // Once for every frame drawn (a timer of 33 ms made the words move at 30 a second).
+            CompositionTarget.Rendering -= LyricWordTimer_OnTick;
+            CompositionTarget.Rendering += LyricWordTimer_OnTick;
             LyricWordTimer_OnTick(null, EventArgs.Empty);
         }
 
         private void StopLyricWords()
         {
-            _lyricWordTimer?.Stop();
+            CompositionTarget.Rendering -= LyricWordTimer_OnTick;
             foreach (ActiveWordLine active in _activeLines)
             {
                 active.Block.TextEffects.Clear();
@@ -867,7 +865,7 @@ namespace RetroBar.Controls
         {
             if (_activeLines.Count == 0 || !SeekPopup.IsOpen)
             {
-                _lyricWordTimer?.Stop();
+                CompositionTarget.Rendering -= LyricWordTimer_OnTick;
                 return;
             }
 
