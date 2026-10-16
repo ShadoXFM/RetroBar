@@ -37,7 +37,7 @@
                    Foreground="{DynamicResource ClockForeground}"
                    utilities:MonitorOffset.Tag="CpuTemp" />
     </StackPanel>
-    <!-- The graph of the temperature of the last fifteen minutes: opens and closes as the weather's forecast does (the same frame, the same
+    <!-- The graph of the temperature of the last five minutes: opens and closes as the weather's forecast does (the same frame, the same
          slide; see CpuTempDisplay.xaml.cs). -->
     <Popup x:Name="GraphPopup"
            StaysOpen="True"
@@ -64,8 +64,8 @@
                                    TextTrimming="CharacterEllipsis"
                                    Margin="2,0,2,0" />
                         <controls:CpuTempGraph x:Name="Graph"
-                                               Height="112"
-                                               Margin="0,8,0,0" />
+                                               Height="108"
+                                               Margin="0,5,0,0" />
                         <!-- Min, average and max across the width of the widget: the first at the left, the last at the right, the
                              second between them. -->
                         <Grid Margin="2,6,2,0">

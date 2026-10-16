@@ -9,8 +9,8 @@ using System.Windows.Media;
 namespace RetroBar.Controls
 {
     /// <summary>
-    /// A graph of the CPU temperature over the last fifteen minutes (see CpuTemperatureHistory): the temperature up the side, in the unit of
-    /// the weather's setting, and along the bottom the time, at every third minute of the clock (8:00, 8:03, 8:06...), ending at now at the
+    /// A graph of the CPU temperature over the last five minutes (see CpuTemperatureHistory): the temperature up the side, in the unit of
+    /// the weather's setting, and along the bottom the time, at every minute of the clock (8:00, 8:01, 8:02...), ending at now at the
     /// right. Its text is Tahoma bold, hinted to the pixels (not smoothed).
     /// </summary>
     public class CpuTempGraph : FrameworkElement
@@ -22,13 +22,13 @@ namespace RetroBar.Controls
         private const double FontSize = 10;
 
         // A mark and a label every this many minutes of the clock.
-        private const int TickMinutes = 3;
+        private const int TickMinutes = 1;
 
         private CpuTemperatureHistory.Sample[] _samples = Array.Empty<CpuTemperatureHistory.Sample>();
 
         public string CollectingText { get; set; } = "…";
 
-        /// <summary>Draws the readings of the last fifteen minutes again.</summary>
+        /// <summary>Draws the readings of the last five minutes again.</summary>
         public void Refresh()
         {
             _samples = CpuTemperatureHistory.Last();
@@ -68,7 +68,7 @@ namespace RetroBar.Controls
             gridPen.Freeze();
 
             double right = width - Pad;
-            double top = Pad + FontSize / 2;
+            double top = FontSize / 2 + 1;
             double bottom = height - Pad - FontSize - 4;
 
             if (_samples.Length < 2)
@@ -78,20 +78,21 @@ namespace RetroBar.Controls
                 return;
             }
 
-            // The range of the side: the readings with a little room, at least ten degrees, between multiples of five.
+            // The range of the side: the readings with a little room, from a line to a line, so that the highest line is at the very top of
+            // the graph (and the lowest at its bottom), with at least two spaces between lines.
             double min = _samples.Min(s => InUnit(s.Celsius));
             double max = _samples.Max(s => InUnit(s.Celsius));
-            double low = Math.Floor((min - 1) / 5) * 5;
-            double high = Math.Ceiling((max + 1) / 5) * 5;
-            if (high - low < 10)
+            double step = (max - min + 2) <= 20 ? 5 : (max - min + 2) <= 40 ? 10 : 20;
+            double low = Math.Floor((min - 1) / step) * step;
+            double high = Math.Ceiling((max + 1) / step) * step;
+            if (high - low < 2 * step)
             {
-                high = low + 10;
+                high = low + 2 * step;
             }
 
             double Y(double value) => bottom - (value - low) / (high - low) * (bottom - top);
 
-            // Lines across at every multiple of the step, which makes about four of them. The graph starts after the widest of their labels.
-            double step = (high - low) <= 20 ? 5 : (high - low) <= 40 ? 10 : 20;
+            // Lines across at every multiple of the step. The graph starts after the widest of their labels.
             var marks = new List<(double Value, FormattedText Label)>();
             for (double value = Math.Ceiling(low / step) * step; value <= high; value += step)
             {
@@ -107,11 +108,12 @@ namespace RetroBar.Controls
                 dc.DrawText(label, new Point(Snap(LabelMargin + widest - label.Width), Snap(y - label.Height / 2)));
             }
 
-            // Five whole device pixels' spaces for the fifteen minutes (a mark is at every third), so every mark is the same whole number of
-            // pixels from the next and the labels move together, not each by its own rounding.
+            // The span is a whole number of spaces, each a whole number of device pixels (a mark is at the end of each), so every mark is the
+            // same whole number of pixels from the next and the labels move together, not each by its own rounding.
             DateTime now = DateTime.UtcNow;
-            int spacePixels = Math.Max(1, (int)Math.Floor((right - left) * dpi / 5));
-            double plot = spacePixels * 5 / dpi;
+            int spaces = (int)Math.Round(CpuTemperatureHistory.Span.TotalMinutes / TickMinutes);
+            int spacePixels = Math.Max(1, (int)Math.Floor((right - left) * dpi / spaces));
+            double plot = spacePixels * spaces / dpi;
             double plotLeft = Math.Round(left * dpi) / dpi;
             double X(DateTime utc) => plotLeft + (1 - (now - utc).TotalSeconds / CpuTemperatureHistory.Span.TotalSeconds) * plot;
 

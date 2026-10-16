@@ -1082,7 +1082,7 @@ namespace RetroBar.Controls
         {
             bool fahrenheit = Settings.Instance.WeatherUseFahrenheit;
             int rounded = (int)Math.Round(fahrenheit ? celsius * 9 / 5 + 32 : celsius, MidpointRounding.AwayFromZero);
-            string temperature = $"{rounded}\u00B0{(fahrenheit ? 'F' : 'C')}";
+            string temperature = $"{rounded}\u00B0";
             string description = weatherCode is int code ? DescribeWeather(code) : null;
             return description == null ? temperature : temperature + "  \u00B7  " + description;
         }

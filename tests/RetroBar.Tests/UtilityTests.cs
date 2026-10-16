@@ -421,13 +421,13 @@ namespace RetroBar.Tests
         }
 
         [Fact]
-        public void The_temperature_history_keeps_each_reading_once_and_the_last_fifteen_minutes()
+        public void The_temperature_history_keeps_each_reading_once_and_the_last_five_minutes()
         {
             DateTime now = DateTime.UtcNow;
             CpuTemperatureHistory.Record(40, now - TimeSpan.FromMinutes(20));
-            CpuTemperatureHistory.Record(50, now - TimeSpan.FromMinutes(5));
-            CpuTemperatureHistory.Record(51, now - TimeSpan.FromMinutes(5));    // the same time again: kept once
-            CpuTemperatureHistory.Record(55, now - TimeSpan.FromMinutes(6));    // older than the last: not kept
+            CpuTemperatureHistory.Record(50, now - TimeSpan.FromMinutes(2));
+            CpuTemperatureHistory.Record(51, now - TimeSpan.FromMinutes(2));    // the same time again: kept once
+            CpuTemperatureHistory.Record(55, now - TimeSpan.FromMinutes(3));    // older than the last: not kept
             CpuTemperatureHistory.Record(60, now);
 
             Assert.Equal(new[] { 50.0, 60.0 }, CpuTemperatureHistory.Last().Select(sample => sample.Celsius).ToArray());

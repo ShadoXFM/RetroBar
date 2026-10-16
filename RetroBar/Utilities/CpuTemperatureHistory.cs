@@ -5,13 +5,13 @@ using System.Linq;
 namespace RetroBar.Utilities
 {
     /// <summary>
-    /// The CPU temperatures read over the last fifteen minutes, for the graph the CPU temperature widget opens. Shared by the taskbars (each
+    /// The CPU temperatures read over the last five minutes, for the graph the CPU temperature widget opens. Shared by the taskbars (each
     /// has a widget, and each reads the helper's file): a reading is kept once, by the time the helper wrote it. Only kept in memory, from
     /// when RetroBar started.
     /// </summary>
     public static class CpuTemperatureHistory
     {
-        public static readonly TimeSpan Span = TimeSpan.FromMinutes(15);
+        public static readonly TimeSpan Span = TimeSpan.FromMinutes(5);
 
         public readonly record struct Sample(DateTime Utc, double Celsius);
 
@@ -38,7 +38,7 @@ namespace RetroBar.Utilities
             }
         }
 
-        /// <summary>The readings of the last fifteen minutes, oldest first.</summary>
+        /// <summary>The readings of the last five minutes, oldest first.</summary>
         public static Sample[] Last()
         {
             DateTime from = DateTime.UtcNow - Span;
