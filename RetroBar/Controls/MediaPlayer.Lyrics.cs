@@ -59,6 +59,7 @@ namespace RetroBar.Controls
         private const double LyricWordSoftEdge = 0.12;
         private const double LyricLiftSeconds = 0.5;
         private const double LyricLiftPixels = 2;
+        private const double LyricLiftStep = 0.5;
         private const double LyricBackgroundScale = 0.85;
         private Run[][] _lyricRuns;
         private int[][] _lyricRunOffsets;
@@ -987,7 +988,11 @@ namespace RetroBar.Controls
             }
 
             double eased = level * level * (3 - 2 * level);
-            ((TranslateTransform)active.Lifts[word].Transform).Y = -LyricLiftPixels * eased / GetSeekDpi().DpiScaleY;
+
+            // In steps of half a pixel: a letter between two rows of pixels is blurred, and the most at the middle; with steps, half of
+            // the moments it is on a row, sharp.
+            double pixels = Math.Round(LyricLiftPixels * eased / LyricLiftStep) * LyricLiftStep;
+            ((TranslateTransform)active.Lifts[word].Transform).Y = -pixels / GetSeekDpi().DpiScaleY;
         }
 
         // The setting (Properties window, right-click menu): off takes the lyrics away; on asks for those of what is playing.
