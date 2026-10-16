@@ -436,8 +436,8 @@ namespace RetroBar.Controls
             ShowLyrics(previous, before, index);
         }
 
-        // How far the lines are scrolled (up) to show the lines in focus: their middle in the middle of the window, as far as there are lines
-        // to fill the window - the first lines are at the top and the last at the bottom. A whole number of the screen's pixels, so the text
+        // How far the lines are scrolled (up) to show the lines from one to another: their middle in the middle of the window, as far as there
+        // are lines to fill the window - the first lines are at the top and the last at the bottom. A whole number of the screen's pixels, so the text
         // is sharp.
         private double LyricScrollFor(int firstFocus, int lastFocus, out double visibleTop, out double visibleBottom)
         {
@@ -624,8 +624,9 @@ namespace RetroBar.Controls
 
             BeginLyricWords();
 
+            // Centered on the line that started last (the next one), not on the middle of the lines that overlap.
             double scroll = _focusLines.Length > 0
-                ? LyricScrollFor(_focusLines[0], _focusLines[^1], out double visibleTop, out double visibleBottom)
+                ? LyricScrollFor(_focusLines[^1], _focusLines[^1], out double visibleTop, out double visibleBottom)
                 : LyricScrollFor(-1, -1, out visibleTop, out visibleBottom);
             UpdateLyricMask(visibleTop, visibleBottom, animate);
             double top = -scroll;
