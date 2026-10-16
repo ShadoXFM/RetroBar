@@ -944,10 +944,11 @@ namespace RetroBar.Controls
 
                     if (lifted >= 0)
                     {
-                        // On the run of the word itself (a text effect on the block is ignored by a block made of runs; its positions
-                        // count from the start of the block), and at once: a single pixel is not eased in.
+                        // On the run of the word itself (a text effect on the block is ignored by a block made of runs), and at once: a
+                        // single pixel is not eased in. Its positions count from the start of the block as text pointers do, which count
+                        // the start and the end of every run too: the letters of run n begin 2n + 1 after where they are in the text.
                         active.Move.Y = -1 / GetSeekDpi().DpiScaleY;
-                        active.Lift.PositionStart = active.Offsets[lifted];
+                        active.Lift.PositionStart = active.Offsets[lifted] + 2 * lifted + 1;
                         active.Lift.PositionCount = active.Runs[lifted].Text.Length;
                         active.Runs[lifted].TextEffects.Add(active.Lift);
                     }
