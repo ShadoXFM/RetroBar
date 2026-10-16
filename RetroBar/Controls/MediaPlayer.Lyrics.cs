@@ -393,7 +393,7 @@ namespace RetroBar.Controls
                 return;
             }
 
-            int index = LyricsClient.IndexAt(_lyrics, position + LyricsLead);
+            int index = LyricsClient.FocusIndex(_lyrics, _shownLyricIndex, position + LyricsLead);
             if (index == _shownLyricIndex)
             {
                 // The popup was closed and opened again, which stopped the words.

@@ -382,6 +382,23 @@ namespace RetroBar.Tests
         }
 
         [Fact]
+        public void A_line_that_starts_while_the_one_in_focus_is_sung_waits_for_it()
+        {
+            var lines = new[]
+            {
+                new LyricLine(TimeSpan.FromSeconds(1), "a", null, TimeSpan.FromSeconds(5)),
+                new LyricLine(TimeSpan.FromSeconds(3), "b", null, TimeSpan.FromSeconds(7)),
+                new LyricLine(TimeSpan.FromSeconds(8), "c"),
+            };
+
+            Assert.Equal(0, LyricsClient.FocusIndex(lines, 0, TimeSpan.FromSeconds(4)));   // b has started, a is still sung
+            Assert.Equal(1, LyricsClient.FocusIndex(lines, 0, TimeSpan.FromSeconds(5.5))); // a is done
+            Assert.Equal(1, LyricsClient.FocusIndex(lines, -1, TimeSpan.FromSeconds(4)));  // nothing was in focus: the last started
+            Assert.Equal(0, LyricsClient.FocusIndex(lines, 1, TimeSpan.FromSeconds(2)));   // sought back
+            Assert.Equal(2, LyricsClient.FocusIndex(lines, 1, TimeSpan.FromSeconds(8.5)));
+        }
+
+        [Fact]
         public void Lyrics_without_timing_or_unreadable_ones_give_none()
         {
             Assert.Null(SpicyLyricsClient.Parse("""{"Body":{"Type":"Static","Lines":[{"Text":"a"}]}}"""));
