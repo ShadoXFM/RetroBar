@@ -123,6 +123,9 @@ namespace RetroBar.Utilities
         // track doesn't inherit a stale baseline from whatever the previous one was doing.
         private bool _hasPositionEstimateBase;
 
+        // The estimate is read by the popup (the UI thread) and by the poll of the playback state (a timer's thread).
+        private readonly object _positionLock = new();
+
         // The position the source reported when the estimate last started over: the estimate starts over when this changes (a seek, a source
         // that reports its position), and runs on from where it is when it does not (a source that never reports one).
         private TimeSpan _lastRawPosition;
@@ -384,10 +387,13 @@ namespace RetroBar.Utilities
             // estimate keep extrapolating forward from whatever the previous track was doing. It starts now, at 0:00, not when the
             // position is first read (which for a source that never reports one, as foobar2000, is when the popup is opened, and would
             // lose all the track has played by then); a source that does report a position gives its own as soon as it is read.
-            _positionEstimateBase = TimeSpan.Zero;
-            _positionEstimateBaseTime = DateTimeOffset.Now;
-            _lastRawPosition = TimeSpan.Zero;
-            _hasPositionEstimateBase = true;
+            lock (_positionLock)
+            {
+                _positionEstimateBase = TimeSpan.Zero;
+                _positionEstimateBaseTime = DateTimeOffset.Now;
+                _lastRawPosition = TimeSpan.Zero;
+                _hasPositionEstimateBase = true;
+            }
 
             try
             {
@@ -554,13 +560,24 @@ namespace RetroBar.Utilities
             // reports its position - foobar2000's - had its time back to 0:00 at every pause).
             if (PlaybackState != previous && _hasPositionEstimateBase)
             {
-                DateTimeOffset now = DateTimeOffset.Now;
-                if (previous == MediaPlaybackState.Playing)
+                lock (_positionLock)
                 {
-                    _positionEstimateBase += now - _positionEstimateBaseTime;
-                }
+                    DateTimeOffset now = DateTimeOffset.Now;
+                    if (previous == MediaPlaybackState.Playing)
+                    {
+                        _positionEstimateBase += now - _positionEstimateBaseTime;
+                    }
 
-                _positionEstimateBaseTime = now;
+                    _positionEstimateBaseTime = now;
+                }
+            }
+
+            // The position is read on every poll, not only while a popup shows it: its estimate runs on from the moments the source's own
+            // position changes, which are only seen when it is read (a popup opened a few seconds on found the source's last position,
+            // behind, and moved to the right one when it next changed).
+            if (_session != null && PlaybackState != MediaPlaybackState.None)
+            {
+                GetTimeline();
             }
 
             // Polling calls this every 500ms regardless of whether anything changed - only
@@ -613,17 +630,21 @@ namespace RetroBar.Utilities
                 // from our own wall-clock time since we first saw that frozen value, which still
                 // advances smoothly. Reset on track/session change happens in
                 // RefreshPropertiesAsync, so a new track never inherits a stale baseline.
-                if (!_hasPositionEstimateBase || rawPosition != _lastRawPosition)
+                TimeSpan position;
+                lock (_positionLock)
                 {
-                    _lastRawPosition = rawPosition;
-                    _positionEstimateBase = rawPosition;
-                    _positionEstimateBaseTime = DateTimeOffset.Now;
-                    _hasPositionEstimateBase = true;
-                }
+                    if (!_hasPositionEstimateBase || rawPosition != _lastRawPosition)
+                    {
+                        _lastRawPosition = rawPosition;
+                        _positionEstimateBase = rawPosition;
+                        _positionEstimateBaseTime = DateTimeOffset.Now;
+                        _hasPositionEstimateBase = true;
+                    }
 
-                TimeSpan position = PlaybackState == MediaPlaybackState.Playing
-                    ? _positionEstimateBase + (DateTimeOffset.Now - _positionEstimateBaseTime)
-                    : _positionEstimateBase;
+                    position = PlaybackState == MediaPlaybackState.Playing
+                        ? _positionEstimateBase + (DateTimeOffset.Now - _positionEstimateBaseTime)
+                        : _positionEstimateBase;
+                }
 
                 if (position < TimeSpan.Zero)
                 {
