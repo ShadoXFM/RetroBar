@@ -513,6 +513,51 @@ namespace RetroBar.Controls
             return Geometry.Empty;
         }
 
+        private static readonly System.Runtime.CompilerServices.ConditionalWeakTable<ImageSource, object> BlankImages = new();
+
+        // The image, or null if it has nothing to see (all its pixels clear).
+        private static ImageSource Visible(ImageSource image)
+        {
+            if (image is not System.Windows.Media.Imaging.BitmapSource bitmap)
+            {
+                return image;
+            }
+
+            if (BlankImages.TryGetValue(bitmap, out object blank))
+            {
+                return blank == null ? image : null;
+            }
+
+            bool hasPixels = true;
+            try
+            {
+                var converted = new System.Windows.Media.Imaging.FormatConvertedBitmap(bitmap, PixelFormats.Pbgra32, null, 0);
+                int width = converted.PixelWidth;
+                int height = converted.PixelHeight;
+                if (width > 0 && height > 0 && width * height <= 512 * 512)
+                {
+                    var pixels = new byte[width * height * 4];
+                    converted.CopyPixels(pixels, width * 4, 0);
+                    hasPixels = false;
+                    for (int i = 3; i < pixels.Length; i += 4)
+                    {
+                        if (pixels[i] > 8)
+                        {
+                            hasPixels = true;
+                            break;
+                        }
+                    }
+                }
+            }
+            catch (Exception ex) when (ex is NotSupportedException or InvalidOperationException or ArgumentException)
+            {
+                // Taken as art.
+            }
+
+            BlankImages.Add(bitmap, hasPixels ? null : new object());
+            return hasPixels ? image : null;
+        }
+
         private void UpdateAlbumArt()
         {
             // Falls back to the source app's own taskbar icon (e.g. foobar2000's) when the track
@@ -521,7 +566,9 @@ namespace RetroBar.Controls
             // looked up once and reused for both images below rather than twice.
             ApplicationWindow sourceWindow = Settings.Instance.ShowMediaPlayerAlbumArt ? FindSourceAppWindow() : null;
 
-            ImageSource art = Settings.Instance.ShowMediaPlayerAlbumArt ? (_sessionManager?.Thumbnail ?? sourceWindow?.Icon) : null;
+            // An image with nothing in it (a source that has no cover, and an icon the system gives blank) is no art: it left an empty
+            // gap where the art would be.
+            ImageSource art = Settings.Instance.ShowMediaPlayerAlbumArt ? Visible(_sessionManager?.Thumbnail) ?? Visible(sourceWindow?.Icon) : null;
 
             AlbumArtImage.Source = art;
             // Hidden, not Visible/Collapsed: it still reserves its normal layout slot (used
@@ -535,7 +582,7 @@ namespace RetroBar.Controls
             // taskbar row uses, since the popup shows it much bigger - the app icon fallback has
             // no separate large version, so it's reused as-is here too (a small icon, upscaled by
             // the popup's own Image, beats nothing).
-            ImageSource largeArt = Settings.Instance.ShowMediaPlayerAlbumArt ? (_sessionManager?.LargeThumbnail ?? sourceWindow?.Icon) : null;
+            ImageSource largeArt = Settings.Instance.ShowMediaPlayerAlbumArt ? Visible(_sessionManager?.LargeThumbnail) ?? Visible(sourceWindow?.Icon) : null;
             SeekAlbumArtImage.Source = largeArt;
             SeekAlbumArtImage.Visibility = largeArt == null ? Visibility.Collapsed : Visibility.Visible;
             UpdateSeekAccent(largeArt ?? art);
