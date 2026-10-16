@@ -250,11 +250,27 @@ namespace RetroBar.Controls
                 GraphHeader.Text = $"{Degrees(_celsius.Value)} · {ProcessorName}";
             }
 
-            // Each its own text, to be spread across the width.
-            string Stat(string key, string fallback, double celsius) => string.Format(TryFindResource(key) as string ?? fallback, Degrees(celsius));
-            GraphMin.Text = samples.Length == 0 ? "" : Stat("cpu_temp_graph_min", "Min {0}", samples.Min(s => s.Celsius));
-            GraphAverage.Text = samples.Length == 0 ? "" : Stat("cpu_temp_graph_average", "Average {0}", samples.Average(s => s.Celsius));
-            GraphMax.Text = samples.Length == 0 ? "" : Stat("cpu_temp_graph_max", "Max {0}", samples.Max(s => s.Celsius));
+            // Each its own text, to be spread across the width: the word in the theme's font, the temperature in Tahoma bold as the others.
+            void Stat(TextBlock block, string key, string fallback, double? celsius)
+            {
+                block.Inlines.Clear();
+                if (celsius == null)
+                {
+                    return;
+                }
+
+                string[] parts = (TryFindResource(key) as string ?? fallback).Split("{0}");
+                block.Inlines.Add(new System.Windows.Documents.Run(parts[0]));
+                block.Inlines.Add(new System.Windows.Documents.Run(Degrees(celsius.Value)) { FontFamily = new System.Windows.Media.FontFamily("Tahoma"), FontWeight = FontWeights.Bold });
+                if (parts.Length > 1 && parts[1].Length > 0)
+                {
+                    block.Inlines.Add(new System.Windows.Documents.Run(parts[1]));
+                }
+            }
+
+            Stat(GraphMin, "cpu_temp_graph_min", "Min {0}", samples.Length == 0 ? null : samples.Min(s => s.Celsius));
+            Stat(GraphAverage, "cpu_temp_graph_average", "Average {0}", samples.Length == 0 ? null : samples.Average(s => s.Celsius));
+            Stat(GraphMax, "cpu_temp_graph_max", "Max {0}", samples.Length == 0 ? null : samples.Max(s => s.Celsius));
         }
 
         // On a taskbar at the bottom: how far the popup's window reaches below the taskbar's top, so that only what is above it shows while

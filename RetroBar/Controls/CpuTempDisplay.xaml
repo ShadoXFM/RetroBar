@@ -73,20 +73,20 @@
                                        HorizontalAlignment="Left"
                                        Style="{DynamicResource GlobalFonts}"
                                        Foreground="{DynamicResource ButtonForeground}"
-                                       FontFamily="Tahoma"
-                                       FontWeight="Bold" />
+                                       FontFamily="Microsoft Sans Serif"
+                                       FontWeight="Normal" />
                             <TextBlock x:Name="GraphAverage"
                                        HorizontalAlignment="Center"
                                        Style="{DynamicResource GlobalFonts}"
                                        Foreground="{DynamicResource ButtonForeground}"
-                                       FontFamily="Tahoma"
-                                       FontWeight="Bold" />
+                                       FontFamily="Microsoft Sans Serif"
+                                       FontWeight="Normal" />
                             <TextBlock x:Name="GraphMax"
                                        HorizontalAlignment="Right"
                                        Style="{DynamicResource GlobalFonts}"
                                        Foreground="{DynamicResource ButtonForeground}"
-                                       FontFamily="Tahoma"
-                                       FontWeight="Bold" />
+                                       FontFamily="Microsoft Sans Serif"
+                                       FontWeight="Normal" />
                         </Grid>
                     </StackPanel>
                 </ContentControl>
