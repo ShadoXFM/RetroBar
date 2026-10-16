@@ -144,8 +144,11 @@ namespace RetroBar.Utilities
             _transform.BeginAnimation(axis, slide);
         }
 
-        /// <summary>Slides away and closes the popup.</summary>
-        public void Hide()
+        /// <summary>The slide away that makes room for another popup: shorter, so that popup does not wait long.</summary>
+        public static readonly TimeSpan QuickHideTime = TimeSpan.FromMilliseconds(90);
+
+        /// <summary>Slides away and closes the popup (in the time given, or the usual one).</summary>
+        public void Hide(TimeSpan? time = null)
         {
             if (!_popup.IsOpen || Closing)
             {
@@ -158,7 +161,7 @@ namespace RetroBar.Utilities
             _sliding = true;
             UpdateClip();
 
-            var slide = new DoubleAnimation((double)_transform.GetValue(axis), hidden, HideDuration)
+            var slide = new DoubleAnimation((double)_transform.GetValue(axis), hidden, time is TimeSpan quick ? new Duration(quick) : HideDuration)
             {
                 EasingFunction = new CubicEase { EasingMode = EasingMode.EaseIn },
             };

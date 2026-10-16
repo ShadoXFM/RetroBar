@@ -194,7 +194,7 @@ namespace RetroBar.Controls
         private void ScheduleGraphClose()
         {
             _graphOpenTimer?.Stop();
-            _graphCloseTimer ??= MakeTimer(GraphCloseDelay, _slide.Hide);
+            _graphCloseTimer ??= MakeTimer(GraphCloseDelay, () => _slide.Hide());
             _graphCloseTimer.Stop();
             _graphCloseTimer.Start();
         }

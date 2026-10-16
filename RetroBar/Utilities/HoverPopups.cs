@@ -53,7 +53,7 @@ namespace RetroBar.Utilities
             {
                 _waiting = (null, show);
                 _waitingFor = _open;
-                _open.Hide();
+                _open.Hide(PopupSlide.QuickHideTime);
                 return;
             }
 
