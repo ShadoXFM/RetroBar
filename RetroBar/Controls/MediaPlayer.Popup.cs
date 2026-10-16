@@ -425,6 +425,9 @@ namespace RetroBar.Controls
                 _seekPopupSource = null;
             }
 
+            // The popup that was dragged to another monitor's player closes after that one has opened (and taken the setting over): it is
+            // not the open one any more, and must not put the shared settings back.
+            bool theOpenOne = _openSeekPlayer == null || _openSeekPlayer == this;
             if (_openSeekPlayer == this)
             {
                 _openSeekPlayer = null;
@@ -439,7 +442,11 @@ namespace RetroBar.Controls
             _seekPopupHeldX = null;
 
             // Moved or on top is for the one opening: the next one starts as an ordinary popup again.
-            _seekPopupPinned = false;
+            if (theOpenOne)
+            {
+                _seekPopupPinned = false;
+            }
+
             SeekPopupRoot.ClearValue(MonitorOffset.DeviceNameOverrideProperty);
 
             // Nothing is set to ignore the next click on the text here: the click that closes the popup from outside it sets that itself
