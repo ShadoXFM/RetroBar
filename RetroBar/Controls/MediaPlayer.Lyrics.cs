@@ -238,10 +238,19 @@ namespace RetroBar.Controls
             return new SolidColorBrush(Color.FromRgb(Lighter(accent.R), Lighter(accent.G), Lighter(accent.B)));
         }
 
-        // The colour the other lines have (the text's own).
+        // The colour the other lines have (the text's own): read once, from the first row before any line has been styled - the first row's
+        // colour changes as it is in focus or fading out, and the words of a line took that (the cover's colour, dimmed) for the colour of
+        // what is not sung yet.
+        private Color? _lyricNeutral;
+
         private Color? NeutralColor()
         {
-            return _lyricRows is { Length: > 0 } && _lyricRows[0].Foreground is SolidColorBrush brush ? brush.Color : null;
+            if (_lyricNeutral == null && _lyricRows is { Length: > 0 } && _lyricRows[0].Foreground is SolidColorBrush brush)
+            {
+                _lyricNeutral = brush.Color;
+            }
+
+            return _lyricNeutral;
         }
 
         // A press and release that moved less than a drag is a click (not the end of a drag of the popup).
@@ -360,6 +369,7 @@ namespace RetroBar.Controls
             _lyricHosts = null;
             _lyricGhosts = null;
             _lyricRuns = null;
+            _lyricNeutral = null;
             StopLyricWords();
         }
 

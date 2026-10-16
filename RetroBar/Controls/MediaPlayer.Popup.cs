@@ -696,7 +696,14 @@ namespace RetroBar.Controls
                 return;
             }
 
+            // The source still reports where it was for a moment after a seek: a notch of the wheel that comes before it has caught up goes on
+            // from the position the last one sought to (else a fast wheel sought again and again from the same place, and stalled).
             (TimeSpan position, TimeSpan duration) = GetTimeline();
+            if (DateTime.UtcNow < _seekHoldUntil)
+            {
+                position = _seekHoldPosition;
+            }
+
             TimeSpan target = position + delta;
             if (target < TimeSpan.Zero)
             {
@@ -712,7 +719,36 @@ namespace RetroBar.Controls
             SetSeekDisplay(target, duration);
             HoldSeek(target);
 
-            await SeekSourceAsync(target, position);
+            await SeekLatestAsync(target, position);
+        }
+
+        // Seeks the wheel asked for, one at a time: a command sent while the one before is still on its way is dropped by the source, so only
+        // the last target wanted is kept to send when that one is done (from the position the first one that was held back started at, which
+        // is what a source that seeks by a difference needs).
+        private bool _seekSending;
+        private (TimeSpan Target, TimeSpan From)? _seekPending;
+
+        private async System.Threading.Tasks.Task SeekLatestAsync(TimeSpan target, TimeSpan from)
+        {
+            _seekPending = (target, _seekPending?.From ?? from);
+            if (_seekSending)
+            {
+                return;
+            }
+
+            _seekSending = true;
+            try
+            {
+                while (_seekPending is (TimeSpan next, TimeSpan start))
+                {
+                    _seekPending = null;
+                    await SeekSourceAsync(next, start);
+                }
+            }
+            finally
+            {
+                _seekSending = false;
+            }
         }
     }
 }
