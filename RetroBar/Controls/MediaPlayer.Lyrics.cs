@@ -39,8 +39,9 @@ namespace RetroBar.Controls
 
         // The scroll and the colour take the same time: the line is in its colour when it is in its place.
         private static readonly Duration LyricScroll = new(TimeSpan.FromMilliseconds(320));
-        // The cover's colour leaves a line that loses focus more slowly than it came (the scroll takes its own time).
-        private static readonly Duration LyricColorFadeOut = new(TimeSpan.FromMilliseconds(900));
+        // A line that loses focus fades out - the cover's colour, the brightness and the blur together, in a straight line - more slowly than
+        // it came in (the scroll takes its own time).
+        private static readonly Duration LyricColorFadeOut = new(TimeSpan.FromMilliseconds(1200));
         private static readonly TimeSpan LyricsRetry = TimeSpan.FromSeconds(30);
 
         // The window fades out at its top and bottom edges, so a line cut off there reads as scrolled out of view, not as a stray mark.
@@ -519,13 +520,15 @@ namespace RetroBar.Controls
 
             {
                 bool moves = animate && (oldBlur != blur || oldOpacity != opacity);
+                bool fadingOut = wasFocus && !nowFocus;
+                Duration time = fadingOut ? LyricColorFadeOut : LyricScroll;
                 var effect = new BlurEffect { Radius = moves ? oldBlur : blur, RenderingBias = RenderingBias.Performance };
                 row.Effect = effect;
                 if (moves)
                 {
-                    var ease = new QuadraticEase { EasingMode = EasingMode.EaseOut };
-                    row.BeginAnimation(OpacityProperty, new DoubleAnimation(oldOpacity, opacity, LyricScroll) { EasingFunction = ease });
-                    var radius = new DoubleAnimation(oldBlur, blur, LyricScroll) { EasingFunction = ease };
+                    IEasingFunction ease = fadingOut ? null : new QuadraticEase { EasingMode = EasingMode.EaseOut };
+                    row.BeginAnimation(OpacityProperty, new DoubleAnimation(oldOpacity, opacity, time) { EasingFunction = ease });
+                    var radius = new DoubleAnimation(oldBlur, blur, time) { EasingFunction = ease };
                     if (blur == 0)
                     {
                         // A blur effect, even of nothing, softens the text: the lines in focus have none at rest.
@@ -584,7 +587,7 @@ namespace RetroBar.Controls
             {
                 var fade = new SolidColorBrush(beforeBrush.Color);
                 row.Foreground = fade;
-                var animation = new ColorAnimation(beforeBrush.Color, back, LyricColorFadeOut) { EasingFunction = new QuadraticEase { EasingMode = EasingMode.EaseOut } };
+                var animation = new ColorAnimation(beforeBrush.Color, back, LyricColorFadeOut);
                 animation.Completed += (s, e) =>
                 {
                     if (token == _lyricScrollToken && !IsInFocus(i))
