@@ -39,6 +39,8 @@ namespace RetroBar.Controls
 
         // The scroll and the colour take the same time: the line is in its colour when it is in its place.
         private static readonly Duration LyricScroll = new(TimeSpan.FromMilliseconds(320));
+        // The cover's colour leaves a line that loses focus more slowly than it came (the scroll takes its own time).
+        private static readonly Duration LyricColorFadeOut = new(TimeSpan.FromMilliseconds(900));
         private static readonly TimeSpan LyricsRetry = TimeSpan.FromSeconds(30);
 
         // The window fades out at its top and bottom edges, so a line cut off there reads as scrolled out of view, not as a stray mark.
@@ -582,7 +584,7 @@ namespace RetroBar.Controls
             {
                 var fade = new SolidColorBrush(beforeBrush.Color);
                 row.Foreground = fade;
-                var animation = new ColorAnimation(beforeBrush.Color, back, LyricScroll);
+                var animation = new ColorAnimation(beforeBrush.Color, back, LyricColorFadeOut) { EasingFunction = new QuadraticEase { EasingMode = EasingMode.EaseOut } };
                 animation.Completed += (s, e) =>
                 {
                     if (token == _lyricScrollToken && !IsInFocus(i))
