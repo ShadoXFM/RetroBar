@@ -513,6 +513,8 @@ namespace RetroBar.Controls
             return Geometry.Empty;
         }
 
+        private bool _albumArtIsAppIcon;
+
         private static readonly System.Runtime.CompilerServices.ConditionalWeakTable<ImageSource, object> BlankImages = new();
 
         // The image, or null if it has nothing to see (all its pixels clear).
@@ -568,7 +570,11 @@ namespace RetroBar.Controls
 
             // An image with nothing in it (a source that has no cover, and an icon the system gives blank) is no art: it left an empty
             // gap where the art would be.
-            ImageSource art = Settings.Instance.ShowMediaPlayerAlbumArt ? Visible(_sessionManager?.Thumbnail) ?? Visible(sourceWindow?.Icon) : null;
+            ImageSource cover = Settings.Instance.ShowMediaPlayerAlbumArt ? Visible(_sessionManager?.Thumbnail) : null;
+            ImageSource art = cover ?? (Settings.Instance.ShowMediaPlayerAlbumArt ? Visible(sourceWindow?.Icon) : null);
+
+            // The app's icon in place of a cover (VLC's cone, foobar2000's logo): it has clear parts, which the VU meter shows behind.
+            _albumArtIsAppIcon = cover == null && art != null;
 
             AlbumArtImage.Source = art;
             // Hidden, not Visible/Collapsed: it still reserves its normal layout slot (used
@@ -763,7 +769,10 @@ namespace RetroBar.Controls
             // X nudges the meter's left edge only: the width absorbs it, so the right edge stays on the end of the text. It is tuned for the album
             // art, which the meter starts behind; without art there is nothing to nudge past (the meter starts at the first button), so X is
             // 0 unless "VuMeterContainerNoArt" says otherwise.
-            double nudgeX = Settings.Instance.ShowMediaPlayerAlbumArt ? offset.X : MonitorAdjustments.Get(deviceName, "VuMeterContainerNoArt").X;
+            // A transparent logo (the app's icon, where there is no cover) is not something the meter starts behind: it starts at the tray box's
+            // edge, as it does with no art, and shows through the logo.
+            bool coverShown = Settings.Instance.ShowMediaPlayerAlbumArt && AlbumArtImage.Source != null && !_albumArtIsAppIcon;
+            double nudgeX = coverShown ? offset.X : MonitorAdjustments.Get(deviceName, "VuMeterContainerNoArt").X;
             _vuMeterMaxWidth = offset.Width ?? Math.Max(0, naturalWidth - nudgeX);
 
             VuMeterContainer.Width = _vuMeterMaxWidth;
