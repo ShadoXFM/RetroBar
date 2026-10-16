@@ -226,17 +226,74 @@ namespace RetroBar
             }
         }
 
-        // The arrows: a step up or down.
+        // The arrows: a step up or down. A click does one; held down, the steps repeat (after a moment, then quickly).
+        private void StepLyricLines(int step)
+        {
+            Settings.Instance.LyricLines += step;
+            txtLyricLines.Text = Settings.Instance.LyricLines.ToString();
+        }
+
+        private void StepLyricsDelay(int step)
+        {
+            Settings.Instance.LyricsLeadMs += step;
+            txtLyricsDelay.Text = Settings.Instance.LyricsLeadMs.ToString();
+        }
+
+        private static int StepOf(object sender) => int.Parse((string)((System.Windows.Controls.Button)sender).Tag, System.Globalization.CultureInfo.InvariantCulture);
+
+        private System.Windows.Threading.DispatcherTimer _spinTimer;
+        private bool _spinFromMouse;
+
+        private void StartSpin(Action step)
+        {
+            _spinFromMouse = true;
+            step();
+
+            _spinTimer?.Stop();
+            _spinTimer = new System.Windows.Threading.DispatcherTimer { Interval = TimeSpan.FromMilliseconds(400) };
+            _spinTimer.Tick += (s, e) =>
+            {
+                _spinTimer.Interval = TimeSpan.FromMilliseconds(70);
+                step();
+            };
+            _spinTimer.Start();
+        }
+
+        private void LyricLinesStep_MouseDown(object sender, System.Windows.Input.MouseButtonEventArgs e)
+        {
+            int step = StepOf(sender);
+            StartSpin(() => StepLyricLines(step));
+        }
+
+        private void LyricsDelayStep_MouseDown(object sender, System.Windows.Input.MouseButtonEventArgs e)
+        {
+            int step = StepOf(sender);
+            StartSpin(() => StepLyricsDelay(step));
+        }
+
+        private void Spin_MouseUp(object sender, System.Windows.Input.MouseEventArgs e)
+        {
+            _spinTimer?.Stop();
+
+            // The click that follows the mouse button's release has been done by the press already.
+            Dispatcher.BeginInvoke(new Action(() => _spinFromMouse = false), System.Windows.Threading.DispatcherPriority.Background);
+        }
+
+        // From the keyboard (the mouse's presses do their steps themselves).
         private void LyricLinesStep_Click(object sender, RoutedEventArgs e)
         {
-            Settings.Instance.LyricLines += int.Parse((string)((System.Windows.Controls.Button)sender).Tag, System.Globalization.CultureInfo.InvariantCulture);
-            txtLyricLines.Text = Settings.Instance.LyricLines.ToString();
+            if (!_spinFromMouse)
+            {
+                StepLyricLines(StepOf(sender));
+            }
         }
 
         private void LyricsDelayStep_Click(object sender, RoutedEventArgs e)
         {
-            Settings.Instance.LyricsLeadMs += int.Parse((string)((System.Windows.Controls.Button)sender).Tag, System.Globalization.CultureInfo.InvariantCulture);
-            txtLyricsDelay.Text = Settings.Instance.LyricsLeadMs.ToString();
+            if (!_spinFromMouse)
+            {
+                StepLyricsDelay(StepOf(sender));
+            }
         }
 
         private void LyricLines_LostFocus(object sender, RoutedEventArgs e)

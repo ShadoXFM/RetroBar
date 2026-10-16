@@ -458,7 +458,10 @@
                                                 MinWidth="0"
                                                 MinHeight="0"
                                                 Margin="1,0,0,0"
-                                                Click="LyricLinesStep_Click">
+                                                Click="LyricLinesStep_Click"
+                                                PreviewMouseLeftButtonDown="LyricLinesStep_MouseDown"
+                                                PreviewMouseLeftButtonUp="Spin_MouseUp"
+                                                MouseLeave="Spin_MouseUp">
                                             <Path Data="M 0,3 L 3,0 L 6,3 Z"
                                                   Fill="{Binding Foreground, RelativeSource={RelativeSource AncestorType=Button}}"
                                                   HorizontalAlignment="Center"
@@ -469,7 +472,10 @@
                                                 MinWidth="0"
                                                 MinHeight="0"
                                                 Margin="1,0,0,0"
-                                                Click="LyricLinesStep_Click">
+                                                Click="LyricLinesStep_Click"
+                                                PreviewMouseLeftButtonDown="LyricLinesStep_MouseDown"
+                                                PreviewMouseLeftButtonUp="Spin_MouseUp"
+                                                MouseLeave="Spin_MouseUp">
                                             <Path Data="M 0,0 L 6,0 L 3,3 Z"
                                                   Fill="{Binding Foreground, RelativeSource={RelativeSource AncestorType=Button}}"
                                                   HorizontalAlignment="Center"
@@ -501,7 +507,10 @@
                                                 MinWidth="0"
                                                 MinHeight="0"
                                                 Margin="1,0,0,0"
-                                                Click="LyricsDelayStep_Click">
+                                                Click="LyricsDelayStep_Click"
+                                                PreviewMouseLeftButtonDown="LyricsDelayStep_MouseDown"
+                                                PreviewMouseLeftButtonUp="Spin_MouseUp"
+                                                MouseLeave="Spin_MouseUp">
                                             <Path Data="M 0,3 L 3,0 L 6,3 Z"
                                                   Fill="{Binding Foreground, RelativeSource={RelativeSource AncestorType=Button}}"
                                                   HorizontalAlignment="Center"
@@ -512,7 +521,10 @@
                                                 MinWidth="0"
                                                 MinHeight="0"
                                                 Margin="1,0,0,0"
-                                                Click="LyricsDelayStep_Click">
+                                                Click="LyricsDelayStep_Click"
+                                                PreviewMouseLeftButtonDown="LyricsDelayStep_MouseDown"
+                                                PreviewMouseLeftButtonUp="Spin_MouseUp"
+                                                MouseLeave="Spin_MouseUp">
                                             <Path Data="M 0,0 L 6,0 L 3,3 Z"
                                                   Fill="{Binding Foreground, RelativeSource={RelativeSource AncestorType=Button}}"
                                                   HorizontalAlignment="Center"
