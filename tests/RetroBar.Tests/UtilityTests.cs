@@ -382,7 +382,7 @@ namespace RetroBar.Tests
         }
 
         [Fact]
-        public void A_line_that_starts_while_the_one_in_focus_is_sung_waits_for_it()
+        public void The_lines_that_overlap_are_in_focus_together()
         {
             var lines = new[]
             {
@@ -391,11 +391,11 @@ namespace RetroBar.Tests
                 new LyricLine(TimeSpan.FromSeconds(8), "c"),
             };
 
-            Assert.Equal(0, LyricsClient.FocusIndex(lines, 0, TimeSpan.FromSeconds(4)));   // b has started, a is still sung
-            Assert.Equal(1, LyricsClient.FocusIndex(lines, 0, TimeSpan.FromSeconds(5.5))); // a is done
-            Assert.Equal(1, LyricsClient.FocusIndex(lines, -1, TimeSpan.FromSeconds(4)));  // nothing was in focus: the last started
-            Assert.Equal(0, LyricsClient.FocusIndex(lines, 1, TimeSpan.FromSeconds(2)));   // sought back
-            Assert.Equal(2, LyricsClient.FocusIndex(lines, 1, TimeSpan.FromSeconds(8.5)));
+            Assert.Equal(new[] { 0, 1 }, LyricsClient.FocusSet(lines, TimeSpan.FromSeconds(4), 1));   // b has started, a is still sung
+            Assert.Equal(new[] { 1 }, LyricsClient.FocusSet(lines, TimeSpan.FromSeconds(5.5), 1));    // a is done
+            Assert.Equal(new[] { 0 }, LyricsClient.FocusSet(lines, TimeSpan.FromSeconds(2), 0));
+            Assert.Equal(new[] { 2 }, LyricsClient.FocusSet(lines, TimeSpan.FromSeconds(8.5), 2));
+            Assert.Empty(LyricsClient.FocusSet(lines, TimeSpan.Zero, -1));
         }
 
         [Fact]

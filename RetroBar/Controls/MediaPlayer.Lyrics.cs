@@ -56,20 +56,30 @@ namespace RetroBar.Controls
         private static readonly Duration LyricLiftTime = new(TimeSpan.FromMilliseconds(110));
         private Run[][] _lyricRuns;
         private int[][] _lyricRunOffsets;
-        private Run[] _activeRuns;
-        private LyricWord[] _activeWords;
-        private int[] _activeOffsets;
-        private TextBlock _activeBlock;
-        private byte[] _activeStates;
-        private LinearGradientBrush[] _activeSweeps;
-        private TextEffect _wordLift;
-        private TranslateTransform _wordLiftMove;
-        private int _liftedWord = -1;
         private DispatcherTimer _lyricWordTimer;
+
+        // A line being sung by word: its words, and how far each has got (not sung yet 0, being sung 1, sung 2).
+        private sealed class ActiveWordLine
+        {
+            public Run[] Runs;
+            public LyricWord[] Words;
+            public int[] Offsets;
+            public TextBlock Block;
+            public byte[] States;
+            public LinearGradientBrush[] Sweeps;
+            public TextEffect Lift;
+            public TranslateTransform Move;
+            public int Lifted = -1;
+        }
+
+        private readonly List<ActiveWordLine> _activeLines = new();
 
         private LyricLine[] _lyrics;
         private string _lyricsKey;
         private int _shownLyricIndex = int.MinValue;
+
+        // The lines in focus: the one that started last, and the lines before it that are still being sung (they overlap it).
+        private int[] _focusLines = Array.Empty<int>();
         private TextBlock[] _lyricRows;
         private int _lyricScrollToken;
 
@@ -255,30 +265,41 @@ namespace RetroBar.Controls
             _ = SeekToAsync(target);
         }
 
-        // The line being sung is in the colour taken from the cover (see UpdateSeekAccent); the text's own colour when there is none.
+        // The lines being sung are in the colour taken from the cover (see UpdateSeekAccent); the text's own colour when there is none.
         private void ApplyLyricsColor()
         {
-            if (_lyricRows == null || _shownLyricIndex < 0 || _shownLyricIndex >= _lyricRows.Length)
+            if (_lyricRows == null)
             {
                 return;
             }
 
-            TextBlock current = _lyricRows[_shownLyricIndex];
-            if (_lyricRuns?[_shownLyricIndex] != null)
+            bool byWord = false;
+            foreach (int line in _focusLines)
             {
-                // Its words take the colour as they are sung (see BeginLyricWords).
-                BeginLyricWords(_shownLyricIndex);
-                return;
+                if (line < 0 || line >= _lyricRows.Length)
+                {
+                    continue;
+                }
+
+                if (_lyricRuns?[line] != null)
+                {
+                    // Its words take the colour as they are sung (see BeginLyricWords).
+                    byWord = true;
+                }
+                else if (AccentBrush() is SolidColorBrush brush)
+                {
+                    brush.Freeze();
+                    _lyricRows[line].Foreground = brush;
+                }
+                else
+                {
+                    _lyricRows[line].ClearValue(TextBlock.ForegroundProperty);
+                }
             }
 
-            if (AccentBrush() is SolidColorBrush brush)
+            if (byWord)
             {
-                brush.Freeze();
-                current.Foreground = brush;
-            }
-            else
-            {
-                current.ClearValue(TextBlock.ForegroundProperty);
+                BeginLyricWords();
             }
         }
 
@@ -320,6 +341,7 @@ namespace RetroBar.Controls
             _lyricsKey = null;
             _lyrics = null;
             _shownLyricIndex = int.MinValue;
+            _focusLines = Array.Empty<int>();
             _lyricScrollToken++;
             SeekLyricsPanel.BeginAnimation(Canvas.TopProperty, null);
             Canvas.SetTop(SeekLyricsPanel, 0);
@@ -393,41 +415,49 @@ namespace RetroBar.Controls
                 return;
             }
 
-            int index = LyricsClient.FocusIndex(_lyrics, _shownLyricIndex, position + LyricsLead);
-            if (index == _shownLyricIndex)
+            TimeSpan at = position + LyricsLead;
+            int index = LyricsClient.IndexAt(_lyrics, at);
+            int[] focus = LyricsClient.FocusSet(_lyrics, at, index);
+            if (index == _shownLyricIndex && focus.SequenceEqual(_focusLines))
             {
                 // The popup was closed and opened again, which stopped the words.
-                if (_activeRuns == null && index >= 0 && _lyricRuns?[index] != null)
+                if (_activeLines.Count == 0 && focus.Any(line => _lyricRuns?[line] != null))
                 {
-                    BeginLyricWords(index);
+                    BeginLyricWords();
                 }
 
                 return;
             }
 
             int previous = _shownLyricIndex;
+            int[] before = _focusLines;
             _shownLyricIndex = index;
-            ShowLyrics(previous, index);
+            _focusLines = focus;
+            ShowLyrics(previous, before, index);
         }
 
-        // How far the lines are scrolled (up) to show the one: its middle in the middle of the window, as far as there are lines to fill
-        // the window - the first lines are at the top and the last at the bottom. A whole number of the screen's pixels, so the text is sharp.
-        private double LyricScrollFor(int index, out double visibleTop, out double visibleBottom)
+        // How far the lines are scrolled (up) to show the lines in focus: their middle in the middle of the window, as far as there are lines
+        // to fill the window - the first lines are at the top and the last at the bottom. A whole number of the screen's pixels, so the text
+        // is sharp.
+        private double LyricScrollFor(int firstFocus, int lastFocus, out double visibleTop, out double visibleBottom)
         {
             SeekLyricsPanel.UpdateLayout();
             double window = SeekLyricsHost.Height;
             double maximum = Math.Max(0, SeekLyricsPanel.ActualHeight - window);
             visibleTop = 0;
             visibleBottom = window;
-            if (index < 0 || double.IsNaN(window))
+            if (firstFocus < 0 || double.IsNaN(window))
             {
                 return 0;
             }
 
-            // The current line in the middle of the window (or as near as the first and last lines allow). The line that doesn't fit whole
+            // The lines in focus in the middle of the window (or as near as the first and last lines allow). The line that doesn't fit whole
             // at an edge is shown cut off and faded out (see UpdateLyricMask).
-            TextBlock row = _lyricRows[index];
-            double middle = row.TranslatePoint(new Point(0, row.ActualHeight / 2), SeekLyricsPanel).Y;
+            TextBlock first = _lyricRows[firstFocus];
+            TextBlock last = _lyricRows[lastFocus];
+            double top = first.TranslatePoint(new Point(0, 0), SeekLyricsPanel).Y;
+            double bottom = last.TranslatePoint(new Point(0, last.ActualHeight), SeekLyricsPanel).Y;
+            double middle = (top + bottom) / 2;
             double scale = GetSeekDpi().DpiScaleY;
             double scroll = Math.Clamp(middle - window / 2, 0, maximum);
 
@@ -448,14 +478,35 @@ namespace RetroBar.Controls
             return scroll;
         }
 
-        // Puts the look of its distance from the current line on a row, from the look of its distance from the previous one.
-        private void StyleLyricRow(int i, int index, int previous, bool animate, int token)
+        // How far a row is from the lines in focus (from the nearest of them): its look.
+        private static int DistanceToFocus(int[] focus, int row, int fallback)
+        {
+            if (focus == null || focus.Length == 0)
+            {
+                return Math.Abs(row - fallback);
+            }
+
+            int nearest = int.MaxValue;
+            foreach (int line in focus)
+            {
+                nearest = Math.Min(nearest, Math.Abs(row - line));
+            }
+
+            return nearest;
+        }
+
+        private bool IsInFocus(int row) => Array.IndexOf(_focusLines, row) >= 0;
+
+        // Puts the look of its distance from the lines in focus on a row, from the look of its distance from the ones that were.
+        private void StyleLyricRow(int i, int index, int previous, int[] before, bool animate, int token)
         {
             TextBlock row = _lyricRows[i];
-            int distance = Math.Abs(i - index);
+            bool nowFocus = IsInFocus(i);
+            bool wasFocus = before != null && Array.IndexOf(before, i) >= 0;
+            int distance = DistanceToFocus(_focusLines, i, index);
             double opacity = LyricOpacityAt(distance);
             double blur = LyricBlurAt(distance);
-            int oldDistance = previous == int.MinValue ? distance : Math.Abs(i - previous);
+            int oldDistance = previous == int.MinValue ? distance : DistanceToFocus(before, i, previous);
             double oldOpacity = LyricOpacityAt(oldDistance);
             double oldBlur = LyricBlurAt(oldDistance);
 
@@ -475,10 +526,10 @@ namespace RetroBar.Controls
                     var radius = new DoubleAnimation(oldBlur, blur, LyricScroll) { EasingFunction = ease };
                     if (blur == 0)
                     {
-                        // A blur effect, even of nothing, softens the text: the current line has none at rest.
+                        // A blur effect, even of nothing, softens the text: the lines in focus have none at rest.
                         radius.Completed += (s, e) =>
                         {
-                            if (token == _lyricScrollToken && Math.Abs(i - _shownLyricIndex) == 0)
+                            if (token == _lyricScrollToken && IsInFocus(i))
                             {
                                 row.Effect = null;
                             }
@@ -497,8 +548,8 @@ namespace RetroBar.Controls
                 row.Effect = null;
             }
 
-            // The colour: the current line fades into the cover's colour, the one that was current out of it. (A line synced by word has its
-            // words lit one by one instead, see BeginLyricWords; the one that was current, all lit, fades out whole.)
+            // The colour: a line in focus fades into the cover's colour, one that was out of it. (A line synced by word has its words lit
+            // one by one instead, see BeginLyricWords; the one that was in focus, all lit, fades out whole.)
             Color? neutral = NeutralColor();
             Run[] runs = _lyricRuns?[i];
             if (runs != null)
@@ -509,13 +560,13 @@ namespace RetroBar.Controls
                 }
             }
 
-            if (i == index && runs != null)
+            if (nowFocus && runs != null)
             {
                 row.ClearValue(TextBlock.ForegroundProperty);
             }
-            else if (i == index && AccentBrush() is SolidColorBrush accent && neutral is Color rest)
+            else if (nowFocus && AccentBrush() is SolidColorBrush accent && neutral is Color rest)
             {
-                if (animate)
+                if (animate && !wasFocus)
                 {
                     var fade = new SolidColorBrush(rest);
                     row.Foreground = fade;
@@ -527,14 +578,14 @@ namespace RetroBar.Controls
                     row.Foreground = accent;
                 }
             }
-            else if (i == previous && animate && AccentBrush() is SolidColorBrush before && neutral is Color back)
+            else if (wasFocus && !nowFocus && animate && AccentBrush() is SolidColorBrush beforeBrush && neutral is Color back)
             {
-                var fade = new SolidColorBrush(before.Color);
+                var fade = new SolidColorBrush(beforeBrush.Color);
                 row.Foreground = fade;
-                var animation = new ColorAnimation(before.Color, back, LyricScroll);
+                var animation = new ColorAnimation(beforeBrush.Color, back, LyricScroll);
                 animation.Completed += (s, e) =>
                 {
-                    if (token == _lyricScrollToken && i != _shownLyricIndex)
+                    if (token == _lyricScrollToken && !IsInFocus(i))
                     {
                         row.ClearValue(TextBlock.ForegroundProperty);
                     }
@@ -547,29 +598,35 @@ namespace RetroBar.Controls
             }
         }
 
-        // Shows the lines around one: the lines that move scroll to their places, and every row takes the look of its new distance from the
-        // current line.
-        private void ShowLyrics(int previous, int index)
+        // Shows the lines around the ones in focus: the lines that move scroll to their places, and every row takes the look of its new
+        // distance from the lines in focus.
+        private void ShowLyrics(int previous, int[] before, int index)
         {
             ApplyLyricsHeight();
             int token = ++_lyricScrollToken;
             bool animate = previous != int.MinValue;
 
-            // The rows that are, or were, near enough to the current line to look different; the others keep the dimmest look.
-            int first = Math.Max(0, Math.Min(index, animate ? previous : index) - LyricStyledDistance - 1);
-            int last = Math.Min(_lyricRows.Length - 1, Math.Max(index, animate ? previous : index) + LyricStyledDistance + 1);
+            // The rows that are, or were, near enough to the lines in focus to look different; the others keep the dimmest look.
+            int low = index;
+            int high = index;
+            foreach (int line in _focusLines.Concat(animate ? before : Array.Empty<int>()).Concat(animate ? new[] { previous } : Array.Empty<int>()))
+            {
+                low = Math.Min(low, line);
+                high = Math.Max(high, line);
+            }
+
+            int first = Math.Max(0, low - LyricStyledDistance - 1);
+            int last = Math.Min(_lyricRows.Length - 1, high + LyricStyledDistance + 1);
             for (int i = first; i <= last; i++)
             {
-                StyleLyricRow(i, index, previous, animate, token);
+                StyleLyricRow(i, index, previous, before, animate, token);
             }
 
-            StopLyricWords();
-            if (index >= 0 && _lyricRuns?[index] != null)
-            {
-                BeginLyricWords(index);
-            }
+            BeginLyricWords();
 
-            double scroll = LyricScrollFor(index, out double visibleTop, out double visibleBottom);
+            double scroll = _focusLines.Length > 0
+                ? LyricScrollFor(_focusLines[0], _focusLines[^1], out double visibleTop, out double visibleBottom)
+                : LyricScrollFor(-1, -1, out visibleTop, out visibleBottom);
             UpdateLyricMask(visibleTop, visibleBottom, animate);
             double top = -scroll;
             SeekLyricsPanel.BeginAnimation(Canvas.TopProperty, null);
@@ -585,33 +642,44 @@ namespace RetroBar.Controls
             }
         }
 
-        // The words of the current line start dim, and light up (fade into the colour of the cover) when they are sung.
-        private void BeginLyricWords(int line)
+        // The words of the lines in focus start dim, and fill with the colour of the cover as they are sung.
+        private void BeginLyricWords()
         {
             StopLyricWords();
-            Run[] runs = _lyricRuns[line];
-            LyricWord[] words = _lyrics[line].Words;
-            if (runs.Length != words.Length)
+            foreach (int line in _focusLines)
+            {
+                Run[] runs = _lyricRuns?[line];
+                LyricWord[] words = _lyrics?[line].Words;
+                if (runs == null || words == null || runs.Length != words.Length)
+                {
+                    continue;
+                }
+
+                var active = new ActiveWordLine
+                {
+                    Runs = runs,
+                    Words = words,
+                    Offsets = _lyricRunOffsets[line],
+                    Block = _lyricRows[line],
+                    States = new byte[runs.Length],
+                    Sweeps = new LinearGradientBrush[runs.Length],
+                };
+                for (int i = 0; i < runs.Length; i++)
+                {
+                    runs[i].Foreground = new SolidColorBrush(UnsungColor(words[i].IsBackground));
+                }
+
+                // The word being sung is a pixel higher: a text effect over its letters, which moves as the singing does.
+                active.Move = new TranslateTransform();
+                active.Lift = new TextEffect { Transform = active.Move, PositionStart = 0, PositionCount = 0 };
+                active.Block.TextEffects.Add(active.Lift);
+                _activeLines.Add(active);
+            }
+
+            if (_activeLines.Count == 0)
             {
                 return;
             }
-
-            _activeRuns = runs;
-            _activeWords = words;
-            _activeOffsets = _lyricRunOffsets[line];
-            _activeBlock = _lyricRows[line];
-            _activeStates = new byte[runs.Length];
-            _activeSweeps = new LinearGradientBrush[runs.Length];
-            _liftedWord = -1;
-            for (int i = 0; i < runs.Length; i++)
-            {
-                runs[i].Foreground = new SolidColorBrush(UnsungColor(words[i].IsBackground));
-            }
-
-            // The word being sung is a pixel higher: a text effect over its letters, which moves as the singing does.
-            _wordLiftMove = new TranslateTransform();
-            _wordLift = new TextEffect { Transform = _wordLiftMove, PositionStart = 0, PositionCount = 0 };
-            _activeBlock.TextEffects.Add(_wordLift);
 
             _lyricWordTimer ??= new DispatcherTimer(DispatcherPriority.Render) { Interval = TimeSpan.FromMilliseconds(33) };
             _lyricWordTimer.Tick -= LyricWordTimer_OnTick;
@@ -623,15 +691,12 @@ namespace RetroBar.Controls
         private void StopLyricWords()
         {
             _lyricWordTimer?.Stop();
-            _activeBlock?.TextEffects.Clear();
-            _activeBlock = null;
-            _wordLift = null;
-            _wordLiftMove = null;
-            _activeRuns = null;
-            _activeWords = null;
-            _activeOffsets = null;
-            _activeStates = null;
-            _activeSweeps = null;
+            foreach (ActiveWordLine active in _activeLines)
+            {
+                active.Block.TextEffects.Clear();
+            }
+
+            _activeLines.Clear();
         }
 
         // What is not sung yet is the text's own colour a little faded, what has been the cover's colour: the background vocals both dimmer.
@@ -661,75 +726,78 @@ namespace RetroBar.Controls
 
         private void LyricWordTimer_OnTick(object sender, EventArgs e)
         {
-            if (_activeRuns == null || _activeWords == null || !SeekPopup.IsOpen)
+            if (_activeLines.Count == 0 || !SeekPopup.IsOpen)
             {
                 _lyricWordTimer?.Stop();
                 return;
             }
 
             TimeSpan position = EstimatedSeekPosition() + LyricsLead;
-            int lifted = -1;
-            for (int i = 0; i < _activeRuns.Length; i++)
+            foreach (ActiveWordLine active in _activeLines)
             {
-                LyricWord word = _activeWords[i];
-                bool background = word.IsBackground;
-
-                // Not sung yet (0), being sung (1), or sung (2).
-                byte state = position >= word.End ? (byte)2 : position >= word.Start ? (byte)1 : (byte)0;
-                if (state == 1)
+                int lifted = -1;
+                for (int i = 0; i < active.Runs.Length; i++)
                 {
-                    double progress = word.End > word.Start ? (position - word.Start).TotalSeconds / (word.End - word.Start).TotalSeconds : 1;
-                    progress = Math.Clamp(progress, 0, 1);
-                    Color sung = SungColor(background);
-                    Color unsung = UnsungColor(background);
-                    LinearGradientBrush sweep = _activeSweeps[i] ??= new LinearGradientBrush
-                    {
-                        StartPoint = new Point(0, 0.5),
-                        EndPoint = new Point(1, 0.5),
-                        GradientStops = new GradientStopCollection { new GradientStop(), new GradientStop(), new GradientStop(), new GradientStop() },
-                    };
+                    LyricWord word = active.Words[i];
+                    bool background = word.IsBackground;
 
-                    // The part sung is filled up to the progress, with a soft edge before the part that is not.
-                    sweep.GradientStops[0].Color = sung;
-                    sweep.GradientStops[0].Offset = 0;
-                    sweep.GradientStops[1].Color = sung;
-                    sweep.GradientStops[1].Offset = progress;
-                    sweep.GradientStops[2].Color = unsung;
-                    sweep.GradientStops[2].Offset = Math.Min(1, progress + LyricWordSoftEdge);
-                    sweep.GradientStops[3].Color = unsung;
-                    sweep.GradientStops[3].Offset = 1;
-                    if (_activeStates[i] != 1)
+                    // Not sung yet (0), being sung (1), or sung (2).
+                    byte state = position >= word.End ? (byte)2 : position >= word.Start ? (byte)1 : (byte)0;
+                    if (state == 1)
                     {
-                        _activeRuns[i].Foreground = sweep;
+                        double progress = word.End > word.Start ? (position - word.Start).TotalSeconds / (word.End - word.Start).TotalSeconds : 1;
+                        progress = Math.Clamp(progress, 0, 1);
+                        Color sung = SungColor(background);
+                        Color unsung = UnsungColor(background);
+                        LinearGradientBrush sweep = active.Sweeps[i] ??= new LinearGradientBrush
+                        {
+                            StartPoint = new Point(0, 0.5),
+                            EndPoint = new Point(1, 0.5),
+                            GradientStops = new GradientStopCollection { new GradientStop(), new GradientStop(), new GradientStop(), new GradientStop() },
+                        };
+
+                        // The part sung is filled up to the progress, with a soft edge before the part that is not.
+                        sweep.GradientStops[0].Color = sung;
+                        sweep.GradientStops[0].Offset = 0;
+                        sweep.GradientStops[1].Color = sung;
+                        sweep.GradientStops[1].Offset = progress;
+                        sweep.GradientStops[2].Color = unsung;
+                        sweep.GradientStops[2].Offset = Math.Min(1, progress + LyricWordSoftEdge);
+                        sweep.GradientStops[3].Color = unsung;
+                        sweep.GradientStops[3].Offset = 1;
+                        if (active.States[i] != 1)
+                        {
+                            active.Runs[i].Foreground = sweep;
+                        }
+
+                        if (!background)
+                        {
+                            lifted = i;
+                        }
+                    }
+                    else if (active.States[i] != state)
+                    {
+                        active.Runs[i].Foreground = new SolidColorBrush(state == 2 ? SungColor(background) : UnsungColor(background));
                     }
 
-                    if (!background)
+                    active.States[i] = state;
+                }
+
+                if (lifted != active.Lifted)
+                {
+                    active.Lifted = lifted;
+                    if (lifted >= 0)
                     {
-                        lifted = i;
+                        active.Lift.PositionStart = active.Offsets[lifted];
+                        active.Lift.PositionCount = active.Runs[lifted].Text.Length;
+                        active.Move.BeginAnimation(TranslateTransform.YProperty, new DoubleAnimation(0, -1 / GetSeekDpi().DpiScaleY, LyricLiftTime));
                     }
-                }
-                else if (_activeStates[i] != state)
-                {
-                    _activeRuns[i].Foreground = new SolidColorBrush(state == 2 ? SungColor(background) : UnsungColor(background));
-                }
-
-                _activeStates[i] = state;
-            }
-
-            if (lifted != _liftedWord)
-            {
-                _liftedWord = lifted;
-                if (lifted >= 0)
-                {
-                    _wordLift.PositionStart = _activeOffsets[lifted];
-                    _wordLift.PositionCount = _activeRuns[lifted].Text.Length;
-                    _wordLiftMove.BeginAnimation(TranslateTransform.YProperty, new DoubleAnimation(0, -1 / GetSeekDpi().DpiScaleY, LyricLiftTime));
-                }
-                else
-                {
-                    _wordLiftMove.BeginAnimation(TranslateTransform.YProperty, null);
-                    _wordLiftMove.Y = 0;
-                    _wordLift.PositionCount = 0;
+                    else
+                    {
+                        active.Move.BeginAnimation(TranslateTransform.YProperty, null);
+                        active.Move.Y = 0;
+                        active.Lift.PositionCount = 0;
+                    }
                 }
             }
         }

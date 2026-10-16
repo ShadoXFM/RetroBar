@@ -230,17 +230,26 @@ namespace RetroBar.Utilities
             return current;
         }
 
-        /// <summary>The line in focus at a position, given the one that was: two lines are never in focus together, so a line that starts while
-        /// the one in focus is still being sung waits for it to end (the background vocals of one line are part of it, not another line).</summary>
-        public static int FocusIndex(LyricLine[] lines, int shown, TimeSpan position)
+        /// <summary>The lines in focus at a position (in order): the one that was started last, and the lines before it that are still being
+        /// sung (those that overlap it, in a duet or with an echo). None before the first line.</summary>
+        public static int[] FocusSet(LyricLine[] lines, TimeSpan position, int index)
         {
-            int index = IndexAt(lines, position);
-            if (shown >= 0 && shown < index && shown < lines.Length && lines[shown].End is TimeSpan end && position < end)
+            if (index < 0 || index >= lines.Length)
             {
-                return shown;
+                return Array.Empty<int>();
             }
 
-            return index;
+            var focus = new List<int>();
+            for (int i = Math.Max(0, index - 8); i < index; i++)
+            {
+                if (lines[i].End is TimeSpan end && position < end)
+                {
+                    focus.Add(i);
+                }
+            }
+
+            focus.Add(index);
+            return focus.ToArray();
         }
 
         /// <summary>The line being sung at a position: the last one that has started (null before the first).</summary>
