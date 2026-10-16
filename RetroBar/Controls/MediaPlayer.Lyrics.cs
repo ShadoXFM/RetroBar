@@ -39,8 +39,9 @@ namespace RetroBar.Controls
 
         // The scroll and the colour take the same time: the line is in its colour when it is in its place.
         private static readonly Duration LyricScroll = new(TimeSpan.FromMilliseconds(320));
-        // A line that loses focus fades out - the cover's colour to its dimmed gray, and the blur, which is stepped (a blur that is drawn again
-        // for every frame made the fade choppy) - in a straight line, shortly.
+        // A line that loses focus (or gains it) goes between its sharp look and its blurred one by a cross-fade of the two, in a straight line:
+        // a blur effect whose radius is animated has no look between "none" (below a radius of 1), a brighter one (up to 2) and the blur, which
+        // showed as a flash and an abrupt cut. The cover's colour leaves the line in the same time.
         private static readonly Duration LyricColorFadeOut = new(TimeSpan.FromMilliseconds(600));
         private static readonly TimeSpan LyricsRetry = TimeSpan.FromSeconds(30);
 
@@ -84,6 +85,8 @@ namespace RetroBar.Controls
         // The lines in focus: the one that started last, and the lines before it that are still being sung (they overlap it).
         private int[] _focusLines = Array.Empty<int>();
         private TextBlock[] _lyricRows;
+        private Grid[] _lyricHosts;
+        private TextBlock[] _lyricGhosts;
         private int _lyricScrollToken;
 
         private static double LyricOpacityAt(int distance) => LyricOpacity[Math.Min(distance, LyricOpacity.Length - 1)];
@@ -162,6 +165,8 @@ namespace RetroBar.Controls
         {
             SeekLyricsPanel.Children.Clear();
             _lyricRows = new TextBlock[lines.Length];
+            _lyricHosts = new Grid[lines.Length];
+            _lyricGhosts = new TextBlock[lines.Length];
             _lyricRuns = new Run[lines.Length][];
             _lyricRunOffsets = new int[lines.Length][];
 
@@ -213,7 +218,10 @@ namespace RetroBar.Controls
                 row.MouseLeftButtonDown += (s, e) => GetCursorPos(out _lyricClickStart);
                 row.MouseLeftButtonUp += (s, e) => LyricRow_OnClick(line, e.GetPosition(row));
                 _lyricRows[i] = row;
-                SeekLyricsPanel.Children.Add(row);
+                var host = new Grid();
+                host.Children.Add(row);
+                _lyricHosts[i] = host;
+                SeekLyricsPanel.Children.Add(host);
             }
         }
 
@@ -350,6 +358,8 @@ namespace RetroBar.Controls
             Canvas.SetTop(SeekLyricsPanel, 0);
             SeekLyricsPanel.Children.Clear();
             _lyricRows = null;
+            _lyricHosts = null;
+            _lyricGhosts = null;
             _lyricRuns = null;
             StopLyricWords();
         }
@@ -501,10 +511,50 @@ namespace RetroBar.Controls
 
         private bool IsInFocus(int row) => Array.IndexOf(_focusLines, row) >= 0;
 
+        // A copy of a row laid over it (the same text, in one colour, blurred), for the cross-fade between its sharp look and its blurred one.
+        private TextBlock AddLyricGhost(int i, Color color, double blur, double opacity)
+        {
+            TextBlock row = _lyricRows[i];
+            var ghost = new TextBlock
+            {
+                TextAlignment = row.TextAlignment,
+                TextWrapping = row.TextWrapping,
+                HorizontalAlignment = row.HorizontalAlignment,
+                Margin = row.Margin,
+                IsHitTestVisible = false,
+                Foreground = new SolidColorBrush(color),
+                Opacity = opacity,
+            };
+            ghost.SetResourceReference(StyleProperty, "MediaPlayerTrackTextStyle");
+            foreach (Run run in row.Inlines.OfType<Run>())
+            {
+                ghost.Inlines.Add(new Run(run.Text) { FontSize = run.FontSize });
+            }
+
+            if (blur > 0)
+            {
+                ghost.Effect = new BlurEffect { Radius = blur, RenderingBias = RenderingBias.Performance };
+            }
+
+            _lyricHosts[i].Children.Add(ghost);
+            _lyricGhosts[i] = ghost;
+            return ghost;
+        }
+
+        private void RemoveLyricGhost(int i)
+        {
+            if (_lyricGhosts?[i] is TextBlock ghost)
+            {
+                _lyricHosts[i].Children.Remove(ghost);
+                _lyricGhosts[i] = null;
+            }
+        }
+
         // Puts the look of its distance from the lines in focus on a row, from the look of its distance from the ones that were.
         private void StyleLyricRow(int i, int index, int previous, int[] before, bool animate, int token)
         {
             TextBlock row = _lyricRows[i];
+            RemoveLyricGhost(i);
             bool nowFocus = IsInFocus(i);
             bool wasFocus = before != null && Array.IndexOf(before, i) >= 0;
             int distance = DistanceToFocus(_focusLines, i, index);
@@ -514,48 +564,78 @@ namespace RetroBar.Controls
             double oldOpacity = LyricOpacityAt(oldDistance);
             double oldBlur = LyricBlurAt(oldDistance);
 
-            // A line that loses focus keeps its brightness while it fades (the colour goes from the cover's to the dimmed gray it ends up as,
-            // directly, as an opaque colour: a colour and a brightness changing together pass by a lighter gray on the way), and takes
-            // its new brightness when the fade is done.
-            bool fadingOut = animate && wasFocus && !nowFocus && AccentBrush() != null && NeutralColor() != null;
+            Color? neutral = NeutralColor();
+            SolidColorBrush accentNow = AccentBrush();
+            Run[] runs = _lyricRuns?[i];
+
+            // A line that loses focus goes to its blurred look, and one that gains it to its sharp look, by a cross-fade (see above).
+            bool fadingOut = animate && wasFocus && !nowFocus && blur > 0 && accentNow != null && neutral != null;
+            bool fadingIn = animate && nowFocus && !wasFocus && oldBlur > 0 && blur == 0 && neutral != null;
+
+            // What the text will look like when it has its new brightness: its color over the popup's ground.
+            Color ground = (TryFindResource("ButtonFace") as SolidColorBrush)?.Color ?? Color.FromRgb(18, 16, 20);
+            Color rest = neutral ?? Colors.White;
+            Color dimmed = Color.FromRgb(
+                (byte)Math.Round(ground.R + (rest.R - ground.R) * opacity),
+                (byte)Math.Round(ground.G + (rest.G - ground.G) * opacity),
+                (byte)Math.Round(ground.B + (rest.B - ground.B) * opacity));
+
             row.BeginAnimation(OpacityProperty, null);
-            row.Opacity = fadingOut ? 1 : opacity;
+            row.Opacity = opacity;
+            row.Effect = null;
 
-            if (blur > 0 || oldBlur > 0)
-
+            if (fadingOut)
+            {
+                // The sharp text fades out as it changes to the dimmed gray, and a blurred copy of the gray fades in over it. At the end the row
+                // takes the look the copy has (its blur, its brightness), and the copy goes.
+                TextBlock ghost = AddLyricGhost(i, rest, blur, 0);
+                var ghostIn = new DoubleAnimation(0, opacity, LyricColorFadeOut);
+                ghostIn.Completed += (s, e) =>
+                {
+                    if (token == _lyricScrollToken && !IsInFocus(i) && _lyricGhosts?[i] == ghost)
+                    {
+                        RemoveLyricGhost(i);
+                        row.BeginAnimation(OpacityProperty, null);
+                        row.Opacity = opacity;
+                        row.Effect = new BlurEffect { Radius = blur, RenderingBias = RenderingBias.Performance };
+                        row.ClearValue(TextBlock.ForegroundProperty);
+                        if (runs != null)
+                        {
+                            foreach (Run run in runs)
+                            {
+                                run.ClearValue(TextElement.ForegroundProperty);
+                            }
+                        }
+                    }
+                };
+                ghost.BeginAnimation(OpacityProperty, ghostIn);
+                row.BeginAnimation(OpacityProperty, new DoubleAnimation(1, 0, LyricColorFadeOut));
+            }
+            else if (fadingIn)
+            {
+                // The blurred copy of what the row was fades out, and the sharp text fades in.
+                TextBlock ghost = AddLyricGhost(i, rest, oldBlur, oldOpacity);
+                var ghostOut = new DoubleAnimation(oldOpacity, 0, LyricScroll);
+                ghostOut.Completed += (s, e) =>
+                {
+                    if (_lyricGhosts?[i] == ghost)
+                    {
+                        RemoveLyricGhost(i);
+                    }
+                };
+                ghost.BeginAnimation(OpacityProperty, ghostOut);
+                row.BeginAnimation(OpacityProperty, new DoubleAnimation(0, opacity, LyricScroll));
+            }
+            else if (blur > 0 || oldBlur > 0)
             {
                 bool moves = animate && (oldBlur != blur || oldOpacity != opacity);
-                Duration time = fadingOut ? LyricColorFadeOut : LyricScroll;
                 var effect = new BlurEffect { Radius = moves ? oldBlur : blur, RenderingBias = RenderingBias.Performance };
                 row.Effect = effect;
                 if (moves)
                 {
-                    IEasingFunction ease = fadingOut ? null : new QuadraticEase { EasingMode = EasingMode.EaseOut };
-                    if (!fadingOut)
-                    {
-                        row.BeginAnimation(OpacityProperty, new DoubleAnimation(oldOpacity, opacity, time) { EasingFunction = ease });
-                    }
-
-                    AnimationTimeline radius;
-                    if (fadingOut)
-                    {
-                        // The blur grows in small steps, so that it is drawn again a dozen times and not for every frame.
-                        const int steps = 12;
-                        var keyed = new DoubleAnimationUsingKeyFrames();
-                        keyed.KeyFrames.Add(new DiscreteDoubleKeyFrame(oldBlur, KeyTime.FromPercent(0)));
-                        for (int step = 1; step <= steps; step++)
-                        {
-                            keyed.KeyFrames.Add(new DiscreteDoubleKeyFrame(oldBlur + (blur - oldBlur) * step / steps, KeyTime.FromPercent((step - 1) / (double)steps * 0.92 + 0.0001)));
-                        }
-
-                        keyed.Duration = time;
-                        radius = keyed;
-                    }
-                    else
-                    {
-                        radius = new DoubleAnimation(oldBlur, blur, time) { EasingFunction = ease };
-                    }
-
+                    var ease = new QuadraticEase { EasingMode = EasingMode.EaseOut };
+                    row.BeginAnimation(OpacityProperty, new DoubleAnimation(oldOpacity, opacity, LyricScroll) { EasingFunction = ease });
+                    var radius = new DoubleAnimation(oldBlur, blur, LyricScroll) { EasingFunction = ease };
                     if (blur == 0)
                     {
                         // A blur effect, even of nothing, softens the text: the lines in focus have none at rest.
@@ -575,18 +655,9 @@ namespace RetroBar.Controls
                     row.Effect = null;
                 }
             }
-            else
-            {
-                row.Effect = null;
-            }
 
             // The colour: a line in focus fades into the cover's colour, one that was out of it. (A line synced by word has its words lit
-            // one by one instead, see BeginLyricWords; the one that was in focus, all lit, fades out whole.)
-            Color? neutral = NeutralColor();
-            Run[] runs = _lyricRuns?[i];
-
-            // A line synced by word that loses focus fades from the look each of its words has at that moment (the background vocals dimmer
-            // than the others, a word that is being sung half way), not from its whole being in the cover's colour.
+            // one by one instead, see BeginLyricWords; one that loses focus fades from the look each of its words has at that moment.)
             ActiveWordLine fadingWords = fadingOut && runs != null ? _activeLines.FirstOrDefault(active => ReferenceEquals(active.Block, row)) : null;
             if (runs != null && fadingWords == null)
             {
@@ -600,67 +671,39 @@ namespace RetroBar.Controls
             {
                 row.ClearValue(TextBlock.ForegroundProperty);
             }
-            else if (nowFocus && AccentBrush() is SolidColorBrush accent && neutral is Color rest)
+            else if (nowFocus && accentNow != null && neutral is Color rowRest)
             {
                 if (animate && !wasFocus)
                 {
-                    var fade = new SolidColorBrush(rest);
+                    var fade = new SolidColorBrush(rowRest);
                     row.Foreground = fade;
-                    fade.BeginAnimation(SolidColorBrush.ColorProperty, new ColorAnimation(rest, accent.Color, LyricScroll));
+                    fade.BeginAnimation(SolidColorBrush.ColorProperty, new ColorAnimation(rowRest, accentNow.Color, LyricScroll));
                 }
                 else
                 {
-                    accent.Freeze();
-                    row.Foreground = accent;
+                    accentNow.Freeze();
+                    row.Foreground = accentNow;
                 }
             }
-            else if (fadingOut && AccentBrush() is SolidColorBrush beforeBrush && neutral is Color back)
+            else if (fadingOut)
             {
-                // What the text will look like when it has its new brightness: its color over the popup's ground.
-                Color ground = (TryFindResource("ButtonFace") as SolidColorBrush)?.Color ?? Color.FromRgb(18, 16, 20);
-                Color end = Color.FromRgb(
-                    (byte)Math.Round(ground.R + (back.R - ground.R) * opacity),
-                    (byte)Math.Round(ground.G + (back.G - ground.G) * opacity),
-                    (byte)Math.Round(ground.B + (back.B - ground.B) * opacity));
                 if (fadingWords != null)
                 {
                     row.ClearValue(TextBlock.ForegroundProperty);
                     TimeSpan now = EstimatedSeekPosition() + LyricsLead;
                     for (int w = 0; w < runs.Length; w++)
                     {
-                        int word = w;
-                        Color from = WordColor(fadingWords, word, now);
+                        Color from = WordColor(fadingWords, w, now);
                         var wordBrush = new SolidColorBrush(from);
-                        runs[word].Foreground = wordBrush;
-                        var wordFade = new ColorAnimation(from, end, LyricColorFadeOut);
-                        wordFade.Completed += (s, e) =>
-                        {
-                            if (token == _lyricScrollToken && !IsInFocus(i))
-                            {
-                                runs[word].ClearValue(TextElement.ForegroundProperty);
-                                if (word == 0)
-                                {
-                                    row.Opacity = opacity;
-                                }
-                            }
-                        };
-                        wordBrush.BeginAnimation(SolidColorBrush.ColorProperty, wordFade);
+                        runs[w].Foreground = wordBrush;
+                        wordBrush.BeginAnimation(SolidColorBrush.ColorProperty, new ColorAnimation(from, dimmed, LyricColorFadeOut));
                     }
                 }
                 else
                 {
-                    var fade = new SolidColorBrush(beforeBrush.Color);
+                    var fade = new SolidColorBrush(accentNow.Color);
                     row.Foreground = fade;
-                    var animation = new ColorAnimation(beforeBrush.Color, end, LyricColorFadeOut);
-                    animation.Completed += (s, e) =>
-                    {
-                        if (token == _lyricScrollToken && !IsInFocus(i))
-                        {
-                            row.Opacity = opacity;
-                            row.ClearValue(TextBlock.ForegroundProperty);
-                        }
-                    };
-                    fade.BeginAnimation(SolidColorBrush.ColorProperty, animation);
+                    fade.BeginAnimation(SolidColorBrush.ColorProperty, new ColorAnimation(accentNow.Color, dimmed, LyricColorFadeOut));
                 }
             }
             else
