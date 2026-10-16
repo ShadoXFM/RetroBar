@@ -58,6 +58,12 @@ namespace RetroBar.Utilities
         /// <summary>True while it slides away (the popup closes when that is done).</summary>
         public bool Closing { get; private set; }
 
+        /// <summary>True while the popup is open (sliding in or away included).</summary>
+        public bool IsOpen => _popup.IsOpen;
+
+        /// <summary>Raised when the popup has closed, after it slid away or by CloseNow.</summary>
+        public event Action Closed;
+
         private (DependencyProperty Property, double Hidden) Axis()
         {
             SlideDirection direction = _direction();
@@ -131,6 +137,7 @@ namespace RetroBar.Utilities
                     Closing = false;
                     _popup.IsOpen = false;
                     Reset();
+                    Closed?.Invoke();
                 }
             };
             _transform.BeginAnimation(axis, slide);
@@ -142,6 +149,7 @@ namespace RetroBar.Utilities
             Closing = false;
             _popup.IsOpen = false;
             Reset();
+            Closed?.Invoke();
         }
 
         /// <summary>Stops any slide and takes the transform and the clip off.</summary>

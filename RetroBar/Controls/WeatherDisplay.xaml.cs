@@ -173,11 +173,13 @@ namespace RetroBar.Controls
                 return;
             }
 
-            // Open on the side of the widget facing into the screen, whichever edge the taskbar is on, and
-            // centered on the widget along the taskbar (see PlaceForecast).
-            ForecastPopup.PlacementTarget = WeatherPanel;
-            ForecastPopup.Placement = PlacementMode.Custom;
-            ForecastPopup.CustomPopupPlacementCallback = PlaceForecast;
+            // One at a time with the CPU temperature's graph: if that is open it slides away first (see HoverPopups).
+            HoverPopups.Open(_slide, () =>
+            {
+                if (!WeatherPanel.IsMouseOver)
+                {
+                    return;
+                }
 
             // Show the latest reading, and refresh it in the background if it has gone stale.
             _ = _viewModel?.UpdateWeatherAsync();

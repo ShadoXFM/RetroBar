@@ -203,11 +203,20 @@ namespace RetroBar.Controls
                 return;
             }
 
-            GraphPopup.PlacementTarget = CpuTempPanel;
-            GraphPopup.Placement = PlacementMode.Custom;
-            GraphPopup.CustomPopupPlacementCallback = PlaceGraph;
-            RefreshGraph();
-            _slide.Show();
+            // One at a time with the weather's forecast: if that is open it slides away first (see HoverPopups).
+            HoverPopups.Open(_slide, () =>
+            {
+                if (!CpuTempPanel.IsMouseOver)
+                {
+                    return;
+                }
+
+                GraphPopup.PlacementTarget = CpuTempPanel;
+                GraphPopup.Placement = PlacementMode.Custom;
+                GraphPopup.CustomPopupPlacementCallback = PlaceGraph;
+                RefreshGraph();
+                _slide.Show();
+            });
         }
 
         // The name of the processor, as Windows has it in the registry, without the marks and the words that say nothing ("(R)", "Processor").
