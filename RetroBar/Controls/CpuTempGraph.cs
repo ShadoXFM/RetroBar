@@ -1,5 +1,6 @@
 using RetroBar.Utilities;
 using System;
+using System.Collections.Generic;
 using System.Globalization;
 using System.Linq;
 using System.Windows;
@@ -14,7 +15,9 @@ namespace RetroBar.Controls
     /// </summary>
     public class CpuTempGraph : FrameworkElement
     {
-        private const double LabelWidth = 30;
+        // The temperatures at the left start this far from the edge (the header's text is as far), and have this much room before the graph.
+        private const double LabelMargin = 2;
+        private const double LabelGap = 4;
         private const double Pad = 4;
         private const double FontSize = 10;
 
@@ -45,7 +48,7 @@ namespace RetroBar.Controls
         {
             double width = ActualWidth;
             double height = ActualHeight;
-            if (width <= LabelWidth + 2 * Pad || height <= 2 * Pad + 2 * FontSize)
+            if (width <= 60 || height <= 2 * Pad + 2 * FontSize)
             {
                 return;
             }
@@ -64,7 +67,6 @@ namespace RetroBar.Controls
             var gridPen = new Pen(faint, 1);
             gridPen.Freeze();
 
-            double left = LabelWidth;
             double right = width - Pad;
             double top = Pad + FontSize / 2;
             double bottom = height - Pad - FontSize - 4;
@@ -88,44 +90,55 @@ namespace RetroBar.Controls
 
             double Y(double value) => bottom - (value - low) / (high - low) * (bottom - top);
 
-            // Lines across at every multiple of the step, which makes about four of them.
+            // Lines across at every multiple of the step, which makes about four of them. The graph starts after the widest of their labels.
             double step = (high - low) <= 20 ? 5 : (high - low) <= 40 ? 10 : 20;
+            var marks = new List<(double Value, FormattedText Label)>();
             for (double value = Math.Ceiling(low / step) * step; value <= high; value += step)
+            {
+                marks.Add((value, Text($"{value:0}°")));
+            }
+
+            double widest = marks.Count > 0 ? marks.Max(m => m.Label.Width) : 0;
+            double left = Math.Ceiling((LabelMargin + widest + LabelGap) * dpi) / dpi;
+            foreach ((double value, FormattedText label) in marks)
             {
                 double y = Math.Round(Y(value)) + 0.5;
                 dc.DrawLine(gridPen, new Point(left, y), new Point(right, y));
-                FormattedText label = Text($"{value:0}°");
-                dc.DrawText(label, new Point(Snap(left - 4 - label.Width), Snap(y - label.Height / 2)));
+                dc.DrawText(label, new Point(Snap(LabelMargin + widest - label.Width), Snap(y - label.Height / 2)));
             }
 
+            // Five whole device pixels' spaces for the fifteen minutes (a mark is at every third), so every mark is the same whole number of
+            // pixels from the next and the labels move together, not each by its own rounding.
             DateTime now = DateTime.UtcNow;
-            double Seconds(DateTime utc) => (now - utc).TotalSeconds;
-            double X(DateTime utc) => left + (1 - Seconds(utc) / CpuTemperatureHistory.Span.TotalSeconds) * (right - left);
+            int spacePixels = Math.Max(1, (int)Math.Floor((right - left) * dpi / 5));
+            double plot = spacePixels * 5 / dpi;
+            double plotLeft = Math.Round(left * dpi) / dpi;
+            double X(DateTime utc) => plotLeft + (1 - (now - utc).TotalSeconds / CpuTemperatureHistory.Span.TotalSeconds) * plot;
 
             // The time, at the third minutes of the clock that are in the span.
             DateTime nowLocal = now.ToLocalTime();
             DateTime tick = new DateTime(nowLocal.Year, nowLocal.Month, nowLocal.Day, nowLocal.Hour, nowLocal.Minute / TickMinutes * TickMinutes, 0, DateTimeKind.Local);
+            double labelHalf = Text("00:00").Width / 2;
             for (; (nowLocal - tick) <= CpuTemperatureHistory.Span; tick = tick.AddMinutes(-TickMinutes))
             {
-                double x = Math.Round(X(tick.ToUniversalTime())) + 0.5;
-                FormattedText label = Text(TimeText(tick));
-                double labelLeft = Math.Clamp(x - label.Width / 2, left - 2, width - label.Width);
-                if (x < left)
+                double x = (Math.Round(X(tick.ToUniversalTime()) * dpi) + 0.5) / dpi;
+                if (x < plotLeft)
                 {
                     continue;
                 }
 
+                FormattedText label = Text(TimeText(tick));
                 dc.DrawLine(gridPen, new Point(x, bottom), new Point(x, bottom + 3));
-                dc.DrawText(label, new Point(Snap(labelLeft), Snap(bottom + 4)));
+                dc.DrawText(label, new Point(Math.Min(Snap(x - labelHalf), width - label.Width), Snap(bottom + 4)));
             }
 
             var line = new StreamGeometry();
             using (StreamGeometryContext context = line.Open())
             {
-                context.BeginFigure(new Point(Math.Max(left, X(_samples[0].Utc)), Y(InUnit(_samples[0].Celsius))), false, false);
+                context.BeginFigure(new Point(Math.Max(plotLeft, X(_samples[0].Utc)), Y(InUnit(_samples[0].Celsius))), false, false);
                 foreach (CpuTemperatureHistory.Sample sample in _samples.Skip(1))
                 {
-                    context.LineTo(new Point(Math.Max(left, X(sample.Utc)), Y(InUnit(sample.Celsius))), true, false);
+                    context.LineTo(new Point(Math.Max(plotLeft, X(sample.Utc)), Y(InUnit(sample.Celsius))), true, false);
                 }
             }
 
@@ -135,11 +148,10 @@ namespace RetroBar.Controls
             var area = new StreamGeometry();
             using (StreamGeometryContext context = area.Open())
             {
-                double x0 = Math.Max(left, X(_samples[0].Utc));
-                context.BeginFigure(new Point(x0, bottom), true, true);
+                context.BeginFigure(new Point(Math.Max(plotLeft, X(_samples[0].Utc)), bottom), true, true);
                 foreach (CpuTemperatureHistory.Sample sample in _samples)
                 {
-                    context.LineTo(new Point(Math.Max(left, X(sample.Utc)), Y(InUnit(sample.Celsius))), false, false);
+                    context.LineTo(new Point(Math.Max(plotLeft, X(sample.Utc)), Y(InUnit(sample.Celsius))), false, false);
                 }
 
                 context.LineTo(new Point(X(_samples[^1].Utc), bottom), false, false);

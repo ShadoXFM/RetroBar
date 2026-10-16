@@ -66,14 +66,28 @@
                         <controls:CpuTempGraph x:Name="Graph"
                                                Height="112"
                                                Margin="0,8,0,0" />
-                        <TextBlock x:Name="GraphStats"
-                                   Style="{DynamicResource GlobalFonts}"
-                                   Foreground="{DynamicResource ButtonForeground}"
-                                   FontFamily="Tahoma"
-                                   FontWeight="Bold"
-                                   HorizontalAlignment="Stretch"
-                                   TextAlignment="Center"
-                                   Margin="0,6,0,0" />
+                        <!-- Min, average and max across the width of the widget: the first at the left, the last at the right, the
+                             second between them. -->
+                        <Grid Margin="2,6,2,0">
+                            <TextBlock x:Name="GraphMin"
+                                       HorizontalAlignment="Left"
+                                       Style="{DynamicResource GlobalFonts}"
+                                       Foreground="{DynamicResource ButtonForeground}"
+                                       FontFamily="Tahoma"
+                                       FontWeight="Bold" />
+                            <TextBlock x:Name="GraphAverage"
+                                       HorizontalAlignment="Center"
+                                       Style="{DynamicResource GlobalFonts}"
+                                       Foreground="{DynamicResource ButtonForeground}"
+                                       FontFamily="Tahoma"
+                                       FontWeight="Bold" />
+                            <TextBlock x:Name="GraphMax"
+                                       HorizontalAlignment="Right"
+                                       Style="{DynamicResource GlobalFonts}"
+                                       Foreground="{DynamicResource ButtonForeground}"
+                                       FontFamily="Tahoma"
+                                       FontWeight="Bold" />
+                        </Grid>
                     </StackPanel>
                 </ContentControl>
             </Grid>

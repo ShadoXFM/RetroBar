@@ -250,13 +250,11 @@ namespace RetroBar.Controls
                 GraphHeader.Text = $"{Degrees(_celsius.Value)} · {ProcessorName}";
             }
 
-            GraphStats.Text = samples.Length == 0
-                ? ""
-                : string.Format(
-                    TryFindResource("cpu_temp_graph_stats") as string ?? "Min {0}   Average {1}   Max {2}",
-                    Degrees(samples.Min(s => s.Celsius)),
-                    Degrees(samples.Average(s => s.Celsius)),
-                    Degrees(samples.Max(s => s.Celsius)));
+            // Each its own text, to be spread across the width.
+            string Stat(string key, string fallback, double celsius) => string.Format(TryFindResource(key) as string ?? fallback, Degrees(celsius));
+            GraphMin.Text = samples.Length == 0 ? "" : Stat("cpu_temp_graph_min", "Min {0}", samples.Min(s => s.Celsius));
+            GraphAverage.Text = samples.Length == 0 ? "" : Stat("cpu_temp_graph_average", "Average {0}", samples.Average(s => s.Celsius));
+            GraphMax.Text = samples.Length == 0 ? "" : Stat("cpu_temp_graph_max", "Max {0}", samples.Max(s => s.Celsius));
         }
 
         // On a taskbar at the bottom: how far the popup's window reaches below the taskbar's top, so that only what is above it shows while
