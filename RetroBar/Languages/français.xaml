@@ -9,7 +9,9 @@
     <s:String x:Key="notification_area">Zone de notifications</s:String>
     <s:String x:Key="general_heading">Généralités</s:String>
     <s:String x:Key="media_player_heading">Media Player</s:String>
-    <s:String x:Key="media_lyrics_lines">Lignes de _paroles affichées dans la fenêtre :</s:String>
+    <s:String x:Key="media_lyrics_lines">Lignes de _paroles affichées dans la fenêtre (3 à 14) :</s:String>
+    <s:String x:Key="media_lyrics_delay">_Décalage des paroles (ms d'avance) :</s:String>
+    <s:String x:Key="media_lyrics_delay_tip">Combien de millisecondes avant leur moment les paroles apparaissent : plus les montre plus tôt, moins (ou négatif) plus tard. Pour toutes les chansons.</s:String>
     <s:String x:Key="show_vu_meter">Afficher le _vu-mètre derrière le titre</s:String>
     <s:String x:Key="show_media_player">Montrer les contrôles du lecteur media</s:String>
     <s:String x:Key="show_media_player_album_art">Afficher la p_ochette de l'album</s:String>

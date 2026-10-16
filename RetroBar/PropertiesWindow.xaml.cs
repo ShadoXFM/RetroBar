@@ -195,20 +195,69 @@ namespace RetroBar
 
         private void LoadLyricLines()
         {
-            for (int i = 3; i <= 14; i++)
-            {
-                cboLyricLines.Items.Add(i);
-            }
-
-            cboLyricLines.SelectedItem = Settings.Instance.LyricLines;
+            txtLyricLines.Text = Settings.Instance.LyricLines.ToString();
+            txtLyricsDelay.Text = Settings.Instance.LyricsLeadMs.ToString();
         }
 
-        private void CboLyricLines_SelectionChanged(object sender, System.Windows.Controls.SelectionChangedEventArgs e)
+        // Digits only (and a minus sign at the start, for a delay that goes the other way).
+        private void NumberBox_PreviewTextInput(object sender, System.Windows.Input.TextCompositionEventArgs e)
         {
-            if (cboLyricLines.SelectedItem is int lines)
+            var box = (System.Windows.Controls.TextBox)sender;
+            bool minus = e.Text == "-" && box == txtLyricsDelay && box.SelectionStart == 0 && !box.Text.Contains('-');
+            e.Handled = !minus && !e.Text.All(char.IsDigit);
+        }
+
+        // Enter takes the number as it does when the box is left.
+        private void LyricsBox_KeyDown(object sender, System.Windows.Input.KeyEventArgs e)
+        {
+            if (e.Key == System.Windows.Input.Key.Enter)
+            {
+                if (sender == txtLyricLines)
+                {
+                    LyricLines_LostFocus(sender, e);
+                }
+                else
+                {
+                    LyricsDelay_LostFocus(sender, e);
+                }
+
+                ((System.Windows.Controls.TextBox)sender).SelectAll();
+                e.Handled = true;
+            }
+        }
+
+        // The arrows: a step up or down.
+        private void LyricLinesStep_Click(object sender, RoutedEventArgs e)
+        {
+            Settings.Instance.LyricLines += int.Parse((string)((System.Windows.Controls.Button)sender).Tag, System.Globalization.CultureInfo.InvariantCulture);
+            txtLyricLines.Text = Settings.Instance.LyricLines.ToString();
+        }
+
+        private void LyricsDelayStep_Click(object sender, RoutedEventArgs e)
+        {
+            Settings.Instance.LyricsLeadMs += int.Parse((string)((System.Windows.Controls.Button)sender).Tag, System.Globalization.CultureInfo.InvariantCulture);
+            txtLyricsDelay.Text = Settings.Instance.LyricsLeadMs.ToString();
+        }
+
+        private void LyricLines_LostFocus(object sender, RoutedEventArgs e)
+        {
+            if (int.TryParse(txtLyricLines.Text, out int lines))
             {
                 Settings.Instance.LyricLines = lines;
             }
+
+            // What the setting took (it is kept from 3 to 14).
+            txtLyricLines.Text = Settings.Instance.LyricLines.ToString();
+        }
+
+        private void LyricsDelay_LostFocus(object sender, RoutedEventArgs e)
+        {
+            if (int.TryParse(txtLyricsDelay.Text, out int delay))
+            {
+                Settings.Instance.LyricsLeadMs = delay;
+            }
+
+            txtLyricsDelay.Text = Settings.Instance.LyricsLeadMs.ToString();
         }
 
         private void LoadAppInfo()
