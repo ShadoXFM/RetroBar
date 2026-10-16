@@ -258,14 +258,72 @@ namespace RetroBar.Controls
         private void UpdateVisualizerActiveState(bool isPlaying)
         {
             bool show = isPlaying && Settings.Instance.ShowVuMeter;
-            VuMeterContainer.Visibility = show ? Visibility.Visible : Visibility.Collapsed;
-            if (!show)
+            if (show)
             {
-                // So the next time it reappears, it doesn't flash whatever width either bar last
-                // had before VisualizerCapture_OnLevelUpdated's own next update arrives.
-                VuMeterFillLeft.Width = 0;
-                VuMeterFillRight.Width = 0;
+                CancelVuMeterFade();
+                VuMeterContainer.Visibility = Visibility.Visible;
+                return;
             }
+
+            // The bars slide to nothing, not stop at once, when it is paused or ends.
+            if (_vuMeterFading)
+            {
+                return;
+            }
+
+            if (VuMeterContainer.Visibility == Visibility.Visible && IsVisible && (VuMeterFillLeft.ActualWidth > 0 || VuMeterFillRight.ActualWidth > 0))
+            {
+                FadeOutVuMeter();
+                return;
+            }
+
+            HideVuMeter();
+        }
+
+        private static readonly Duration VuMeterFadeTime = new(TimeSpan.FromMilliseconds(500));
+        private bool _vuMeterFading;
+
+        // The two bars go from the width they have to nothing in half a second, and the meter goes after that.
+        private void FadeOutVuMeter()
+        {
+            _vuMeterFading = true;
+            foreach (System.Windows.Shapes.Rectangle bar in new[] { VuMeterFillLeft, VuMeterFillRight })
+            {
+                var slide = new System.Windows.Media.Animation.DoubleAnimation(bar.ActualWidth, 0, VuMeterFadeTime)
+                {
+                    EasingFunction = new System.Windows.Media.Animation.QuadraticEase { EasingMode = System.Windows.Media.Animation.EasingMode.EaseOut },
+                };
+                if (bar == VuMeterFillLeft)
+                {
+                    slide.Completed += (s, e) =>
+                    {
+                        if (_vuMeterFading)
+                        {
+                            CancelVuMeterFade();
+                            HideVuMeter();
+                        }
+                    };
+                }
+
+                bar.BeginAnimation(WidthProperty, slide);
+            }
+        }
+
+        private void CancelVuMeterFade()
+        {
+            _vuMeterFading = false;
+            VuMeterFillLeft.BeginAnimation(WidthProperty, null);
+            VuMeterFillRight.BeginAnimation(WidthProperty, null);
+        }
+
+        private void HideVuMeter()
+        {
+            VuMeterContainer.Visibility = Visibility.Collapsed;
+
+            // So the next time it reappears, it doesn't flash whatever width either bar last
+            // had before VisualizerCapture_OnLevelUpdated's own next update arrives.
+            VuMeterFillLeft.Width = 0;
+            VuMeterFillRight.Width = 0;
         }
 
         private void Settings_PropertyChanged(object sender, System.ComponentModel.PropertyChangedEventArgs e)

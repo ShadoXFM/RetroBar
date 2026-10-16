@@ -195,7 +195,7 @@ namespace RetroBar.Controls
         {
             Dispatcher.BeginInvoke(new Action(() =>
             {
-                if (_visualizerCapture == null || VuMeterContainer.Visibility != Visibility.Visible)
+                if (_visualizerCapture == null || VuMeterContainer.Visibility != Visibility.Visible || _vuMeterFading)
                 {
                     return;
                 }
