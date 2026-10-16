@@ -1,7 +1,6 @@
 using System;
 using System.Linq;
 using System.Collections.Generic;
-using System.Diagnostics;
 using System.Threading.Tasks;
 using System.Windows;
 using System.Windows.Controls;
@@ -54,28 +53,20 @@ namespace RetroBar.Controls
         private double _lyricRowUnit;
 
         // Lyrics synced by word: the current line's words fill with the colour of the cover as they are sung, left to right over the time of
-        // each, and the one being sung is two pixels higher (the timer follows the position between the popup's polls, which are too far apart for
-        // words). Background vocals are smaller and dimmer.
+        // each (the timer follows the position between the popup's polls, which are too far apart for words). Background vocals are smaller
+        // and dimmer.
         private const double LyricWordSoftEdge = 0.12;
-        private const double LyricLiftSeconds = 0.5;
-        private const double LyricLiftPixels = 2;
-        private const double LyricLiftStep = 0.5;
         private const double LyricBackgroundScale = 0.85;
         private Run[][] _lyricRuns;
-        private int[][] _lyricRunOffsets;
 
         // A line being sung by word: its words, and how far each has got (not sung yet 0, being sung 1, sung 2).
         private sealed class ActiveWordLine
         {
             public Run[] Runs;
             public LyricWord[] Words;
-            public int[] Offsets;
             public TextBlock Block;
             public byte[] States;
             public LinearGradientBrush[] Sweeps;
-            public TextEffect[] Lifts;
-            public double[] Levels;
-            public long LastTicks;
         }
 
         private readonly List<ActiveWordLine> _activeLines = new();
@@ -170,7 +161,6 @@ namespace RetroBar.Controls
             _lyricHosts = new Grid[lines.Length];
             _lyricGhosts = new TextBlock[lines.Length];
             _lyricRuns = new Run[lines.Length][];
-            _lyricRunOffsets = new int[lines.Length][];
 
             // A duet has its second singer's lines on the right and the first one's on the left; the other lyrics are centered.
             bool duet = lines.Any(line => line.OppositeAligned);
@@ -191,13 +181,9 @@ namespace RetroBar.Controls
                 };
                 row.SetResourceReference(StyleProperty, "MediaPlayerTrackTextStyle");
 
-                // The letters are not fitted to the pixel grid, so the word that rises is drawn between two rows of pixels as it goes.
-                TextOptions.SetTextHintingMode(row, TextHintingMode.Animated);
                 if (lines[i].Words is { Length: > 0 } words && !string.IsNullOrWhiteSpace(lines[i].Text))
                 {
                     var runs = new Run[words.Length];
-                    var offsets = new int[words.Length];
-                    int offset = 0;
                     for (int j = 0; j < words.Length; j++)
                     {
                         runs[j] = new Run(j == words.Length - 1 ? words[j].Text.TrimEnd() : words[j].Text);
@@ -206,13 +192,10 @@ namespace RetroBar.Controls
                             runs[j].FontSize = SeekArtistText.FontSize * LyricBackgroundScale;
                         }
 
-                        offsets[j] = offset;
-                        offset += runs[j].Text.Length;
                         row.Inlines.Add(runs[j]);
                     }
 
                     _lyricRuns[i] = runs;
-                    _lyricRunOffsets[i] = offsets;
                 }
                 else
                 {
@@ -789,13 +772,9 @@ namespace RetroBar.Controls
                 {
                     Runs = runs,
                     Words = words,
-                    Offsets = _lyricRunOffsets[line],
                     Block = _lyricRows[line],
                     States = new byte[runs.Length],
                     Sweeps = new LinearGradientBrush[runs.Length],
-                    Lifts = new TextEffect[runs.Length],
-                    Levels = new double[runs.Length],
-                    LastTicks = Stopwatch.GetTimestamp(),
                 };
                 for (int i = 0; i < runs.Length; i++)
                 {
@@ -819,17 +798,6 @@ namespace RetroBar.Controls
         private void StopLyricWords()
         {
             CompositionTarget.Rendering -= LyricWordTimer_OnTick;
-            foreach (ActiveWordLine active in _activeLines)
-            {
-                for (int i = 0; i < active.Lifts.Length; i++)
-                {
-                    if (active.Lifts[i] != null)
-                    {
-                        active.Runs[i].TextEffects.Remove(active.Lifts[i]);
-                    }
-                }
-            }
-
             _activeLines.Clear();
         }
 
@@ -893,12 +861,8 @@ namespace RetroBar.Controls
             }
 
             TimeSpan position = EstimatedSeekPosition() + LyricsLead;
-            long now = Stopwatch.GetTimestamp();
             foreach (ActiveWordLine active in _activeLines)
             {
-                double step = (now - active.LastTicks) / (double)Stopwatch.Frequency / LyricLiftSeconds;
-                active.LastTicks = now;
-                bool lifting = false;
                 for (int i = 0; i < active.Runs.Length; i++)
                 {
                     LyricWord word = active.Words[i];
@@ -939,60 +903,8 @@ namespace RetroBar.Controls
                     }
 
                     active.States[i] = state;
-
-                    // The word being sung is higher: it rises as it starts and settles back as it ends.
-                    double target = state == 1 && !background ? 1 : 0;
-                    double level = active.Levels[i];
-                    if (level != target)
-                    {
-                        level = target > level ? Math.Min(target, level + step) : Math.Max(target, level - step);
-                        active.Levels[i] = level;
-                        LiftWord(active, i, level);
-                        lifting = true;
-                    }
-                }
-
-                if (lifting)
-                {
-                    // A change of a text effect is not drawn until the block is laid out again.
-                    active.Block.InvalidateMeasure();
                 }
             }
-        }
-
-        // The lift of a word (0 to 1): a text effect on the run of the word itself (one on the block is ignored by a block made of runs).
-        // Its positions count from the start of the block as text pointers do, which count the start and the end of every run too: the
-        // letters of run n begin 2n + 1 after where they are in the text.
-        private void LiftWord(ActiveWordLine active, int word, double level)
-        {
-            if (level <= 0)
-            {
-                if (active.Lifts[word] != null)
-                {
-                    active.Runs[word].TextEffects.Remove(active.Lifts[word]);
-                    active.Lifts[word] = null;
-                }
-
-                return;
-            }
-
-            if (active.Lifts[word] == null)
-            {
-                active.Lifts[word] = new TextEffect
-                {
-                    Transform = new TranslateTransform(),
-                    PositionStart = active.Offsets[word] + 2 * word + 1,
-                    PositionCount = active.Runs[word].Text.Length,
-                };
-                active.Runs[word].TextEffects.Add(active.Lifts[word]);
-            }
-
-            double eased = level * level * (3 - 2 * level);
-
-            // In steps of half a pixel: a letter between two rows of pixels is blurred, and the most at the middle; with steps, half of
-            // the moments it is on a row, sharp.
-            double pixels = Math.Round(LyricLiftPixels * eased / LyricLiftStep) * LyricLiftStep;
-            ((TranslateTransform)active.Lifts[word].Transform).Y = -pixels / GetSeekDpi().DpiScaleY;
         }
 
         // The setting (Properties window, right-click menu): off takes the lyrics away; on asks for those of what is playing.
