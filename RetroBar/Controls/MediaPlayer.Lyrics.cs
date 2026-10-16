@@ -188,6 +188,9 @@ namespace RetroBar.Controls
 
                 };
                 row.SetResourceReference(StyleProperty, "MediaPlayerTrackTextStyle");
+
+                // The letters are not fitted to the pixel grid, so the word that rises is drawn between two rows of pixels as it goes.
+                TextOptions.SetTextHintingMode(row, TextHintingMode.Animated);
                 if (lines[i].Words is { Length: > 0 } words && !string.IsNullOrWhiteSpace(lines[i].Text))
                 {
                     var runs = new Run[words.Length];
