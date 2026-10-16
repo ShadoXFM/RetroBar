@@ -67,6 +67,10 @@ namespace RetroBar.Controls
         // And it has a halo: a blurred copy of it behind the line, in the colour of the cover, as strong as the word is bright.
         private const double LyricHaloBlur = 7;
         private const double LyricHaloOpacity = 0.9;
+        private const double LyricHaloTrailShare = 0.35;
+
+        // Both follow the letters: the brightest at the one being sung, and less so behind it over this much of the word.
+        private const double LyricGlowTrail = 0.45;
         private Run[][] _lyricRuns;
 
         // A line being sung by word: its words, and how far each has got (not sung yet 0, being sung 1, sung 2).
@@ -78,6 +82,8 @@ namespace RetroBar.Controls
             public byte[] States;
             public LinearGradientBrush[] Sweeps;
             public double[] Glows;
+            public bool[] Bright;
+            public LinearGradientBrush[] HaloSweeps;
             public long LastTicks;
             public TextBlock Halo;
             public Run[] HaloRuns;
@@ -790,6 +796,8 @@ namespace RetroBar.Controls
                     States = new byte[runs.Length],
                     Sweeps = new LinearGradientBrush[runs.Length],
                     Glows = new double[runs.Length],
+                    Bright = new bool[runs.Length],
+                    HaloSweeps = new LinearGradientBrush[runs.Length],
                     LastTicks = Stopwatch.GetTimestamp(),
                 };
                 for (int i = 0; i < runs.Length; i++)
@@ -894,6 +902,33 @@ namespace RetroBar.Controls
             return Color.FromArgb((byte)(background ? 90 : 150), rest.R, rest.G, rest.B);
         }
 
+        private static LinearGradientBrush NewWordGradient()
+        {
+            return new LinearGradientBrush
+            {
+                StartPoint = new Point(0, 0.5),
+                EndPoint = new Point(1, 0.5),
+                GradientStops = new GradientStopCollection { new GradientStop(), new GradientStop(), new GradientStop(), new GradientStop(), new GradientStop() },
+            };
+        }
+
+        // The five stops of a gradient over a word: from its start to where the trail begins, the peak at the letter being sung, and beyond it
+        // (a soft edge, then to the end) what is not sung yet.
+        private static void SetWordGradient(LinearGradientBrush brush, Color start, Color trailStart, Color peak, Color ahead, Color end, double trail, double progress, double edge)
+        {
+            GradientStopCollection stops = brush.GradientStops;
+            stops[0].Color = start;
+            stops[0].Offset = 0;
+            stops[1].Color = trailStart;
+            stops[1].Offset = trail;
+            stops[2].Color = peak;
+            stops[2].Offset = progress;
+            stops[3].Color = ahead;
+            stops[3].Offset = edge;
+            stops[4].Color = end;
+            stops[4].Offset = 1;
+        }
+
         // A colour part of the way to white (the transparency it has is kept).
         private static Color Brightened(Color color, double glow)
         {
@@ -949,45 +984,53 @@ namespace RetroBar.Controls
 
                     // How bright the word is: up while it is sung, back down after.
                     double glow = active.Glows[i];
-                    double glowBefore = glow;
                     glow = state == 1 ? Math.Min(1, glow + elapsed / LyricGlowRiseSeconds) : Math.Max(0, glow - elapsed / LyricGlowFallSeconds);
                     active.Glows[i] = glow;
-                    if (glow != glowBefore)
-                    {
-                        Color halo = SungColor(background);
-                        ((SolidColorBrush)active.HaloRuns[i].Foreground).Color = Color.FromArgb((byte)Math.Round(255 * glow * LyricHaloOpacity * (background ? 0.6 : 1)), halo.R, halo.G, halo.B);
-                    }
 
-                    if (state == 1)
+                    // A word that is being sung, or whose brightness has not gone yet, is drawn by a gradient across its letters: the part
+                    // sung in the colour of the cover, the brightest at the letter that is being sung and less so behind it, as is the halo.
+                    bool bright = state == 1 || (state == 2 && glow > 0);
+                    if (bright)
                     {
-                        double progress = word.End > word.Start ? (position - word.Start).TotalSeconds / (word.End - word.Start).TotalSeconds : 1;
-                        progress = Math.Clamp(progress, 0, 1);
-                        Color sung = Brightened(SungColor(background), glow);
-                        Color unsung = UnsungColor(background);
-                        LinearGradientBrush sweep = active.Sweeps[i] ??= new LinearGradientBrush
+                        double progress = 1;
+                        if (state == 1)
                         {
-                            StartPoint = new Point(0, 0.5),
-                            EndPoint = new Point(1, 0.5),
-                            GradientStops = new GradientStopCollection { new GradientStop(), new GradientStop(), new GradientStop(), new GradientStop() },
-                        };
+                            progress = word.End > word.Start ? (position - word.Start).TotalSeconds / (word.End - word.Start).TotalSeconds : 1;
+                            progress = Math.Clamp(progress, 0, 1);
+                        }
 
-                        // The part sung is filled up to the progress, with a soft edge before the part that is not.
-                        sweep.GradientStops[0].Color = sung;
-                        sweep.GradientStops[0].Offset = 0;
-                        sweep.GradientStops[1].Color = sung;
-                        sweep.GradientStops[1].Offset = progress;
-                        sweep.GradientStops[2].Color = unsung;
-                        sweep.GradientStops[2].Offset = Math.Min(1, progress + LyricWordSoftEdge);
-                        sweep.GradientStops[3].Color = unsung;
-                        sweep.GradientStops[3].Offset = 1;
-                        if (active.States[i] != 1)
+                        Color baseColor = SungColor(background);
+                        Color peak = Brightened(baseColor, glow);
+                        Color unsung = UnsungColor(background);
+                        double trail = Math.Max(0, progress - LyricGlowTrail);
+                        double edge = Math.Min(1, progress + LyricWordSoftEdge);
+
+                        LinearGradientBrush sweep = active.Sweeps[i] ??= NewWordGradient();
+                        SetWordGradient(sweep, baseColor, baseColor, peak, unsung, unsung, trail, progress, edge);
+                        if (!ReferenceEquals(active.Runs[i].Foreground, sweep))
                         {
                             active.Runs[i].Foreground = sweep;
                         }
+
+                        Color haloColor = baseColor;
+                        byte haloAlpha = (byte)Math.Round(255 * glow * LyricHaloOpacity * (background ? 0.6 : 1));
+                        Color halo = Color.FromArgb(haloAlpha, haloColor.R, haloColor.G, haloColor.B);
+                        Color haloFaint = Color.FromArgb((byte)(haloAlpha * LyricHaloTrailShare), haloColor.R, haloColor.G, haloColor.B);
+                        Color haloNone = Color.FromArgb(0, haloColor.R, haloColor.G, haloColor.B);
+                        LinearGradientBrush haloSweep = active.HaloSweeps[i] ??= NewWordGradient();
+                        SetWordGradient(haloSweep, haloFaint, haloFaint, halo, haloNone, haloNone, trail, progress, edge);
+                        if (!ReferenceEquals(active.HaloRuns[i].Foreground, haloSweep))
+                        {
+                            active.HaloRuns[i].Foreground = haloSweep;
+                        }
+
+                        active.Bright[i] = true;
                     }
-                    else if (active.States[i] != state || glow != glowBefore)
+                    else if (active.Bright[i] || active.States[i] != state)
                     {
-                        active.Runs[i].Foreground = new SolidColorBrush(state == 2 ? Brightened(SungColor(background), glow) : UnsungColor(background));
+                        active.Runs[i].Foreground = new SolidColorBrush(state == 2 ? SungColor(background) : UnsungColor(background));
+                        active.HaloRuns[i].Foreground = Brushes.Transparent;
+                        active.Bright[i] = false;
                     }
 
                     active.States[i] = state;
