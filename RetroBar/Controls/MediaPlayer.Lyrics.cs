@@ -54,10 +54,11 @@ namespace RetroBar.Controls
         private double _lyricRowUnit;
 
         // Lyrics synced by word: the current line's words fill with the colour of the cover as they are sung, left to right over the time of
-        // each, and the one being sung is a pixel higher (the timer follows the position between the popup's polls, which are too far apart for
+        // each, and the one being sung is two pixels higher (the timer follows the position between the popup's polls, which are too far apart for
         // words). Background vocals are smaller and dimmer.
         private const double LyricWordSoftEdge = 0.12;
         private const double LyricLiftSeconds = 0.12;
+        private const double LyricLiftPixels = 2;
         private const double LyricBackgroundScale = 0.85;
         private Run[][] _lyricRuns;
         private int[][] _lyricRunOffsets;
@@ -986,7 +987,7 @@ namespace RetroBar.Controls
             }
 
             double eased = level * level * (3 - 2 * level);
-            ((TranslateTransform)active.Lifts[word].Transform).Y = -eased / GetSeekDpi().DpiScaleY;
+            ((TranslateTransform)active.Lifts[word].Transform).Y = -LyricLiftPixels * eased / GetSeekDpi().DpiScaleY;
         }
 
         // The setting (Properties window, right-click menu): off takes the lyrics away; on asks for those of what is playing.
