@@ -258,14 +258,72 @@ namespace RetroBar.Controls
         private void UpdateVisualizerActiveState(bool isPlaying)
         {
             bool show = isPlaying && Settings.Instance.ShowVuMeter;
-            VuMeterContainer.Visibility = show ? Visibility.Visible : Visibility.Collapsed;
-            if (!show)
+            if (show)
             {
-                // So the next time it reappears, it doesn't flash whatever width either bar last
-                // had before VisualizerCapture_OnLevelUpdated's own next update arrives.
-                VuMeterFillLeft.Width = 0;
-                VuMeterFillRight.Width = 0;
+                CancelVuMeterFade();
+                VuMeterContainer.Visibility = Visibility.Visible;
+                return;
             }
+
+            // The bars slide to nothing, not stop at once, when it is paused or ends.
+            if (_vuMeterFading)
+            {
+                return;
+            }
+
+            if (VuMeterContainer.Visibility == Visibility.Visible && IsVisible && (VuMeterFillLeft.ActualWidth > 0 || VuMeterFillRight.ActualWidth > 0))
+            {
+                FadeOutVuMeter();
+                return;
+            }
+
+            HideVuMeter();
+        }
+
+        private static readonly Duration VuMeterFadeTime = new(TimeSpan.FromMilliseconds(500));
+        private bool _vuMeterFading;
+
+        // The two bars go from the width they have to nothing in half a second, and the meter goes after that.
+        private void FadeOutVuMeter()
+        {
+            _vuMeterFading = true;
+            foreach (System.Windows.Shapes.Rectangle bar in new[] { VuMeterFillLeft, VuMeterFillRight })
+            {
+                var slide = new System.Windows.Media.Animation.DoubleAnimation(bar.ActualWidth, 0, VuMeterFadeTime)
+                {
+                    EasingFunction = new System.Windows.Media.Animation.QuadraticEase { EasingMode = System.Windows.Media.Animation.EasingMode.EaseOut },
+                };
+                if (bar == VuMeterFillLeft)
+                {
+                    slide.Completed += (s, e) =>
+                    {
+                        if (_vuMeterFading)
+                        {
+                            CancelVuMeterFade();
+                            HideVuMeter();
+                        }
+                    };
+                }
+
+                bar.BeginAnimation(WidthProperty, slide);
+            }
+        }
+
+        private void CancelVuMeterFade()
+        {
+            _vuMeterFading = false;
+            VuMeterFillLeft.BeginAnimation(WidthProperty, null);
+            VuMeterFillRight.BeginAnimation(WidthProperty, null);
+        }
+
+        private void HideVuMeter()
+        {
+            VuMeterContainer.Visibility = Visibility.Collapsed;
+
+            // So the next time it reappears, it doesn't flash whatever width either bar last
+            // had before VisualizerCapture_OnLevelUpdated's own next update arrives.
+            VuMeterFillLeft.Width = 0;
+            VuMeterFillRight.Width = 0;
         }
 
         private void Settings_PropertyChanged(object sender, System.ComponentModel.PropertyChangedEventArgs e)
@@ -455,6 +513,99 @@ namespace RetroBar.Controls
             return Geometry.Empty;
         }
 
+        private bool _albumArtIsAppIcon;
+
+        private static readonly System.Runtime.CompilerServices.ConditionalWeakTable<ImageSource, object> LogoImages = new();
+
+        // A cover is opaque; a logo has a good part of it clear (a tenth of its pixels, at the least).
+        private static bool IsTransparentLogo(ImageSource image)
+        {
+            if (image is not System.Windows.Media.Imaging.BitmapSource bitmap)
+            {
+                return false;
+            }
+
+            if (LogoImages.TryGetValue(bitmap, out object known))
+            {
+                return known != null;
+            }
+
+            bool logo = false;
+            try
+            {
+                var converted = new System.Windows.Media.Imaging.FormatConvertedBitmap(bitmap, PixelFormats.Pbgra32, null, 0);
+                int width = converted.PixelWidth;
+                int height = converted.PixelHeight;
+                if (width > 0 && height > 0 && width * height <= 512 * 512)
+                {
+                    var pixels = new byte[width * height * 4];
+                    converted.CopyPixels(pixels, width * 4, 0);
+                    int clear = 0;
+                    for (int i = 3; i < pixels.Length; i += 4)
+                    {
+                        if (pixels[i] < 200)
+                        {
+                            clear++;
+                        }
+                    }
+
+                    logo = clear * 10 >= width * height;
+                }
+            }
+            catch (Exception ex) when (ex is NotSupportedException or InvalidOperationException or ArgumentException)
+            {
+                // Taken as a cover.
+            }
+
+            LogoImages.Add(bitmap, logo ? new object() : null);
+            return logo;
+        }
+
+        private static readonly System.Runtime.CompilerServices.ConditionalWeakTable<ImageSource, object> BlankImages = new();
+
+        // The image, or null if it has nothing to see (all its pixels clear).
+        private static ImageSource Visible(ImageSource image)
+        {
+            if (image is not System.Windows.Media.Imaging.BitmapSource bitmap)
+            {
+                return image;
+            }
+
+            if (BlankImages.TryGetValue(bitmap, out object blank))
+            {
+                return blank == null ? image : null;
+            }
+
+            bool hasPixels = true;
+            try
+            {
+                var converted = new System.Windows.Media.Imaging.FormatConvertedBitmap(bitmap, PixelFormats.Pbgra32, null, 0);
+                int width = converted.PixelWidth;
+                int height = converted.PixelHeight;
+                if (width > 0 && height > 0 && width * height <= 512 * 512)
+                {
+                    var pixels = new byte[width * height * 4];
+                    converted.CopyPixels(pixels, width * 4, 0);
+                    hasPixels = false;
+                    for (int i = 3; i < pixels.Length; i += 4)
+                    {
+                        if (pixels[i] > 8)
+                        {
+                            hasPixels = true;
+                            break;
+                        }
+                    }
+                }
+            }
+            catch (Exception ex) when (ex is NotSupportedException or InvalidOperationException or ArgumentException)
+            {
+                // Taken as art.
+            }
+
+            BlankImages.Add(bitmap, hasPixels ? null : new object());
+            return hasPixels ? image : null;
+        }
+
         private void UpdateAlbumArt()
         {
             // Falls back to the source app's own taskbar icon (e.g. foobar2000's) when the track
@@ -463,7 +614,14 @@ namespace RetroBar.Controls
             // looked up once and reused for both images below rather than twice.
             ApplicationWindow sourceWindow = Settings.Instance.ShowMediaPlayerAlbumArt ? FindSourceAppWindow() : null;
 
-            ImageSource art = Settings.Instance.ShowMediaPlayerAlbumArt ? (_sessionManager?.Thumbnail ?? sourceWindow?.Icon) : null;
+            // An image with nothing in it (a source that has no cover, and an icon the system gives blank) is no art: it left an empty
+            // gap where the art would be.
+            ImageSource cover = Settings.Instance.ShowMediaPlayerAlbumArt ? Visible(_sessionManager?.Thumbnail) : null;
+            ImageSource art = cover ?? (Settings.Instance.ShowMediaPlayerAlbumArt ? Visible(sourceWindow?.Icon) : null);
+
+            // The app's icon in place of a cover, or a logo the player gives as the cover (VLC's cone, foobar2000's logo): it has clear parts,
+            // which the VU meter shows behind.
+            _albumArtIsAppIcon = art != null && (cover == null || IsTransparentLogo(cover));
 
             AlbumArtImage.Source = art;
             // Hidden, not Visible/Collapsed: it still reserves its normal layout slot (used
@@ -477,7 +635,7 @@ namespace RetroBar.Controls
             // taskbar row uses, since the popup shows it much bigger - the app icon fallback has
             // no separate large version, so it's reused as-is here too (a small icon, upscaled by
             // the popup's own Image, beats nothing).
-            ImageSource largeArt = Settings.Instance.ShowMediaPlayerAlbumArt ? (_sessionManager?.LargeThumbnail ?? sourceWindow?.Icon) : null;
+            ImageSource largeArt = Settings.Instance.ShowMediaPlayerAlbumArt ? Visible(_sessionManager?.LargeThumbnail) ?? Visible(sourceWindow?.Icon) : null;
             SeekAlbumArtImage.Source = largeArt;
             SeekAlbumArtImage.Visibility = largeArt == null ? Visibility.Collapsed : Visibility.Visible;
             UpdateSeekAccent(largeArt ?? art);
@@ -658,7 +816,10 @@ namespace RetroBar.Controls
             // X nudges the meter's left edge only: the width absorbs it, so the right edge stays on the end of the text. It is tuned for the album
             // art, which the meter starts behind; without art there is nothing to nudge past (the meter starts at the first button), so X is
             // 0 unless "VuMeterContainerNoArt" says otherwise.
-            double nudgeX = Settings.Instance.ShowMediaPlayerAlbumArt ? offset.X : MonitorAdjustments.Get(deviceName, "VuMeterContainerNoArt").X;
+            // A transparent logo (the app's icon, where there is no cover) is not something the meter starts behind: it starts at the tray box's
+            // edge, as it does with no art, and shows through the logo.
+            bool coverShown = Settings.Instance.ShowMediaPlayerAlbumArt && AlbumArtImage.Source != null && !_albumArtIsAppIcon;
+            double nudgeX = coverShown ? offset.X : MonitorAdjustments.Get(deviceName, "VuMeterContainerNoArt").X;
             _vuMeterMaxWidth = offset.Width ?? Math.Max(0, naturalWidth - nudgeX);
 
             VuMeterContainer.Width = _vuMeterMaxWidth;

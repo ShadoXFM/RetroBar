@@ -41,6 +41,7 @@ namespace RetroBar.Utilities
                     return null;
                 }
 
+                CpuTemperatureHistory.Record(payload.Temperature, payload.UpdatedUtc);
                 return payload.Temperature;
             }
             catch (Exception e)

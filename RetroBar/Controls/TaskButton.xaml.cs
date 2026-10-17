@@ -73,6 +73,28 @@ namespace RetroBar.Controls
             private set { SetValue(IsGroupActiveProperty, value); }
         }
 
+        public static readonly DependencyProperty IsGroupFlashingProperty = DependencyProperty.Register(
+            nameof(IsGroupFlashing), typeof(bool), typeof(TaskButton), new PropertyMetadata(false));
+
+        /// <summary>
+        /// Whether one of the windows this tab stands for has asked for attention and has not been used since: the tab shows it, from the
+        /// first flash until that window is activated. A tab that stands for several windows read only its first one, so a flash of another
+        /// (a second window of Discord, say) was not shown at all; and a flash that ends on the shell's redraw (the blink's off) left
+        /// nothing on the tab. While the window blinks, the tab blinks with it (what the shell reports); once it has stopped blinking, the
+        /// tab stays highlighted.
+        /// </summary>
+        public bool IsGroupFlashing
+        {
+            get { return (bool)GetValue(IsGroupFlashingProperty); }
+            private set { SetValue(IsGroupFlashingProperty, value); }
+        }
+
+        // The windows that have flashed and have not been activated since, for every taskbar, with when their state last changed: the blinks
+        // of a flash come a half second apart, so a window that has not changed for longer has stopped blinking.
+        private static readonly Dictionary<IntPtr, DateTime> NeedsAttention = new();
+        private static readonly TimeSpan BlinkGap = TimeSpan.FromMilliseconds(1300);
+        private System.Windows.Threading.DispatcherTimer _attentionTimer;
+
         private TaskList _groupHost;
 
         private void RefreshGroup()
@@ -137,13 +159,50 @@ namespace RetroBar.Controls
         {
             if (e.PropertyName == "State")
             {
+                if (sender is ApplicationWindow changed)
+                {
+                    lock (NeedsAttention)
+                    {
+                        if (changed.State == ApplicationWindow.WindowState.Flashing)
+                        {
+                            NeedsAttention[changed.Handle] = DateTime.UtcNow;
+                        }
+                        else if (changed.State == ApplicationWindow.WindowState.Active)
+                        {
+                            NeedsAttention.Remove(changed.Handle);
+                        }
+                        else if (NeedsAttention.ContainsKey(changed.Handle))
+                        {
+                            // The off of a blink, or the end of the flash: told apart by whether another blink comes (see UpdateGroupActive).
+                            NeedsAttention[changed.Handle] = DateTime.UtcNow;
+                            _attentionTimer ??= new System.Windows.Threading.DispatcherTimer { Interval = BlinkGap + TimeSpan.FromMilliseconds(100) };
+                            _attentionTimer.Tick -= AttentionTimer_OnTick;
+                            _attentionTimer.Tick += AttentionTimer_OnTick;
+                            _attentionTimer.Stop();
+                            _attentionTimer.Start();
+                        }
+                    }
+                }
+
                 UpdateGroupActive();
             }
+        }
+
+        private void AttentionTimer_OnTick(object sender, EventArgs e)
+        {
+            _attentionTimer.Stop();
+            UpdateGroupActive();
         }
 
         private void UpdateGroupActive()
         {
             IsGroupActive = GroupWindows.Count > 1 && GroupWindows.Any(w => w.State == ApplicationWindow.WindowState.Active);
+            lock (NeedsAttention)
+            {
+                DateTime now = DateTime.UtcNow;
+                IsGroupFlashing = GroupWindows.Any(w => w.State == ApplicationWindow.WindowState.Flashing
+                    || (w.State != ApplicationWindow.WindowState.Active && NeedsAttention.TryGetValue(w.Handle, out DateTime since) && now - since > BlinkGap));
+            }
         }
 
         // With window previews off, a click on a tab that stands for several windows goes to the next one
@@ -203,6 +262,7 @@ namespace RetroBar.Controls
             multiBinding.Bindings.Add(new Binding { RelativeSource = RelativeSource.Self });
             multiBinding.Bindings.Add(new Binding("State"));
             multiBinding.Bindings.Add(new Binding(nameof(IsGroupActive)) { Source = this });
+            multiBinding.Bindings.Add(new Binding(nameof(IsGroupFlashing)) { Source = this });
 
             AppButton.SetBinding(StyleProperty, multiBinding);
         }

@@ -1,5 +1,7 @@
 using System;
+using System.Runtime.InteropServices;
 using System.Windows;
+using System.Windows.Interop;
 using System.Windows.Controls.Primitives;
 using System.Windows.Media;
 using System.Windows.Media.Animation;
@@ -53,10 +55,47 @@ namespace RetroBar.Utilities
 
             // The clip follows the size while it slides (the popup's first layout comes after it opens).
             _clipRoot.SizeChanged += (s, e) => UpdateClip();
+
+            // The popup's window is in its place when it has opened: the clip is measured from where it is (see MeasureOverlap).
+            _popup.Opened += (s, e) => UpdateClip();
+        }
+
+        [StructLayout(LayoutKind.Sequential)]
+        private struct RECT
+        {
+            public int Left, Top, Right, Bottom;
+        }
+
+        [DllImport("user32.dll")]
+        private static extern bool GetWindowRect(IntPtr hWnd, out RECT rect);
+
+        /// <summary>
+        /// How many DIPs the open popup's window reaches below the top of the taskbar's window, from where the two windows are on the screen
+        /// (null if either is not there yet): the popup is placed in whole pixels, so a number worked out from the layout can be a pixel out,
+        /// which left a pixel of the popup over the taskbar's edge while it slid.
+        /// </summary>
+        public static double? MeasureOverlap(FrameworkElement clipRoot, Window taskbar)
+        {
+            if (PresentationSource.FromVisual(clipRoot) is not HwndSource popupSource
+                || PresentationSource.FromVisual(taskbar) is not HwndSource taskbarSource
+                || !GetWindowRect(popupSource.Handle, out RECT popup)
+                || !GetWindowRect(taskbarSource.Handle, out RECT bar))
+            {
+                return null;
+            }
+
+            double scale = VisualTreeHelper.GetDpi(clipRoot).DpiScaleY;
+            return Math.Max(0, (popup.Bottom - bar.Top) / scale);
         }
 
         /// <summary>True while it slides away (the popup closes when that is done).</summary>
         public bool Closing { get; private set; }
+
+        /// <summary>True while the popup is open (sliding in or away included).</summary>
+        public bool IsOpen => _popup.IsOpen;
+
+        /// <summary>Raised when the popup has closed, after it slid away or by CloseNow.</summary>
+        public event Action Closed;
 
         private (DependencyProperty Property, double Hidden) Axis()
         {
@@ -105,8 +144,11 @@ namespace RetroBar.Utilities
             _transform.BeginAnimation(axis, slide);
         }
 
-        /// <summary>Slides away and closes the popup.</summary>
-        public void Hide()
+        /// <summary>The slide away that makes room for another popup: shorter, so that popup does not wait long.</summary>
+        public static readonly TimeSpan QuickHideTime = TimeSpan.FromMilliseconds(90);
+
+        /// <summary>Slides away and closes the popup (in the time given, or the usual one).</summary>
+        public void Hide(TimeSpan? time = null)
         {
             if (!_popup.IsOpen || Closing)
             {
@@ -119,7 +161,7 @@ namespace RetroBar.Utilities
             _sliding = true;
             UpdateClip();
 
-            var slide = new DoubleAnimation((double)_transform.GetValue(axis), hidden, HideDuration)
+            var slide = new DoubleAnimation((double)_transform.GetValue(axis), hidden, time is TimeSpan quick ? new Duration(quick) : HideDuration)
             {
                 EasingFunction = new CubicEase { EasingMode = EasingMode.EaseIn },
             };
@@ -131,6 +173,7 @@ namespace RetroBar.Utilities
                     Closing = false;
                     _popup.IsOpen = false;
                     Reset();
+                    Closed?.Invoke();
                 }
             };
             _transform.BeginAnimation(axis, slide);
@@ -142,6 +185,7 @@ namespace RetroBar.Utilities
             Closing = false;
             _popup.IsOpen = false;
             Reset();
+            Closed?.Invoke();
         }
 
         /// <summary>Stops any slide and takes the transform and the clip off.</summary>

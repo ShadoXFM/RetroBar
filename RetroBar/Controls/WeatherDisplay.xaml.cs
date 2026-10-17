@@ -133,6 +133,9 @@ namespace RetroBar.Controls
 
             _forecastOpenTimer ??= MakeTimer(ForecastOpenDelay, () => OpenForecast());
             _forecastOpenTimer.Stop();
+
+            // Going from the CPU temperature's graph to this is quick; it is the rest on the widget that waits.
+            _forecastOpenTimer.Interval = HoverPopups.AnyOpen ? HoverPopups.SwitchDelay : ForecastOpenDelay;
             _forecastOpenTimer.Start();
         }
 
@@ -173,11 +176,13 @@ namespace RetroBar.Controls
                 return;
             }
 
-            // Open on the side of the widget facing into the screen, whichever edge the taskbar is on, and
-            // centered on the widget along the taskbar (see PlaceForecast).
-            ForecastPopup.PlacementTarget = WeatherPanel;
-            ForecastPopup.Placement = PlacementMode.Custom;
-            ForecastPopup.CustomPopupPlacementCallback = PlaceForecast;
+            // One at a time with the CPU temperature's graph: if that is open it slides away first (see HoverPopups).
+            HoverPopups.Open(_slide, () =>
+            {
+                if (!WeatherPanel.IsMouseOver)
+                {
+                    return;
+                }
 
             // Show the latest reading, and refresh it in the background if it has gone stale.
             _ = _viewModel?.UpdateWeatherAsync();
@@ -217,6 +222,11 @@ namespace RetroBar.Controls
                 try
                 {
                     frameBottom = WeatherPanel.TransformToAncestor(taskbar).Transform(new Point(0, 0)).Y;
+            if (PopupSlide.MeasureOverlap(ForecastFrame, taskbar) is double measured)
+            {
+                return measured;
+            }
+
                 }
                 catch (InvalidOperationException)
                 {
@@ -1082,7 +1092,7 @@ namespace RetroBar.Controls
         {
             bool fahrenheit = Settings.Instance.WeatherUseFahrenheit;
             int rounded = (int)Math.Round(fahrenheit ? celsius * 9 / 5 + 32 : celsius, MidpointRounding.AwayFromZero);
-            string temperature = $"{rounded}\u00B0{(fahrenheit ? 'F' : 'C')}";
+            string temperature = $"{rounded}\u00B0";
             string description = weatherCode is int code ? DescribeWeather(code) : null;
             return description == null ? temperature : temperature + "  \u00B7  " + description;
         }

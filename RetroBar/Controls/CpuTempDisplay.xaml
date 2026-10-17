@@ -2,10 +2,20 @@
              xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
              xmlns:utilities="clr-namespace:RetroBar.Utilities"
+             xmlns:controls="clr-namespace:RetroBar.Controls"
              Loaded="CpuTempDisplay_OnLoaded"
              Unloaded="CpuTempDisplay_OnUnloaded"
              Visibility="Collapsed">
-    <StackPanel Orientation="Horizontal" VerticalAlignment="Center" HorizontalAlignment="Center" Margin="4,0">
+    <Grid>
+    <!-- Transparent background so the whole widget takes the pointer that opens the graph. -->
+    <StackPanel x:Name="CpuTempPanel"
+                Orientation="Horizontal"
+                VerticalAlignment="Center"
+                HorizontalAlignment="Center"
+                Margin="4,0"
+                Background="Transparent"
+                MouseEnter="CpuTempPanel_OnMouseEnter"
+                MouseLeave="CpuTempPanel_OnMouseLeave">
         <!-- A small chip socket (a hollow body with a pin on each side, twice), in place of the "/" that used to sit here: with
              it the number reads as the processor's, not as the other half of the weather's. It sits inside this same UserControl
              (rather than as a separate element in Taskbar.xaml) so it only ever appears alongside CpuTempText - collapsing this
@@ -27,4 +37,61 @@
                    Foreground="{DynamicResource ClockForeground}"
                    utilities:MonitorOffset.Tag="CpuTemp" />
     </StackPanel>
+    <!-- The graph of the temperature of the last five minutes: opens and closes as the weather's forecast does (the same frame, the same
+         slide; see CpuTempDisplay.xaml.cs). -->
+    <Popup x:Name="GraphPopup"
+           StaysOpen="True"
+           AllowsTransparency="True"
+           PopupAnimation="None">
+        <Grid x:Name="GraphFrame"
+              ClipToBounds="True"
+              RenderOptions.ClearTypeHint="Enabled">
+            <Grid x:Name="GraphSlideHost">
+                <controls:PopupShadow />
+                <ContentControl Margin="6"
+                                Style="{DynamicResource TaskButtonThumbnail}"
+                                MouseEnter="GraphPopup_OnMouseEnter"
+                                MouseLeave="GraphPopup_OnMouseLeave">
+                    <StackPanel Margin="5.4,5.8,5.4,5.8"
+                                Width="250">
+                        <!-- The temperature and the name of the processor, one line: 49° · AMD Ryzen 7 5800X -->
+                        <TextBlock x:Name="GraphHeader"
+                                   Style="{DynamicResource GlobalFonts}"
+                                   Foreground="{DynamicResource ButtonForeground}"
+                                   FontFamily="Tahoma"
+                                   FontSize="12"
+                                   FontWeight="Bold"
+                                   TextTrimming="CharacterEllipsis"
+                                   Margin="2,0,2,0" />
+                        <controls:CpuTempGraph x:Name="Graph"
+                                               Height="108"
+                                               Margin="0,5,0,0" />
+                        <!-- Min, average and max across the width of the widget: the first at the left, the last at the right, the
+                             second between them. -->
+                        <Grid Margin="2,6,2,0">
+                            <TextBlock x:Name="GraphMin"
+                                       HorizontalAlignment="Left"
+                                       Style="{DynamicResource GlobalFonts}"
+                                       Foreground="{DynamicResource ButtonForeground}"
+                                       FontFamily="Microsoft Sans Serif"
+                                       FontWeight="Normal" />
+                            <TextBlock x:Name="GraphAverage"
+                                       HorizontalAlignment="Center"
+                                       Style="{DynamicResource GlobalFonts}"
+                                       Foreground="{DynamicResource ButtonForeground}"
+                                       FontFamily="Microsoft Sans Serif"
+                                       FontWeight="Normal" />
+                            <TextBlock x:Name="GraphMax"
+                                       HorizontalAlignment="Right"
+                                       Style="{DynamicResource GlobalFonts}"
+                                       Foreground="{DynamicResource ButtonForeground}"
+                                       FontFamily="Microsoft Sans Serif"
+                                       FontWeight="Normal" />
+                        </Grid>
+                    </StackPanel>
+                </ContentControl>
+            </Grid>
+        </Grid>
+    </Popup>
+    </Grid>
 </UserControl>
