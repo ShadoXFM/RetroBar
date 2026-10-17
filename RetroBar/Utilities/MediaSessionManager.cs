@@ -201,13 +201,35 @@ namespace RetroBar.Utilities
                     }
                 }
 
-                return _manager.GetCurrentSession();
+                return PreferSpotify(_manager.GetCurrentSession());
             }
             catch (Exception e)
             {
                 ShellLogger.Debug($"MediaSessionManager: Unable to choose a session: {e.Message}");
                 return null;
             }
+        }
+
+        // Spotifast (another client of the same account) shows what Spotify plays, in a session whose position it hardly ever updates: while
+        // Spotify itself is playing, its session is the one to show (the position, the controls and the lyrics are those of the real player).
+        private GlobalSystemMediaTransportControlsSession PreferSpotify(GlobalSystemMediaTransportControlsSession session)
+        {
+            if (session == null || (session.SourceAppUserModelId ?? "").IndexOf("spotifast", StringComparison.OrdinalIgnoreCase) < 0)
+            {
+                return session;
+            }
+
+            foreach (GlobalSystemMediaTransportControlsSession candidate in _manager.GetSessions())
+            {
+                string aumid = candidate.SourceAppUserModelId ?? "";
+                if (aumid.IndexOf("spotify", StringComparison.OrdinalIgnoreCase) >= 0 && aumid.IndexOf("spotifast", StringComparison.OrdinalIgnoreCase) < 0
+                    && candidate.GetPlaybackInfo()?.PlaybackStatus == GlobalSystemMediaTransportControlsSessionPlaybackStatus.Playing)
+                {
+                    return candidate;
+                }
+            }
+
+            return session;
         }
 
         /// <summary>
@@ -374,6 +396,12 @@ namespace RetroBar.Utilities
         private void Session_PlaybackInfoChanged(GlobalSystemMediaTransportControlsSession sender, PlaybackInfoChangedEventArgs args)
         {
             RefreshPlaybackState();
+
+            // Spotify starting to play while Spotifast's session is the one shown (and the other way round, when it stops): see PreferSpotify.
+            if ((SourceAppUserModelId ?? "").IndexOf("spotify", StringComparison.OrdinalIgnoreCase) >= 0 && string.IsNullOrEmpty(Settings.Instance.MediaPreferredApp))
+            {
+                AttachSession(ChooseSession());
+            }
         }
 
         private async Task RefreshPropertiesAsync()
