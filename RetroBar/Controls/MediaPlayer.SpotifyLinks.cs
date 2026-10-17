@@ -13,7 +13,7 @@ using System.Windows.Media;
 namespace RetroBar.Controls
 {
     // In the media popup, the title of a Spotify track opens its album in Spotify, and the artist opens the artist's page: underlined in the
-    // cover's colour while the pointer is on them. The album and the artist come from the track's Spotify search result (the credentials
+    // colour of the text while the pointer is on them. The album and the artist come from the track's Spotify search result (the credentials
     // that the lyrics use); without them it opens a Spotify search for the title or the artist.
     public partial class MediaPlayer
     {
@@ -44,11 +44,14 @@ namespace RetroBar.Controls
             }
 
             var text = (TextBlock)sender;
-            Color color = AccentBrush()?.Color ?? SystemColors.HighlightColor;
-            var pen = new Pen(new SolidColorBrush(color), 1);
-            pen.Freeze();
+            // In the colour of the text itself.
+            var pen = new Pen(text.Foreground, 1);
+            if (pen.CanFreeze)
+            {
+                pen.Freeze();
+            }
+
             var underline = new TextDecoration(TextDecorationLocation.Underline, pen, 1, TextDecorationUnit.Pixel, TextDecorationUnit.Pixel);
-            underline.Freeze();
             text.TextDecorations = new TextDecorationCollection { underline };
             text.Cursor = Cursors.Hand;
         }
