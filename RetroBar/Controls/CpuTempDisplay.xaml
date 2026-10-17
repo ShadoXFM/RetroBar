@@ -65,7 +65,7 @@
                                    Margin="2,0,2,0" />
                         <controls:CpuTempGraph x:Name="Graph"
                                                Height="108"
-                                               Margin="0,5,0,0" />
+                                               Margin="0,9,0,0" />
                         <!-- Min, average and max across the width of the widget: the first at the left, the last at the right, the
                              second between them. -->
                         <Grid Margin="2,6,2,0">
