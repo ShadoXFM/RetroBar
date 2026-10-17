@@ -98,6 +98,14 @@ namespace RetroBar.Tests
             Assert.Equal(1f, AudioSpectrumCapture.ToLevel(Math.Pow(10, -20 / 20.0)), 3);
             Assert.Equal(1f, AudioSpectrumCapture.ToLevel(1.0));
         }
+
+        [Fact]
+        public void A_gain_lifts_a_quiet_band_off_the_floor()
+        {
+            double quiet = Math.Pow(10, -70 / 20.0);
+            Assert.Equal(0f, AudioSpectrumCapture.ToLevel(quiet), 3);
+            Assert.Equal(0.5f, AudioSpectrumCapture.ToLevel(quiet, 30), 3);
+        }
     }
 
     public class MonitorAdjustmentsTests

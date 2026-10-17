@@ -3,6 +3,7 @@ using NAudio.CoreAudioApi;
 using NAudio.Dsp;
 using NAudio.Wave;
 using System;
+using System.Linq;
 
 namespace RetroBar.Utilities
 {
@@ -47,6 +48,15 @@ namespace RetroBar.Utilities
         // mean level - not its loudest bin, so the bass is stronger than the treble as it is in the music, and the bars fall away to the right.
         private const double SpectrumFloorDb = -60;
         private const double SpectrumCeilingDb = -20;
+
+        // A song recorded quiet (or quiet at that moment) has its bands below SpectrumFloorDb, and read as silence. The bars are lifted by
+        // the gain it takes to bring the loudest band of the last while up to SpectrumReferenceDb (at most SpectrumMaxGainDb, and never
+        // below nothing: a loud song is drawn as it is). The loudest level falls away slowly, so the lift does not pump with the music.
+        private const double SpectrumReferenceDb = -30;
+        private const double SpectrumMaxGainDb = 30;
+        private const double SpectrumPeakFallDbPerSecond = 3;
+        private double _spectrumPeakDb = SpectrumReferenceDb;
+        private DateTime _spectrumPeakTime = DateTime.Now;
 
         // The VU meter is foobar2000's: the bar is the loudest sample of the last 40 ms, in decibels from VuFloorDb (empty) to full scale
         // (full), of the sound as it is sent to the device, before the device's volume. It rises at once and falls smoothly, by VuFallTime:
@@ -226,9 +236,9 @@ namespace RetroBar.Utilities
             return (float)Math.Clamp(1 - db / VuFloorDb, 0, 1);
         }
 
-        internal static float ToLevel(double magnitude)
+        internal static float ToLevel(double magnitude, double gainDb = 0)
         {
-            double db = 20 * Math.Log10(Math.Max(magnitude, 1e-6));
+            double db = 20 * Math.Log10(Math.Max(magnitude, 1e-6)) + gainDb;
             return (float)Math.Clamp((db - SpectrumFloorDb) / (SpectrumCeilingDb - SpectrumFloorDb), 0, 1);
         }
 
@@ -270,7 +280,7 @@ namespace RetroBar.Utilities
 
             FastFourierTransform.FFT(true, FftLog2, _fftBuffer);
 
-            var bands = new float[SpectrumBands];
+            var means = new double[SpectrumBands];
             double binHz = (double)sampleRate / FftSize;
             double highest = Math.Min(HighestBandHz, sampleRate / 2.0);
 
@@ -289,11 +299,23 @@ namespace RetroBar.Utilities
                     bins++;
                 }
 
-                double mean = bins > 0 ? Math.Sqrt(power / bins) : 0;
-
                 // A full-scale sine through the window reads FftSize / 4 in its bin once the FFT is scaled by 1 / FftSize (NAudio's
                 // forward transform does that): scale back to 1 for a full-scale sine, so 0 dB is full scale as in the VU meter.
-                bands[band] = ToLevel(mean * 4);
+                means[band] = bins > 0 ? Math.Sqrt(power / bins) * 4 : 0;
+            }
+
+            // The loudest band sets the lift (see SpectrumReferenceDb): up at once, down slowly.
+            DateTime now = DateTime.Now;
+            double fall = Math.Min((now - _spectrumPeakTime).TotalSeconds, 0.5) * SpectrumPeakFallDbPerSecond;
+            _spectrumPeakTime = now;
+            double loudestDb = 20 * Math.Log10(Math.Max(means.Max(), 1e-6));
+            _spectrumPeakDb = Math.Max(Math.Max(loudestDb, SpectrumReferenceDb - SpectrumMaxGainDb), _spectrumPeakDb - fall);
+            double gainDb = Math.Clamp(SpectrumReferenceDb - _spectrumPeakDb, 0, SpectrumMaxGainDb);
+
+            var bands = new float[SpectrumBands];
+            for (int band = 0; band < SpectrumBands; band++)
+            {
+                bands[band] = ToLevel(means[band], gainDb);
             }
 
             return bands;
