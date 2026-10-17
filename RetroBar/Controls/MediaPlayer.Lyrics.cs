@@ -35,7 +35,12 @@ namespace RetroBar.Controls
 
         // The lines and the words come this much before their time (the lyrics are ahead of what is heard): a setting for every song,
         // which the media popup's right-click menu moves.
-        private static TimeSpan LyricsLead => TimeSpan.FromMilliseconds(Settings.Instance.LyricsLeadMs);
+        // The timing set for this song (from the popup's menu, kept for it), or else the global one of the properties.
+        private string LyricsTimingKey => _sessionManager == null ? null : LyricsTiming.KeyOf(_sessionManager.Artist, _sessionManager.Title);
+
+        private int LyricsLeadMs => LyricsTiming.Get(LyricsTimingKey) ?? Settings.Instance.LyricsLeadMs;
+
+        private TimeSpan LyricsLead => TimeSpan.FromMilliseconds(LyricsLeadMs);
 
         // The scroll and the colour take the same time: the line is in its colour when it is in its place.
         private static readonly Duration LyricScroll = new(TimeSpan.FromMilliseconds(320));

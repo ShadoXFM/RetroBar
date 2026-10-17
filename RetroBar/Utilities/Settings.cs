@@ -150,7 +150,7 @@ namespace RetroBar.Utilities
         }
 
         // How many milliseconds before their time the lyrics' lines and words come (the lyrics are ahead of what is heard); negative for
-        // after. For every song: the right-click menu of the media popup moves it a step at a time.
+        // after. The default for every song: the right-click menu of the media popup sets one song's own, kept for it (LyricsTiming).
         private int _lyricsLeadMs = 250;
         public int LyricsLeadMs
         {

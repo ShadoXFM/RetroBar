@@ -84,6 +84,17 @@ namespace RetroBar.Controls
                 SeekSpectrum.Fill = SeekTitleText.Foreground;
             }
 
+            // The artist's name is in the cover's colour.
+            if (AccentBrush() is SolidColorBrush artist)
+            {
+                artist.Freeze();
+                SeekArtistText.Foreground = artist;
+            }
+            else
+            {
+                SeekArtistText.ClearValue(TextBlock.ForegroundProperty);
+            }
+
             ApplyVuMeterFill();
             ApplyLyricsColor();
         }

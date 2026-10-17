@@ -683,22 +683,27 @@ namespace RetroBar.Controls
             };
             lyrics.Click += (s, args) => Settings.Instance.ShowMediaPopupLyrics = !Settings.Instance.ShowMediaPopupLyrics;
 
-            // Global timing of the lyrics: a step earlier or later each time, for every song.
+            // Timing of the lyrics of this song: a step earlier or later each time, kept for the song (the global one is in the properties).
             const int step = 50;
+            string songKey = LyricsTimingKey;
+            bool songTiming = LyricsTiming.Get(songKey) != null;
+            int current = LyricsLeadMs;
             string Seconds(int ms) => (ms / 1000.0).ToString("0.00", System.Globalization.CultureInfo.CurrentCulture);
             var timing = new MenuItem { Header = TryFindResource("media_popup_lyrics_timing") as string ?? "Lyrics _timing" };
             timing.Items.Add(new MenuItem
             {
-                Header = string.Format(TryFindResource("media_popup_lyrics_now") as string ?? "Now: {0} s ahead", Seconds(Settings.Instance.LyricsLeadMs)),
+                Header = string.Format(TryFindResource(songTiming ? "media_popup_lyrics_now_song" : "media_popup_lyrics_now") as string
+                    ?? (songTiming ? "This song: {0} s ahead" : "Now: {0} s ahead"), Seconds(current)),
                 IsEnabled = false,
             });
             timing.Items.Add(MakeMenuSeparator());
             var earlier = new MenuItem { Header = (TryFindResource("media_popup_lyrics_earlier") as string ?? "Show _earlier") + $" ({Seconds(step)} s)" };
-            earlier.Click += (s, args) => Settings.Instance.LyricsLeadMs += step;
+            earlier.Click += (s, args) => LyricsTiming.Set(songKey, current + step);
             var later = new MenuItem { Header = (TryFindResource("media_popup_lyrics_later") as string ?? "Show _later") + $" ({Seconds(step)} s)" };
-            later.Click += (s, args) => Settings.Instance.LyricsLeadMs -= step;
-            var reset = new MenuItem { Header = TryFindResource("media_popup_lyrics_reset") as string ?? "_Reset" };
-            reset.Click += (s, args) => Settings.Instance.LyricsLeadMs = 250;
+            later.Click += (s, args) => LyricsTiming.Set(songKey, current - step);
+            var reset = new MenuItem { Header = TryFindResource("media_popup_lyrics_reset") as string ?? "_Reset to the global timing" };
+            reset.IsEnabled = songTiming;
+            reset.Click += (s, args) => LyricsTiming.Set(songKey, null);
             timing.Items.Add(earlier);
             timing.Items.Add(later);
             timing.Items.Add(reset);
