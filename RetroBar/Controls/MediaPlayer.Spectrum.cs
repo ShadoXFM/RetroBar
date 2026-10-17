@@ -85,7 +85,7 @@ namespace RetroBar.Controls
             }
 
             // The artist's name is in the cover's colour.
-            if (AccentBrush() is SolidColorBrush artist)
+            if (AccentBrush(ArtistAccentLighten) is SolidColorBrush artist)
             {
                 artist.Freeze();
                 SeekArtistText.Foreground = artist;

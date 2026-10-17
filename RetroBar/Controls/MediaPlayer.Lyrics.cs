@@ -240,14 +240,17 @@ namespace RetroBar.Controls
         // The cover's colour, a little lighter than the one the meter and the spectrum have, to read on the popup's dark ground at this size.
         private const double LyricAccentLighten = 0.3;
 
-        private SolidColorBrush AccentBrush()
+        // The artist's name, brighter still (it is a short line, on the popup's dark ground).
+        private const double ArtistAccentLighten = 0.55;
+
+        private SolidColorBrush AccentBrush(double lighten = LyricAccentLighten)
         {
             if (_seekAccentColor is not Color accent)
             {
                 return null;
             }
 
-            static byte Lighter(byte channel) => (byte)Math.Round(channel + (255 - channel) * LyricAccentLighten);
+            byte Lighter(byte channel) => (byte)Math.Round(channel + (255 - channel) * lighten);
             return new SolidColorBrush(Color.FromRgb(Lighter(accent.R), Lighter(accent.G), Lighter(accent.B)));
         }
 
