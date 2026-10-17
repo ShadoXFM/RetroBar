@@ -108,6 +108,7 @@ namespace RetroBar.Controls
         public MediaPlayer()
         {
             InitializeComponent();
+            InitializeSpotifyLinks();
             SeekSlider.MouseMove += SeekSlider_OnMouseMove;
             SeekSlider.MouseLeave += SeekSlider_OnMouseLeave;
             InitializeSeekSlide();
@@ -418,6 +419,7 @@ namespace RetroBar.Controls
             Visibility = Visibility.Visible;
             SetIsMediaPlaying(true);
             PrefetchLyrics();
+            PrefetchSpotifyLinks();
             bool isPlaying = _sessionManager.PlaybackState == MediaPlaybackState.Playing;
             UpdateVisualizerActiveState(isPlaying);
 
