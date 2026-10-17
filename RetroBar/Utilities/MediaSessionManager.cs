@@ -210,8 +210,9 @@ namespace RetroBar.Utilities
             }
         }
 
-        // Spotifast (another client of the same account) shows what Spotify plays, in a session whose position it hardly ever updates: while
-        // Spotify itself is playing, its session is the one to show (the position, the controls and the lyrics are those of the real player).
+        // Spotifast (another client of the same account) shows what Spotify plays, in a session whose position it hardly ever updates and
+        // whose play button does nothing for the real player (it went to playing and straight back): while Spotify itself is playing, or
+        // has the same track, its session is the one to show (the position, the controls and the lyrics are those of the real player).
         private GlobalSystemMediaTransportControlsSession PreferSpotify(GlobalSystemMediaTransportControlsSession session)
         {
             if (session == null || (session.SourceAppUserModelId ?? "").IndexOf("spotifast", StringComparison.OrdinalIgnoreCase) < 0)
@@ -223,13 +224,30 @@ namespace RetroBar.Utilities
             {
                 string aumid = candidate.SourceAppUserModelId ?? "";
                 if (aumid.IndexOf("spotify", StringComparison.OrdinalIgnoreCase) >= 0 && aumid.IndexOf("spotifast", StringComparison.OrdinalIgnoreCase) < 0
-                    && candidate.GetPlaybackInfo()?.PlaybackStatus == GlobalSystemMediaTransportControlsSessionPlaybackStatus.Playing)
+                    && candidate.GetPlaybackInfo()?.PlaybackStatus is GlobalSystemMediaTransportControlsSessionPlaybackStatus status
+                    && (status == GlobalSystemMediaTransportControlsSessionPlaybackStatus.Playing
+                        || (status == GlobalSystemMediaTransportControlsSessionPlaybackStatus.Paused && SameTrack(candidate, session))))
                 {
                     return candidate;
                 }
             }
 
             return session;
+        }
+
+        private static bool SameTrack(GlobalSystemMediaTransportControlsSession a, GlobalSystemMediaTransportControlsSession b)
+        {
+            try
+            {
+                var first = a.TryGetMediaPropertiesAsync().AsTask().GetAwaiter().GetResult();
+                var second = b.TryGetMediaPropertiesAsync().AsTask().GetAwaiter().GetResult();
+                return first != null && second != null && first.Title == second.Title && first.Artist == second.Artist;
+            }
+            catch (Exception e)
+            {
+                ShellLogger.Debug($"MediaSessionManager: Unable to compare two sessions' tracks: {e.Message}");
+                return false;
+            }
         }
 
         /// <summary>
