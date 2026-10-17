@@ -46,7 +46,9 @@ namespace RetroBar.Controls
 
         private ImageSource _seekAccentSource;
 
-        private static bool IsSpotify(string aumid) => aumid != null && aumid.Contains("spotify", StringComparison.OrdinalIgnoreCase);
+        // Spotify's own app, and Spotifast (another client of the same service, with its own media session and the same tracks).
+        private static bool IsSpotify(string aumid) => aumid != null
+            && (aumid.Contains("spotify", StringComparison.OrdinalIgnoreCase) || aumid.Contains("spotifast", StringComparison.OrdinalIgnoreCase));
 
         private void UpdateSeekAccent(ImageSource art)
         {

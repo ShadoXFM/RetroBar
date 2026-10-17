@@ -684,7 +684,7 @@ namespace RetroBar.Controls
             lyrics.Click += (s, args) => Settings.Instance.ShowMediaPopupLyrics = !Settings.Instance.ShowMediaPopupLyrics;
 
             // Timing of the lyrics of this song: a step earlier or later each time, kept for the song (the global one is in the properties).
-            const int step = 50;
+            const int step = 100;
             string songKey = LyricsTimingKey;
             bool songTiming = LyricsTiming.Get(songKey) != null;
             int current = LyricsLeadMs;
