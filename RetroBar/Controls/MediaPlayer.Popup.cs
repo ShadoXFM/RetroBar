@@ -313,6 +313,55 @@ namespace RetroBar.Controls
 
         private double? _lastSeekFrameBottom;
 
+        // With nothing playing the media part of the taskbar is not there to measure, and the weather's forecast and the CPU temperature's
+        // graph, placed from the media popup's frame bottom, sat lower than with something playing. So what was measured is kept for
+        // each monitor (as it is, taskbar and scale), also in a file, for when nothing has played since RetroBar started.
+        private static readonly string FrameBottomFile = "media-frame-bottom.json".InLocalAppData();
+        private static System.Collections.Generic.Dictionary<string, double> _knownFrameBottoms;
+
+        private string FrameBottomKey(Visual relativeTo)
+        {
+            string device = (relativeTo as Taskbar)?.Screen.DeviceName;
+            double height = (relativeTo as FrameworkElement)?.ActualHeight ?? 0;
+            return $"{device}|{Settings.Instance.Edge}|{VisualTreeHelper.GetDpi(this).DpiScaleY:0.###}|{height:0.#}";
+        }
+
+        private static System.Collections.Generic.Dictionary<string, double> KnownFrameBottoms()
+        {
+            if (_knownFrameBottoms == null)
+            {
+                try
+                {
+                    _knownFrameBottoms = System.Text.Json.JsonSerializer.Deserialize<System.Collections.Generic.Dictionary<string, double>>(System.IO.File.ReadAllText(FrameBottomFile));
+                }
+                catch (Exception ex) when (ex is System.IO.IOException or System.Text.Json.JsonException or UnauthorizedAccessException)
+                {
+                }
+
+                _knownFrameBottoms ??= new System.Collections.Generic.Dictionary<string, double>();
+            }
+
+            return _knownFrameBottoms;
+        }
+
+        private static void RememberFrameBottom(string key, double bottom)
+        {
+            System.Collections.Generic.Dictionary<string, double> known = KnownFrameBottoms();
+            if (known.TryGetValue(key, out double was) && Math.Abs(was - bottom) < 0.05)
+            {
+                return;
+            }
+
+            known[key] = bottom;
+            try
+            {
+                System.IO.File.WriteAllText(FrameBottomFile, System.Text.Json.JsonSerializer.Serialize(known));
+            }
+            catch (Exception ex) when (ex is System.IO.IOException or UnauthorizedAccessException)
+            {
+            }
+        }
+
         public double? GetSeekFrameBottom(Visual relativeTo)
         {
             try
@@ -320,10 +369,16 @@ namespace RetroBar.Controls
                 if (IsVisible && TrackTextCanvas.ActualWidth > 0)
                 {
                     _lastSeekFrameBottom = TrackTextCanvas.TransformToAncestor(relativeTo).Transform(new Point(0, 0)).Y + SeekPopupOffset - SeekFrameShadowRoom;
+                    RememberFrameBottom(FrameBottomKey(relativeTo), _lastSeekFrameBottom.Value);
                 }
             }
             catch (InvalidOperationException)
             {
+            }
+
+            if (_lastSeekFrameBottom == null && KnownFrameBottoms().TryGetValue(FrameBottomKey(relativeTo), out double known))
+            {
+                return known;
             }
 
             return _lastSeekFrameBottom;
