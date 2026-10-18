@@ -680,6 +680,8 @@ namespace RetroBar.Controls
             {
                 Header = TryFindResource("media_popup_show_lyrics") as string ?? "Show _lyrics",
                 IsChecked = Settings.Instance.ShowMediaPopupLyrics,
+                // Lyrics are only found for Spotify's tracks: for any other player there is nothing to switch.
+                IsEnabled = IsSpotifySource,
             };
             lyrics.Click += (s, args) => Settings.Instance.ShowMediaPopupLyrics = !Settings.Instance.ShowMediaPopupLyrics;
 
@@ -689,7 +691,7 @@ namespace RetroBar.Controls
             bool songTiming = LyricsTiming.Get(songKey) != null;
             int current = LyricsLeadMs;
             string Seconds(int ms) => (ms / 1000.0).ToString("0.00", System.Globalization.CultureInfo.CurrentCulture);
-            var timing = new MenuItem { Header = TryFindResource("media_popup_lyrics_timing") as string ?? "Lyrics _timing" };
+            var timing = new MenuItem { Header = TryFindResource("media_popup_lyrics_timing") as string ?? "Lyrics _timing", IsEnabled = IsSpotifySource };
             timing.Items.Add(new MenuItem
             {
                 Header = string.Format(TryFindResource(songTiming ? "media_popup_lyrics_now_song" : "media_popup_lyrics_now") as string
