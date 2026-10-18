@@ -87,6 +87,8 @@ namespace RetroBar.Controls
                 collectionViewShaping.LiveFilteringProperties.Add("IsHidden");
                 collectionViewShaping.LiveFilteringProperties.Add("IsPinned");
                 NotifyIcons.ItemsSource = collectionView;
+                ((INotifyCollectionChanged)collectionView).CollectionChanged += (s, e) => UpdateIconsEnd();
+                UpdateIconsEnd();
 
                 if (Settings.Instance.CollapseNotifyIcons)
                 {
@@ -357,6 +359,13 @@ namespace RetroBar.Controls
         private void NotifyIconToggleButton_OnClick(object sender, RoutedEventArgs e)
         {
             collectionView?.Refresh();
+            UpdateIconsEnd();
+        }
+
+        // The gap after the icons is there while any icon is shown.
+        private void UpdateIconsEnd()
+        {
+            NotifyIconsEnd.Visibility = collectionView != null && !collectionView.IsEmpty ? Visibility.Visible : Visibility.Collapsed;
         }
 
         private void SetToggleVisibility()

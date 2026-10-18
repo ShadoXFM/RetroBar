@@ -72,7 +72,7 @@ A tag that is chosen by a state has variants: `Playing` (media is playing), `NoC
 | `MediaSeekGlyphSkipNext` | `Controls/MediaPlayer.xaml` |  |
 | `MediaSeekGlyphSkipPrevious` | `Controls/MediaPlayer.xaml` |  |
 | `MediaSeekLyricsText` | `Controls/MediaPlayer.xaml` |  |
-| `MediaSeekSlider` | `Controls/MediaPlayer.xaml` |  |
+| `MediaSeekSlider` | `Controls/MediaPlayer.Popup.cs`, `Controls/MediaPlayer.xaml` |  |
 | `MediaSeekSpectrum` | `Controls/MediaPlayer.xaml` |  |
 | `MediaSeekTimeText` | `Controls/MediaPlayer.xaml` |  |
 | `MediaSeekTitleText` | `Controls/MediaPlayer.xaml` |  |
@@ -103,6 +103,7 @@ A tag that is chosen by a state has variants: `Playing` (media is playing), `NoC
 | `TrayBoxOuter` | `Themes/Windows XFM Light.xaml`, `Themes/Windows XFM.xaml` | `TrayBoxOuterPlaying` |
 | `TrayBoxOuterPlaying` | `Themes/Windows XFM Light.xaml`, `Themes/Windows XFM.xaml` |  |
 | `TrayIcon` | `Controls/NotifyIcon.xaml` |  |
+| `TrayNotifyIconsEnd` | `Controls/NotifyIconList.xaml` |  |
 | `TrayNotifyList` | `Taskbar.xaml` | `TrayNotifyListAlone` |
 | `TrayNotifyListAlone` | `Taskbar.xaml` |  |
 | `TrayToggleButton` | `Themes/System.xaml`, `Themes/Windows XFM Light.xaml`, `Themes/Windows XFM.xaml` | `TrayToggleButtonPlaying` |

@@ -4,6 +4,7 @@
              xmlns:local="clr-namespace:RetroBar.Controls"
              xmlns:converters="clr-namespace:RetroBar.Converters"
              xmlns:dd="urn:gong-wpf-dragdrop"
+             xmlns:utilities="clr-namespace:RetroBar.Utilities"
              Loaded="NotifyIconList_Loaded"
              Unloaded="NotifyIconList_OnUnloaded">
     <UserControl.Resources>
@@ -55,5 +56,11 @@
                 </ItemContainerTemplate>
             </ItemsControl.ItemTemplate>
         </ItemsControl>
+        <!-- The gap between the last icon and what follows (the clock): its own element, with a Width of its own per monitor
+             (TrayNotifyIconsEnd), so that it can be shown only while there are icons - with none (the tray collapsed) the gap
+             would be left on its own. -->
+        <Border x:Name="NotifyIconsEnd"
+                Visibility="Collapsed"
+                utilities:MonitorOffset.Tag="TrayNotifyIconsEnd" />
     </StackPanel>
 </UserControl>
