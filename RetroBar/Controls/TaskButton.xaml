@@ -161,6 +161,7 @@
                                                          off again, see PreviewShadowRoom). -->
                                                     <controls:PopupShadow />
                                                     <ContentControl Style="{DynamicResource TaskButtonThumbnail}"
+                                                                    ClipToBounds="True"
                                                                     Margin="6">
                                                         <!-- One block per window of the tab (just the one, unless windows of an app are
                                                              combined - see TaskButton.GroupWindows, kept in the button's Tag). Side by side
@@ -302,6 +303,27 @@
                                                                         </Grid>
                                                                         <!-- BoxWidth: the thumbnail area is as wide as the tab itself, so every
                                                                              preview is the same size rather than shaped like its window. -->
+                                                                        <!-- A shadow behind the picture, inside the frame: a black box the size of the thumbnail (a pixel
+                                                                             in from its edges, so none of the black shows round it) with a drop shadow. The thumbnail is drawn by
+                                                                             DWM over it, so only the shadow round the picture is seen. The Effect is on this box alone, not on
+                                                                             anything with text in it. -->
+                                                                        <Grid Grid.Row="1"
+                                                                              VerticalAlignment="Center"
+                                                                              HorizontalAlignment="Center"
+                                                                              IsHitTestVisible="False"
+                                                                              Width="{Binding ElementName=PreviewThumbnail, Path=Width}"
+                                                                              Height="{Binding ElementName=PreviewThumbnail, Path=Height}">
+                                                                            <Border Margin="1"
+                                                                                    Background="Black">
+                                                                                <Border.Effect>
+                                                                                    <DropShadowEffect BlurRadius="6"
+                                                                                                      ShadowDepth="3"
+                                                                                                      Direction="270"
+                                                                                                      Opacity="1"
+                                                                                                      Color="Black" />
+                                                                                </Border.Effect>
+                                                                            </Border>
+                                                                        </Grid>
                                                                         <controls:TaskThumbnail x:Name="PreviewThumbnail"
                                                                                                 Grid.Row="1"
                                                                                                 VerticalAlignment="Center"
