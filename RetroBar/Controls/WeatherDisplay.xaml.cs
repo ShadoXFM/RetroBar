@@ -31,6 +31,10 @@ namespace RetroBar.Controls
             InitializeComponent();
             InitializeForecastSlide();
 
+            // A right click inside the popup does nothing: it went on to the taskbar's own menu, opened over the popup.
+            ForecastFrame.PreviewMouseRightButtonDown += (s, e) => e.Handled = true;
+            ForecastFrame.PreviewMouseRightButtonUp += (s, e) => e.Handled = true;
+
             // Wait until the control is fully loaded before starting the timer
             this.Loaded += WeatherDisplay_Loaded;
             this.Unloaded += WeatherDisplay_Unloaded;
@@ -184,9 +188,16 @@ namespace RetroBar.Controls
                     return;
                 }
 
-            // Show the latest reading, and refresh it in the background if it has gone stale.
-            _ = _viewModel?.UpdateWeatherAsync();
-            ShowForecast();
+                // Open on the side of the widget facing into the screen, whichever edge the taskbar is on, and
+                // centered on the widget along the taskbar (see PlaceForecast).
+                ForecastPopup.PlacementTarget = WeatherPanel;
+                ForecastPopup.Placement = PlacementMode.Custom;
+                ForecastPopup.CustomPopupPlacementCallback = PlaceForecast;
+
+                // Show the latest reading, and refresh it in the background if it has gone stale.
+                _ = _viewModel?.UpdateWeatherAsync();
+                ShowForecast();
+            });
         }
 
         // The popup slides out of the taskbar's edge, and back into it (see PopupSlide).
@@ -215,6 +226,11 @@ namespace RetroBar.Controls
                 return null;
             }
 
+            if (PopupSlide.MeasureOverlap(ForecastFrame, taskbar) is double measured)
+            {
+                return measured;
+            }
+
             // The frame's bottom (see PlaceForecast).
             double? frameBottom = taskbar.MediaPlayerControl.GetSeekFrameBottom(taskbar);
             if (frameBottom == null)
@@ -222,11 +238,6 @@ namespace RetroBar.Controls
                 try
                 {
                     frameBottom = WeatherPanel.TransformToAncestor(taskbar).Transform(new Point(0, 0)).Y;
-            if (PopupSlide.MeasureOverlap(ForecastFrame, taskbar) is double measured)
-            {
-                return measured;
-            }
-
                 }
                 catch (InvalidOperationException)
                 {

@@ -30,6 +30,10 @@ namespace RetroBar.Controls
         {
             InitializeComponent();
             InitializeGraphSlide();
+
+            // A right click inside the popup does nothing: it went on to the taskbar's own menu, opened over the popup.
+            GraphFrame.PreviewMouseRightButtonDown += (s, e) => e.Handled = true;
+            GraphFrame.PreviewMouseRightButtonUp += (s, e) => e.Handled = true;
             Graph.CollectingText = TryFindResource("cpu_temp_graph_collecting") as string ?? "Collecting readings…";
         }
 
