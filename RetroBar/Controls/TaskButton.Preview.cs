@@ -142,6 +142,11 @@ namespace RetroBar.Controls
         }
 
         private static DateTime _previewKeepUntil = DateTime.MinValue;
+
+        // Where the preview was when a window was closed from it: it keeps open while the pointer stays there (the others come together,
+        // so the pointer is soon off them, on the empty place the closed one left - and the preview went a moment later, from under
+        // a pointer that had not moved), and goes by the usual rule once the pointer has left it.
+        private static RECT? _previewKeepWhilePointerIn;
         private static string _reopenPreviewApp;
         private static DateTime _reopenPreviewUntil = DateTime.MinValue;
         private static RECT? _reopenPreviewFrom;
@@ -164,6 +169,7 @@ namespace RetroBar.Controls
             Dispatcher.BeginInvoke(new Action(() =>
             {
                 OpenPreview(true, true);
+                _previewKeepWhilePointerIn = from;
 
                 if (from != null)
                 {
@@ -437,6 +443,17 @@ namespace RetroBar.Controls
 
             // After a window was closed from the preview the others are re-centered, and the pointer is then often off the preview for
             // a moment: it is given a little longer before the preview goes.
+            if (_previewKeepWhilePointerIn is RECT keep)
+            {
+                if (GetCursorPos(out POINT pointer) && pointer.X >= keep.Left && pointer.X < keep.Right && pointer.Y >= keep.Top && pointer.Y < keep.Bottom)
+                {
+                    _previewOutsideSince = null;
+                    return;
+                }
+
+                _previewKeepWhilePointerIn = null;
+            }
+
             if (IsPointerOverTab() || overPreview || _windowMenu?.IsOpen == true || DateTime.UtcNow < _previewKeepUntil)
             {
                 _previewOutsideSince = null;
@@ -457,6 +474,7 @@ namespace RetroBar.Controls
             CloseWindowMenu(animate);
             _previewShowTimer?.Stop();
             _previewPollTimer?.Stop();
+            _previewKeepWhilePointerIn = null;
             _previewOutsideSince = null;
             _previewHoverSince = null;
             _previewHoverTarget = null;
@@ -754,6 +772,7 @@ namespace RetroBar.Controls
                         _reopenPreviewUntil = DateTime.UtcNow + TimeSpan.FromSeconds(3);
                         _previewKeepUntil = DateTime.UtcNow + TimeSpan.FromSeconds(2);
                         _reopenPreviewFrom = GetWindowRect(hwnd, out RECT here) ? here : null;
+                        _previewKeepWhilePointerIn = _reopenPreviewFrom;
                         // Its thumbnail has gone grey (the window's icon on a plain box) in the moments before the window is
                         // gone from the list, so it is hidden - kept in its place, so the others don't move yet - at once. If the
                         // window is still there a little later (it asked to save something, say), it is shown again.
