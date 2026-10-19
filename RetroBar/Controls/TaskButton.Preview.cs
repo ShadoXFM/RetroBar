@@ -402,12 +402,42 @@ namespace RetroBar.Controls
             _previewPollTimer.Start();
         }
 
+        // The keys (not the mouse buttons) that were down at the last poll: a key already held when the preview came up does not count, and
+        // one held on does not count again.
+        private readonly bool[] _previewKeysDown = new bool[256];
+        private bool _previewKeysKnown;
+
+        private bool AnyKeyPressedSinceLastPoll()
+        {
+            bool pressed = false;
+            for (int key = 8; key < 255; key++)
+            {
+                bool down = (GetAsyncKeyState(key) & 0x8000) != 0;
+                if (down && !_previewKeysDown[key] && _previewKeysKnown)
+                {
+                    pressed = true;
+                }
+
+                _previewKeysDown[key] = down;
+            }
+
+            _previewKeysKnown = true;
+            return pressed;
+        }
+
         private void PreviewPollTimer_Tick(object sender, EventArgs e)
         {
             if (AppButton.ToolTip is not ToolTip tip || !tip.IsOpen)
             {
                 StopPeek();
                 _previewPollTimer?.Stop();
+                return;
+            }
+
+            // A key pressed (anywhere: the app is being used, not looked at) takes the preview away.
+            if (AnyKeyPressedSinceLastPoll())
+            {
+                ClosePreview();
                 return;
             }
 
@@ -498,6 +528,7 @@ namespace RetroBar.Controls
             _previewPollTimer?.Stop();
             _previewKeepWhilePointerIn = null;
             _previewClicked = false;
+            _previewKeysKnown = false;
             _previewOutsideSince = null;
             _previewHoverSince = null;
             _previewHoverTarget = null;

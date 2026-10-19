@@ -319,7 +319,7 @@
                                                                                     <DropShadowEffect BlurRadius="6"
                                                                                                       ShadowDepth="4"
                                                                                                       Direction="315"
-                                                                                                      Opacity="1"
+                                                                                                      Opacity="0.7"
                                                                                                       Color="Black" />
                                                                                 </Border.Effect>
                                                                             </Border>
