@@ -107,7 +107,7 @@
             </ContextMenu>
         </Button.ContextMenu>
         <Button.ToolTip>
-            <ToolTip>
+            <controls:PreviewToolTip>
                 <ToolTip.Style>
                     <Style TargetType="ToolTip"
                            BasedOn="{StaticResource {x:Type ToolTip}}">
@@ -324,7 +324,7 @@
                     </Style>
                 </ToolTip.Style>
                 <TextBlock Text="{Binding Path=Title}" />
-            </ToolTip>
+            </controls:PreviewToolTip>
         </Button.ToolTip>
     </Button>
 </UserControl>

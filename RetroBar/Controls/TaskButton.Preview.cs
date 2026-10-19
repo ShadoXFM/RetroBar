@@ -348,6 +348,7 @@ namespace RetroBar.Controls
             tip.BeginAnimation(UIElement.OpacityProperty, null);
             ClearPreviewSlide(tip);
             tip.Opacity = startOpacity;
+            SetPreviewKeepOpen(tip, true);
             tip.IsOpen = true;
 
             if (tip.Parent is System.Windows.Controls.Primitives.Popup openedPopup)
@@ -468,6 +469,14 @@ namespace RetroBar.Controls
             }
         }
 
+        private static void SetPreviewKeepOpen(ToolTip tip, bool keepOpen)
+        {
+            if (tip is PreviewToolTip preview)
+            {
+                preview.KeepOpen = keepOpen;
+            }
+        }
+
         // animate: fade out (the normal case); false closes at once (tab unloaded, thumbnails turned off).
         private void ClosePreview(bool animate = true)
         {
@@ -503,6 +512,7 @@ namespace RetroBar.Controls
                 _previewFadingOut = false;
                 tip.BeginAnimation(UIElement.OpacityProperty, null);
                 ClearPreviewSlide(tip);
+                SetPreviewKeepOpen(tip, false);
                 tip.IsOpen = false;
                 return;
             }
@@ -535,6 +545,7 @@ namespace RetroBar.Controls
                     _previewFadingOut = false;
                     tip.BeginAnimation(UIElement.OpacityProperty, null);
                     ClearPreviewSlide(tip);
+                    SetPreviewKeepOpen(tip, false);
                     tip.IsOpen = false;
                 }
             };
