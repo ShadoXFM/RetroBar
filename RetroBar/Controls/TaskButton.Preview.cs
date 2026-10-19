@@ -145,9 +145,13 @@ namespace RetroBar.Controls
             AppButton.ContextMenuOpening += (s, e) => ClosePreview();
         }
 
-        // The tab was clicked while its preview was up or coming: closing one of its windows from the preview then leaves the preview for
-        // the others. With the pointer only resting on the tab it goes with the window that was closed, quickly.
+        // The tab was clicked while its preview was up or coming: after closing one of its windows from the preview, the preview then
+        // stays for the others for as long as the pointer is where it was. With the pointer only resting on the tab it goes soon after,
+        // if the pointer is not on it (PreviewKeepAfterCloseHover), rather than lingering.
         private bool _previewClicked;
+        private static bool _reopenPreviewClicked;
+        private static readonly TimeSpan PreviewKeepAfterCloseClicked = TimeSpan.FromSeconds(2);
+        private static readonly TimeSpan PreviewKeepAfterCloseHover = TimeSpan.FromMilliseconds(250);
 
         private static DateTime _previewKeepUntil = DateTime.MinValue;
 
@@ -177,8 +181,8 @@ namespace RetroBar.Controls
             Dispatcher.BeginInvoke(new Action(() =>
             {
                 OpenPreview(true, true);
-                _previewClicked = true;
-                _previewKeepWhilePointerIn = from;
+                _previewClicked = _reopenPreviewClicked;
+                _previewKeepWhilePointerIn = _reopenPreviewClicked ? from : null;
 
                 if (from != null)
                 {
@@ -787,13 +791,14 @@ namespace RetroBar.Controls
 
                     // Closing one of several windows leaves the preview open for the others. If the tab itself goes with the window
                     // (it stood for that one), the tab that takes its place opens the preview again (see ReopenPreviewAfterClose).
-                    if (close && items.Count > 1 && target != null && _previewClicked)
+                    if (close && items.Count > 1 && target != null)
                     {
                         _reopenPreviewApp = TaskOpenOrderComparer.AppKey(target);
                         _reopenPreviewUntil = DateTime.UtcNow + TimeSpan.FromSeconds(3);
-                        _previewKeepUntil = DateTime.UtcNow + TimeSpan.FromSeconds(2);
+                        _reopenPreviewClicked = _previewClicked;
+                        _previewKeepUntil = DateTime.UtcNow + (_previewClicked ? PreviewKeepAfterCloseClicked : PreviewKeepAfterCloseHover);
                         _reopenPreviewFrom = GetWindowRect(hwnd, out RECT here) ? here : null;
-                        _previewKeepWhilePointerIn = _reopenPreviewFrom;
+                        _previewKeepWhilePointerIn = _previewClicked ? _reopenPreviewFrom : null;
                         // Its thumbnail has gone grey (the window's icon on a plain box) in the moments before the window is
                         // gone from the list, so it is hidden - kept in its place, so the others don't move yet - at once. If the
                         // window is still there a little later (it asked to save something, say), it is shown again.
