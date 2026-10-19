@@ -137,9 +137,17 @@ namespace RetroBar.Controls
                 {
                     ClosePreview();
                 }
+                else if (e.ChangedButton == System.Windows.Input.MouseButton.Left)
+                {
+                    _previewClicked = true;
+                }
             };
             AppButton.ContextMenuOpening += (s, e) => ClosePreview();
         }
+
+        // The tab was clicked while its preview was up or coming: closing one of its windows from the preview then leaves the preview for
+        // the others. With the pointer only resting on the tab it goes with the window that was closed, quickly.
+        private bool _previewClicked;
 
         private static DateTime _previewKeepUntil = DateTime.MinValue;
 
@@ -169,6 +177,7 @@ namespace RetroBar.Controls
             Dispatcher.BeginInvoke(new Action(() =>
             {
                 OpenPreview(true, true);
+                _previewClicked = true;
                 _previewKeepWhilePointerIn = from;
 
                 if (from != null)
@@ -484,6 +493,7 @@ namespace RetroBar.Controls
             _previewShowTimer?.Stop();
             _previewPollTimer?.Stop();
             _previewKeepWhilePointerIn = null;
+            _previewClicked = false;
             _previewOutsideSince = null;
             _previewHoverSince = null;
             _previewHoverTarget = null;
@@ -777,7 +787,7 @@ namespace RetroBar.Controls
 
                     // Closing one of several windows leaves the preview open for the others. If the tab itself goes with the window
                     // (it stood for that one), the tab that takes its place opens the preview again (see ReopenPreviewAfterClose).
-                    if (close && items.Count > 1 && target != null)
+                    if (close && items.Count > 1 && target != null && _previewClicked)
                     {
                         _reopenPreviewApp = TaskOpenOrderComparer.AppKey(target);
                         _reopenPreviewUntil = DateTime.UtcNow + TimeSpan.FromSeconds(3);
