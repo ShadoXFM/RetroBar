@@ -33,15 +33,15 @@ namespace RetroBar.Controls
 
         // Like the Windows taskbar, previews live in a box of limited size: the height follows the
         // window's shape only up to MAX_HEIGHT_RATIO of the width (about 4:3), and a taller window gets
-        // that same box with its picture fitted inside and centered (bars at the sides) instead of a
-        // preview that keeps growing taller. Very wide windows are floored at MIN_HEIGHT_RATIO so they
-        // don't become a sliver.
-        private const double MIN_HEIGHT_RATIO = 0.35;
+        // its picture fitted into that box instead of a preview that keeps growing taller. The thumbnail
+        // is then exactly as big as the picture (narrower than the tab, for a tall window): there are
+        // no bars round it, so the shadow behind it falls along the picture's own edges.
         private const double MAX_HEIGHT_RATIO = 0.75;
 
-        // Height of the thumbnail area for the window currently being shown (set by Refresh).
+        // Size of the thumbnail (the picture) for the window currently being shown, in DIPs (set by Refresh).
         private double _boxHeight = Math.Round(DEFAULT_WIDTH * 2.0 / 3.0);
         private double BoxHeight => _boxHeight;
+        private double _fitWidth = DEFAULT_WIDTH;
 
         // The area's width in DIPs, rounded to a whole number of device pixels so its edges (and the
         // frame around it) land cleanly on the pixel grid at any monitor scale.
@@ -134,7 +134,7 @@ namespace RetroBar.Controls
                     return new NativeMethods.Rect(
                           left,
                           top,
-                          left + (int)Math.Round(AreaWidth * DpiScale),
+                          left + (int)Math.Round(_fitWidth * DpiScale),
                           top + (int)Math.Round(BoxHeight * DpiScale)
                          );
                 }
@@ -193,23 +193,15 @@ namespace RetroBar.Controls
                     opacity = GetPopupOpacity()
                 };
 
-                // Width is the tab's (scaled up a little); height follows the window's shape (clamped)...
+                // The widest the picture can be is the tab's width (scaled up a little), and the tallest follows the
+                // window's shape (clamped): the picture is scaled to fill that, and the thumbnail is as big as the picture.
                 double areaWidth = AreaWidth;
                 if (size.x > 0 && size.y > 0)
                 {
-                    double ratio = Math.Min(MAX_HEIGHT_RATIO, Math.Max(MIN_HEIGHT_RATIO, (double)size.y / size.x));
-                    _boxHeight = Math.Round(areaWidth * ratio * DpiScale) / DpiScale;
-                }
-
-                Width = areaWidth;
-                Height = BoxHeight;
-
-                if (size.x > 0 && size.y > 0)
-                {
-                    // ...and the picture is scaled to fill it - to the full width for a normal window,
-                    // or fitted inside if the height was clamped - centered either way.
+                    double ratio = Math.Min(MAX_HEIGHT_RATIO, (double)size.y / size.x);
+                    double maxHeight = Math.Round(areaWidth * ratio * DpiScale) / DpiScale;
                     double boxWidthPx = areaWidth * DpiScale;
-                    double boxHeightPx = BoxHeight * DpiScale;
+                    double boxHeightPx = maxHeight * DpiScale;
                     double scale = Math.Min(boxWidthPx / size.x, boxHeightPx / size.y);
                     int boxWidth = (int)Math.Round(boxWidthPx);
                     int boxHeight = (int)Math.Round(boxHeightPx);
@@ -229,11 +221,17 @@ namespace RetroBar.Controls
                         height = boxHeight;
                     }
 
-                    int left = props.rcDestination.Left + (int)Math.Round((boxWidth - width) / 2.0);
-                    int top = props.rcDestination.Top + (int)Math.Round((boxHeight - height) / 2.0);
-
-                    props.rcDestination = new NativeMethods.Rect(left, top, left + width, top + height);
+                    _fitWidth = width / DpiScale;
+                    _boxHeight = height / DpiScale;
                 }
+                else
+                {
+                    _fitWidth = areaWidth;
+                }
+
+                Width = _fitWidth;
+                Height = BoxHeight;
+                props.rcDestination = Rect;
 
                 if (this != null)
                     NativeMethods.DwmUpdateThumbnailProperties(_thumbHandle, ref props);
