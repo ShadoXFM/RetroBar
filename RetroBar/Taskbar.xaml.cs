@@ -633,6 +633,51 @@ namespace RetroBar
             ShellHelper.StartTaskManager();
         }
 
+        // Ends File Explorer (its windows and the shell) and brings it back. Windows starts the shell again by itself a moment after it
+        // ends; if it has not by then, it is started here. RetroBar follows what the shell does (see ExplorerMonitor).
+        private void RestartExplorerMenuItem_OnClick(object sender, RoutedEventArgs e)
+        {
+            if (EnvironmentHelper.IsAppRunningAsShell)
+            {
+                // RetroBar is the shell: there is no Explorer shell to restart.
+                return;
+            }
+
+            try
+            {
+                foreach (Process explorer in Process.GetProcessesByName("explorer"))
+                {
+                    try
+                    {
+                        explorer.Kill();
+                    }
+                    catch (Exception ex) when (ex is Win32Exception or InvalidOperationException)
+                    {
+                        ShellLogger.Warning($"Taskbar: Unable to end an explorer process: {ex.Message}");
+                    }
+                    finally
+                    {
+                        explorer.Dispose();
+                    }
+                }
+
+                var wait = new DispatcherTimer { Interval = TimeSpan.FromSeconds(4) };
+                wait.Tick += (s, args) =>
+                {
+                    wait.Stop();
+                    if (NativeMethods.GetShellWindow() == IntPtr.Zero)
+                    {
+                        Process.Start(new ProcessStartInfo("explorer.exe") { UseShellExecute = true });
+                    }
+                };
+                wait.Start();
+            }
+            catch (Exception ex) when (ex is Win32Exception or InvalidOperationException)
+            {
+                ShellLogger.Error("Taskbar: Unable to restart Explorer", ex);
+            }
+        }
+
         private void UpdateAvailableMenuItem_OnClick(object sender, RoutedEventArgs e)
         {
             ProcessStartInfo psi = new ProcessStartInfo

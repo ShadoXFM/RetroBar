@@ -179,6 +179,7 @@
     <s:String x:Key="undo_tile">Annuler le ca_rrelage</s:String>
     <s:String x:Key="undo_minimize_all">Annuler l'action de réduire _tout</s:String>
     <s:String x:Key="show_taskman_2k">_Gestionnaire des tâches...</s:String>
+    <s:String x:Key="restart_explorer">Redémarrer l’_Explorateur</s:String>
     <s:String x:Key="show_taskman">_Gestionnaire des tâches</s:String>
     <s:String x:Key="tray_properties">P_ropriétés</s:String>
     <s:String x:Key="update_available">_Mise à jour disponible...</s:String>

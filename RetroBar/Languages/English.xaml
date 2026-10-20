@@ -187,6 +187,7 @@
     <s:String x:Key="undo_tile">_Undo Tile</s:String>
     <s:String x:Key="undo_minimize_all">_Undo Minimize All</s:String>
     <s:String x:Key="show_taskman_2k">Tas_k Manager...</s:String>
+    <s:String x:Key="restart_explorer">Restart _Explorer</s:String>
     <s:String x:Key="show_taskman">Tas_k Manager</s:String>
     <s:String x:Key="tray_properties">P_roperties</s:String>
     <s:String x:Key="update_available">_Update available...</s:String>
