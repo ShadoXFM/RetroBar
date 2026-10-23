@@ -317,9 +317,88 @@ namespace RetroBar.Controls
             {
                 return false;
             }
-            
-            var _ = new ShellItemContextMenu(new ShellItem[] { file }, Folder, IntPtr.Zero, HandleFileAction, isInteractive, false, new ShellMenuCommandBuilder(), GetFileCommandBuilder(file));
+
+            // The menu of a pin leads with the program's jump list (see JumpLists), as the taskbar's button menu does.
+            ShellMenuCommandBuilder jumpList = isInteractive ? GetJumpListBuilder(file) : new ShellMenuCommandBuilder();
+            var _ = new ShellItemContextMenu(new ShellItem[] { file }, Folder, IntPtr.Zero, HandleFileAction, isInteractive, false, jumpList, GetFileCommandBuilder(file));
             return true;
+        }
+
+        // Ids of the jump list's entries in the menu (above the ones of the native menu and this class's own).
+        private const uint JumpListHeaderId = 6000;
+        private const uint JumpListItemId = 6100;
+        private const int JumpListSectionMax = 6;
+        private const int JumpListMax = 16;
+        private readonly Dictionary<uint, JumpListItem> _jumpListItems = new();
+
+        private ShellMenuCommandBuilder GetJumpListBuilder(ShellFile file)
+        {
+            var builder = new ShellMenuCommandBuilder();
+            _jumpListItems.Clear();
+
+            List<JumpListItem> items;
+            try
+            {
+                items = JumpLists.ForShortcut(file.Path, 200);
+            }
+            catch (Exception e)
+            {
+                ShellLogger.Error($"Toolbar: Unable to read the jump list of {file.Path}", e);
+                return builder;
+            }
+
+            // The user's pinned entries, the recent documents, what the program put in its own categories, and its tasks, last: each
+            // under its heading. The program's links to web pages come after its real tasks (some browsers add a dozen of them).
+            var sections = new List<(string Heading, List<JumpListItem> Items)>
+            {
+                (GetString("jump_list_pinned", "Pinned"), items.Where(i => i.Pinned).ToList()),
+                (GetString("jump_list_recent", "Recent"), items.Where(i => !i.Pinned && !i.FromProgram).ToList()),
+            };
+
+            foreach (IGrouping<string, JumpListItem> category in items.Where(i => i.FromProgram && !string.IsNullOrEmpty(i.Group)).GroupBy(i => i.Group))
+            {
+                sections.Add((category.Key, category.ToList()));
+            }
+
+            sections.Add((GetString("jump_list_tasks", "Tasks"), items
+                .Where(i => i.FromProgram && string.IsNullOrEmpty(i.Group))
+                .OrderBy(i => i.Arguments != null && i.Arguments.TrimStart().StartsWith("http", StringComparison.OrdinalIgnoreCase))
+                .ToList()));
+
+            uint header = JumpListHeaderId;
+            uint id = JumpListItemId;
+            int total = 0;
+            foreach ((string heading, List<JumpListItem> section) in sections)
+            {
+                if (section.Count == 0 || total >= JumpListMax)
+                {
+                    continue;
+                }
+
+                builder.AddCommand(new ShellMenuCommand { Flags = MFT.GRAYED, Label = MenuLabel(heading), UID = header++ });
+                foreach (JumpListItem item in section.Take(Math.Min(JumpListSectionMax, JumpListMax - total)))
+                {
+                    _jumpListItems[id] = item;
+                    builder.AddCommand(new ShellMenuCommand { Flags = MFT.BYCOMMAND, Label = MenuLabel(item.Title), UID = id++ });
+                    total++;
+                }
+            }
+
+            if (total > 0)
+            {
+                builder.AddSeparator();
+            }
+
+            return builder;
+        }
+
+        private string GetString(string key, string fallback) => TryFindResource(key) as string ?? fallback;
+
+        // A menu label: the ampersand is the mnemonic's marker, and a long name is cut.
+        private static string MenuLabel(string text)
+        {
+            text = (text ?? "").Replace("&", "&&");
+            return text.Length > 60 ? text.Substring(0, 59) + "\u2026" : text;
         }
 
         private bool HandleFileAction(string action, ShellItem[] items, bool allFolders)
@@ -327,6 +406,31 @@ namespace RetroBar.Controls
             if (action == ((uint)MenuItem.OpenParentFolder).ToString())
             {
                 ShellHelper.StartProcess(Folder.Path);
+                return true;
+            }
+
+            if (uint.TryParse(action, out uint id) && _jumpListItems.TryGetValue(id, out JumpListItem item))
+            {
+                try
+                {
+                    var start = new System.Diagnostics.ProcessStartInfo(item.Target) { UseShellExecute = true };
+                    if (!string.IsNullOrEmpty(item.Arguments))
+                    {
+                        start.Arguments = item.Arguments;
+                    }
+
+                    if (!string.IsNullOrEmpty(item.WorkingDirectory) && System.IO.Directory.Exists(item.WorkingDirectory))
+                    {
+                        start.WorkingDirectory = item.WorkingDirectory;
+                    }
+
+                    System.Diagnostics.Process.Start(start);
+                }
+                catch (Exception e)
+                {
+                    ShellLogger.Error($"Toolbar: Unable to start {item.Target} from a jump list", e);
+                }
+
                 return true;
             }
 
