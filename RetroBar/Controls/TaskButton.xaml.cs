@@ -300,9 +300,9 @@ namespace RetroBar.Controls
             if (Host?.IconOnly == true)
             {
                 // The tabs of the Windows 11 style are centered in a list that already has its final width: the other tabs slide to their
-                // places (TaskList), and this one grows from its middle and comes in from nothing.
+                // places (TaskList), and this one grows from its left edge, to the right, and comes in from nothing, as the classic tab does.
                 var scale = new ScaleTransform(0, 1);
-                RenderTransformOrigin = new Point(0.5, 0.5);
+                RenderTransformOrigin = new Point(0, 0.5);
                 RenderTransform = scale;
                 var grow = new DoubleAnimation(0, 1, new Duration(TimeSpan.FromMilliseconds(250))) { EasingFunction = ease };
                 grow.Completed += (s, e) => RenderTransform = null;
@@ -355,7 +355,7 @@ namespace RetroBar.Controls
             // appearing - growing it in from zero width would push every tab to its right along with it
             // (see TaskListDropHandler, which slides the tabs into place instead).
             if (Settings.Instance.SlideTaskbarButtons && Host?.Host?.Orientation == Orientation.Horizontal
-                && DateTime.UtcNow > SuppressSlideInUntilUtc)
+                && DateTime.UtcNow > SuppressSlideInUntilUtc && (Host.IconOnly != true || Host.JustOpened(Window)))
             {
                 Animate();
             }

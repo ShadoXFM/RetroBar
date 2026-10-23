@@ -650,8 +650,30 @@ namespace RetroBar.Controls
             isLoaded = false;
         }
 
+        // The windows that have just come into the list. A tab of the Windows 11 style is also made again when it is moved (a pinned program
+        // that starts goes from the end of the list to the place of its pin, and the tabs after it are made again): only a window that is
+        // new comes in with the opening animation.
+        private readonly Dictionary<ApplicationWindow, DateTime> _openedAt = new();
+
+        public bool JustOpened(ApplicationWindow window) =>
+            window != null && _openedAt.TryGetValue(window, out DateTime at) && DateTime.UtcNow - at < TimeSpan.FromSeconds(2);
+
         private void GroupedWindows_CollectionChanged(object sender, System.Collections.Specialized.NotifyCollectionChangedEventArgs e)
         {
+            if (e.Action == System.Collections.Specialized.NotifyCollectionChangedAction.Add && e.NewItems != null)
+            {
+                DateTime now = DateTime.UtcNow;
+                foreach (ApplicationWindow old in _openedAt.Where(p => now - p.Value > TimeSpan.FromSeconds(10)).Select(p => p.Key).ToList())
+                {
+                    _openedAt.Remove(old);
+                }
+
+                foreach (ApplicationWindow added in e.NewItems.OfType<ApplicationWindow>())
+                {
+                    _openedAt[added] = now;
+                }
+            }
+
             SetTaskButtonWidth();
 
             // A tab that closes: the ones after it slide left into the gap (their containers are still where they were
