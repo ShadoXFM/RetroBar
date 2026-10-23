@@ -146,10 +146,7 @@ namespace RetroBar.Controls
             set { SetValue(LauncherWidthProperty, value); }
         }
 
-        // The room a launcher takes in the row, and the width of its button (the least that shows its icon whole: the button has a border and a
-        // padding of 3 either side of the icon). The button is wider than the room, so its margins are negative: it overlaps the room of the
-        // launcher beside it, and the tabs, by what it has of nothing but its own empty border.
-        private const double LauncherRoom = 20;
+        // The width of the button of a launcher: the least that shows its icon whole (the button has a border and a padding of 3 either side of it).
         private const double LauncherButtonWidth = 24;
 
         // How far the frame of a tab is to the right in its slot (the room at its left less the room at its right), and the margin that puts a
@@ -158,13 +155,14 @@ namespace RetroBar.Controls
 
         private double _launcherShift;
         private double _launcherLift;
-        private double _launcherOverlap;
+        private double _launcherLeft;
+        private double _launcherRight;
         private int _alignChecks;
 
         private void ApplyLauncherMargin()
         {
             // The side margins keep the slot as wide as it was; the top and bottom ones, equal and opposite, move the icon without changing the button's size.
-            LauncherMargin = new Thickness(Math.Max(0, _launcherShift) - _launcherOverlap, _launcherLift, Math.Max(0, -_launcherShift) - _launcherOverlap, -_launcherLift);
+            LauncherMargin = new Thickness(_launcherLeft, _launcherLift, _launcherRight, -_launcherLift);
         }
 
         // The icon of a launcher is put at the height of the icon of a tab (the button of a launcher has its own offsets, so it sat lower): the
@@ -769,20 +767,22 @@ namespace RetroBar.Controls
 
                 double iconWidth = Math.Round((side + overhead + TabExtraWidth) / PixelStep) * PixelStep;
                 double room = AvailableWidth > 0 ? AvailableWidth : iconWidth * ButtonsPerRow;
-                double launcherWidth = Math.Round(LauncherRoom / PixelStep) * PixelStep;
                 int launchers = Math.Min(LauncherCount, ButtonsPerRow);
                 _launcherShift = Math.Round(_frameShift / PixelStep) * PixelStep;
-                launcherWidth = Math.Max(PixelStep, launcherWidth);
-                double launcherButton = Math.Max(launcherWidth, Math.Round(LauncherButtonWidth / PixelStep) * PixelStep);
+                _launcherLeft = Math.Round((launcherWidth - launcherButton + _launcherShift) / 2 / PixelStep) * PixelStep;
+                _launcherRight = launcherWidth - launcherButton - _launcherLeft;
                 LauncherWidth = launcherButton;
-                _launcherOverlap = Math.Floor((launcherButton - launcherWidth) / 2 / PixelStep) * PixelStep;
-                ApplyLauncherMargin();
-                // The slot: the room, and what the margin that centers the icon adds to it (the button's own width is not what is left in the row).
-                launcherWidth = launcherButton - 2 * _launcherOverlap + Math.Abs(_launcherShift);
-                if (iconWidth * (ButtonsPerRow - launchers) + launcherWidth * launchers > room)
+                if (iconWidth * ButtonsPerRow > room)
                 {
-                    iconWidth = Math.Floor((room - launcherWidth * launchers) / Math.Max(1, ButtonsPerRow - launchers) / PixelStep) * PixelStep;
+                    iconWidth = Math.Max(PixelStep, Math.Floor(room / Math.Max(1, ButtonsPerRow) / PixelStep) * PixelStep);
                 }
+
+                // A pinned program that is not running takes the room of a tab, so the row does not change size when it starts (and the pins
+                // are no closer together than the tabs are). Its button keeps the width its icon needs, with margins to make up the slot and
+                // to put the icon in the middle of the frame a tab has in the same place.
+                double launcherWidth = iconWidth;
+                double launcherButton = Math.Round(LauncherButtonWidth / PixelStep) * PixelStep;
+                ApplyLauncherMargin();
 
                 ButtonWidth = iconWidth;
                 // Over what they need by what the list has beside its tabs (the grip at its left): the row wraps, and its last tab is out of
