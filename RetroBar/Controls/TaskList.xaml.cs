@@ -75,6 +75,16 @@ namespace RetroBar.Controls
                         frame = tab.AppButton;
                     }
 
+                    try
+                    {
+                        // Where the frame is in its slot: the room it leaves at the left less the room at the right (the theme's margins are not even).
+                        Rect bounds = frame.TransformToAncestor(tab).TransformBounds(new Rect(0, 0, frame.ActualWidth, frame.ActualHeight));
+                        _frameShift = bounds.Left - (tab.ActualWidth - bounds.Right);
+                    }
+                    catch (InvalidOperationException)
+                    {
+                    }
+
                     return (frame.ActualWidth, frame.ActualHeight, tab.ActualWidth);
                 }
             }
@@ -135,7 +145,19 @@ namespace RetroBar.Controls
             set { SetValue(LauncherWidthProperty, value); }
         }
 
-        private const double LauncherRoom = 20;
+        private const double LauncherRoom = 24;
+
+        // How far the frame of a tab is to the right in its slot (the room at its left less the room at its right), and the margin that puts a
+        // launcher's icon in the middle of the free room between the frames of the tabs either side of it, as far from the one as the other.
+        private double _frameShift;
+
+        public static DependencyProperty LauncherMarginProperty = DependencyProperty.Register(nameof(LauncherMargin), typeof(Thickness), typeof(TaskList), new PropertyMetadata(new Thickness()));
+
+        public Thickness LauncherMargin
+        {
+            get { return (Thickness)GetValue(LauncherMarginProperty); }
+            set { SetValue(LauncherMarginProperty, value); }
+        }
 
         // How many of the items are launchers (and not tabs).
         private int LauncherCount => _mergedItems?.Count(item => item is ManagedShell.ShellFolders.ShellFile) ?? 0;
@@ -645,7 +667,10 @@ namespace RetroBar.Controls
                 double room = AvailableWidth > 0 ? AvailableWidth : iconWidth * ButtonsPerRow;
                 double launcherWidth = Math.Round(LauncherRoom / PixelStep) * PixelStep;
                 int launchers = Math.Min(LauncherCount, ButtonsPerRow);
-                LauncherWidth = launcherWidth;
+                double shift = Math.Round(_frameShift / PixelStep) * PixelStep;
+                LauncherMargin = shift > 0 ? new Thickness(shift, 0, 0, 0) : new Thickness(0, 0, -shift, 0);
+                launcherWidth = Math.Max(PixelStep, launcherWidth);
+                LauncherWidth = launcherWidth - Math.Abs(shift);
                 if (iconWidth * (ButtonsPerRow - launchers) + launcherWidth * launchers > room)
                 {
                     iconWidth = Math.Floor((room - launcherWidth * launchers) / Math.Max(1, ButtonsPerRow - launchers) / PixelStep) * PixelStep;

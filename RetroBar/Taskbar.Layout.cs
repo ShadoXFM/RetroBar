@@ -17,10 +17,6 @@ namespace RetroBar
         private StackPanel _centerRow;
         private bool _windows11Applied;
 
-        // Room before what is at the left of a tray box in this style (the weather's icon, the media player or the chevron), which the
-        // theme's padding for the boxes of the classic layout leaves too little of.
-        private const double StyleBoxPadding = 4;
-
         // Only for a taskbar at the top or the bottom: the middle of a vertical one has no left and right.
         private bool WantsWindows11Style => Settings.Instance.TaskbarStyle == TaskbarStyleOption.Windows11 && Orientation == Orientation.Horizontal;
 
@@ -52,13 +48,13 @@ namespace RetroBar
             }
 
             _windows11Applied = windows11;
+            UpdateTrayContentFlags();
             if (windows11)
             {
                 // The weather and the CPU temperature: out of the tray box, into a box of their own at the left; the media player is in
                 // the tray box in their place (at its left, with the notification icons and the clock).
                 TrayContent.Children.Remove(WeatherGroup);
-                WeatherGroup.Margin = new Thickness(StyleBoxPadding, 0, 0, 0);
-                TrayContent.Margin = new Thickness(StyleBoxPadding, 0, 0, 0);
+
                 _mediaBox = new GroupBox { Style = (Style)FindResource("Tray"), Content = WeatherGroup, Margin = new Thickness(2, 0, 0, 0) };
                 DockPanel.SetDock(_mediaBox, Dock.Left);
 
@@ -88,8 +84,6 @@ namespace RetroBar
                 TaskbarDock.Children.Remove(_centerStrip);
                 TaskbarDock.Children.Remove(_mediaBox);
                 _mediaBox.Content = null;
-                WeatherGroup.Margin = new Thickness(5, 0, 0, 0);
-                TrayContent.Margin = new Thickness(0);
                 TrayContent.Children.Insert(TrayContent.Children.IndexOf(MediaPlayerControl) + 1, WeatherGroup);
 
                 TaskbarDock.Children.Add(TaskListControl);

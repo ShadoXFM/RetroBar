@@ -329,7 +329,7 @@
                                     BorderBrush="{DynamicResource ButtonDarkShadow}"
                                     Background="{TemplateBinding Background}"
                                     Padding="1"
-                                    utilities:MonitorOffset.Tag="{Binding Path=IsMediaPlaying, RelativeSource={RelativeSource Mode=FindAncestor, AncestorType={x:Type Window}}, Converter={StaticResource mediaPlayingToMonitorTagConverter}, ConverterParameter=TrayBoxBevel}">
+                                    utilities:MonitorOffset.Tag="{Binding Path=(utilities:TrayBoxState.MediaPlaying), RelativeSource={RelativeSource Self}, Converter={StaticResource mediaPlayingToMonitorTagConverter}, ConverterParameter=TrayBoxBevel}">
                                 <ContentPresenter />
                             </Border>
                         </Border>

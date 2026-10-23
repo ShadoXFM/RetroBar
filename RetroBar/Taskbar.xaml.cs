@@ -44,7 +44,7 @@ namespace RetroBar
         }
 
         public static readonly DependencyProperty IsCpuTempShownProperty = DependencyProperty.Register(
-            nameof(IsCpuTempShown), typeof(bool), typeof(Taskbar), new PropertyMetadata(false));
+            nameof(IsCpuTempShown), typeof(bool), typeof(Taskbar), new PropertyMetadata(false, (d, e) => ((Taskbar)d).UpdateTrayContentFlags()));
 
         /// <summary>
         /// Set by CpuTempDisplay whenever it shows/hides itself (Settings.ShowCpuTemp off, or the
@@ -59,7 +59,33 @@ namespace RetroBar
         }
 
         public static readonly DependencyProperty IsWeatherShownProperty = DependencyProperty.Register(
-            nameof(IsWeatherShown), typeof(bool), typeof(Taskbar), new PropertyMetadata(false));
+            nameof(IsWeatherShown), typeof(bool), typeof(Taskbar), new PropertyMetadata(false, (d, e) => ((Taskbar)d).UpdateTrayContentFlags()));
+
+        public static readonly DependencyProperty IsWeatherInTrayProperty = DependencyProperty.Register(
+            nameof(IsWeatherInTray), typeof(bool), typeof(Taskbar), new PropertyMetadata(false));
+
+        public static readonly DependencyProperty IsCpuTempInTrayProperty = DependencyProperty.Register(
+            nameof(IsCpuTempInTray), typeof(bool), typeof(Taskbar), new PropertyMetadata(false));
+
+        /// <summary>Whether the weather is in the tray box (not in the box of its own it has in the Windows 11 style): with the CPU temperature and the media player, what decides whether the tray box holds anything but the tray icons and the clock.</summary>
+        public bool IsWeatherInTray
+        {
+            get => (bool)GetValue(IsWeatherInTrayProperty);
+            private set => SetValue(IsWeatherInTrayProperty, value);
+        }
+
+        /// <summary>Whether the CPU temperature is in the tray box (see <see cref="IsWeatherInTray"/>).</summary>
+        public bool IsCpuTempInTray
+        {
+            get => (bool)GetValue(IsCpuTempInTrayProperty);
+            private set => SetValue(IsCpuTempInTrayProperty, value);
+        }
+
+        internal void UpdateTrayContentFlags()
+        {
+            IsWeatherInTray = IsWeatherShown && !_windows11Applied;
+            IsCpuTempInTray = IsCpuTempShown && !_windows11Applied;
+        }
 
         /// <summary>
         /// Set by WeatherDisplay whenever it shows/hides itself (Settings.ShowWeather) - with IsMediaPlaying and IsCpuTempShown, what

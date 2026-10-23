@@ -98,6 +98,7 @@
             </controls:ShowDesktopButton>
             <GroupBox Style="{DynamicResource Tray}"
                       x:Name="TrayBox"
+                      utilities:TrayBoxState.MediaPlaying="{Binding Path=IsMediaPlaying, RelativeSource={RelativeSource Mode=FindAncestor, AncestorType=Window}}"
                       utilities:MonitorOffset.Tag="TrayBox">
                 <GroupBox.ContextMenu>
                     <ContextMenu>
@@ -140,7 +141,7 @@
                                 Orientation="Horizontal"
                                 VerticalAlignment="Center"
                                 Margin="5,0,0,0"
-                                utilities:MonitorOffset.Tag="{Binding Path=IsMediaPlaying, RelativeSource={RelativeSource Mode=FindAncestor, AncestorType=Window}, Converter={StaticResource mediaPlayingToMonitorTagConverter}, ConverterParameter=WeatherGroup}">
+                                utilities:MonitorOffset.Tag="{Binding Path=(utilities:TrayBoxState.MediaPlaying), RelativeSource={RelativeSource Self}, Converter={StaticResource mediaPlayingToMonitorTagConverter}, ConverterParameter=WeatherGroup}">
                         <controls:WeatherDisplay VerticalAlignment="Center" />
                         <controls:CpuTempDisplay VerticalAlignment="Center" />
                     </StackPanel>
@@ -150,8 +151,8 @@
                         <utilities:MonitorOffset.Tag>
                             <MultiBinding Converter="{StaticResource trayAloneToMonitorTagConverter}" ConverterParameter="TrayNotifyList">
                                 <Binding Path="IsMediaPlaying" RelativeSource="{RelativeSource Mode=FindAncestor, AncestorType=Window}" />
-                                <Binding Path="IsWeatherShown" RelativeSource="{RelativeSource Mode=FindAncestor, AncestorType=Window}" />
-                                <Binding Path="IsCpuTempShown" RelativeSource="{RelativeSource Mode=FindAncestor, AncestorType=Window}" />
+                                <Binding Path="IsWeatherInTray" RelativeSource="{RelativeSource Mode=FindAncestor, AncestorType=Window}" />
+                                <Binding Path="IsCpuTempInTray" RelativeSource="{RelativeSource Mode=FindAncestor, AncestorType=Window}" />
                             </MultiBinding>
                         </utilities:MonitorOffset.Tag>
                     </controls:NotifyIconList>
