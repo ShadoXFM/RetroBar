@@ -108,6 +108,7 @@ namespace RetroBar.Controls
         public MediaPlayer()
         {
             InitializeComponent();
+            InitializeSpotifyLinks();
             SeekSlider.MouseMove += SeekSlider_OnMouseMove;
             SeekSlider.MouseLeave += SeekSlider_OnMouseLeave;
             InitializeSeekSlide();
@@ -346,6 +347,12 @@ namespace RetroBar.Controls
                 return;
             }
 
+            if (e.PropertyName == nameof(Settings.FadeLongMediaText))
+            {
+                Dispatcher.BeginInvoke(new Action(ApplyFadeSetting));
+                return;
+            }
+
             if (e.PropertyName == nameof(Settings.ShowVuMeter))
             {
                 Dispatcher.BeginInvoke(new Action(ApplyVuMeterSetting));
@@ -418,6 +425,7 @@ namespace RetroBar.Controls
             Visibility = Visibility.Visible;
             SetIsMediaPlaying(true);
             PrefetchLyrics();
+            PrefetchSpotifyLinks();
             bool isPlaying = _sessionManager.PlaybackState == MediaPlaybackState.Playing;
             UpdateVisualizerActiveState(isPlaying);
 

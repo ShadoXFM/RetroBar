@@ -150,7 +150,7 @@ namespace RetroBar.Utilities
         }
 
         // How many milliseconds before their time the lyrics' lines and words come (the lyrics are ahead of what is heard); negative for
-        // after. For every song: the right-click menu of the media popup moves it a step at a time.
+        // after. The default for every song: the right-click menu of the media popup sets one song's own, kept for it (LyricsTiming).
         private int _lyricsLeadMs = 250;
         public int LyricsLeadMs
         {
@@ -164,6 +164,15 @@ namespace RetroBar.Utilities
         {
             get => _lyricLines;
             set => Set(ref _lyricLines, Math.Clamp(value, 3, 14));
+        }
+
+        // Whether the ends of a track text too long for its room (the taskbar's, and the media popup's title and artist) fade out while it
+        // slides; off, the text is cut off sharp at the edges.
+        private bool _fadeLongMediaText = true;
+        public bool FadeLongMediaText
+        {
+            get => _fadeLongMediaText;
+            set => Set(ref _fadeLongMediaText, value);
         }
 
         private bool _showVuMeter = true;

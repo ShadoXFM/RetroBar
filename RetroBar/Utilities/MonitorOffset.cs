@@ -384,10 +384,15 @@ namespace RetroBar.Utilities
         /// exactly on a pixel boundary, so the bitmap is resampled once, cleanly, into an aligned box.
         /// Layout is untouched, exactly as before - only how the image is painted.
         /// </summary>
+        // Images that are put on whole device pixels with no adjustment too: where they come to be in the layout is a fraction of a pixel
+        // (the tray's icons were at x.75 and y.5 on a 125% monitor, from the padding and the nudges of the boxes around them), and WPF draws
+        // an image at such a position blended with its neighbours - all of them soft, even the icons that are the size they are shown at.
+        private static readonly System.Collections.Generic.HashSet<string> AlwaysSnapped = new() { "TrayIcon" };
+
         private static bool TryApplySnappedImageTransform(FrameworkElement element, MonitorOffsetValue offset)
         {
             bool hasAnyAdjustment = offset.X != 0 || offset.Y != 0 || offset.Scale.HasValue || offset.Width.HasValue || offset.Height.HasValue;
-            if (!hasAnyAdjustment)
+            if (!hasAnyAdjustment && !AlwaysSnapped.Contains(GetTag(element)))
             {
                 element.RenderTransform = null;
                 element.SetValue(SnapKeyProperty, null);

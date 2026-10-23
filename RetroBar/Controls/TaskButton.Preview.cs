@@ -137,11 +137,28 @@ namespace RetroBar.Controls
                 {
                     ClosePreview();
                 }
+                else if (e.ChangedButton == System.Windows.Input.MouseButton.Left)
+                {
+                    _previewClicked = true;
+                }
             };
             AppButton.ContextMenuOpening += (s, e) => ClosePreview();
         }
 
+        // The tab was clicked while its preview was up or coming: after closing one of its windows from the preview, the preview then
+        // stays for the others for as long as the pointer is where it was. With the pointer only resting on the tab it goes soon after,
+        // if the pointer is not on it (PreviewKeepAfterCloseHover), rather than lingering.
+        private bool _previewClicked;
+        private static bool _reopenPreviewClicked;
+        private static readonly TimeSpan PreviewKeepAfterCloseClicked = TimeSpan.FromSeconds(2);
+        private static readonly TimeSpan PreviewKeepAfterCloseHover = TimeSpan.FromMilliseconds(250);
+
         private static DateTime _previewKeepUntil = DateTime.MinValue;
+
+        // Where the preview was when a window was closed from it: it keeps open while the pointer stays there (the others come together,
+        // so the pointer is soon off them, on the empty place the closed one left - and the preview went a moment later, from under
+        // a pointer that had not moved), and goes by the usual rule once the pointer has left it.
+        private static RECT? _previewKeepWhilePointerIn;
         private static string _reopenPreviewApp;
         private static DateTime _reopenPreviewUntil = DateTime.MinValue;
         private static RECT? _reopenPreviewFrom;
@@ -164,6 +181,8 @@ namespace RetroBar.Controls
             Dispatcher.BeginInvoke(new Action(() =>
             {
                 OpenPreview(true, true);
+                _previewClicked = _reopenPreviewClicked;
+                _previewKeepWhilePointerIn = _reopenPreviewClicked ? from : null;
 
                 if (from != null)
                 {
@@ -342,6 +361,7 @@ namespace RetroBar.Controls
             tip.BeginAnimation(UIElement.OpacityProperty, null);
             ClearPreviewSlide(tip);
             tip.Opacity = startOpacity;
+            SetPreviewKeepOpen(tip, true);
             tip.IsOpen = true;
 
             if (tip.Parent is System.Windows.Controls.Primitives.Popup openedPopup)
@@ -382,12 +402,42 @@ namespace RetroBar.Controls
             _previewPollTimer.Start();
         }
 
+        // The keys (not the mouse buttons) that were down at the last poll: a key already held when the preview came up does not count, and
+        // one held on does not count again.
+        private readonly bool[] _previewKeysDown = new bool[256];
+        private bool _previewKeysKnown;
+
+        private bool AnyKeyPressedSinceLastPoll()
+        {
+            bool pressed = false;
+            for (int key = 8; key < 255; key++)
+            {
+                bool down = (GetAsyncKeyState(key) & 0x8000) != 0;
+                if (down && !_previewKeysDown[key] && _previewKeysKnown)
+                {
+                    pressed = true;
+                }
+
+                _previewKeysDown[key] = down;
+            }
+
+            _previewKeysKnown = true;
+            return pressed;
+        }
+
         private void PreviewPollTimer_Tick(object sender, EventArgs e)
         {
             if (AppButton.ToolTip is not ToolTip tip || !tip.IsOpen)
             {
                 StopPeek();
                 _previewPollTimer?.Stop();
+                return;
+            }
+
+            // A key pressed (anywhere: the app is being used, not looked at) takes the preview away.
+            if (AnyKeyPressedSinceLastPoll())
+            {
+                ClosePreview();
                 return;
             }
 
@@ -437,6 +487,17 @@ namespace RetroBar.Controls
 
             // After a window was closed from the preview the others are re-centered, and the pointer is then often off the preview for
             // a moment: it is given a little longer before the preview goes.
+            if (_previewKeepWhilePointerIn is RECT keep)
+            {
+                if (GetCursorPos(out POINT pointer) && pointer.X >= keep.Left && pointer.X < keep.Right && pointer.Y >= keep.Top && pointer.Y < keep.Bottom)
+                {
+                    _previewOutsideSince = null;
+                    return;
+                }
+
+                _previewKeepWhilePointerIn = null;
+            }
+
             if (IsPointerOverTab() || overPreview || _windowMenu?.IsOpen == true || DateTime.UtcNow < _previewKeepUntil)
             {
                 _previewOutsideSince = null;
@@ -451,12 +512,23 @@ namespace RetroBar.Controls
             }
         }
 
+        private static void SetPreviewKeepOpen(ToolTip tip, bool keepOpen)
+        {
+            if (tip is PreviewToolTip preview)
+            {
+                preview.KeepOpen = keepOpen;
+            }
+        }
+
         // animate: fade out (the normal case); false closes at once (tab unloaded, thumbnails turned off).
         private void ClosePreview(bool animate = true)
         {
             CloseWindowMenu(animate);
             _previewShowTimer?.Stop();
             _previewPollTimer?.Stop();
+            _previewKeepWhilePointerIn = null;
+            _previewClicked = false;
+            _previewKeysKnown = false;
             _previewOutsideSince = null;
             _previewHoverSince = null;
             _previewHoverTarget = null;
@@ -485,6 +557,7 @@ namespace RetroBar.Controls
                 _previewFadingOut = false;
                 tip.BeginAnimation(UIElement.OpacityProperty, null);
                 ClearPreviewSlide(tip);
+                SetPreviewKeepOpen(tip, false);
                 tip.IsOpen = false;
                 return;
             }
@@ -517,6 +590,7 @@ namespace RetroBar.Controls
                     _previewFadingOut = false;
                     tip.BeginAnimation(UIElement.OpacityProperty, null);
                     ClearPreviewSlide(tip);
+                    SetPreviewKeepOpen(tip, false);
                     tip.IsOpen = false;
                 }
             };
@@ -752,8 +826,10 @@ namespace RetroBar.Controls
                     {
                         _reopenPreviewApp = TaskOpenOrderComparer.AppKey(target);
                         _reopenPreviewUntil = DateTime.UtcNow + TimeSpan.FromSeconds(3);
-                        _previewKeepUntil = DateTime.UtcNow + TimeSpan.FromSeconds(2);
+                        _reopenPreviewClicked = _previewClicked;
+                        _previewKeepUntil = DateTime.UtcNow + (_previewClicked ? PreviewKeepAfterCloseClicked : PreviewKeepAfterCloseHover);
                         _reopenPreviewFrom = GetWindowRect(hwnd, out RECT here) ? here : null;
+                        _previewKeepWhilePointerIn = _previewClicked ? _reopenPreviewFrom : null;
                         // Its thumbnail has gone grey (the window's icon on a plain box) in the moments before the window is
                         // gone from the list, so it is hidden - kept in its place, so the others don't move yet - at once. If the
                         // window is still there a little later (it asked to save something, say), it is shown again.

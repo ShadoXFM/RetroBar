@@ -98,6 +98,14 @@ namespace RetroBar.Tests
             Assert.Equal(1f, AudioSpectrumCapture.ToLevel(Math.Pow(10, -20 / 20.0)), 3);
             Assert.Equal(1f, AudioSpectrumCapture.ToLevel(1.0));
         }
+
+        [Fact]
+        public void A_gain_lifts_a_quiet_band_off_the_floor()
+        {
+            double quiet = Math.Pow(10, -70 / 20.0);
+            Assert.Equal(0f, AudioSpectrumCapture.ToLevel(quiet), 3);
+            Assert.Equal(0.5f, AudioSpectrumCapture.ToLevel(quiet, 30), 3);
+        }
     }
 
     public class MonitorAdjustmentsTests
@@ -418,6 +426,23 @@ namespace RetroBar.Tests
 
             Assert.Equal("remaster", SpotifyTrackLookup.Pick(json, "song", TimeSpan.FromSeconds(240)));
             Assert.Null(SpotifyTrackLookup.Pick(json, "song", TimeSpan.FromSeconds(100)));
+        }
+
+        [Fact]
+        public void The_found_track_has_its_album_and_the_artist_named()
+        {
+            const string json = """
+                {"tracks":{"items":[
+                  {"id":"t1","name":"Song","duration_ms":240000,"album":{"id":"alb1"},
+                   "artists":[{"id":"a1","name":"First Band"},{"id":"a2","name":"Guest"}]}]}}
+                """;
+
+            SpotifyTrackLookup.SpotifyTrack track = SpotifyTrackLookup.PickTrack(json, "Guest, First Band", "Song", TimeSpan.FromSeconds(240));
+            Assert.Equal("t1", track.Id);
+            Assert.Equal("alb1", track.AlbumId);
+            Assert.Equal("a2", track.ArtistId);   // the first artist named in the player's text is the one asked for... Guest comes first there
+            Assert.Equal("a1", SpotifyTrackLookup.PickTrack(json, "First Band", "Song", TimeSpan.FromSeconds(240)).ArtistId);
+            Assert.Equal("a1", SpotifyTrackLookup.PickTrack(json, "Someone Else", "Song", TimeSpan.FromSeconds(240)).ArtistId);   // none named: the first
         }
 
         [Fact]

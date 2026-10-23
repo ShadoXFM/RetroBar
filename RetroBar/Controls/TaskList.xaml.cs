@@ -281,6 +281,15 @@ namespace RetroBar.Controls
 
         private void SourceWindows_CollectionChanged(object sender, System.Collections.Specialized.NotifyCollectionChangedEventArgs e)
         {
+            // A window of a program that already has a tab (the combined tab shows one window of an app) raises nothing on the view, so
+            // nothing sorted it: it stayed where the list had added it, on the right, and the tab that took over from the window
+            // that closed (Discord's loading window, then its main window) came up there instead of in its pin's place.
+            if (e.Action == System.Collections.Specialized.NotifyCollectionChangedAction.Add)
+            {
+                ScheduleStartupSort();
+                Dispatcher.BeginInvoke(new Action(() => TaskOpenOrderComparer.SortSource(startupSortSource)), DispatcherPriority.Normal);
+            }
+
             ScheduleGroupSync();
         }
 
@@ -319,8 +328,20 @@ namespace RetroBar.Controls
 
                 try
                 {
-                    editable.EditItem(window);
-                    editable.CommitEdit();
+                    if (!taskbarItems.Contains(window))
+                    {
+                        // A window that was held back (another window of its app had the tab) and now has to be shown: the view cannot take
+                        // it by an edit (CommitEdit throws, and refreshing the whole view after that rebuilt every tab). Taken out of the
+                        // list and put back at the same place, it comes to the view as a new item, which the filter now lets in.
+                        int index = startupSortSource.IndexOf(window);
+                        startupSortSource.RemoveAt(index);
+                        startupSortSource.Insert(index, window);
+                    }
+                    else
+                    {
+                        editable.EditItem(window);
+                        editable.CommitEdit();
+                    }
                 }
                 catch (Exception)
                 {

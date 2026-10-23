@@ -11,12 +11,13 @@
     <s:String x:Key="media_player_heading">Media Player</s:String>
     <s:String x:Key="media_lyrics_lines">Lignes de _paroles affichées dans la fenêtre (3 à 14) :</s:String>
     <s:String x:Key="media_lyrics_delay">_Décalage des paroles (ms d'avance) :</s:String>
-    <s:String x:Key="media_lyrics_delay_tip">Combien de millisecondes avant leur moment les paroles apparaissent : plus les montre plus tôt, moins (ou négatif) plus tard. Pour toutes les chansons.</s:String>
+    <s:String x:Key="media_lyrics_delay_tip">Combien de millisecondes avant leur moment les paroles apparaissent : plus les montre plus tôt, moins (ou négatif) plus tard. Par défaut pour toutes les chansons (le menu clic droit de la fenêtre média règle celui d’une chanson).</s:String>
     <s:String x:Key="cpu_temp_graph_collecting">Relevés en cours…</s:String>
     <s:String x:Key="cpu_temp_graph_min">Min {0}</s:String>
     <s:String x:Key="cpu_temp_graph_average">Moyenne {0}</s:String>
     <s:String x:Key="cpu_temp_graph_max">Max {0}</s:String>
     <s:String x:Key="show_vu_meter">Afficher le _vu-mètre derrière le titre</s:String>
+    <s:String x:Key="fade_long_media_text">_Estomper les bords d’un long texte pendant qu’il défile</s:String>
     <s:String x:Key="show_media_player">Montrer les contrôles du lecteur media</s:String>
     <s:String x:Key="show_media_player_album_art">Afficher la p_ochette de l'album</s:String>
     <s:String x:Key="weather_cpu_temp_heading">Météo et température du CPU</s:String>
@@ -179,6 +180,7 @@
     <s:String x:Key="undo_tile">Annuler le ca_rrelage</s:String>
     <s:String x:Key="undo_minimize_all">Annuler l'action de réduire _tout</s:String>
     <s:String x:Key="show_taskman_2k">_Gestionnaire des tâches...</s:String>
+    <s:String x:Key="restart_explorer">Redémarrer l’_Explorateur</s:String>
     <s:String x:Key="show_taskman">_Gestionnaire des tâches</s:String>
     <s:String x:Key="tray_properties">P_ropriétés</s:String>
     <s:String x:Key="update_available">_Mise à jour disponible...</s:String>
@@ -204,8 +206,9 @@
     <s:String x:Key="media_popup_lyrics_timing">_Minutage des paroles</s:String>
     <s:String x:Key="media_popup_lyrics_earlier">Plus _tôt</s:String>
     <s:String x:Key="media_popup_lyrics_later">Plus _tard</s:String>
-    <s:String x:Key="media_popup_lyrics_reset">_Réinitialiser</s:String>
-    <s:String x:Key="media_popup_lyrics_now">Actuel : {0} s d’avance</s:String>
+    <s:String x:Key="media_popup_lyrics_reset">_Revenir au minutage global</s:String>
+    <s:String x:Key="media_popup_lyrics_now">Global : {0} s d’avance</s:String>
+    <s:String x:Key="media_popup_lyrics_now_song">Cette chanson : {0} s d’avance</s:String>
     <s:String x:Key="end_task">_Forcer l'arrêt</s:String>
 
     <s:String x:Key="show_hidden">Afficher les icônes cachées</s:String>

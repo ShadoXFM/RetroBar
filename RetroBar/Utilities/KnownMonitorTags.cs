@@ -66,6 +66,7 @@ namespace RetroBar.Utilities
             "TrayBoxOuter",
             "TrayBoxOuterPlaying",
             "TrayIcon",
+            "TrayNotifyIconsEnd",
             "TrayNotifyList",
             "TrayNotifyListAlone",
             "TrayToggleButton",

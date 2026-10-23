@@ -35,7 +35,12 @@ namespace RetroBar.Controls
 
         // The lines and the words come this much before their time (the lyrics are ahead of what is heard): a setting for every song,
         // which the media popup's right-click menu moves.
-        private static TimeSpan LyricsLead => TimeSpan.FromMilliseconds(Settings.Instance.LyricsLeadMs);
+        // The timing set for this song (from the popup's menu, kept for it), or else the global one of the properties.
+        private string LyricsTimingKey => _sessionManager == null ? null : LyricsTiming.KeyOf(_sessionManager.Artist, _sessionManager.Title);
+
+        private int LyricsLeadMs => LyricsTiming.Get(LyricsTimingKey) ?? Settings.Instance.LyricsLeadMs;
+
+        private TimeSpan LyricsLead => TimeSpan.FromMilliseconds(LyricsLeadMs);
 
         // The scroll and the colour take the same time: the line is in its colour when it is in its place.
         private static readonly Duration LyricScroll = new(TimeSpan.FromMilliseconds(320));
@@ -235,14 +240,17 @@ namespace RetroBar.Controls
         // The cover's colour, a little lighter than the one the meter and the spectrum have, to read on the popup's dark ground at this size.
         private const double LyricAccentLighten = 0.3;
 
-        private SolidColorBrush AccentBrush()
+        // The artist's name, brighter still (it is a short line, on the popup's dark ground).
+        private const double ArtistAccentLighten = 0.55;
+
+        private SolidColorBrush AccentBrush(double lighten = LyricAccentLighten)
         {
             if (_seekAccentColor is not Color accent)
             {
                 return null;
             }
 
-            static byte Lighter(byte channel) => (byte)Math.Round(channel + (255 - channel) * LyricAccentLighten);
+            byte Lighter(byte channel) => (byte)Math.Round(channel + (255 - channel) * lighten);
             return new SolidColorBrush(Color.FromRgb(Lighter(accent.R), Lighter(accent.G), Lighter(accent.B)));
         }
 

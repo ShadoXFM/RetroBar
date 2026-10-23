@@ -58,8 +58,7 @@ namespace RetroBar.Utilities
                 }
             }
 
-            string id = await SearchAsync($"track:\"{Clean(title)}\" artist:\"{Clean(FirstArtist(artist))}\"", title, duration).ConfigureAwait(false)
-                        ?? await SearchAsync($"{Clean(title)} {Clean(FirstArtist(artist))}", title, duration).ConfigureAwait(false);
+            string id = (await FindTrackAsync(artist, title, duration).ConfigureAwait(false))?.Id;
 
             if (id != null)
             {
@@ -86,6 +85,41 @@ namespace RetroBar.Utilities
             return id;
         }
 
+        /// <summary>A track found, with the album it is on and the artist it is under.</summary>
+        public sealed record SpotifyTrack(string Id, string AlbumId, string ArtistId);
+
+        private static readonly Dictionary<string, SpotifyTrack> Found = new();
+
+        /// <summary>The track with its album and artist (for links to them), or null if Spotify has none like it; throws if the search failed.</summary>
+        public static async Task<SpotifyTrack> FindTrackAsync(string artist, string title, TimeSpan duration)
+        {
+            string key = $"{artist}|{title}|{(int)duration.TotalSeconds / 3}";
+            lock (Gate)
+            {
+                if (Found.TryGetValue(key, out SpotifyTrack known))
+                {
+                    return known;
+                }
+            }
+
+            SpotifyTrack track = await SearchAsync($"track:\"{Clean(title)}\" artist:\"{Clean(FirstArtist(artist))}\"", artist, title, duration).ConfigureAwait(false)
+                                 ?? await SearchAsync($"{Clean(title)} {Clean(FirstArtist(artist))}", artist, title, duration).ConfigureAwait(false);
+            if (track != null)
+            {
+                lock (Gate)
+                {
+                    if (Found.Count > 500)
+                    {
+                        Found.Clear();
+                    }
+
+                    Found[key] = track;
+                }
+            }
+
+            return track;
+        }
+
         private static void LoadDisk()
         {
             if (_ids != null)
@@ -105,6 +139,40 @@ namespace RetroBar.Utilities
             _ids ??= new Dictionary<string, string>();
         }
 
+        private static string AlbumIdOf(JsonElement item)
+        {
+            return item.TryGetProperty("album", out JsonElement album) && album.TryGetProperty("id", out JsonElement id) && id.ValueKind == JsonValueKind.String
+                ? id.GetString()
+                : null;
+        }
+
+        // The id of the artist the track is under: the one named, else the first.
+        private static string ArtistIdOf(JsonElement item, string name)
+        {
+            if (!item.TryGetProperty("artists", out JsonElement artists) || artists.ValueKind != JsonValueKind.Array)
+            {
+                return null;
+            }
+
+            string first = null;
+            foreach (JsonElement artist in artists.EnumerateArray())
+            {
+                if (!artist.TryGetProperty("id", out JsonElement id) || id.ValueKind != JsonValueKind.String)
+                {
+                    continue;
+                }
+
+                first ??= id.GetString();
+                if (artist.TryGetProperty("name", out JsonElement artistName) && artistName.ValueKind == JsonValueKind.String
+                    && string.Equals(artistName.GetString()?.Trim(), name?.Trim(), StringComparison.OrdinalIgnoreCase))
+                {
+                    return id.GetString();
+                }
+            }
+
+            return first;
+        }
+
         private static string Clean(string text) => (text ?? "").Replace("\"", " ").Trim();
 
         // "Artist, Other Artist" (or with ; / &): the first one is the one the track is under.
@@ -119,7 +187,7 @@ namespace RetroBar.Utilities
             return cut > 0 ? artist[..cut] : artist;
         }
 
-        private static async Task<string> SearchAsync(string query, string title, TimeSpan duration)
+        private static async Task<SpotifyTrack> SearchAsync(string query, string artist, string title, TimeSpan duration)
         {
             string token = await TokenAsync().ConfigureAwait(false);
             using var request = new HttpRequestMessage(HttpMethod.Get, "https://api.spotify.com/v1/search?type=track&limit=10&q=" + Uri.EscapeDataString(query));
@@ -131,7 +199,7 @@ namespace RetroBar.Utilities
             }
 
             response.EnsureSuccessStatusCode();
-            return Pick(await response.Content.ReadAsStringAsync().ConfigureAwait(false), title, duration);
+            return PickTrack(await response.Content.ReadAsStringAsync().ConfigureAwait(false), artist, title, duration);
         }
 
         private static async Task<string> TokenAsync()
@@ -161,7 +229,9 @@ namespace RetroBar.Utilities
         }
 
         // The id of the result that is the track: of those as long as it, the one with the same name (if one has), else the closest in length.
-        internal static string Pick(string json, string title, TimeSpan duration)
+        internal static string Pick(string json, string title, TimeSpan duration) => PickTrack(json, null, title, duration)?.Id;
+
+        internal static SpotifyTrack PickTrack(string json, string artist, string title, TimeSpan duration)
         {
             using JsonDocument document = JsonDocument.Parse(json);
             if (!document.RootElement.TryGetProperty("tracks", out JsonElement tracks) || !tracks.TryGetProperty("items", out JsonElement items)
@@ -170,7 +240,7 @@ namespace RetroBar.Utilities
                 return null;
             }
 
-            string best = null;
+            SpotifyTrack best = null;
             double bestScore = double.MaxValue;
             foreach (JsonElement item in items.EnumerateArray())
             {
@@ -195,7 +265,7 @@ namespace RetroBar.Utilities
                 if (score < bestScore)
                 {
                     bestScore = score;
-                    best = id.GetString();
+                    best = new SpotifyTrack(id.GetString(), AlbumIdOf(item), ArtistIdOf(item, FirstArtist(artist)));
                 }
             }
 
