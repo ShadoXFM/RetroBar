@@ -119,6 +119,7 @@ namespace RetroBar.Controls
         // Once the tabs have their size, the button is measured and the width set again if it is not a square (a few times at most).
         private void CheckSquare()
         {
+            AlignLauncherIcons();
             if (!IconOnly || _squareChecks > 6 || MeasureTabButton() is not (double w, double h, double _))
             {
                 return;
@@ -151,6 +152,77 @@ namespace RetroBar.Controls
         // launcher's icon in the middle of the free room between the frames of the tabs either side of it, as far from the one as the other.
         private double _frameShift;
 
+        private double _launcherShift;
+        private double _launcherLift;
+        private int _alignChecks;
+
+        private void ApplyLauncherMargin()
+        {
+            // The side margins keep the slot as wide as it was; the top and bottom ones, equal and opposite, move the icon without changing the button's size.
+            LauncherMargin = new Thickness(Math.Max(0, _launcherShift), _launcherLift, Math.Max(0, -_launcherShift), -_launcherLift);
+        }
+
+        // The icon of a launcher is put at the height of the icon of a tab (the button of a launcher has its own offsets, so it sat lower): the
+        // two are measured and the difference taken up in the margin, a few times at most.
+        private void AlignLauncherIcons()
+        {
+            if (!IconOnly || _alignChecks > 6)
+            {
+                return;
+            }
+
+            ToolbarButton launcher = null;
+            TaskButton tab = null;
+            for (int i = 0; i < TasksList.Items.Count && (launcher == null || tab == null); i++)
+            {
+                if (TasksList.ItemContainerGenerator.ContainerFromIndex(i) is DependencyObject container)
+                {
+                    tab ??= FindTabButton(container);
+                    launcher ??= FindLauncherButton(container);
+                }
+            }
+
+            if (launcher == null || tab == null || !tab.IconOnlyImage.IsVisible || launcher.ToolbarIcon.ActualHeight <= 0 || tab.IconOnlyImage.ActualHeight <= 0)
+            {
+                return;
+            }
+
+            try
+            {
+                Rect tabIcon = tab.IconOnlyImage.TransformToAncestor(TasksList).TransformBounds(new Rect(0, 0, tab.IconOnlyImage.ActualWidth, tab.IconOnlyImage.ActualHeight));
+                Rect launcherIcon = launcher.ToolbarIcon.TransformToAncestor(TasksList).TransformBounds(new Rect(0, 0, launcher.ToolbarIcon.ActualWidth, launcher.ToolbarIcon.ActualHeight));
+                double delta = (tabIcon.Top + tabIcon.Height / 2) - (launcherIcon.Top + launcherIcon.Height / 2);
+                if (Math.Abs(delta) >= PixelStep * 0.75)
+                {
+                    _alignChecks++;
+                    _launcherLift += Math.Round(delta / PixelStep) * PixelStep;
+                    ApplyLauncherMargin();
+                }
+            }
+            catch (InvalidOperationException)
+            {
+            }
+        }
+
+        private static ToolbarButton FindLauncherButton(DependencyObject parent)
+        {
+            for (int i = 0; i < System.Windows.Media.VisualTreeHelper.GetChildrenCount(parent); i++)
+            {
+                DependencyObject child = System.Windows.Media.VisualTreeHelper.GetChild(parent, i);
+                if (child is ToolbarButton button)
+                {
+                    return button;
+                }
+
+                if (FindLauncherButton(child) is ToolbarButton found)
+                {
+                    return found;
+                }
+            }
+
+            return null;
+        }
+
         public static DependencyProperty LauncherMarginProperty = DependencyProperty.Register(nameof(LauncherMargin), typeof(Thickness), typeof(TaskList), new PropertyMetadata(new Thickness()));
 
         public Thickness LauncherMargin
@@ -165,6 +237,8 @@ namespace RetroBar.Controls
         private void IconOnlyChanged()
         {
             _squareChecks = 0;
+            _alignChecks = 0;
+            _launcherLift = 0;
             TasksList.LayoutUpdated -= TasksList_LayoutUpdatedForSquare;
             if (IconOnly)
             {
@@ -667,10 +741,10 @@ namespace RetroBar.Controls
                 double room = AvailableWidth > 0 ? AvailableWidth : iconWidth * ButtonsPerRow;
                 double launcherWidth = Math.Round(LauncherRoom / PixelStep) * PixelStep;
                 int launchers = Math.Min(LauncherCount, ButtonsPerRow);
-                double shift = Math.Round(_frameShift / PixelStep) * PixelStep;
-                LauncherMargin = shift > 0 ? new Thickness(shift, 0, 0, 0) : new Thickness(0, 0, -shift, 0);
+                _launcherShift = Math.Round(_frameShift / PixelStep) * PixelStep;
                 launcherWidth = Math.Max(PixelStep, launcherWidth);
-                LauncherWidth = launcherWidth - Math.Abs(shift);
+                LauncherWidth = launcherWidth - Math.Abs(_launcherShift);
+                ApplyLauncherMargin();
                 if (iconWidth * (ButtonsPerRow - launchers) + launcherWidth * launchers > room)
                 {
                     iconWidth = Math.Floor((room - launcherWidth * launchers) / Math.Max(1, ButtonsPerRow - launchers) / PixelStep) * PixelStep;
