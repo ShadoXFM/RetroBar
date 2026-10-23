@@ -218,6 +218,8 @@
     <s:String x:Key="jump_list_pinned">Épinglés</s:String>
     <s:String x:Key="jump_list_recent">Récents</s:String>
     <s:String x:Key="jump_list_tasks">Tâches</s:String>
+    <s:String x:Key="jump_list_history">Historique</s:String>
+    <s:String x:Key="jump_list_links">Liens</s:String>
 
     <s:String x:Key="ime_input_tip_enabled">Clic droit pour les options IME</s:String>
     <s:String x:Key="ime_input_tip_disabled">IME désactivé</s:String>

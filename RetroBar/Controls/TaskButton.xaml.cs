@@ -420,6 +420,9 @@ namespace RetroBar.Controls
             PinMenuItem.Visibility = Window.IsUWP || string.IsNullOrEmpty(Window.WinFileName) ? Visibility.Collapsed : Visibility.Visible;
             PinMenuItem.Header = FindResource(PinnedApps.FindLink(Window) != null ? "unpin_from_taskbar" : "pin_to_taskbar");
             CloseMenuItem.FontWeight = FontWeights.Bold;
+
+            // The program's jump list and, for a browser, its pages, above the rest of the menu (see TaskButton.JumpList.cs).
+            UpdateJumpListMenu();
         }
 
         private static readonly Dictionary<string, ImageSource> ProgramIcons = new(StringComparer.OrdinalIgnoreCase);

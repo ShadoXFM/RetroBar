@@ -85,19 +85,20 @@ namespace RetroBar.Utilities
         /// <summary>The application IDs a pinned program can have, most likely first: its own (as the shortcut says), then the ones Windows works out.</summary>
         public static List<string> AppIdCandidates(string shortcutPath)
         {
-            var ids = new List<string>();
             ShortcutInfo link = ShortcutFile.Read(shortcutPath);
-            if (link == null)
+            return link == null ? new List<string>() : AppIdCandidates(link.Target, link.AppUserModelId, link.Arguments);
+        }
+
+        /// <summary>The application IDs of a program, most likely first: its own, if it has one, then the ones Windows works out from where its executable is.</summary>
+        public static List<string> AppIdCandidates(string exe, string explicitId, string arguments)
+        {
+            var ids = new List<string>();
+
+            if (!string.IsNullOrEmpty(explicitId))
             {
-                return ids;
+                ids.Add(explicitId);
             }
 
-            if (!string.IsNullOrEmpty(link.AppUserModelId))
-            {
-                ids.Add(link.AppUserModelId);
-            }
-
-            string exe = link.Target;
             if (string.IsNullOrEmpty(exe) || exe.EndsWith("explorer.exe", StringComparison.OrdinalIgnoreCase))
             {
                 ids.Add("Microsoft.Windows.Explorer");
@@ -107,14 +108,25 @@ namespace RetroBar.Utilities
             {
                 // An updater that starts the program ("Update.exe --processStart Discord.exe"): Squirrel's IDs are com.squirrel.<folder>.<program>.
                 const string processStart = "--processStart ";
-                int at = link.Arguments?.IndexOf(processStart, StringComparison.OrdinalIgnoreCase) ?? -1;
+                int at = arguments?.IndexOf(processStart, StringComparison.OrdinalIgnoreCase) ?? -1;
                 if (at >= 0)
                 {
-                    string started = link.Arguments.Substring(at + processStart.Length).Trim().Trim('"').Split(' ')[0];
+                    string started = arguments.Substring(at + processStart.Length).Trim().Trim('"').Split(' ')[0];
                     string folder = Path.GetFileName(Path.GetDirectoryName(exe));
                     if (!string.IsNullOrEmpty(folder) && !string.IsNullOrEmpty(started))
                     {
                         ids.Add($"com.squirrel.{folder}.{Path.GetFileNameWithoutExtension(started)}");
+                    }
+                }
+
+                // The program itself, run from the updater's "app-1.2.3" folder (the running window's executable): the folder above it.
+                string inFolder = Path.GetFileName(Path.GetDirectoryName(exe));
+                if (inFolder != null && inFolder.StartsWith("app-", StringComparison.OrdinalIgnoreCase))
+                {
+                    string root = Path.GetFileName(Path.GetDirectoryName(Path.GetDirectoryName(exe)));
+                    if (!string.IsNullOrEmpty(root))
+                    {
+                        ids.Add($"com.squirrel.{root}.{Path.GetFileNameWithoutExtension(exe)}");
                     }
                 }
 
@@ -133,14 +145,17 @@ namespace RetroBar.Utilities
         }
 
         /// <summary>The jump list of the pinned program a shortcut starts: up to <paramref name="max"/> entries, the program's own first.</summary>
-        public static List<JumpListItem> ForShortcut(string shortcutPath, int max)
+        public static List<JumpListItem> ForShortcut(string shortcutPath, int max) => ForApp(AppIdCandidates(shortcutPath), max);
+
+        /// <summary>The jump list of a program that has one of these application IDs: up to <paramref name="max"/> entries, the program's own first.</summary>
+        public static List<JumpListItem> ForApp(IEnumerable<string> appIds, int max)
         {
             var own = new List<JumpListItem>();
             var recent = new List<JumpListItem>();
 
             try
             {
-                foreach (string id in AppIdCandidates(shortcutPath))
+                foreach (string id in appIds.Distinct(StringComparer.OrdinalIgnoreCase))
                 {
                     string hash = AppIdHash(id);
 
@@ -171,30 +186,73 @@ namespace RetroBar.Utilities
                 .ToList();
         }
 
-        /// <summary>What the program put in its own jump list (the tasks and its categories): a series of shortcuts.</summary>
+        /// <summary>
+        /// What the program put in its own jump list (its categories and its tasks): a header (a version, how many categories), then each
+        /// category as its type (0: one with a title of its own, 1: one of the shell's, 2: the tasks), its title (for the first kind) and its
+        /// shortcuts, and AB FB BF BA to end it.
+        /// </summary>
         public static List<JumpListItem> ReadCustomDestinations(string path)
         {
             byte[] data = File.ReadAllBytes(path);
             var items = new List<JumpListItem>();
-
-            // Every shortcut starts with the same header (its size, 0x4C, and the shell link's class ID); a category's footer, AB FB BF BA,
-            // ends the run of them.
-            byte[] signature = { 0x4C, 0, 0, 0, 0x01, 0x14, 0x02, 0, 0, 0, 0, 0, 0xC0, 0, 0, 0, 0, 0, 0, 0x46 };
-            for (int at = IndexOf(data, signature, 0); at >= 0; at = IndexOf(data, signature, at + signature.Length))
+            if (data.Length < 16)
             {
-                ShortcutInfo link = ShortcutFile.Parse(data, at);
-                if (link != null && !(string.IsNullOrEmpty(link.Target) && string.IsNullOrEmpty(link.Title)))
+                return items;
+            }
+
+            byte[] signature = { 0x4C, 0, 0, 0, 0x01, 0x14, 0x02, 0, 0, 0, 0, 0, 0xC0, 0, 0, 0, 0, 0, 0, 0x46 };
+            byte[] footer = { 0xAB, 0xFB, 0xBF, 0xBA };
+            int categories = (int)BitConverter.ToUInt32(data, 4);
+            int at = 12;
+
+            for (int category = 0; category < categories && at + 8 <= data.Length; category++)
+            {
+                int end = IndexOf(data, footer, at);
+                if (end < 0)
                 {
-                    items.Add(new JumpListItem
-                    {
-                        Title = !string.IsNullOrEmpty(link.Title) ? link.Title : Path.GetFileName(link.Target),
-                        Target = link.Target,
-                        Arguments = link.Arguments,
-                        WorkingDirectory = link.WorkingDirectory,
-                        FromProgram = true,
-                        Group = link.Group,
-                    });
+                    end = data.Length;
                 }
+
+                uint type = BitConverter.ToUInt32(data, at);
+                string title = null;
+                int entries = at + 4;
+                if (type == 0)
+                {
+                    int chars = BitConverter.ToUInt16(data, entries);
+                    if (entries + 2 + chars * 2 <= end)
+                    {
+                        title = Encoding.Unicode.GetString(data, entries + 2, chars * 2);
+                    }
+
+                    entries += 2 + chars * 2 + 4;       // the title, and how many shortcuts follow
+                }
+                else if (type == 2)
+                {
+                    entries += 4;
+                }
+                else
+                {
+                    entries = end;                       // a category of the shell's: it has no shortcuts here
+                }
+
+                for (int link = IndexOf(data, signature, entries); link >= 0 && link < end; link = IndexOf(data, signature, link + signature.Length))
+                {
+                    ShortcutInfo info = ShortcutFile.Parse(data, link);
+                    if (info != null && !(string.IsNullOrEmpty(info.Target) && string.IsNullOrEmpty(info.Title)))
+                    {
+                        items.Add(new JumpListItem
+                        {
+                            Title = !string.IsNullOrEmpty(info.Title) ? info.Title : Path.GetFileName(info.Target),
+                            Target = info.Target,
+                            Arguments = info.Arguments,
+                            WorkingDirectory = info.WorkingDirectory,
+                            FromProgram = true,
+                            Group = !string.IsNullOrEmpty(title) ? title : info.Group,
+                        });
+                    }
+                }
+
+                at = end + footer.Length;
             }
 
             return items;
