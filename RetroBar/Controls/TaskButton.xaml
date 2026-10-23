@@ -59,6 +59,14 @@
                    Visibility="{Binding Source={x:Static utilities:Settings.Instance}, Path=ShowTaskBadges, UpdateSourceTrigger=PropertyChanged, Converter={StaticResource boolToVisibilityConverter}}" />
             <!-- MonitorOffset.Tag is TaskLabel normally, TaskLabelActive while State==Active -
                  see TaskStateToMonitorTagConverter for why the active state needs its own tag. -->
+            <!-- The progress the window reports to the taskbar (see TaskButton.Progress.cs): a thin bar along the bottom of the tab. -->
+            <Rectangle x:Name="TaskProgressBar"
+                       Grid.ColumnSpan="2"
+                       Height="3"
+                       HorizontalAlignment="Left"
+                       VerticalAlignment="Bottom"
+                       IsHitTestVisible="False"
+                       Visibility="Collapsed" />
             <TextBlock x:Name="TaskLabelText"
                        Grid.Column="1"
                        Style="{DynamicResource TaskLabel}">

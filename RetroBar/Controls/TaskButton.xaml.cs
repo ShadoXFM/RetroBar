@@ -50,6 +50,7 @@ namespace RetroBar.Controls
             SetStyle();
             SetMonitorTags();
             InitHoverablePreview();
+            InitProgressBar();
             AppButton.Tag = GroupWindows;
             HitAreaExtension.SetEnabled(AppButton, true);
         }
@@ -132,6 +133,7 @@ namespace RetroBar.Controls
             }
 
             UpdateGroupActive();
+            UpdateProgressBar();
         }
 
         private void ReleaseGroup()
@@ -157,6 +159,11 @@ namespace RetroBar.Controls
 
         private void GroupWindow_PropertyChanged(object sender, PropertyChangedEventArgs e)
         {
+            if (e.PropertyName == "ProgressState" || e.PropertyName == "ProgressValue")
+            {
+                Dispatcher.BeginInvoke(new Action(UpdateProgressBar));
+            }
+
             if (e.PropertyName == "State")
             {
                 if (sender is ApplicationWindow changed)

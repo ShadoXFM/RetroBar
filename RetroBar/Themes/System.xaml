@@ -1619,6 +1619,26 @@
         </Setter>
     </Style>
 
+    <!-- What has been played, in the groove of the seek bar: the cover's colour (MediaSeekProgress, set on the slider by the media popup
+         for a track that has one; transparent otherwise, as the bar always was). -->
+    <SolidColorBrush x:Key="MediaSeekProgress" Color="Transparent" />
+
+    <Style TargetType="RepeatButton"
+           x:Key="MediaSeekSliderProgressButtonStyle"
+           BasedOn="{StaticResource MediaSeekSliderRepeatButtonStyle}">
+        <Setter Property="Template">
+            <Setter.Value>
+                <ControlTemplate TargetType="RepeatButton">
+                    <Border Background="Transparent">
+                        <Border VerticalAlignment="Center"
+                                Height="2"
+                                Background="{DynamicResource MediaSeekProgress}" />
+                    </Border>
+                </ControlTemplate>
+            </Setter.Value>
+        </Setter>
+    </Style>
+
     <Style TargetType="Slider"
            x:Key="MediaSeekSliderStyle">
         <Setter Property="FocusVisualStyle"
@@ -1637,7 +1657,7 @@
                         </Border>
                         <Track x:Name="PART_Track">
                             <Track.DecreaseRepeatButton>
-                                <RepeatButton Style="{StaticResource MediaSeekSliderRepeatButtonStyle}"
+                                <RepeatButton Style="{StaticResource MediaSeekSliderProgressButtonStyle}"
                                               Command="Slider.DecreaseLarge" />
                             </Track.DecreaseRepeatButton>
                             <Track.IncreaseRepeatButton>

@@ -86,6 +86,17 @@ namespace RetroBar.Controls
                 SeekSpectrum.Fill = SeekTitleText.Foreground;
             }
 
+            // What has been played of the track, in the groove of the seek bar, is in the cover's colour too.
+            if (AccentBrush() is SolidColorBrush progress)
+            {
+                progress.Freeze();
+                SeekSlider.Resources["MediaSeekProgress"] = progress;
+            }
+            else
+            {
+                SeekSlider.Resources.Remove("MediaSeekProgress");
+            }
+
             // The artist's name is in the cover's colour.
             if (AccentBrush(ArtistAccentLighten) is SolidColorBrush artist)
             {
