@@ -13,6 +13,7 @@ namespace RetroBar
     public partial class Taskbar
     {
         private GroupBox _mediaBox;
+        private StackPanel _weatherPlace;
         private Grid _centerStrip;
         private StackPanel _centerRow;
         private bool _windows11Applied;
@@ -53,7 +54,12 @@ namespace RetroBar
             {
                 // The weather and the CPU temperature: out of the tray box, into a box of their own at the left; the media player is in
                 // the tray box in their place (at its left, with the notification icons and the clock).
+                // What the tray box has in the weather's place is the weather group with nothing in it, as with the weather and the CPU
+                // temperature turned off: its margin is part of what the box's per-monitor margins (TrayNotifyListAlone and the like) were tuned with.
+                int weatherAt = TrayContent.Children.IndexOf(WeatherGroup);
                 TrayContent.Children.Remove(WeatherGroup);
+                _weatherPlace = new StackPanel { Orientation = Orientation.Horizontal, VerticalAlignment = VerticalAlignment.Center, Margin = WeatherGroup.Margin };
+                TrayContent.Children.Insert(weatherAt, _weatherPlace);
 
                 _mediaBox = new GroupBox { Style = (Style)FindResource("Tray"), Content = WeatherGroup, Margin = new Thickness(2, 0, 0, 0) };
                 DockPanel.SetDock(_mediaBox, Dock.Left);
@@ -84,7 +90,10 @@ namespace RetroBar
                 TaskbarDock.Children.Remove(_centerStrip);
                 TaskbarDock.Children.Remove(_mediaBox);
                 _mediaBox.Content = null;
-                TrayContent.Children.Insert(TrayContent.Children.IndexOf(MediaPlayerControl) + 1, WeatherGroup);
+                int placeAt = TrayContent.Children.IndexOf(_weatherPlace);
+                TrayContent.Children.Remove(_weatherPlace);
+                _weatherPlace = null;
+                TrayContent.Children.Insert(Math.Max(0, placeAt), WeatherGroup);
 
                 TaskbarDock.Children.Add(TaskListControl);
                 _centerStrip = null;

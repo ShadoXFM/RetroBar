@@ -743,8 +743,10 @@ namespace RetroBar.Controls
                 int launchers = Math.Min(LauncherCount, ButtonsPerRow);
                 _launcherShift = Math.Round(_frameShift / PixelStep) * PixelStep;
                 launcherWidth = Math.Max(PixelStep, launcherWidth);
-                LauncherWidth = launcherWidth - Math.Abs(_launcherShift);
+                LauncherWidth = launcherWidth;
                 ApplyLauncherMargin();
+                // The button keeps its width (its icon would be cut by a narrower one); the margin that centers it is room added to its slot.
+                launcherWidth += Math.Abs(_launcherShift);
                 if (iconWidth * (ButtonsPerRow - launchers) + launcherWidth * launchers > room)
                 {
                     iconWidth = Math.Floor((room - launcherWidth * launchers) / Math.Max(1, ButtonsPerRow - launchers) / PixelStep) * PixelStep;
