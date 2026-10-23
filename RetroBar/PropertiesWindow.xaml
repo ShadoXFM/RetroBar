@@ -538,6 +538,11 @@
                                       IsEnabled="{Binding Source={x:Static Settings:Settings.Instance}, Path=ShowMediaPlayer, UpdateSourceTrigger=PropertyChanged}">
                                 <Label Content="{DynamicResource show_vu_meter}" />
                             </CheckBox>
+                            <CheckBox x:Name="cbFadeLongMediaText"
+                                      IsChecked="{Binding Source={x:Static Settings:Settings.Instance}, Path=FadeLongMediaText, UpdateSourceTrigger=PropertyChanged}"
+                                      IsEnabled="{Binding Source={x:Static Settings:Settings.Instance}, Path=ShowMediaPlayer, UpdateSourceTrigger=PropertyChanged}">
+                                <Label Content="{DynamicResource fade_long_media_text}" />
+                            </CheckBox>
                         </StackPanel>
                     </GroupBox>
                     <GroupBox Header="{DynamicResource weather_cpu_temp_heading}">

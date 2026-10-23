@@ -154,7 +154,7 @@ namespace RetroBar.Controls
         private void StartTrackTextFade()
         {
             double width = TrackTextClip.ActualWidth;
-            if (width <= TrackTextFadeWidth * 2)
+            if (width <= TrackTextFadeWidth * 2 || !Settings.Instance.FadeLongMediaText)
             {
                 StopTrackTextFade();
                 return;
@@ -194,7 +194,7 @@ namespace RetroBar.Controls
         private void UpdateTrackTextFadeOffsets()
         {
             double width = TrackTextClip.ActualWidth;
-            if (_trackTextMask == null && _marqueeRunning && width > TrackTextFadeWidth * 2)
+            if (_trackTextMask == null && _marqueeRunning && width > TrackTextFadeWidth * 2 && Settings.Instance.FadeLongMediaText)
             {
                 // The slide began before the clip had a width, so it started without a mask.
                 StartTrackTextFade();
@@ -372,7 +372,7 @@ namespace RetroBar.Controls
 
             Rectangle fadeRight = text == SeekTitleText ? SeekTitleFade : SeekArtistFade;
             Rectangle fadeLeft = text == SeekTitleText ? SeekTitleFadeLeft : SeekArtistFadeLeft;
-            Visibility fadeVisibility = overflow > 0 ? Visibility.Visible : Visibility.Collapsed;
+            Visibility fadeVisibility = overflow > 0 && Settings.Instance.FadeLongMediaText ? Visibility.Visible : Visibility.Collapsed;
             fadeRight.Visibility = fadeVisibility;
             fadeLeft.Visibility = fadeVisibility;
             if (overflow > 0 && TryFindResource("ButtonFace") is SolidColorBrush face)
@@ -400,6 +400,24 @@ namespace RetroBar.Controls
                 text.BeginAnimation(Canvas.LeftProperty, CreateMarqueeAnimation(overflow));
                 EnsureFadeRendering();
             }
+        }
+
+        // The setting changed: the fades are put on or taken off the slides that are running now.
+        private void ApplyFadeSetting()
+        {
+            if (Settings.Instance.FadeLongMediaText)
+            {
+                if (_marqueeRunning)
+                {
+                    StartTrackTextFade();
+                }
+            }
+            else
+            {
+                StopTrackTextFade();
+            }
+
+            UpdateSeekMarquees(false);
         }
 
         private void StopMarquee()

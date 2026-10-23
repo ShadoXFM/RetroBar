@@ -166,6 +166,15 @@ namespace RetroBar.Utilities
             set => Set(ref _lyricLines, Math.Clamp(value, 3, 14));
         }
 
+        // Whether the ends of a track text too long for its room (the taskbar's, and the media popup's title and artist) fade out while it
+        // slides; off, the text is cut off sharp at the edges.
+        private bool _fadeLongMediaText = true;
+        public bool FadeLongMediaText
+        {
+            get => _fadeLongMediaText;
+            set => Set(ref _fadeLongMediaText, value);
+        }
+
         private bool _showVuMeter = true;
         public bool ShowVuMeter
         {

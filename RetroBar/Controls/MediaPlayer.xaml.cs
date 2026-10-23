@@ -347,6 +347,12 @@ namespace RetroBar.Controls
                 return;
             }
 
+            if (e.PropertyName == nameof(Settings.FadeLongMediaText))
+            {
+                Dispatcher.BeginInvoke(new Action(ApplyFadeSetting));
+                return;
+            }
+
             if (e.PropertyName == nameof(Settings.ShowVuMeter))
             {
                 Dispatcher.BeginInvoke(new Action(ApplyVuMeterSetting));
