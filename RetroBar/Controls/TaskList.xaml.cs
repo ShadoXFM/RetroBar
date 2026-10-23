@@ -638,6 +638,11 @@ namespace RetroBar.Controls
 
         private void TaskList_OnUnloaded(object sender, RoutedEventArgs e)
         {
+            // The list of tabs and pins is made again when the list is loaded again (the Windows 11 style moves it, and changing the style
+            // back and forth unloads and loads it): a merged list kept from before was not subscribed to the new view of the windows, and
+            // showed a tab only after a pin changed - the program open had no tab, and closed it had.
+            ReleasePinnedMerge();
+
             if (taskbarItems != null)
             {
                 taskbarItems.CollectionChanged -= GroupedWindows_CollectionChanged;
@@ -787,23 +792,23 @@ namespace RetroBar.Controls
                     iconWidth = pitch + PixelStep;
                 }
 
+                TabMargin = new Thickness(0, 0, -PixelStep, 0);
+
                 // A pinned program that is not running takes the room of a tab, so the row does not change size when it starts (and the pins
                 // are no closer together than the tabs are). Its button keeps the width its icon needs, with margins to make up the slot and
                 // to put the icon in the middle of the frame a tab has in the same place.
                 double launcherWidth = pitch;
                 double launcherButton = Math.Round(LauncherButtonWidth / PixelStep) * PixelStep;
-                TabMargin = new Thickness(0, 0, -PixelStep, 0);
-
-                ApplyLauncherMargin();
-
-                ButtonWidth = iconWidth;
-                // Over what they need by what the list has beside its tabs (the grip at its left): the row wraps, and its last tab is out of
-                // sight, when it is short.
                 // (A tab's frame is in the middle of the width it has, which reaches a pixel past its place in the row.)
                 _launcherShift = Math.Round((_frameShift + PixelStep) / PixelStep) * PixelStep;
                 _launcherLeft = Math.Round((launcherWidth - launcherButton + _launcherShift) / 2 / PixelStep) * PixelStep;
                 _launcherRight = launcherWidth - launcherButton - _launcherLeft;
                 LauncherWidth = launcherButton;
+                ApplyLauncherMargin();
+
+                ButtonWidth = iconWidth;
+                // Over what they need by what the list has beside its tabs (the grip at its left): the row wraps, and its last tab is out of
+                // sight, when it is short.
                 double beside = ActualWidth > 0 && TasksList.ActualWidth > 0 ? Math.Max(0, ActualWidth - TasksList.ActualWidth) : 6;
                 Width = pitch * ButtonsPerRow + beside + 2 * PixelStep;
                 SetScrollable(false);

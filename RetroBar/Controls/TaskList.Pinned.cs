@@ -48,13 +48,27 @@ namespace RetroBar.Controls
             }
             else if (_mergedItems != null)
             {
-                taskbarItems.CollectionChanged -= TasksChangedForMerge;
+                ReleasePinnedMerge();
                 TasksList.ItemsSource = taskbarItems;
                 GongSolutions.Wpf.DragDrop.DragDrop.SetDropHandler(TasksList, new RetroBar.Utilities.TaskListDropHandler(TasksList));
-                _pinFolder?.Dispose();
-                _pinFolder = null;
-                _mergedItems = null;
             }
+        }
+
+        // Lets go of the merged list (and of the folder of the pins it reads); the next ApplyPinnedMerge in the Windows 11 style makes it again.
+        private void ReleasePinnedMerge()
+        {
+            if (taskbarItems != null)
+            {
+                taskbarItems.CollectionChanged -= TasksChangedForMerge;
+            }
+
+            if (_pinFolder != null)
+            {
+                _pinFolder.Dispose();
+                _pinFolder = null;
+            }
+
+            _mergedItems = null;
         }
 
         private void TasksChangedForMerge(object sender, System.Collections.Specialized.NotifyCollectionChangedEventArgs e)
