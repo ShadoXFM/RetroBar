@@ -1,7 +1,5 @@
 using RetroBar.Utilities;
 using System;
-using System.Collections.Generic;
-using System.Windows.Media.Imaging;
 using System.ComponentModel;
 using System.Windows;
 using System.Windows.Controls;
@@ -19,71 +17,6 @@ namespace RetroBar.Controls
         private TaskList _iconOnlyHost;
         private DependencyPropertyDescriptor _iconOnlyDescriptor;
         private bool _placeIconQueued;
-        private ImageSource _programSource;
-
-        private static readonly Dictionary<(ImageSource, int), ImageSource> ScaledIcons = new();
-
-        // The icon made to the exact size it is drawn at, in whole device pixels, once: drawn in a size that is not the one of its bitmap (a
-        // 40 pixel icon in 18, say), the icon is resampled at a place that is not on the pixel grid, and its top comes out flat.
-        private static ImageSource IconAtSize(ImageSource source, int pixels)
-        {
-            if (source is not BitmapSource bitmap || pixels <= 0 || (bitmap.PixelWidth == pixels && bitmap.PixelHeight == pixels))
-            {
-                return source;
-            }
-
-            lock (ScaledIcons)
-            {
-                if (ScaledIcons.TryGetValue((source, pixels), out ImageSource cached))
-                {
-                    return cached;
-                }
-            }
-
-            ImageSource result = source;
-            try
-            {
-                var converted = new FormatConvertedBitmap(bitmap, PixelFormats.Bgra32, null, 0);
-                int stride = converted.PixelWidth * 4;
-                byte[] data = new byte[stride * converted.PixelHeight];
-                converted.CopyPixels(data, stride, 0);
-
-                using var from = new System.Drawing.Bitmap(converted.PixelWidth, converted.PixelHeight, System.Drawing.Imaging.PixelFormat.Format32bppArgb);
-                System.Drawing.Imaging.BitmapData fromData = from.LockBits(new System.Drawing.Rectangle(0, 0, from.Width, from.Height), System.Drawing.Imaging.ImageLockMode.WriteOnly, System.Drawing.Imaging.PixelFormat.Format32bppArgb);
-                System.Runtime.InteropServices.Marshal.Copy(data, 0, fromData.Scan0, data.Length);
-                from.UnlockBits(fromData);
-
-                using var to = new System.Drawing.Bitmap(pixels, pixels, System.Drawing.Imaging.PixelFormat.Format32bppArgb);
-                using (System.Drawing.Graphics g = System.Drawing.Graphics.FromImage(to))
-                {
-                    g.Clear(System.Drawing.Color.Transparent);
-                    g.InterpolationMode = System.Drawing.Drawing2D.InterpolationMode.HighQualityBicubic;
-                    g.PixelOffsetMode = System.Drawing.Drawing2D.PixelOffsetMode.HighQuality;
-                    g.CompositingQuality = System.Drawing.Drawing2D.CompositingQuality.HighQuality;
-                    g.DrawImage(from, new System.Drawing.Rectangle(0, 0, pixels, pixels), 0, 0, from.Width, from.Height, System.Drawing.GraphicsUnit.Pixel);
-                }
-
-                System.Drawing.Imaging.BitmapData toData = to.LockBits(new System.Drawing.Rectangle(0, 0, pixels, pixels), System.Drawing.Imaging.ImageLockMode.ReadOnly, System.Drawing.Imaging.PixelFormat.Format32bppArgb);
-                byte[] scaled = new byte[toData.Stride * pixels];
-                System.Runtime.InteropServices.Marshal.Copy(toData.Scan0, scaled, 0, scaled.Length);
-                int scaledStride = toData.Stride;
-                to.UnlockBits(toData);
-
-                BitmapSource made = BitmapSource.Create(pixels, pixels, 96, 96, PixelFormats.Bgra32, null, scaled, scaledStride);
-                made.Freeze();
-                result = made;
-            }
-            catch (Exception)
-            {
-            }
-
-            lock (ScaledIcons)
-            {
-                ScaledIcons[(source, pixels)] = result;
-            }
-
-            return result;
-        }
 
         private void InitIconOnly()
         {
@@ -166,8 +99,8 @@ namespace RetroBar.Controls
                 if (program != null)
                 {
                     BindingOperations.ClearBinding(IconOnlyImage, Image.SourceProperty);
-                    _programSource = program;
                     IconOnlyImage.Source = program;
+                    MonitorOffset.SetTag(IconOnlyImage, "TaskIcon");
                 }
                 else
                 {
@@ -180,8 +113,8 @@ namespace RetroBar.Controls
             else
             {
                 BindingOperations.ClearBinding(IconOnlyImage, Image.SourceProperty);
-                _programSource = null;
                 IconOnlyImage.Source = null;
+                MonitorOffset.SetTag(IconOnlyImage, null);
             }
         }
 
@@ -216,22 +149,11 @@ namespace RetroBar.Controls
 
                 double step = _iconOnlyHost.PixelStep > 0 ? _iconOnlyHost.PixelStep : 1;
 
-                // The size the classic style draws the icon at (the Scale its monitor's TaskIcon adjustment gives it), in whole device pixels:
-                // at full size the icon fills the frame to its top highlight, and it looks cut there.
-                double scale = MonitorAdjustments.Get(MonitorOffset.FindDeviceName(this), "TaskIcon").Scale ?? 1;
-                double side = Math.Max(step, Math.Round(16 * scale / step) * step);
-                IconOnlyImage.Width = side;
-                IconOnlyImage.Height = side;
-                if (_programSource != null)
-                {
-                    // 96 dpi bitmap: one image pixel is one DIP, so it is the device pixels that are asked for and the size is set to match.
-                    int pixels = (int)Math.Round(side / step);
-                    DpiScale dpi = VisualTreeHelper.GetDpi(this);
-                    IconOnlyImage.Source = IconAtSize(_programSource, pixels);
-                    RenderOptions.SetBitmapScalingMode(IconOnlyImage, pixels > 0 && IconOnlyImage.Source is BitmapSource shown && shown.PixelWidth == pixels ? BitmapScalingMode.NearestNeighbor : BitmapScalingMode.HighQuality);
-                }
-                double left = bounds.Left + (bounds.Width - IconOnlyImage.Width) / 2;
-                double top = bounds.Top + (bounds.Height - IconOnlyImage.Height) / 2;
+                // The classic style's own look for the icon: its monitor's TaskIcon adjustment (the Scale, drawn by MonitorOffset as it draws the
+                // classic tab's) - its X and Y, which move the icon inside the classic button, are taken off the place so the icon is in the middle.
+                MonitorOffsetValue adjust = MonitorAdjustments.Get(MonitorOffset.FindDeviceName(this), "TaskIcon");
+                double left = bounds.Left + (bounds.Width - IconOnlyImage.Width) / 2 - adjust.X;
+                double top = bounds.Top + (bounds.Height - IconOnlyImage.Height) / 2 - adjust.Y;
                 double iconLeft = Math.Round(left / step) * step;
                 double iconTop = Math.Round(top / step) * step;
                 IconOnlyImage.Margin = new Thickness(iconLeft, iconTop, 0, 0);
