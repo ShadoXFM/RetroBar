@@ -146,7 +146,11 @@ namespace RetroBar.Controls
             set { SetValue(LauncherWidthProperty, value); }
         }
 
-        private const double LauncherRoom = 24;
+        // The room a launcher takes in the row, and the width of its button (the least that shows its icon whole: the button has a border and a
+        // padding of 3 either side of the icon). The button is wider than the room, so its margins are negative: it overlaps the room of the
+        // launcher beside it, and the tabs, by what it has of nothing but its own empty border.
+        private const double LauncherRoom = 20;
+        private const double LauncherButtonWidth = 24;
 
         // How far the frame of a tab is to the right in its slot (the room at its left less the room at its right), and the margin that puts a
         // launcher's icon in the middle of the free room between the frames of the tabs either side of it, as far from the one as the other.
@@ -154,12 +158,13 @@ namespace RetroBar.Controls
 
         private double _launcherShift;
         private double _launcherLift;
+        private double _launcherOverlap;
         private int _alignChecks;
 
         private void ApplyLauncherMargin()
         {
             // The side margins keep the slot as wide as it was; the top and bottom ones, equal and opposite, move the icon without changing the button's size.
-            LauncherMargin = new Thickness(Math.Max(0, _launcherShift), _launcherLift, Math.Max(0, -_launcherShift), -_launcherLift);
+            LauncherMargin = new Thickness(Math.Max(0, _launcherShift) - _launcherOverlap, _launcherLift, Math.Max(0, -_launcherShift) - _launcherOverlap, -_launcherLift);
         }
 
         // The icon of a launcher is put at the height of the icon of a tab (the button of a launcher has its own offsets, so it sat lower): the
@@ -743,10 +748,12 @@ namespace RetroBar.Controls
                 int launchers = Math.Min(LauncherCount, ButtonsPerRow);
                 _launcherShift = Math.Round(_frameShift / PixelStep) * PixelStep;
                 launcherWidth = Math.Max(PixelStep, launcherWidth);
-                LauncherWidth = launcherWidth;
+                double launcherButton = Math.Max(launcherWidth, Math.Round(LauncherButtonWidth / PixelStep) * PixelStep);
+                LauncherWidth = launcherButton;
+                _launcherOverlap = Math.Floor((launcherButton - launcherWidth) / 2 / PixelStep) * PixelStep;
                 ApplyLauncherMargin();
-                // The button keeps its width (its icon would be cut by a narrower one); the margin that centers it is room added to its slot.
-                launcherWidth += Math.Abs(_launcherShift);
+                // The slot: the room, and what the margin that centers the icon adds to it (the button's own width is not what is left in the row).
+                launcherWidth = launcherButton - 2 * _launcherOverlap + Math.Abs(_launcherShift);
                 if (iconWidth * (ButtonsPerRow - launchers) + launcherWidth * launchers > room)
                 {
                     iconWidth = Math.Floor((room - launcherWidth * launchers) / Math.Max(1, ButtonsPerRow - launchers) / PixelStep) * PixelStep;
