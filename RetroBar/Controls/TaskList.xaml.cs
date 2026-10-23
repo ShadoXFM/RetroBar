@@ -153,6 +153,16 @@ namespace RetroBar.Controls
         // launcher's icon in the middle of the free room between the frames of the tabs either side of it, as far from the one as the other.
         private double _frameShift;
 
+        // A tab of the Windows 11 style overlaps the next one by this much (a pixel) of the empty margin the theme gives its button: the gap
+        // between the frames is that much less.
+        public static DependencyProperty TabMarginProperty = DependencyProperty.Register(nameof(TabMargin), typeof(Thickness), typeof(TaskList), new PropertyMetadata(new Thickness()));
+
+        public Thickness TabMargin
+        {
+            get { return (Thickness)GetValue(TabMarginProperty); }
+            set { SetValue(TabMarginProperty, value); }
+        }
+
         private double _launcherShift;
         private double _launcherLift;
         private double _launcherLeft;
@@ -240,6 +250,7 @@ namespace RetroBar.Controls
         private void IconOnlyChanged()
         {
             _squareChecks = 0;
+            TabMargin = new Thickness();
             _alignChecks = 0;
             _launcherLift = 0;
             TasksList.LayoutUpdated -= TasksList_LayoutUpdatedForSquare;
@@ -766,29 +777,35 @@ namespace RetroBar.Controls
                 }
 
                 double iconWidth = Math.Round((side + overhead + TabExtraWidth) / PixelStep) * PixelStep;
-                double room = AvailableWidth > 0 ? AvailableWidth : iconWidth * ButtonsPerRow;
+                // What a tab takes in the row: its width less the pixel it overlaps the next by.
+                double pitch = iconWidth - PixelStep;
+                double room = AvailableWidth > 0 ? AvailableWidth : pitch * ButtonsPerRow;
                 int launchers = Math.Min(LauncherCount, ButtonsPerRow);
-                _launcherShift = Math.Round(_frameShift / PixelStep) * PixelStep;
-                _launcherLeft = Math.Round((launcherWidth - launcherButton + _launcherShift) / 2 / PixelStep) * PixelStep;
-                _launcherRight = launcherWidth - launcherButton - _launcherLeft;
-                LauncherWidth = launcherButton;
-                if (iconWidth * ButtonsPerRow > room)
+                if (pitch * ButtonsPerRow > room)
                 {
-                    iconWidth = Math.Max(PixelStep, Math.Floor(room / Math.Max(1, ButtonsPerRow) / PixelStep) * PixelStep);
+                    pitch = Math.Max(PixelStep, Math.Floor(room / Math.Max(1, ButtonsPerRow) / PixelStep) * PixelStep);
+                    iconWidth = pitch + PixelStep;
                 }
 
                 // A pinned program that is not running takes the room of a tab, so the row does not change size when it starts (and the pins
                 // are no closer together than the tabs are). Its button keeps the width its icon needs, with margins to make up the slot and
                 // to put the icon in the middle of the frame a tab has in the same place.
-                double launcherWidth = iconWidth;
+                double launcherWidth = pitch;
                 double launcherButton = Math.Round(LauncherButtonWidth / PixelStep) * PixelStep;
+                TabMargin = new Thickness(0, 0, -PixelStep, 0);
+
                 ApplyLauncherMargin();
 
                 ButtonWidth = iconWidth;
                 // Over what they need by what the list has beside its tabs (the grip at its left): the row wraps, and its last tab is out of
                 // sight, when it is short.
+                // (A tab's frame is in the middle of the width it has, which reaches a pixel past its place in the row.)
+                _launcherShift = Math.Round((_frameShift + PixelStep) / PixelStep) * PixelStep;
+                _launcherLeft = Math.Round((launcherWidth - launcherButton + _launcherShift) / 2 / PixelStep) * PixelStep;
+                _launcherRight = launcherWidth - launcherButton - _launcherLeft;
+                LauncherWidth = launcherButton;
                 double beside = ActualWidth > 0 && TasksList.ActualWidth > 0 ? Math.Max(0, ActualWidth - TasksList.ActualWidth) : 6;
-                Width = iconWidth * (ButtonsPerRow - launchers) + launcherWidth * launchers + beside + 2 * PixelStep;
+                Width = pitch * ButtonsPerRow + beside + 2 * PixelStep;
                 SetScrollable(false);
                 return;
             }

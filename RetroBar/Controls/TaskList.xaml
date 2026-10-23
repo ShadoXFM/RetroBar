@@ -17,7 +17,8 @@
             <!-- A tab (a window, the first of its app when windows are combined), and, in the Windows 11 style of the taskbar, the pinned program
                  that is not running (its icon, as the quick launch toolbar has it): see TaskList.Pinned.cs. -->
             <DataTemplate DataType="{x:Type tasks:ApplicationWindow}">
-                <local:TaskButton Host="{Binding RelativeSource={RelativeSource FindAncestor, AncestorType=local:TaskList}}">
+                <local:TaskButton Host="{Binding RelativeSource={RelativeSource FindAncestor, AncestorType=local:TaskList}}"
+                                  Margin="{Binding Path=TabMargin, RelativeSource={RelativeSource FindAncestor, AncestorType=local:TaskList}}">
                     <local:TaskButton.Width>
                         <MultiBinding Converter="{StaticResource taskButtonWidthConverter}">
                                     <Binding Path="(ItemsControl.AlternationIndex)" RelativeSource="{RelativeSource Mode=FindAncestor, AncestorType=ContentPresenter}" />
