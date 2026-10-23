@@ -64,7 +64,13 @@ namespace RetroBar.Utilities
         }
 
         /// <summary>Executable file names of the pinned programs, in the quick launch toolbar's order.</summary>
-        public static List<string> Get()
+        public static List<string> Get() => GetLinks().Select(GetTargetExe).ToList();
+
+        /// <summary>The program (its executable's file name) a pin starts.</summary>
+        public static string TargetExe(string link) => GetTargetExe(link);
+
+        /// <summary>The pins (shortcut files), in the quick launch toolbar's order.</summary>
+        public static List<string> GetLinks()
         {
             var result = new List<string>();
 
@@ -86,10 +92,7 @@ namespace RetroBar.Utilities
                     .ThenBy(file => file, StringComparer.OrdinalIgnoreCase)
                     .ToList();
 
-                foreach (string file in files)
-                {
-                    result.Add(GetTargetExe(file));
-                }
+                result.AddRange(files);
             }
             catch (Exception ex)
             {

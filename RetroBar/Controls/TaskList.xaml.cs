@@ -35,6 +35,41 @@ namespace RetroBar.Controls
             set { SetValue(ButtonWidthProperty, value); }
         }
 
+        // In the Windows 11 style of the taskbar the tabs are small and show only their icons (see Taskbar.Layout.cs), and the list is as wide as
+        // they are, in the middle; AvailableWidth is the room it has.
+        public static DependencyProperty IconOnlyProperty = DependencyProperty.Register(nameof(IconOnly), typeof(bool), typeof(TaskList),
+            new PropertyMetadata(false, (d, e) => ((TaskList)d).IconOnlyChanged()));
+
+        public bool IconOnly
+        {
+            get { return (bool)GetValue(IconOnlyProperty); }
+            set { SetValue(IconOnlyProperty, value); }
+        }
+
+        public static DependencyProperty AvailableWidthProperty = DependencyProperty.Register(nameof(AvailableWidth), typeof(double), typeof(TaskList),
+            new PropertyMetadata(0d, (d, e) => ((TaskList)d).SetTaskButtonWidth()));
+
+        public double AvailableWidth
+        {
+            get { return (double)GetValue(AvailableWidthProperty); }
+            set { SetValue(AvailableWidthProperty, value); }
+        }
+
+        // The windows of an app are one tab when the setting says so, and always in the Windows 11 style (where an app is one icon).
+        private bool CombinesWindows => Settings.Instance.GroupTaskWindows || IconOnly;
+
+        private void IconOnlyChanged()
+        {
+            if (!IconOnly)
+            {
+                ClearValue(WidthProperty);
+            }
+
+            ScheduleGroupSync();
+            ApplyPinnedMerge();
+            SetTaskButtonWidth();
+        }
+
         public static DependencyProperty ButtonsPerRowProperty = DependencyProperty.Register(nameof(ButtonsPerRow), typeof(int), typeof(TaskList), new PropertyMetadata(0));
 
         public int ButtonsPerRow
@@ -138,6 +173,7 @@ namespace RetroBar.Controls
                 }
 
                 TasksList.ItemsSource = taskbarItems;
+                ApplyPinnedMerge();
 
                 // Drag-to-rearrange: see TaskListDropHandler.
                 GongSolutions.Wpf.DragDrop.DragDrop.SetDropHandler(TasksList, new TaskListDropHandler(TasksList));
@@ -162,6 +198,13 @@ namespace RetroBar.Controls
             if (e.PropertyName == nameof(Settings.GroupTaskWindows))
             {
                 ScheduleGroupSync();
+            }
+            else if (e.PropertyName == nameof(Settings.QuickLaunchOrder) || e.PropertyName == nameof(Settings.QuickLaunchPath))
+            {
+                if (_mergedItems != null)
+                {
+                    Dispatcher.BeginInvoke(new Action(RebuildMerged));
+                }
             }
             else if (e.PropertyName == nameof(Settings.MultiMonMode))
             {
@@ -225,7 +268,7 @@ namespace RetroBar.Controls
         {
             var group = new List<ApplicationWindow>();
 
-            if (window != null && Settings.Instance.GroupTaskWindows && startupSortSource != null)
+            if (window != null && CombinesWindows && startupSortSource != null)
             {
                 string app = TaskOpenOrderComparer.AppKey(window);
 
@@ -254,7 +297,7 @@ namespace RetroBar.Controls
                 return false;
             }
 
-            if (!Settings.Instance.GroupTaskWindows || startupSortSource == null)
+            if (!CombinesWindows || startupSortSource == null)
             {
                 return true;
             }
@@ -489,6 +532,24 @@ namespace RetroBar.Controls
 
             double dpiScale = System.Windows.Media.VisualTreeHelper.GetDpi(this).DpiScaleX;
             PixelStep = dpiScale > 0 ? 1.0 / dpiScale : 1.0;
+
+            if (IconOnly && Settings.Instance.Edge != AppBarEdge.Left && Settings.Instance.Edge != AppBarEdge.Right)
+            {
+                // One row of small tabs: the height of the taskbar wide, or narrower if they do not all fit.
+                ButtonsPerRow = Math.Max(1, taskCount);
+                ExtraWidthCount = 0;
+                double iconWidth = Math.Floor(Math.Max(24, ActualHeight) / PixelStep) * PixelStep;
+                double room = AvailableWidth > 0 ? AvailableWidth : iconWidth * ButtonsPerRow;
+                if (iconWidth * ButtonsPerRow > room)
+                {
+                    iconWidth = Math.Floor(room / ButtonsPerRow / PixelStep) * PixelStep;
+                }
+
+                ButtonWidth = iconWidth;
+                Width = iconWidth * ButtonsPerRow;
+                SetScrollable(false);
+                return;
+            }
 
             double margin = TaskButtonLeftMargin + TaskButtonRightMargin;
             ButtonsPerRow = Math.Max(1, (int)Math.Ceiling((double)taskCount / rows));

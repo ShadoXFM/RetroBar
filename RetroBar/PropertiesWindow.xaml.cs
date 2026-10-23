@@ -527,6 +527,14 @@ namespace RetroBar
             }
         }
 
+        private void CboTaskbarStyle_SelectionChanged(object sender, System.Windows.Controls.SelectionChangedEventArgs e)
+        {
+            if (cboTaskbarStyle.SelectedItem == null)
+            {
+                cboTaskbarStyle.SelectedValue = cboTaskbarStyle.Items[(int)Settings.Instance.TaskbarStyle];
+            }
+        }
+
         private void CboInvertIconsMode_SelectionChanged(object sender, System.Windows.Controls.SelectionChangedEventArgs e)
         {
             if (cboInvertIconsMode.SelectedItem == null)

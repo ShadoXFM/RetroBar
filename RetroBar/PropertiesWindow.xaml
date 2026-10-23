@@ -246,6 +246,17 @@
                             </DockPanel>
                             <DockPanel>
                                 <Label VerticalAlignment="Center"
+                                       Target="{Binding ElementName=cboTaskbarStyle}">
+                                    <AccessText Text="{DynamicResource taskbar_style_text}"
+                                                ToolTip="{DynamicResource taskbar_style_tip}" />
+                                </Label>
+                                <ComboBox x:Name="cboTaskbarStyle"
+                                          ItemsSource="{DynamicResource taskbar_style_values}"
+                                          SelectedIndex="{Binding Source={x:Static Settings:Settings.Instance}, Path=TaskbarStyle, UpdateSourceTrigger=PropertyChanged, Converter={StaticResource enumConverter}}"
+                                          SelectionChanged="CboTaskbarStyle_SelectionChanged" />
+                            </DockPanel>
+                            <DockPanel>
+                                <Label VerticalAlignment="Center"
                                        Target="{Binding ElementName=cboEdgeSelect}">
                                     <AccessText Text="{DynamicResource location_text}"
                                                 ToolTip="{DynamicResource location_tip}" />

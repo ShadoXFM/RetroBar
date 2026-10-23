@@ -131,6 +131,7 @@ namespace RetroBar
             UpdateShowDesktopButtonVisibility();
 
             UpdateStartButton();
+            InitializeTaskbarStyle();
 
             StartWorkAreaWatchdog();
 

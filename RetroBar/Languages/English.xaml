@@ -102,6 +102,12 @@
         <s:String>Same taskbar as window</s:String>
         <s:String>Same taskbar as window and primary taskbar</s:String>
     </x:Array>
+    <s:String x:Key="taskbar_style_text">Ta_skbar style:</s:String>
+    <s:String x:Key="taskbar_style_tip">Classic: the tabs are the width of the taskbar, with the Start button at the left. Windows 11: small tabs with only the icons, the pinned programs among them, in the middle; the Start button stays at the left edge, with the media player in a box after it. For a taskbar at the top or the bottom.</s:String>
+    <x:Array x:Key="taskbar_style_values" Type="s:String">
+        <s:String>Classic</s:String>
+        <s:String>Windows 11</s:String>
+    </x:Array>
     <s:String x:Key="invert_grayscale_colors">_Invert grayscale colors:</s:String>
     <x:Array x:Key="invert_grayscale_colors_values" Type="s:String">
         <s:String>When needed by theme</s:String>

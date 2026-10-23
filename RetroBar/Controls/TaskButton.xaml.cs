@@ -329,6 +329,7 @@ namespace RetroBar.Controls
                 _groupHost.GroupsChanged += Host_GroupsChanged;
             }
 
+            InitIconOnly();
             RefreshGroup();
 
             // A button recreated because the user just dragged it somewhere else isn't a new window
@@ -371,6 +372,7 @@ namespace RetroBar.Controls
 
         private void TaskButton_OnUnloaded(object sender, RoutedEventArgs e)
         {
+            ReleaseIconOnly();
             if (!_isLoaded)
             {
                 return;
