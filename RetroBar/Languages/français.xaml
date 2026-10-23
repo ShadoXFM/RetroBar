@@ -220,6 +220,16 @@
     <s:String x:Key="jump_list_tasks">Tâches</s:String>
     <s:String x:Key="jump_list_frequent">Fréquents</s:String>
     <s:String x:Key="jump_list_links">Liens</s:String>
+    <s:String x:Key="jump_text_new_window">Nouvelle fenêtre</s:String>
+    <s:String x:Key="jump_text_new_incognito">Nouvelle fenêtre de navigation privée</s:String>
+    <s:String x:Key="jump_text_new_private">Nouvelle fenêtre privée</s:String>
+    <s:String x:Key="jump_text_new_inprivate">Nouvelle fenêtre InPrivate</s:String>
+    <s:String x:Key="jump_text_new_tab">Nouvel onglet</s:String>
+    <s:String x:Key="jump_text_most_visited">Les + visités</s:String>
+    <s:String x:Key="jump_text_recently_closed">Récemment fermés</s:String>
+    <s:String x:Key="jump_text_quick_access">Accès rapide</s:String>
+    <s:String x:Key="jump_text_recently_played">Écoutés récemment</s:String>
+    <s:String x:Key="jump_text_liked_songs">Titres likés</s:String>
 
     <s:String x:Key="ime_input_tip_enabled">Clic droit pour les options IME</s:String>
     <s:String x:Key="ime_input_tip_disabled">IME désactivé</s:String>

@@ -72,37 +72,49 @@ namespace RetroBar.Utilities
             return crc.ToString("x");
         }
 
-        // What programs wrote in their jump lists in the language of the system (French here), in English. Exact texts, as the programs
-        // give them; any other text is left as it is.
-        private static readonly Dictionary<string, string> English = new(StringComparer.OrdinalIgnoreCase)
+        // The texts programs put in their jump lists, in the language of the system or in English, and the key of the text RetroBar has for
+        // each in its own language (see the language files): shown in the language RetroBar is set to. Exact texts, as the programs give
+        // them; any other text is left as it is.
+        private static readonly Dictionary<string, string> TextKeys = new(StringComparer.OrdinalIgnoreCase)
         {
             // Chromium-based browsers (Chrome, Edge, Brave, Vivaldi, Opera, Helium...)
-            ["Nouvelle fen\u00eatre"] = "New window",
-            ["Nouvelle fen\u00eatre de navigation priv\u00e9e"] = "New incognito window",
-            ["Nouvelle fen\u00eatre priv\u00e9e"] = "New private window",
-            ["Nouvel onglet"] = "New tab",
-            ["Les + visit\u00e9s"] = "Most visited",
-            ["Les plus visit\u00e9s"] = "Most visited",
-            ["R\u00e9cemment ferm\u00e9s"] = "Recently closed",
-            ["Acc\u00e8s rapide"] = "Quick access",
+            ["Nouvelle fen\u00eatre"] = "jump_text_new_window",
+            ["New window"] = "jump_text_new_window",
+            ["Nouvelle fen\u00eatre de navigation priv\u00e9e"] = "jump_text_new_incognito",
+            ["New incognito window"] = "jump_text_new_incognito",
+            ["Nouvelle fen\u00eatre priv\u00e9e"] = "jump_text_new_private",
+            ["New private window"] = "jump_text_new_private",
+            ["Nouvelle fen\u00eatre InPrivate"] = "jump_text_new_inprivate",
+            ["New InPrivate window"] = "jump_text_new_inprivate",
+            ["Nouvel onglet"] = "jump_text_new_tab",
+            ["New tab"] = "jump_text_new_tab",
+            ["Les + visit\u00e9s"] = "jump_text_most_visited",
+            ["Les plus visit\u00e9s"] = "jump_text_most_visited",
+            ["Most visited"] = "jump_text_most_visited",
+            ["R\u00e9cemment ferm\u00e9s"] = "jump_text_recently_closed",
+            ["Recently closed"] = "jump_text_recently_closed",
+            ["Acc\u00e8s rapide"] = "jump_text_quick_access",
+            ["Quick access"] = "jump_text_quick_access",
             // Spotify
-            ["\u00c9cout\u00e9s r\u00e9cemment"] = "Recently played",
-            ["Titres lik\u00e9s"] = "Liked Songs",
-            ["Lire"] = "Play",
-            ["Pause"] = "Pause",
-            ["Suivant"] = "Next",
-            ["Pr\u00e9c\u00e9dent"] = "Previous",
+            ["\u00c9cout\u00e9s r\u00e9cemment"] = "jump_text_recently_played",
+            ["Recently played"] = "jump_text_recently_played",
+            ["Titres lik\u00e9s"] = "jump_text_liked_songs",
+            ["Liked Songs"] = "jump_text_liked_songs",
             // The headings the shell gives
-            ["Fr\u00e9quents"] = "Frequent",
-            ["R\u00e9cents"] = "Recent",
-            ["\u00c9pingl\u00e9s"] = "Pinned",
-            ["T\u00e2ches"] = "Tasks",
+            ["Fr\u00e9quents"] = "jump_list_frequent",
+            ["Frequent"] = "jump_list_frequent",
+            ["R\u00e9cents"] = "jump_list_recent",
+            ["Recent"] = "jump_list_recent",
+            ["\u00c9pingl\u00e9s"] = "jump_list_pinned",
+            ["Pinned"] = "jump_list_pinned",
+            ["T\u00e2ches"] = "jump_list_tasks",
+            ["Tasks"] = "jump_list_tasks",
         };
 
-        /// <summary>The text of a jump list entry or category in English, when it is one that is known in another language (see <see cref="English"/>).</summary>
-        public static string ToEnglish(string text)
+        /// <summary>The key of RetroBar's own text for a jump list entry or category that is one of the known ones, or null.</summary>
+        public static string TextKey(string text)
         {
-            return text != null && English.TryGetValue(text.Trim(), out string english) ? english : text;
+            return text != null && TextKeys.TryGetValue(text.Trim(), out string key) ? key : null;
         }
 
         // The folders whose place in a path Windows writes as their ID when it works out an application ID from an executable's path.

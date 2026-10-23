@@ -28,6 +28,26 @@ namespace RetroBar.Controls
 
         private string JumpListString(string key, string fallback) => TryFindResource(key) as string ?? fallback;
 
+        // A text a program put in its jump list, in the language RetroBar is set to when it is one of the known ones (see JumpLists.TextKey);
+        // a folder's name is the one the shell shows for it (Bureau, Téléchargements) when RetroBar is not in English, the folder's own name
+        // (Desktop, Downloads) when it is.
+        private string JumpListText(string text, JumpListItem item = null)
+        {
+            string key = JumpLists.TextKey(text);
+            if (key != null && TryFindResource(key) is string known)
+            {
+                return known;
+            }
+
+            if (item != null && !(Settings.Instance.Language ?? "").StartsWith("English", StringComparison.OrdinalIgnoreCase) &&
+                !string.IsNullOrEmpty(item.Target) && Directory.Exists(item.Target) && ShellDisplayName(item.Target) is { Length: > 0 } shown)
+            {
+                return shown;
+            }
+
+            return text;
+        }
+
         private void UpdateJumpListMenu()
         {
             ContextMenu menu = AppButton.ContextMenu;
@@ -49,9 +69,9 @@ namespace RetroBar.Controls
             }
 
             var sections = new List<(string Heading, List<JumpListItem> Items)>();
+            string exe = Window.IsUWP ? null : Window.WinFileName;
             try
             {
-                string exe = Window.IsUWP ? null : Window.WinFileName;
                 var ids = new List<string>();
                 string explicitId = Window.AppUserModelID;
                 if (!string.IsNullOrEmpty(explicitId) && !(exe != null && explicitId.Equals(Path.GetFileName(exe), StringComparison.OrdinalIgnoreCase)))
@@ -83,7 +103,7 @@ namespace RetroBar.Controls
 
                 foreach (IGrouping<string, JumpListItem> category in items.Where(i => i.FromProgram && !string.IsNullOrEmpty(i.Group)).GroupBy(i => i.Group))
                 {
-                    sections.Add((JumpLists.ToEnglish(category.Key), category.ToList()));
+                    sections.Add((JumpListText(category.Key), category.ToList()));
                 }
 
                 // The program's tasks, then its links to web pages (a browser's most visited sites, or some promoted ones) last.
@@ -106,11 +126,11 @@ namespace RetroBar.Controls
                     continue;
                 }
 
-                AddJumpListMenuItem(menu, ref index, new MenuItem { Header = MenuText(heading), IsEnabled = false, FontStyle = FontStyles.Italic, Style = MenuItemStyle.Style });
+                AddJumpListMenuItem(menu, ref index, new MenuItem { Header = MenuText(heading), IsEnabled = false, Style = MenuItemStyle.Style });
                 foreach (JumpListItem item in section.Take(Math.Min(JumpListSectionMax, JumpListMax - total)))
                 {
                     JumpListItem chosen = item;
-                    var entry = new MenuItem { Header = MenuText(JumpLists.ToEnglish(item.Title)), Icon = JumpListIconImage(item), Style = MenuItemStyle.Style };
+                    var entry = new MenuItem { Header = MenuText(JumpListText(item.Title, item)), Icon = JumpListIconImage(item, exe), Style = MenuItemStyle.Style };
                     entry.Click += (s, args) => StartJumpListItem(chosen);
                     AddJumpListMenuItem(menu, ref index, entry);
                     total++;
@@ -164,9 +184,17 @@ namespace RetroBar.Controls
 
         // The icon of what an entry starts (a folder's, a document's, the program's own for a task), made the way the program's icon at the
         // top of the menu is (the same 16 DIP image and per-monitor adjustments), so they are as sharp as that one.
-        private static Image JumpListIconImage(JumpListItem item)
+        private static Image JumpListIconImage(JumpListItem item, string browser)
         {
-            ImageSource source = JumpListIcon(item.Target);
+            // A web page of a browser has the icon of its site (as the browser has kept it), the browser's own icon failing that.
+            ImageSource source = null;
+            string url = JumpListUrl(item);
+            if (url != null && browser != null)
+            {
+                source = BrowserFavicons.Get(browser, url);
+            }
+
+            source ??= JumpListIcon(item.Target);
             if (source == null)
             {
                 return null;
@@ -176,6 +204,21 @@ namespace RetroBar.Controls
             RenderOptions.SetBitmapScalingMode(image, BitmapScalingMode.HighQuality);
             MonitorOffset.SetTag(image, "PreviewTitleIcon");
             return image;
+        }
+
+        // The web address an entry opens (a browser's entries have it among their arguments), or null.
+        private static string JumpListUrl(JumpListItem item)
+        {
+            foreach (string part in (item.Arguments ?? "").Split(' ', StringSplitOptions.RemoveEmptyEntries))
+            {
+                string address = part.Trim('"');
+                if (address.StartsWith("http://", StringComparison.OrdinalIgnoreCase) || address.StartsWith("https://", StringComparison.OrdinalIgnoreCase))
+                {
+                    return address;
+                }
+            }
+
+            return null;
         }
 
         private static ImageSource JumpListIcon(string path)
@@ -232,6 +275,13 @@ namespace RetroBar.Controls
 
         private const uint SHGFI_ICON = 0x100;
         private const uint SHGFI_SMALLICON = 0x1;
+        private const uint SHGFI_DISPLAYNAME = 0x200;
+
+        private static string ShellDisplayName(string path)
+        {
+            var info = new SHFILEINFO();
+            return SHGetFileInfo(path, 0, ref info, (uint)Marshal.SizeOf(info), SHGFI_DISPLAYNAME) != IntPtr.Zero ? info.szDisplayName : null;
+        }
 
         [StructLayout(LayoutKind.Sequential, CharSet = CharSet.Unicode)]
         private struct SHFILEINFO
