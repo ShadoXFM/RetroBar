@@ -122,6 +122,16 @@ namespace RetroBar.Controls
             }
         }
 
+        // The gap after a launcher (a pinned program that is not running) in the Windows 11 style: a tab's own margin, so that the launcher is
+        // as wide as the frame of a tab and the two sit evenly.
+        public static DependencyProperty LauncherMarginProperty = DependencyProperty.Register(nameof(LauncherMargin), typeof(Thickness), typeof(TaskList), new PropertyMetadata(new Thickness()));
+
+        public Thickness LauncherMargin
+        {
+            get { return (Thickness)GetValue(LauncherMarginProperty); }
+            set { SetValue(LauncherMarginProperty, value); }
+        }
+
         private void IconOnlyChanged()
         {
             _squareChecks = 0;
@@ -214,6 +224,7 @@ namespace RetroBar.Controls
             TaskButtonRightMargin = buttonMargin.Right;
             TaskButtonTopMargin = buttonMargin.Top;
             TaskButtonBottomMargin = buttonMargin.Bottom;
+            LauncherMargin = new Thickness(0, 0, buttonMargin.Left + buttonMargin.Right, 0);
         }
 
         private void TaskList_OnLoaded(object sender, RoutedEventArgs e)

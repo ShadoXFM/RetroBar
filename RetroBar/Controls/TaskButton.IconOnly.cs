@@ -9,11 +9,14 @@ using System.Windows.Threading;
 
 namespace RetroBar.Controls
 {
-    // In the Windows 11 style of the taskbar (TaskList.IconOnly) a tab shows only its icon, in the middle of it.
+    // In the Windows 11 style of the taskbar (TaskList.IconOnly) a tab shows only its icon, in the middle of its frame. The icon is not the
+    // button's content (the theme moves, and clips, the content of a pressed and of an active tab, so it was never in the same place in the
+    // three states): it is an image of its own over the button (IconOnlyImage), placed once in the middle of the frame the theme draws.
     public partial class TaskButton
     {
         private TaskList _iconOnlyHost;
         private DependencyPropertyDescriptor _iconOnlyDescriptor;
+        private bool _placeIconQueued;
 
         private void InitIconOnly()
         {
@@ -25,82 +28,14 @@ namespace RetroBar.Controls
                 _iconOnlyDescriptor.AddValueChanged(_iconOnlyHost, IconOnly_OnChanged);
             }
 
+            AppButton.SizeChanged -= IconOnly_OnButtonSizeChanged;
+            AppButton.SizeChanged += IconOnly_OnButtonSizeChanged;
             ApplyIconOnly();
-            WatchIconCentering(_iconOnlyHost?.IconOnly == true);
-        }
-
-        // The theme draws a pressed tab, an active one and a resting one with frames that are not the same size and place (and moves the
-        // content of a pressed one), so the icon is not in the middle of all three: after each change the icon is measured against the
-        // frame that is drawn, and moved by the difference.
-        private DependencyPropertyDescriptor _pressedDescriptor;
-        private DependencyPropertyDescriptor _styleDescriptor;
-        private bool _centeringQueued;
-
-        private void WatchIconCentering(bool watch)
-        {
-            _pressedDescriptor ??= DependencyPropertyDescriptor.FromProperty(System.Windows.Controls.Primitives.ButtonBase.IsPressedProperty, typeof(Button));
-            _styleDescriptor ??= DependencyPropertyDescriptor.FromProperty(FrameworkElement.StyleProperty, typeof(Button));
-            _pressedDescriptor.RemoveValueChanged(AppButton, IconCentering_OnChanged);
-            _styleDescriptor.RemoveValueChanged(AppButton, IconCentering_OnChanged);
-            if (watch)
-            {
-                _pressedDescriptor.AddValueChanged(AppButton, IconCentering_OnChanged);
-                _styleDescriptor.AddValueChanged(AppButton, IconCentering_OnChanged);
-            }
-        }
-
-        private void IconCentering_OnChanged(object sender, EventArgs e)
-        {
-            if (_centeringQueued)
-            {
-                return;
-            }
-
-            _centeringQueued = true;
-            Dispatcher.BeginInvoke(new Action(() =>
-            {
-                _centeringQueued = false;
-                CenterIcon();
-            }), DispatcherPriority.Loaded);
-        }
-
-        private void CenterIcon()
-        {
-            if (_iconOnlyHost?.IconOnly != true || !IsLoaded)
-            {
-                return;
-            }
-
-            try
-            {
-                TaskIconImage.Margin = new Thickness(0);
-                AppButton.UpdateLayout();
-
-                var frame = AppButton.Template?.FindName("ButtonOuterBottomBorder", AppButton) as FrameworkElement;
-                if (frame == null || frame.ActualWidth <= 0 || TaskIconImage.ActualWidth <= 0)
-                {
-                    return;
-                }
-
-                Rect icon = TaskIconImage.TransformToAncestor(frame).TransformBounds(new Rect(0, 0, TaskIconImage.ActualWidth, TaskIconImage.ActualHeight));
-                double dx = frame.ActualWidth / 2 - (icon.Left + icon.Width / 2);
-                double dy = frame.ActualHeight / 2 - (icon.Top + icon.Height / 2);
-
-                double step = _iconOnlyHost.PixelStep > 0 ? _iconOnlyHost.PixelStep : 1;
-                double left = Math.Round(Math.Max(0, 2 * dx) / step) * step;
-                double right = Math.Round(Math.Max(0, -2 * dx) / step) * step;
-                double top = Math.Round(Math.Max(0, 2 * dy) / step) * step;
-                double bottom = Math.Round(Math.Max(0, -2 * dy) / step) * step;
-                TaskIconImage.Margin = new Thickness(left, top, right, bottom);
-            }
-            catch (InvalidOperationException)
-            {
-            }
         }
 
         private void ReleaseIconOnly()
         {
-            WatchIconCentering(false);
+            AppButton.SizeChanged -= IconOnly_OnButtonSizeChanged;
             if (_iconOnlyHost != null)
             {
                 _iconOnlyDescriptor?.RemoveValueChanged(_iconOnlyHost, IconOnly_OnChanged);
@@ -108,15 +43,15 @@ namespace RetroBar.Controls
             }
         }
 
-        private void IconOnly_OnChanged(object sender, EventArgs e)
-        {
-            ApplyIconOnly();
-            WatchIconCentering(_iconOnlyHost?.IconOnly == true);
-            IconCentering_OnChanged(this, EventArgs.Empty);
-        }
+        private void IconOnly_OnChanged(object sender, EventArgs e) => ApplyIconOnly();
 
-        // The binding of the icon (the window's own, whatever its title bar shows: a folder, a page), put back when the tab is a classic one.
-        private BindingBase _windowIconBinding;
+        private void IconOnly_OnButtonSizeChanged(object sender, SizeChangedEventArgs e)
+        {
+            if (_iconOnlyHost?.IconOnly == true)
+            {
+                QueuePlaceIcon();
+            }
+        }
 
         // The program's icon: its executable's (File Explorer's own, as the user may have set it), not the window's, which is the title
         // bar's and changes with what the window shows. Null for a window that has no executable to ask (a packaged app).
@@ -140,38 +75,70 @@ namespace RetroBar.Controls
         {
             bool only = _iconOnlyHost?.IconOnly == true;
             TaskLabelText.Visibility = only ? Visibility.Collapsed : Visibility.Visible;
-            Grid.SetColumnSpan(TaskIconImage, only ? 2 : 1);
+
+            // The button's own icon stays where it is (so the button is as big as ever) but is not seen in this style.
+            TaskIconImage.Opacity = only ? 0 : 1;
+            IconOnlyImage.Visibility = only ? Visibility.Visible : Visibility.Collapsed;
 
             if (only)
             {
-                // Centered, both ways, with no margin: the theme's margin leaves room for a label after the icon and is tuned, with the
-                // per-monitor nudges of "TaskIcon", for an icon at the left of the tab. The icon has tags of its own (TaskIconOnly), whose
-                // position is put on whole device pixels.
-                TaskIconImage.HorizontalAlignment = HorizontalAlignment.Center;
-                TaskIconImage.VerticalAlignment = VerticalAlignment.Center;
-                TaskIconImage.Margin = new Thickness(0);
-                SetMonitorTag(TaskIconImage, "TaskIconOnly");
-                IconCentering_OnChanged(this, EventArgs.Empty);
-
-                _windowIconBinding ??= BindingOperations.GetBindingBase(TaskIconImage, Image.SourceProperty);
                 ImageSource program = ProgramIconForTab();
                 if (program != null)
                 {
-                    BindingOperations.ClearBinding(TaskIconImage, Image.SourceProperty);
-                    TaskIconImage.Source = program;
+                    BindingOperations.ClearBinding(IconOnlyImage, Image.SourceProperty);
+                    IconOnlyImage.Source = program;
                 }
+                else
+                {
+                    // A packaged app has no executable to ask: the window's own icon.
+                    IconOnlyImage.SetBinding(Image.SourceProperty, new Binding(nameof(Image.Source)) { Source = TaskIconImage });
+                }
+
+                QueuePlaceIcon();
             }
             else
             {
-                TaskIconImage.ClearValue(FrameworkElement.HorizontalAlignmentProperty);
-                TaskIconImage.ClearValue(FrameworkElement.VerticalAlignmentProperty);
-                TaskIconImage.ClearValue(FrameworkElement.MarginProperty);
-                SetMonitorTag(TaskIconImage, "TaskIcon");
+                BindingOperations.ClearBinding(IconOnlyImage, Image.SourceProperty);
+                IconOnlyImage.Source = null;
+            }
+        }
 
-                if (_windowIconBinding != null)
-                {
-                    TaskIconImage.SetBinding(Image.SourceProperty, _windowIconBinding);
-                }
+        private void QueuePlaceIcon()
+        {
+            if (_placeIconQueued)
+            {
+                return;
+            }
+
+            _placeIconQueued = true;
+            Dispatcher.BeginInvoke(new Action(() =>
+            {
+                _placeIconQueued = false;
+                PlaceIcon();
+            }), DispatcherPriority.Loaded);
+        }
+
+        // In the middle of the frame the theme draws (its outer border, which is smaller than the button's box), in whole device pixels.
+        private void PlaceIcon()
+        {
+            if (_iconOnlyHost?.IconOnly != true || !IsLoaded || AppButton.IsPressed)
+            {
+                return;
+            }
+
+            try
+            {
+                var frame = AppButton.Template?.FindName("ButtonOuterBottomBorder", AppButton) as FrameworkElement;
+                FrameworkElement reference = frame != null && frame.ActualWidth > 0 && frame.ActualHeight > 0 ? frame : AppButton;
+                Rect bounds = reference.TransformToAncestor(this).TransformBounds(new Rect(0, 0, reference.ActualWidth, reference.ActualHeight));
+
+                double step = _iconOnlyHost.PixelStep > 0 ? _iconOnlyHost.PixelStep : 1;
+                double left = bounds.Left + (bounds.Width - IconOnlyImage.Width) / 2;
+                double top = bounds.Top + (bounds.Height - IconOnlyImage.Height) / 2;
+                IconOnlyImage.Margin = new Thickness(Math.Round(left / step) * step, Math.Round(top / step) * step, 0, 0);
+            }
+            catch (InvalidOperationException)
+            {
             }
         }
     }

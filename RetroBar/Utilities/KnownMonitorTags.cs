@@ -54,8 +54,6 @@ namespace RetroBar.Utilities
             "TaskButtonActive",
             "TaskIcon",
             "TaskIconActive",
-            "TaskIconOnly",
-            "TaskIconOnlyActive",
             "TaskLabel",
             "TaskLabelActive",
             "TaskOverlayIcon",

@@ -1,4 +1,5 @@
 using RetroBar.Utilities;
+using System;
 using System.Windows;
 using System.Windows.Controls;
 using System.ComponentModel;
@@ -49,9 +50,11 @@ namespace RetroBar
             _windows11Applied = windows11;
             if (windows11)
             {
-                // The media player: out of the tray box, into a box of its own at the left.
-                TrayContent.Children.Remove(MediaPlayerControl);
-                _mediaBox = new GroupBox { Style = (Style)FindResource("Tray"), Content = MediaPlayerControl, Margin = new Thickness(2, 0, 0, 0) };
+                // The weather and the CPU temperature: out of the tray box, into a box of their own at the left; the media player is in
+                // the tray box in their place (at its left, with the notification icons and the clock).
+                TrayContent.Children.Remove(WeatherGroup);
+                WeatherGroup.Margin = new Thickness(0);
+                _mediaBox = new GroupBox { Style = (Style)FindResource("Tray"), Content = WeatherGroup, Margin = new Thickness(2, 0, 0, 0) };
                 DockPanel.SetDock(_mediaBox, Dock.Left);
 
                 // The tabs: out of the dock, into a row that is centered in what the other boxes leave. The Start button stays where it
@@ -62,6 +65,9 @@ namespace RetroBar
                 _centerStrip = new Grid();
                 _centerStrip.Children.Add(_centerRow);
                 _centerStrip.SizeChanged += (s, e) => UpdateCenterWidth();
+                _mediaBox.SizeChanged += (s, e) => UpdateCenterWidth();
+                StartButton.SizeChanged += (s, e) => UpdateCenterWidth();
+                TrayBox.SizeChanged += (s, e) => UpdateCenterWidth();
 
                 TaskbarDock.Children.Insert(TaskbarDock.Children.IndexOf(StartButton) + 1, _mediaBox);
                 TaskbarDock.Children.Add(_centerStrip);
@@ -77,7 +83,8 @@ namespace RetroBar
                 TaskbarDock.Children.Remove(_centerStrip);
                 TaskbarDock.Children.Remove(_mediaBox);
                 _mediaBox.Content = null;
-                TrayContent.Children.Insert(0, MediaPlayerControl);
+                WeatherGroup.Margin = new Thickness(5, 0, 0, 0);
+                TrayContent.Children.Insert(TrayContent.Children.IndexOf(MediaPlayerControl) + 1, WeatherGroup);
 
                 TaskbarDock.Children.Add(TaskListControl);
                 _centerStrip = null;
@@ -88,13 +95,21 @@ namespace RetroBar
             }
         }
 
-        // The room the tabs have: what is left of the middle.
+        // The tabs are centered on the whole bar, not in what the boxes at the left and the right leave (which moved them when the tray grew,
+        // the hidden icons being shown, say): the row has a margin on the side of the smaller box, and the room it has is what is left
+        // either side of the middle.
         private void UpdateCenterWidth()
         {
-            if (_centerStrip != null)
+            if (_centerStrip == null || _centerRow == null)
             {
-                TaskListControl.AvailableWidth = System.Math.Max(0, _centerStrip.ActualWidth);
+                return;
             }
+
+            double left = StartButton.ActualWidth + (_mediaBox?.ActualWidth ?? 0) + (_mediaBox?.Margin.Left ?? 0);
+            double right = TrayBox.ActualWidth;
+            double difference = Math.Abs(left - right);
+            _centerRow.Margin = left < right ? new Thickness(difference, 0, 0, 0) : new Thickness(0, 0, difference, 0);
+            TaskListControl.AvailableWidth = Math.Max(0, _centerStrip.ActualWidth - difference);
         }
     }
 }

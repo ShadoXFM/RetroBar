@@ -29,6 +29,12 @@ namespace RetroBar.Converters
                 return Binding.DoNothing;
             }
 
+            // values[5], when there is one: room the item leaves out of its slot (a launcher's gap), taken off its width.
+            if (values.Length > 5 && values[5] is double gap)
+            {
+                baseWidth = Math.Max(1, baseWidth - gap);
+            }
+
             if (values[0] is int index
                 && values[2] is int extraCount
                 && values[3] is int buttonsPerRow
