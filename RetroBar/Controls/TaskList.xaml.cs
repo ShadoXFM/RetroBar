@@ -163,6 +163,29 @@ namespace RetroBar.Controls
             set { SetValue(TabMarginProperty, value); }
         }
 
+        // While the tabs slide after one has closed, the list is wider than its tabs by this much each side (they are put at its middle, so
+        // they are where they would be): the tab that is farthest out slides in from beyond the list's new edge, and was cut by it.
+        private double _slideSlack;
+        private double _pitch;
+        private DispatcherTimer _slackTimer;
+
+        private void BeginSlideSlack()
+        {
+            _slideSlack = _pitch + PixelStep;
+            _slackTimer ??= new DispatcherTimer { Interval = TimeSpan.FromMilliseconds(350) };
+            _slackTimer.Stop();
+            _slackTimer.Tick -= SlackTimer_Tick;
+            _slackTimer.Tick += SlackTimer_Tick;
+            _slackTimer.Start();
+        }
+
+        private void SlackTimer_Tick(object sender, EventArgs e)
+        {
+            _slackTimer.Stop();
+            _slideSlack = 0;
+            SetTaskButtonWidth();
+        }
+
         private double _launcherShift;
         private double _launcherLift;
         private double _launcherLeft;
@@ -251,6 +274,8 @@ namespace RetroBar.Controls
         {
             _squareChecks = 0;
             TabMargin = new Thickness();
+            TasksList.Margin = new Thickness();
+            _slideSlack = 0;
             _alignChecks = 0;
             _launcherLift = 0;
             TasksList.LayoutUpdated -= TasksList_LayoutUpdatedForSquare;
@@ -674,6 +699,12 @@ namespace RetroBar.Controls
 
         private void GroupedWindows_CollectionChanged(object sender, System.Collections.Specialized.NotifyCollectionChangedEventArgs e)
         {
+            if (IconOnly && e.Action == System.Collections.Specialized.NotifyCollectionChangedAction.Remove &&
+                Settings.Instance.SlideTaskbarButtons && DateTime.UtcNow > TaskButton.SuppressSlideInUntilUtc)
+            {
+                BeginSlideSlack();
+            }
+
             if (e.Action == System.Collections.Specialized.NotifyCollectionChangedAction.Add && e.NewItems != null)
             {
                 DateTime now = DateTime.UtcNow;
@@ -793,6 +824,8 @@ namespace RetroBar.Controls
                 }
 
                 TabMargin = new Thickness(0, 0, -PixelStep, 0);
+                _pitch = pitch;
+                TasksList.Margin = new Thickness(_slideSlack, 0, _slideSlack, 0);
 
                 // A pinned program that is not running takes the room of a tab, so the row does not change size when it starts (and the pins
                 // are no closer together than the tabs are). Its button keeps the width its icon needs, with margins to make up the slot and
@@ -809,8 +842,8 @@ namespace RetroBar.Controls
                 ButtonWidth = iconWidth;
                 // Over what they need by what the list has beside its tabs (the grip at its left): the row wraps, and its last tab is out of
                 // sight, when it is short.
-                double beside = ActualWidth > 0 && TasksList.ActualWidth > 0 ? Math.Max(0, ActualWidth - TasksList.ActualWidth) : 6;
-                Width = pitch * ButtonsPerRow + beside + 2 * PixelStep;
+                double beside = ActualWidth > 0 && TasksList.ActualWidth > 0 ? Math.Max(0, ActualWidth - TasksList.ActualWidth - TasksList.Margin.Left - TasksList.Margin.Right) : 6;
+                Width = pitch * ButtonsPerRow + beside + 2 * PixelStep + 2 * _slideSlack;
                 SetScrollable(false);
                 return;
             }
