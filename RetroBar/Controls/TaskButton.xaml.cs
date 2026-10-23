@@ -455,12 +455,33 @@ namespace RetroBar.Controls
             ImageSource icon = null;
             try
             {
-                using System.Drawing.Icon extracted = System.Drawing.Icon.ExtractAssociatedIcon(path);
-                if (extracted != null)
+                // The shell's small icon, the one the pinned programs have (a 32 pixel icon shrunk to the size of a tab's, as this was, lost a
+                // row of its picture at the top): the size the icons of the classic style are.
+                bool large = Settings.Instance.TaskbarScale > 1 || (Application.Current.FindResource("UseLargeIcons") as bool? ?? false);
+                IntPtr handle = ManagedShell.Common.Helpers.IconHelper.GetIconByFilename(path, large ? ManagedShell.Common.Enums.IconSize.Large : ManagedShell.Common.Enums.IconSize.Small);
+                if (handle != IntPtr.Zero)
                 {
-                    BitmapSource bitmap = System.Windows.Interop.Imaging.CreateBitmapSourceFromHIcon(extracted.Handle, Int32Rect.Empty, BitmapSizeOptions.FromEmptyOptions());
-                    bitmap.Freeze();
-                    icon = bitmap;
+                    try
+                    {
+                        BitmapSource shell = System.Windows.Interop.Imaging.CreateBitmapSourceFromHIcon(handle, Int32Rect.Empty, BitmapSizeOptions.FromEmptyOptions());
+                        shell.Freeze();
+                        icon = shell;
+                    }
+                    finally
+                    {
+                        DestroyIcon(handle);
+                    }
+                }
+
+                if (icon == null)
+                {
+                    using System.Drawing.Icon extracted = System.Drawing.Icon.ExtractAssociatedIcon(path);
+                    if (extracted != null)
+                    {
+                        BitmapSource bitmap = System.Windows.Interop.Imaging.CreateBitmapSourceFromHIcon(extracted.Handle, Int32Rect.Empty, BitmapSizeOptions.FromEmptyOptions());
+                        bitmap.Freeze();
+                        icon = bitmap;
+                    }
                 }
             }
             catch (Exception)
