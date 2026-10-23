@@ -70,14 +70,44 @@ namespace RetroBar.Utilities
             return positions;
         }
 
-        /// <summary>Schedules the slide for after the pending layout pass.</summary>
+        /// <summary>Schedules the slide for the layout pass that follows: it is set up as that pass ends, before the frame with the items
+        /// at their new places is drawn (set up later, that frame showed them there for an instant and they then jumped back).</summary>
         public static void Play(ItemsControl list, Dictionary<object, Point> before)
         {
-            list.Dispatcher.BeginInvoke(new Action(() => Slide(list, before)), DispatcherPriority.Loaded);
+            bool done = false;
+            int passes = 0;
+            EventHandler handler = null;
+            handler = (s, e) =>
+            {
+                if (done)
+                {
+                    return;
+                }
+
+                passes++;
+                if (Slide(list, before) || passes >= 4)
+                {
+                    done = true;
+                    list.LayoutUpdated -= handler;
+                }
+            };
+            list.LayoutUpdated += handler;
+
+            // If no layout comes (nothing changed its size), the slide is tried once after all.
+            list.Dispatcher.BeginInvoke(new Action(() =>
+            {
+                if (!done)
+                {
+                    done = true;
+                    list.LayoutUpdated -= handler;
+                    Slide(list, before);
+                }
+            }), DispatcherPriority.Loaded);
         }
 
-        private static void Slide(ItemsControl list, Dictionary<object, Point> before)
+        private static bool Slide(ItemsControl list, Dictionary<object, Point> before)
         {
+            bool moved = false;
             Visual reference = Reference(list);
             foreach (object item in list.Items)
             {
@@ -97,6 +127,7 @@ namespace RetroBar.Utilities
                     continue;
                 }
 
+                moved = true;
                 var transform = new TranslateTransform(dx, dy);
                 container.RenderTransform = transform;
 
@@ -107,6 +138,8 @@ namespace RetroBar.Utilities
                 transform.BeginAnimation(TranslateTransform.XProperty, new PixelSnappedAnimation(dx, 0, dpi, SlideDuration, ease));
                 transform.BeginAnimation(TranslateTransform.YProperty, new PixelSnappedAnimation(dy, 0, dpi, SlideDuration, ease));
             }
+
+            return moved;
         }
     }
 }

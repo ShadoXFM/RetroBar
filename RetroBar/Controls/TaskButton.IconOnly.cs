@@ -90,7 +90,8 @@ namespace RetroBar.Controls
             // The button's own icon stays where it is (so the button is as big as ever) but is not seen in this style.
             TaskIconImage.Opacity = only ? 0 : 1;
             TaskOverlayIconImage.Opacity = only ? 0 : 1;
-            IconOnlyBadge.Opacity = only ? 1 : 0;
+            IconOnlyBadge.Opacity = 0;
+            IconOnlyImage.Opacity = 0;
             IconOnlyImage.Visibility = only ? Visibility.Visible : Visibility.Collapsed;
 
             if (only)
@@ -118,8 +119,27 @@ namespace RetroBar.Controls
             }
         }
 
+        private bool _iconPlaced;
+
+        // Each layout pass until the icon has a place: a tab that has just opened has no size yet when it is loaded, and the icon is
+        // hidden until it has one (see PlaceIcon).
+        private void IconOnly_OnLayoutUpdated(object sender, EventArgs e)
+        {
+            if (_iconPlaced || _iconOnlyHost?.IconOnly != true)
+            {
+                LayoutUpdated -= IconOnly_OnLayoutUpdated;
+                return;
+            }
+
+            PlaceIcon();
+        }
+
         private void QueuePlaceIcon()
         {
+            _iconPlaced = false;
+            LayoutUpdated -= IconOnly_OnLayoutUpdated;
+            LayoutUpdated += IconOnly_OnLayoutUpdated;
+
             if (_placeIconQueued)
             {
                 return;
@@ -145,6 +165,15 @@ namespace RetroBar.Controls
             {
                 var frame = AppButton.Template?.FindName("ButtonOuterBottomBorder", AppButton) as FrameworkElement;
                 FrameworkElement reference = frame != null && frame.ActualWidth > 0 && frame.ActualHeight > 0 ? frame : AppButton;
+                if (reference.ActualWidth <= 0 || reference.ActualHeight <= 0)
+                {
+                    // Not laid out yet (a tab that has just opened): its icon is shown once it has a place, not at the corner it would be put
+                    // at now and then moved from.
+                    IconOnlyImage.Opacity = 0;
+                    IconOnlyBadge.Opacity = 0;
+                    return;
+                }
+
                 Rect bounds = reference.TransformToAncestor(this).TransformBounds(new Rect(0, 0, reference.ActualWidth, reference.ActualHeight));
 
                 double step = _iconOnlyHost.PixelStep > 0 ? _iconOnlyHost.PixelStep : 1;
@@ -161,6 +190,9 @@ namespace RetroBar.Controls
                 // The badge at the lower right of the icon, as the classic tab has it.
                 IconOnlyBadge.Margin = new Thickness(Math.Round((iconLeft + IconOnlyImage.Width - IconOnlyBadge.Width + 2) / step) * step,
                     Math.Round((iconTop + IconOnlyImage.Height - IconOnlyBadge.Height + 1) / step) * step, 0, 0);
+                IconOnlyImage.Opacity = 1;
+                IconOnlyBadge.Opacity = 1;
+                _iconPlaced = true;
             }
             catch (InvalidOperationException)
             {
