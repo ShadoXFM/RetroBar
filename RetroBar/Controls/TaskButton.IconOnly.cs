@@ -30,12 +30,15 @@ namespace RetroBar.Controls
 
             AppButton.SizeChanged -= IconOnly_OnButtonSizeChanged;
             AppButton.SizeChanged += IconOnly_OnButtonSizeChanged;
+            MonitorAdjustments.Changed -= IconOnly_OnAdjustmentsChanged;
+            MonitorAdjustments.Changed += IconOnly_OnAdjustmentsChanged;
             ApplyIconOnly();
         }
 
         private void ReleaseIconOnly()
         {
             AppButton.SizeChanged -= IconOnly_OnButtonSizeChanged;
+            MonitorAdjustments.Changed -= IconOnly_OnAdjustmentsChanged;
             if (_iconOnlyHost != null)
             {
                 _iconOnlyDescriptor?.RemoveValueChanged(_iconOnlyHost, IconOnly_OnChanged);
@@ -44,6 +47,14 @@ namespace RetroBar.Controls
         }
 
         private void IconOnly_OnChanged(object sender, EventArgs e) => ApplyIconOnly();
+
+        private void IconOnly_OnAdjustmentsChanged(object sender, EventArgs e)
+        {
+            if (_iconOnlyHost?.IconOnly == true)
+            {
+                Dispatcher.BeginInvoke(new Action(QueuePlaceIcon));
+            }
+        }
 
         private void IconOnly_OnButtonSizeChanged(object sender, SizeChangedEventArgs e)
         {
@@ -135,6 +146,13 @@ namespace RetroBar.Controls
                 Rect bounds = reference.TransformToAncestor(this).TransformBounds(new Rect(0, 0, reference.ActualWidth, reference.ActualHeight));
 
                 double step = _iconOnlyHost.PixelStep > 0 ? _iconOnlyHost.PixelStep : 1;
+
+                // The size the classic style draws the icon at (the Scale its monitor's TaskIcon adjustment gives it), in whole device pixels:
+                // at full size the icon fills the frame to its top highlight, and it looks cut there.
+                double scale = MonitorAdjustments.Get(MonitorOffset.FindDeviceName(this), "TaskIcon").Scale ?? 1;
+                double side = Math.Max(step, Math.Round(16 * scale / step) * step);
+                IconOnlyImage.Width = side;
+                IconOnlyImage.Height = side;
                 double left = bounds.Left + (bounds.Width - IconOnlyImage.Width) / 2;
                 double top = bounds.Top + (bounds.Height - IconOnlyImage.Height) / 2;
                 double iconLeft = Math.Round(left / step) * step;
