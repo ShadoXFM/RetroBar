@@ -656,7 +656,10 @@ namespace RetroBar.Controls
 
             // A tab that closes: the ones after it slide left into the gap (their containers are still where they were
             // until the layout pass that follows). A tab removed by a drag-and-drop slides on its own (TaskListDropHandler).
-            if (e.Action == System.Collections.Specialized.NotifyCollectionChangedAction.Remove &&
+            // In the Windows 11 style the tabs are centered, so one that opens moves the others too (they slide as the list is made, and the
+            // new one comes in as it appears); in the classic style the new tab grows from nothing and pushes the others (TaskButton.Animate).
+            if ((e.Action == System.Collections.Specialized.NotifyCollectionChangedAction.Remove ||
+                 (IconOnly && e.Action == System.Collections.Specialized.NotifyCollectionChangedAction.Add)) &&
                 Settings.Instance.SlideTaskbarButtons && Host?.Orientation == Orientation.Horizontal &&
                 DateTime.UtcNow > TaskButton.SuppressSlideInUntilUtc)
             {

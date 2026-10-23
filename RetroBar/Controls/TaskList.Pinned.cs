@@ -187,6 +187,8 @@ namespace RetroBar.Controls
 
             public void Drop(GongSolutions.Wpf.DragDrop.IDropInfo dropInfo)
             {
+                // The tabs are made again for the new order; they are not new windows coming in (see TaskButton.Animate).
+                TaskButton.SuppressSlideInUntilUtc = DateTime.UtcNow + TimeSpan.FromMilliseconds(600);
                 int place = Place(dropInfo.Data, dropInfo.InsertIndex);
                 Dictionary<object, System.Windows.Point> before = ItemSlideAnimation.Capture(_owner.TasksList);
 

@@ -50,15 +50,20 @@ namespace RetroBar.Utilities
             }
         }
 
+        // Where the places are measured from: the window, so that a list that moves as a whole (the centered tabs of the Windows 11
+        // style, when one is added) has its items slide too, not only the ones that moved inside it.
+        private static Visual Reference(ItemsControl list) => Window.GetWindow(list) ?? (Visual)list;
+
         public static Dictionary<object, Point> Capture(ItemsControl list)
         {
             var positions = new Dictionary<object, Point>();
+            Visual reference = Reference(list);
 
             foreach (object item in list.Items)
             {
                 if (list.ItemContainerGenerator.ContainerFromItem(item) is FrameworkElement container && container.IsLoaded)
                 {
-                    positions[item] = container.TransformToAncestor(list).Transform(new Point(0, 0));
+                    positions[item] = container.TransformToAncestor(reference).Transform(new Point(0, 0));
                 }
             }
 
@@ -73,6 +78,7 @@ namespace RetroBar.Utilities
 
         private static void Slide(ItemsControl list, Dictionary<object, Point> before)
         {
+            Visual reference = Reference(list);
             foreach (object item in list.Items)
             {
                 if (!before.TryGetValue(item, out Point oldPosition) ||
@@ -82,7 +88,7 @@ namespace RetroBar.Utilities
                     continue;
                 }
 
-                Point newPosition = container.TransformToAncestor(list).Transform(new Point(0, 0));
+                Point newPosition = container.TransformToAncestor(reference).Transform(new Point(0, 0));
                 double dx = oldPosition.X - newPosition.X;
                 double dy = oldPosition.Y - newPosition.Y;
 

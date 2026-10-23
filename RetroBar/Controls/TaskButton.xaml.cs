@@ -297,6 +297,20 @@ namespace RetroBar.Controls
             var ease = new SineEase();
             ease.EasingMode = EasingMode.EaseInOut;
 
+            if (Host?.IconOnly == true)
+            {
+                // The tabs of the Windows 11 style are centered in a list that already has its final width: the other tabs slide to their
+                // places (TaskList), and this one grows from its middle and comes in from nothing.
+                var scale = new ScaleTransform(0, 1);
+                RenderTransformOrigin = new Point(0.5, 0.5);
+                RenderTransform = scale;
+                var grow = new DoubleAnimation(0, 1, new Duration(TimeSpan.FromMilliseconds(250))) { EasingFunction = ease };
+                grow.Completed += (s, e) => RenderTransform = null;
+                scale.BeginAnimation(ScaleTransform.ScaleXProperty, grow);
+                BeginAnimation(OpacityProperty, new DoubleAnimation(0, 1, new Duration(TimeSpan.FromMilliseconds(250))) { EasingFunction = ease, FillBehavior = FillBehavior.Stop });
+                return;
+            }
+
             DoubleAnimation animation = new DoubleAnimation();
             animation.From = 0;
             animation.To = Host?.ButtonWidth ?? ActualWidth;
