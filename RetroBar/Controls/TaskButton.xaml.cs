@@ -455,10 +455,8 @@ namespace RetroBar.Controls
             ImageSource icon = null;
             try
             {
-                // The shell's small icon, the one the pinned programs have (a 32 pixel icon shrunk to the size of a tab's, as this was, lost a
-                // row of its picture at the top): the size the icons of the classic style are.
-                bool large = Settings.Instance.TaskbarScale > 1 || (Application.Current.FindResource("UseLargeIcons") as bool? ?? false);
-                IntPtr handle = ManagedShell.Common.Helpers.IconHelper.GetIconByFilename(path, large ? ManagedShell.Common.Enums.IconSize.Large : ManagedShell.Common.Enums.IconSize.Small);
+                // The shell's large icon (the most there is of the picture; the tab makes it to its own size, see TaskButton.IconOnly.cs).
+                IntPtr handle = ManagedShell.Common.Helpers.IconHelper.GetIconByFilename(path, ManagedShell.Common.Enums.IconSize.Large);
                 if (handle != IntPtr.Zero)
                 {
                     try
