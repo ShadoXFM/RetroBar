@@ -5,6 +5,7 @@ using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Data;
 using System.Windows.Media;
+using System.Windows.Threading;
 
 namespace RetroBar.Controls
 {
@@ -25,10 +26,81 @@ namespace RetroBar.Controls
             }
 
             ApplyIconOnly();
+            WatchIconCentering(_iconOnlyHost?.IconOnly == true);
+        }
+
+        // The theme draws a pressed tab, an active one and a resting one with frames that are not the same size and place (and moves the
+        // content of a pressed one), so the icon is not in the middle of all three: after each change the icon is measured against the
+        // frame that is drawn, and moved by the difference.
+        private DependencyPropertyDescriptor _pressedDescriptor;
+        private DependencyPropertyDescriptor _styleDescriptor;
+        private bool _centeringQueued;
+
+        private void WatchIconCentering(bool watch)
+        {
+            _pressedDescriptor ??= DependencyPropertyDescriptor.FromProperty(System.Windows.Controls.Primitives.ButtonBase.IsPressedProperty, typeof(Button));
+            _styleDescriptor ??= DependencyPropertyDescriptor.FromProperty(FrameworkElement.StyleProperty, typeof(Button));
+            _pressedDescriptor.RemoveValueChanged(AppButton, IconCentering_OnChanged);
+            _styleDescriptor.RemoveValueChanged(AppButton, IconCentering_OnChanged);
+            if (watch)
+            {
+                _pressedDescriptor.AddValueChanged(AppButton, IconCentering_OnChanged);
+                _styleDescriptor.AddValueChanged(AppButton, IconCentering_OnChanged);
+            }
+        }
+
+        private void IconCentering_OnChanged(object sender, EventArgs e)
+        {
+            if (_centeringQueued)
+            {
+                return;
+            }
+
+            _centeringQueued = true;
+            Dispatcher.BeginInvoke(new Action(() =>
+            {
+                _centeringQueued = false;
+                CenterIcon();
+            }), DispatcherPriority.Loaded);
+        }
+
+        private void CenterIcon()
+        {
+            if (_iconOnlyHost?.IconOnly != true || !IsLoaded)
+            {
+                return;
+            }
+
+            try
+            {
+                TaskIconImage.Margin = new Thickness(0);
+                AppButton.UpdateLayout();
+
+                var frame = AppButton.Template?.FindName("ButtonOuterBottomBorder", AppButton) as FrameworkElement;
+                if (frame == null || frame.ActualWidth <= 0 || TaskIconImage.ActualWidth <= 0)
+                {
+                    return;
+                }
+
+                Rect icon = TaskIconImage.TransformToAncestor(frame).TransformBounds(new Rect(0, 0, TaskIconImage.ActualWidth, TaskIconImage.ActualHeight));
+                double dx = frame.ActualWidth / 2 - (icon.Left + icon.Width / 2);
+                double dy = frame.ActualHeight / 2 - (icon.Top + icon.Height / 2);
+
+                double step = _iconOnlyHost.PixelStep > 0 ? _iconOnlyHost.PixelStep : 1;
+                double left = Math.Round(Math.Max(0, 2 * dx) / step) * step;
+                double right = Math.Round(Math.Max(0, -2 * dx) / step) * step;
+                double top = Math.Round(Math.Max(0, 2 * dy) / step) * step;
+                double bottom = Math.Round(Math.Max(0, -2 * dy) / step) * step;
+                TaskIconImage.Margin = new Thickness(left, top, right, bottom);
+            }
+            catch (InvalidOperationException)
+            {
+            }
         }
 
         private void ReleaseIconOnly()
         {
+            WatchIconCentering(false);
             if (_iconOnlyHost != null)
             {
                 _iconOnlyDescriptor?.RemoveValueChanged(_iconOnlyHost, IconOnly_OnChanged);
@@ -36,7 +108,12 @@ namespace RetroBar.Controls
             }
         }
 
-        private void IconOnly_OnChanged(object sender, EventArgs e) => ApplyIconOnly();
+        private void IconOnly_OnChanged(object sender, EventArgs e)
+        {
+            ApplyIconOnly();
+            WatchIconCentering(_iconOnlyHost?.IconOnly == true);
+            IconCentering_OnChanged(this, EventArgs.Empty);
+        }
 
         // The binding of the icon (the window's own, whatever its title bar shows: a folder, a page), put back when the tab is a classic one.
         private BindingBase _windowIconBinding;
@@ -74,6 +151,7 @@ namespace RetroBar.Controls
                 TaskIconImage.VerticalAlignment = VerticalAlignment.Center;
                 TaskIconImage.Margin = new Thickness(0);
                 SetMonitorTag(TaskIconImage, "TaskIconOnly");
+                IconCentering_OnChanged(this, EventArgs.Empty);
 
                 _windowIconBinding ??= BindingOperations.GetBindingBase(TaskIconImage, Image.SourceProperty);
                 ImageSource program = ProgramIconForTab();
