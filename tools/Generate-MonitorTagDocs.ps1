@@ -33,6 +33,7 @@ foreach ($file in $files) {
 
     foreach ($m in [regex]::Matches($text, 'MonitorOffset\.Tag="([A-Za-z0-9_]+)"')) { Add-Tag $m.Groups[1].Value $relative }
     foreach ($m in [regex]::Matches($text, 'MonitorOffset\.SetTag\([^,]+,\s*"([A-Za-z0-9_]+)"\)')) { Add-Tag $m.Groups[1].Value $relative }
+    foreach ($m in [regex]::Matches($text, 'SetMonitorTag\(\w+,\s*"(Task\w+)"\)')) { Add-Tag $m.Groups[1].Value $relative @('Active'); Add-Tag ($m.Groups[1].Value + 'Active') $relative }
     foreach ($m in [regex]::Matches($text, 'MonitorAdjustments\.Get\([^,]+,\s*"([A-Za-z0-9_]+)"\)')) { Add-Tag $m.Groups[1].Value $relative }
     foreach ($m in [regex]::Matches($text, '=>\s*"((?:Media|Tray|Weather)[A-Za-z0-9_]+)"')) { Add-Tag $m.Groups[1].Value $relative }
     foreach ($m in [regex]::Matches($text, 'CreateTransportButton\("(\w+)",\s*"(\w+)"')) { Add-Tag $m.Groups[1].Value $relative; Add-Tag $m.Groups[2].Value $relative }

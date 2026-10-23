@@ -44,16 +44,20 @@ namespace RetroBar.Controls
 
             if (only)
             {
-                // Centered: the theme's margin leaves room for a label after the icon.
-                Thickness margin = TaskIconImage.Margin;
+                // Centered, both ways, with no margin: the theme's margin leaves room for a label after the icon and is tuned, with the
+                // per-monitor nudges of "TaskIcon", for an icon at the left of the tab. The icon has tags of its own (TaskIconOnly), whose
+                // position is put on whole device pixels.
                 TaskIconImage.HorizontalAlignment = HorizontalAlignment.Center;
-                TaskIconImage.Margin = new Thickness(0, margin.Top, 0, margin.Bottom);
+                TaskIconImage.VerticalAlignment = VerticalAlignment.Center;
+                TaskIconImage.Margin = new Thickness(0);
+                SetMonitorTag(TaskIconImage, "TaskIconOnly");
             }
             else
             {
                 TaskIconImage.ClearValue(FrameworkElement.HorizontalAlignmentProperty);
+                TaskIconImage.ClearValue(FrameworkElement.VerticalAlignmentProperty);
                 TaskIconImage.ClearValue(FrameworkElement.MarginProperty);
-                MonitorOffset.Refresh(TaskIconImage);
+                SetMonitorTag(TaskIconImage, "TaskIcon");
             }
         }
     }

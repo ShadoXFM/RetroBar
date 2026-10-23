@@ -41,9 +41,8 @@ namespace RetroBar.Controls
                     taskbarItems.CollectionChanged += TasksChangedForMerge;
                 }
 
-                // The pinned programs have their own order (the pins'), so tabs are not dragged about.
-                GongSolutions.Wpf.DragDrop.DragDrop.SetIsDragSource(TasksList, false);
-                GongSolutions.Wpf.DragDrop.DragDrop.SetIsDropTarget(TasksList, false);
+                // The pins can be dragged to another place (see MergedDropHandler); the other tabs stay after them.
+                GongSolutions.Wpf.DragDrop.DragDrop.SetDropHandler(TasksList, new MergedDropHandler(this));
                 TasksList.ItemsSource = _mergedItems;
                 RebuildMerged();
             }
@@ -51,8 +50,7 @@ namespace RetroBar.Controls
             {
                 taskbarItems.CollectionChanged -= TasksChangedForMerge;
                 TasksList.ItemsSource = taskbarItems;
-                GongSolutions.Wpf.DragDrop.DragDrop.SetIsDragSource(TasksList, true);
-                GongSolutions.Wpf.DragDrop.DragDrop.SetIsDropTarget(TasksList, true);
+                GongSolutions.Wpf.DragDrop.DragDrop.SetDropHandler(TasksList, new RetroBar.Utilities.TaskListDropHandler(TasksList));
                 _pinFolder?.Dispose();
                 _pinFolder = null;
                 _mergedItems = null;
@@ -132,6 +130,89 @@ namespace RetroBar.Controls
             }
 
             SetTaskButtonWidth();
+        }
+
+        // The pin (shortcut file) that a tab of the merged list stands for, or null for a tab of a program that is not pinned.
+        private string LinkOf(object item)
+        {
+            if (item is ShellFile file)
+            {
+                return file.Path;
+            }
+
+            if (item is ApplicationWindow window)
+            {
+                List<string> links = PinnedApps.GetLinks();
+                int pin = PinnedApps.IndexOf(window, links.Select(PinnedApps.TargetExe).ToList());
+                return pin >= 0 ? links[pin] : null;
+            }
+
+            return null;
+        }
+
+        /// <summary>
+        /// Drag and drop in the Windows 11 style: a pin (a tab of a pinned program, or the icon of one that is not running) goes to another
+        /// place among the pins, and the order of the pins is saved - the quick launch toolbar of the classic style has it too. The tabs of
+        /// other programs are after the pins and stay there.
+        /// </summary>
+        private sealed class MergedDropHandler : GongSolutions.Wpf.DragDrop.IDropTarget
+        {
+            private readonly TaskList _owner;
+
+            public MergedDropHandler(TaskList owner)
+            {
+                _owner = owner;
+            }
+
+            public void DragOver(GongSolutions.Wpf.DragDrop.IDropInfo dropInfo)
+            {
+                // Only a pin can be dropped (a place after the pins is the last of them).
+                if (_owner.LinkOf(dropInfo.Data) == null)
+                {
+                    return;
+                }
+
+                dropInfo.DropTargetAdorner = GongSolutions.Wpf.DragDrop.DropTargetAdorners.Insert;
+                dropInfo.Effects = System.Windows.DragDropEffects.Move;
+            }
+
+            public void Drop(GongSolutions.Wpf.DragDrop.IDropInfo dropInfo)
+            {
+                string moved = _owner.LinkOf(dropInfo.Data);
+                if (moved == null)
+                {
+                    return;
+                }
+
+                var pins = _owner._mergedItems.Select(_owner.LinkOf).Where(link => link != null).ToList();
+                int from = pins.FindIndex(link => string.Equals(link, moved, StringComparison.OrdinalIgnoreCase));
+                if (from < 0)
+                {
+                    return;
+                }
+
+                int to = Math.Min(dropInfo.InsertIndex, pins.Count);
+                if (to > from)
+                {
+                    to--;
+                }
+
+                if (to == from)
+                {
+                    return;
+                }
+
+                Dictionary<object, System.Windows.Point> before = ItemSlideAnimation.Capture(_owner.TasksList);
+                pins.RemoveAt(from);
+                pins.Insert(to, moved);
+
+                // The pins that are not shown (not in the merged list: none, as every pin is) keep their places after these.
+                var all = PinnedApps.GetLinks();
+                pins.AddRange(all.Where(link => !pins.Any(p => string.Equals(p, link, StringComparison.OrdinalIgnoreCase))));
+                PinnedApps.SaveOrder(pins);
+                _owner.RebuildMerged();
+                ItemSlideAnimation.Play(_owner.TasksList, before);
+            }
         }
 
         #region Pinned programs that are not running

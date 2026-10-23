@@ -253,12 +253,17 @@ namespace RetroBar.Controls
 
             foreach ((FrameworkElement element, string tag) in tags)
             {
-                var multiBinding = new MultiBinding { Converter = TagConverter, ConverterParameter = tag };
-                multiBinding.Bindings.Add(new Binding("State"));
-                multiBinding.Bindings.Add(new Binding(nameof(IsContextMenuActive)) { Source = this });
-                multiBinding.Bindings.Add(new Binding(nameof(IsGroupActive)) { Source = this });
-                element.SetBinding(MonitorOffset.TagProperty, multiBinding);
+                SetMonitorTag(element, tag);
             }
+        }
+
+        private void SetMonitorTag(FrameworkElement element, string tag)
+        {
+            var multiBinding = new MultiBinding { Converter = TagConverter, ConverterParameter = tag };
+            multiBinding.Bindings.Add(new Binding("State"));
+            multiBinding.Bindings.Add(new Binding(nameof(IsContextMenuActive)) { Source = this });
+            multiBinding.Bindings.Add(new Binding(nameof(IsGroupActive)) { Source = this });
+            element.SetBinding(MonitorOffset.TagProperty, multiBinding);
         }
 
         private void SetStyle()

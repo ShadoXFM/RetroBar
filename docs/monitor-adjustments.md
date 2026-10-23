@@ -80,7 +80,7 @@ A tag that is chosen by a state has variants: `Playing` (media is playing), `NoC
 | `MediaTrackTextMax` | `Controls/MediaPlayer.Marquee.cs` |  |
 | `MediaTransportButtonsArea` | `Controls/MediaPlayer.xaml` |  |
 | `PreviewCloseButton` | `Controls/TaskButton.xaml` |  |
-| `PreviewTitleIcon` | `Controls/TaskButton.xaml`, `Controls/TaskButton.xaml.cs` |  |
+| `PreviewTitleIcon` | `Controls/TaskButton.JumpList.cs`, `Controls/TaskButton.xaml`, `Controls/TaskButton.xaml.cs` |  |
 | `PreviewTitleRow` | `Controls/TaskButton.xaml` |  |
 | `PreviewTitleText` | `Controls/TaskButton.xaml` |  |
 | `QuickLaunchToolbar` | `Taskbar.xaml` |  |
@@ -89,8 +89,10 @@ A tag that is chosen by a state has variants: `Playing` (media is playing), `NoC
 | `StartLabel` | `Controls/StartButton.xaml` |  |
 | `TaskButton` | `Controls/TaskButton.xaml.cs` | `TaskButtonActive` |
 | `TaskButtonActive` | `Controls/TaskButton.xaml.cs` |  |
-| `TaskIcon` | `Controls/TaskButton.xaml.cs`, `Utilities/MonitorOffset.cs` | `TaskIconActive` |
-| `TaskIconActive` | `Controls/TaskButton.xaml.cs` |  |
+| `TaskIcon` | `Controls/TaskButton.IconOnly.cs`, `Controls/TaskButton.xaml.cs`, `Utilities/MonitorOffset.cs` | `TaskIconActive` |
+| `TaskIconActive` | `Controls/TaskButton.IconOnly.cs`, `Controls/TaskButton.xaml.cs` |  |
+| `TaskIconOnly` | `Controls/TaskButton.IconOnly.cs` | `TaskIconOnlyActive` |
+| `TaskIconOnlyActive` | `Controls/TaskButton.IconOnly.cs` |  |
 | `TaskLabel` | `Controls/TaskButton.xaml.cs` | `TaskLabelActive` |
 | `TaskLabelActive` | `Controls/TaskButton.xaml.cs` |  |
 | `TaskOverlayIcon` | `Controls/TaskButton.xaml.cs` | `TaskOverlayIconActive` |
@@ -98,23 +100,23 @@ A tag that is chosen by a state has variants: `Playing` (media is playing), `NoC
 | `ToolbarButtonBox` | `Controls/ToolbarButton.xaml` |  |
 | `ToolbarIcon` | `Controls/ToolbarButton.xaml` |  |
 | `TrayBox` | `Taskbar.xaml` |  |
-| `TrayBoxBevel` | `Themes/System.xaml`, `Themes/Windows XFM Light.xaml`, `Themes/Windows XFM.xaml` | `TrayBoxBevelPlaying` |
-| `TrayBoxBevelPlaying` | `Themes/System.xaml`, `Themes/Windows XFM Light.xaml`, `Themes/Windows XFM.xaml` |  |
-| `TrayBoxOuter` | `Themes/Windows XFM Light.xaml`, `Themes/Windows XFM.xaml` | `TrayBoxOuterPlaying` |
-| `TrayBoxOuterPlaying` | `Themes/Windows XFM Light.xaml`, `Themes/Windows XFM.xaml` |  |
+| `TrayBoxBevel` | `Themes/System.xaml`, `Themes/Windows XFM.xaml` | `TrayBoxBevelPlaying` |
+| `TrayBoxBevelPlaying` | `Themes/System.xaml`, `Themes/Windows XFM.xaml` |  |
+| `TrayBoxOuter` | `Themes/Windows XFM.xaml` | `TrayBoxOuterPlaying` |
+| `TrayBoxOuterPlaying` | `Themes/Windows XFM.xaml` |  |
 | `TrayIcon` | `Controls/NotifyIcon.xaml` |  |
 | `TrayNotifyIconsEnd` | `Controls/NotifyIconList.xaml` |  |
 | `TrayNotifyList` | `Taskbar.xaml` | `TrayNotifyListAlone` |
 | `TrayNotifyListAlone` | `Taskbar.xaml` |  |
-| `TrayToggleButton` | `Themes/System.xaml`, `Themes/Windows XFM Light.xaml`, `Themes/Windows XFM.xaml` | `TrayToggleButtonPlaying` |
-| `TrayToggleButtonArrow` | `Themes/Windows XFM Light.xaml`, `Themes/Windows XFM.xaml` |  |
-| `TrayToggleButtonBottom` | `Themes/Windows XFM Light.xaml`, `Themes/Windows XFM.xaml` |  |
+| `TrayToggleButton` | `Themes/System.xaml`, `Themes/Windows XFM.xaml` | `TrayToggleButtonPlaying` |
+| `TrayToggleButtonArrow` | `Themes/Windows XFM.xaml` |  |
+| `TrayToggleButtonBottom` | `Themes/Windows XFM.xaml` |  |
 | `TrayToggleButtonInner` | `Themes/System.xaml` |  |
-| `TrayToggleButtonLeft` | `Themes/Windows XFM Light.xaml`, `Themes/Windows XFM.xaml` |  |
+| `TrayToggleButtonLeft` | `Themes/Windows XFM.xaml` |  |
 | `TrayToggleButtonOuter` | `Themes/System.xaml` |  |
-| `TrayToggleButtonPlaying` | `Themes/Windows XFM Light.xaml`, `Themes/Windows XFM.xaml` |  |
-| `TrayToggleButtonRight` | `Themes/Windows XFM Light.xaml`, `Themes/Windows XFM.xaml` |  |
-| `TrayToggleButtonTop` | `Themes/Windows XFM Light.xaml`, `Themes/Windows XFM.xaml` |  |
+| `TrayToggleButtonPlaying` | `Themes/Windows XFM.xaml` |  |
+| `TrayToggleButtonRight` | `Themes/Windows XFM.xaml` |  |
+| `TrayToggleButtonTop` | `Themes/Windows XFM.xaml` |  |
 | `TrayToggleGlyph` | `Controls/NotifyIconList.xaml.cs` |  |
 | `TrayToggleHoverFill` | `Themes/System.xaml`, `Themes/Windows XFM.xaml` |  |
 | `VuMeterContainer` | `Controls/MediaPlayer.xaml.cs` |  |

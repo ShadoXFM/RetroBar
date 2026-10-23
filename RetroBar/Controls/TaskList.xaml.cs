@@ -25,6 +25,8 @@ namespace RetroBar.Controls
         private double DefaultButtonWidth;
         private double TaskButtonLeftMargin;
         private double TaskButtonRightMargin;
+        private double TaskButtonTopMargin;
+        private double TaskButtonBottomMargin;
         private ICollectionView taskbarItems;
 
         public static DependencyProperty ButtonWidthProperty = DependencyProperty.Register(nameof(ButtonWidth), typeof(double), typeof(TaskList), new PropertyMetadata(new double()));
@@ -141,6 +143,8 @@ namespace RetroBar.Controls
 
             TaskButtonLeftMargin = buttonMargin.Left;
             TaskButtonRightMargin = buttonMargin.Right;
+            TaskButtonTopMargin = buttonMargin.Top;
+            TaskButtonBottomMargin = buttonMargin.Bottom;
         }
 
         private void TaskList_OnLoaded(object sender, RoutedEventArgs e)
@@ -173,10 +177,10 @@ namespace RetroBar.Controls
                 }
 
                 TasksList.ItemsSource = taskbarItems;
-                ApplyPinnedMerge();
 
-                // Drag-to-rearrange: see TaskListDropHandler.
+                // Drag-to-rearrange: see TaskListDropHandler (and, in the Windows 11 style, TaskList.Pinned.cs, which replaces it).
                 GongSolutions.Wpf.DragDrop.DragDrop.SetDropHandler(TasksList, new TaskListDropHandler(TasksList));
+                ApplyPinnedMerge();
 
                 Settings.Instance.PropertyChanged += Settings_PropertyChanged;
                 Host.hotkeyManager.TaskbarHotkeyPressed += TaskList_TaskbarHotkeyPressed;
@@ -538,7 +542,9 @@ namespace RetroBar.Controls
                 // One row of small tabs: the height of the taskbar wide, or narrower if they do not all fit.
                 ButtonsPerRow = Math.Max(1, taskCount);
                 ExtraWidthCount = 0;
-                double iconWidth = Math.Floor(Math.Max(24, ActualHeight) / PixelStep) * PixelStep;
+                // The button itself (inside the margins the theme gives it) is a square: as wide as it is tall.
+                double side = Math.Max(16, ActualHeight - TaskButtonTopMargin - TaskButtonBottomMargin);
+                double iconWidth = Math.Round((side + TaskButtonLeftMargin + TaskButtonRightMargin) / PixelStep) * PixelStep;
                 double room = AvailableWidth > 0 ? AvailableWidth : iconWidth * ButtonsPerRow;
                 if (iconWidth * ButtonsPerRow > room)
                 {
@@ -546,7 +552,10 @@ namespace RetroBar.Controls
                 }
 
                 ButtonWidth = iconWidth;
-                Width = iconWidth * ButtonsPerRow;
+                // Over what they need by what the list has beside its tabs (the grip at its left): the row wraps, and its last tab is out of
+                // sight, when it is short.
+                double beside = ActualWidth > 0 && TasksList.ActualWidth > 0 ? Math.Max(0, ActualWidth - TasksList.ActualWidth) : 6;
+                Width = iconWidth * ButtonsPerRow + beside + 2 * PixelStep;
                 SetScrollable(false);
                 return;
             }

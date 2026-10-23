@@ -51,7 +51,7 @@ namespace RetroBar
             {
                 // The media player: out of the tray box, into a box of its own at the left.
                 TrayContent.Children.Remove(MediaPlayerControl);
-                _mediaBox = new GroupBox { Style = (Style)FindResource("Tray"), Content = MediaPlayerControl };
+                _mediaBox = new GroupBox { Style = (Style)FindResource("Tray"), Content = MediaPlayerControl, Margin = new Thickness(2, 0, 0, 0) };
                 DockPanel.SetDock(_mediaBox, Dock.Left);
 
                 // The tabs: out of the dock, into a row that is centered in what the other boxes leave. The Start button stays where it

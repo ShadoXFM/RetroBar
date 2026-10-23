@@ -69,6 +69,41 @@ namespace RetroBar.Utilities
         /// <summary>The program (its executable's file name) a pin starts.</summary>
         public static string TargetExe(string link) => GetTargetExe(link);
 
+        /// <summary>Saves a new order of the pins (shortcut files, as <see cref="GetLinks"/> gives them): the toolbar and the tabs follow it.</summary>
+        public static void SaveOrder(IEnumerable<string> links)
+        {
+            Settings.Instance.QuickLaunchOrder = links.ToList();
+        }
+
+        /// <summary>
+        /// The pins in the order the tabs of their programs are in (after one was dragged): the places the running programs' pins had
+        /// are filled with them in the tabs' order, and the pins of programs that are not running stay where they were.
+        /// </summary>
+        public static List<string> OrderByTabs(IEnumerable<ApplicationWindow> tabsInOrder)
+        {
+            List<string> links = GetLinks();
+            List<string> programs = links.Select(GetTargetExe).ToList();
+
+            var runningPins = new List<int>();
+            foreach (ApplicationWindow tab in tabsInOrder)
+            {
+                int pin = IndexOf(tab, programs);
+                if (pin >= 0 && !runningPins.Contains(pin))
+                {
+                    runningPins.Add(pin);
+                }
+            }
+
+            List<int> slots = runningPins.OrderBy(i => i).ToList();
+            var result = new List<string>(links);
+            for (int i = 0; i < slots.Count; i++)
+            {
+                result[slots[i]] = links[runningPins[i]];
+            }
+
+            return result;
+        }
+
         /// <summary>The pins (shortcut files), in the quick launch toolbar's order.</summary>
         public static List<string> GetLinks()
         {
