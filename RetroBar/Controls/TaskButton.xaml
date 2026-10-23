@@ -21,7 +21,7 @@
          its icon/label content. This tag and the icon/label ones depend on two inputs (State and
          the context menu), which takes a MultiBinding: set in TaskButton.xaml.cs (SetMonitorTags),
          since an element with child content can't take a property-element tag in XAML. -->
-    <Grid>
+    <Grid Background="Transparent">
         <Button Name="AppButton"
                 Click="AppButton_OnClick"
                 MouseUp="AppButton_OnMouseUp"
@@ -370,5 +370,18 @@
                SnapsToDevicePixels="True"
                RenderOptions.BitmapScalingMode="HighQuality"
                Visibility="Collapsed" />
+        <!-- The badge (the app's overlay icon) of the tab, over that icon: the one in the button is under it. -->
+        <Image x:Name="IconOnlyBadge"
+               Source="{Binding Path=OverlayIcon, Mode=OneWay}"
+               Width="11"
+               Height="11"
+               HorizontalAlignment="Left"
+               VerticalAlignment="Top"
+               IsHitTestVisible="False"
+               Opacity="0"
+               UseLayoutRounding="True"
+               SnapsToDevicePixels="True"
+               RenderOptions.BitmapScalingMode="HighQuality"
+               Visibility="{Binding Source={x:Static utilities:Settings.Instance}, Path=ShowTaskBadges, UpdateSourceTrigger=PropertyChanged, Converter={StaticResource boolToVisibilityConverter}}" />
     </Grid>
 </UserControl>

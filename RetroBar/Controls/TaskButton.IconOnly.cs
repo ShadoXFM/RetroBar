@@ -78,6 +78,8 @@ namespace RetroBar.Controls
 
             // The button's own icon stays where it is (so the button is as big as ever) but is not seen in this style.
             TaskIconImage.Opacity = only ? 0 : 1;
+            TaskOverlayIconImage.Opacity = only ? 0 : 1;
+            IconOnlyBadge.Opacity = only ? 1 : 0;
             IconOnlyImage.Visibility = only ? Visibility.Visible : Visibility.Collapsed;
 
             if (only)
@@ -135,7 +137,13 @@ namespace RetroBar.Controls
                 double step = _iconOnlyHost.PixelStep > 0 ? _iconOnlyHost.PixelStep : 1;
                 double left = bounds.Left + (bounds.Width - IconOnlyImage.Width) / 2;
                 double top = bounds.Top + (bounds.Height - IconOnlyImage.Height) / 2;
-                IconOnlyImage.Margin = new Thickness(Math.Round(left / step) * step, Math.Round(top / step) * step, 0, 0);
+                double iconLeft = Math.Round(left / step) * step;
+                double iconTop = Math.Round(top / step) * step;
+                IconOnlyImage.Margin = new Thickness(iconLeft, iconTop, 0, 0);
+
+                // The badge at the lower right of the icon, as the classic tab has it.
+                IconOnlyBadge.Margin = new Thickness(Math.Round((iconLeft + IconOnlyImage.Width - IconOnlyBadge.Width + 2) / step) * step,
+                    Math.Round((iconTop + IconOnlyImage.Height - IconOnlyBadge.Height + 1) / step) * step, 0, 0);
             }
             catch (InvalidOperationException)
             {

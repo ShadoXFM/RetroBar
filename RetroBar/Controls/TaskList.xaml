@@ -31,20 +31,9 @@
             </DataTemplate>
             <DataTemplate DataType="{x:Type folders:ShellFile}">
                 <local:ToolbarButton DataContext="{Binding}"
-                                     Margin="{Binding Path=LauncherMargin, RelativeSource={RelativeSource FindAncestor, AncestorType=local:TaskList}}"
+                                     Width="{Binding Path=LauncherWidth, RelativeSource={RelativeSource FindAncestor, AncestorType=local:TaskList}}"
                                      PreviewMouseLeftButtonUp="Launcher_OnPreviewMouseLeftButtonUp"
-                                     PreviewMouseRightButtonUp="Launcher_OnPreviewMouseRightButtonUp">
-                    <local:ToolbarButton.Width>
-                        <MultiBinding Converter="{StaticResource taskButtonWidthConverter}">
-                                    <Binding Path="(ItemsControl.AlternationIndex)" RelativeSource="{RelativeSource Mode=FindAncestor, AncestorType=ContentPresenter}" />
-                                    <Binding Path="ButtonWidth" RelativeSource="{RelativeSource Mode=FindAncestor, AncestorType=local:TaskList}" />
-                                    <Binding Path="ExtraWidthCount" RelativeSource="{RelativeSource Mode=FindAncestor, AncestorType=local:TaskList}" />
-                                    <Binding Path="ButtonsPerRow" RelativeSource="{RelativeSource Mode=FindAncestor, AncestorType=local:TaskList}" />
-                                    <Binding Path="PixelStep" RelativeSource="{RelativeSource Mode=FindAncestor, AncestorType=local:TaskList}" />
-                                    <Binding Path="LauncherMargin.Right" RelativeSource="{RelativeSource Mode=FindAncestor, AncestorType=local:TaskList}" />
-                                </MultiBinding>
-                    </local:ToolbarButton.Width>
-                </local:ToolbarButton>
+                                     PreviewMouseRightButtonUp="Launcher_OnPreviewMouseRightButtonUp" />
             </DataTemplate>
         </ResourceDictionary>
     </UserControl.Resources>
@@ -70,7 +59,8 @@
                           dd:DragDrop.DragDropContext="TaskList">
                 <ItemsControl.ItemsPanel>
                     <ItemsPanelTemplate>
-                        <WrapPanel Style="{DynamicResource TaskListWrapPanel}">
+                        <!-- Transparent, not none: the gaps between the tabs are then part of the list, so a tab dragged over one is still over the list and keeps its drop mark. -->
+                        <WrapPanel Style="{DynamicResource TaskListWrapPanel}" Background="Transparent">
                             <WrapPanel.Orientation>
                                 <Binding Converter="{StaticResource orientationConverter}"
                                          Path="Orientation"

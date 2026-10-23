@@ -181,21 +181,12 @@ namespace RetroBar.Controls
                     return;
                 }
 
-                // No mark of the library's: it is made again at every mouse move and flashes (see DropIndicator).
-                dropInfo.DropTargetAdorner = null;
+                dropInfo.DropTargetAdorner = GongSolutions.Wpf.DragDrop.DropTargetAdorners.Insert;
                 dropInfo.Effects = System.Windows.DragDropEffects.Move;
-                RetroBar.Utilities.DropIndicator.Show(_owner.TasksList, Place(dropInfo.Data, dropInfo.InsertIndex));
-            }
-
-            public void DragLeave(GongSolutions.Wpf.DragDrop.IDropInfo dropInfo)
-            {
-                RetroBar.Utilities.DropIndicator.Hide(_owner.TasksList);
             }
 
             public void Drop(GongSolutions.Wpf.DragDrop.IDropInfo dropInfo)
             {
-                RetroBar.Utilities.DropIndicator.Hide(_owner.TasksList);
-
                 int place = Place(dropInfo.Data, dropInfo.InsertIndex);
                 Dictionary<object, System.Windows.Point> before = ItemSlideAnimation.Capture(_owner.TasksList);
 

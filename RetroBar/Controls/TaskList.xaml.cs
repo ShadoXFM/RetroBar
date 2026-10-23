@@ -101,6 +101,9 @@ namespace RetroBar.Controls
             return null;
         }
 
+        // The tab's button is this much wider than it is tall.
+        private const double TabExtraWidth = 2;
+
         private int _squareChecks;
 
         // Once the tabs have their size, the button is measured and the width set again if it is not a square (a few times at most).
@@ -111,7 +114,7 @@ namespace RetroBar.Controls
                 return;
             }
 
-            if (Math.Abs(w - h) > PixelStep * 0.6)
+            if (Math.Abs(w - (h + TabExtraWidth)) > PixelStep * 0.6)
             {
                 _squareChecks++;
                 Dispatcher.BeginInvoke(new Action(SetTaskButtonWidth), DispatcherPriority.Background);
@@ -122,15 +125,20 @@ namespace RetroBar.Controls
             }
         }
 
-        // The gap after a launcher (a pinned program that is not running) in the Windows 11 style: a tab's own margin, so that the launcher is
-        // as wide as the frame of a tab and the two sit evenly.
-        public static DependencyProperty LauncherMarginProperty = DependencyProperty.Register(nameof(LauncherMargin), typeof(Thickness), typeof(TaskList), new PropertyMetadata(new Thickness()));
+        // The width of a launcher (a pinned program that is not running) in the Windows 11 style: its icon with a little room each side. It
+        // has no frame, so being as wide as a tab only looked like a lot of empty room round it.
+        public static DependencyProperty LauncherWidthProperty = DependencyProperty.Register(nameof(LauncherWidth), typeof(double), typeof(TaskList), new PropertyMetadata(22d));
 
-        public Thickness LauncherMargin
+        public double LauncherWidth
         {
-            get { return (Thickness)GetValue(LauncherMarginProperty); }
-            set { SetValue(LauncherMarginProperty, value); }
+            get { return (double)GetValue(LauncherWidthProperty); }
+            set { SetValue(LauncherWidthProperty, value); }
         }
+
+        private const double LauncherRoom = 20;
+
+        // How many of the items are launchers (and not tabs).
+        private int LauncherCount => _mergedItems?.Count(item => item is ManagedShell.ShellFolders.ShellFile) ?? 0;
 
         private void IconOnlyChanged()
         {
@@ -224,7 +232,6 @@ namespace RetroBar.Controls
             TaskButtonRightMargin = buttonMargin.Right;
             TaskButtonTopMargin = buttonMargin.Top;
             TaskButtonBottomMargin = buttonMargin.Bottom;
-            LauncherMargin = new Thickness(0, 0, buttonMargin.Left + buttonMargin.Right, 0);
         }
 
         private void TaskList_OnLoaded(object sender, RoutedEventArgs e)
@@ -634,18 +641,21 @@ namespace RetroBar.Controls
                     overhead = slotWidth - buttonWidth;
                 }
 
-                double iconWidth = Math.Round((side + overhead) / PixelStep) * PixelStep;
+                double iconWidth = Math.Round((side + overhead + TabExtraWidth) / PixelStep) * PixelStep;
                 double room = AvailableWidth > 0 ? AvailableWidth : iconWidth * ButtonsPerRow;
-                if (iconWidth * ButtonsPerRow > room)
+                double launcherWidth = Math.Round(LauncherRoom / PixelStep) * PixelStep;
+                int launchers = Math.Min(LauncherCount, ButtonsPerRow);
+                LauncherWidth = launcherWidth;
+                if (iconWidth * (ButtonsPerRow - launchers) + launcherWidth * launchers > room)
                 {
-                    iconWidth = Math.Floor(room / ButtonsPerRow / PixelStep) * PixelStep;
+                    iconWidth = Math.Floor((room - launcherWidth * launchers) / Math.Max(1, ButtonsPerRow - launchers) / PixelStep) * PixelStep;
                 }
 
                 ButtonWidth = iconWidth;
                 // Over what they need by what the list has beside its tabs (the grip at its left): the row wraps, and its last tab is out of
                 // sight, when it is short.
                 double beside = ActualWidth > 0 && TasksList.ActualWidth > 0 ? Math.Max(0, ActualWidth - TasksList.ActualWidth) : 6;
-                Width = iconWidth * ButtonsPerRow + beside + 2 * PixelStep;
+                Width = iconWidth * (ButtonsPerRow - launchers) + launcherWidth * launchers + beside + 2 * PixelStep;
                 SetScrollable(false);
                 return;
             }
