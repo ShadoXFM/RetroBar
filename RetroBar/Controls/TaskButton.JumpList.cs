@@ -126,7 +126,7 @@ namespace RetroBar.Controls
                     continue;
                 }
 
-                AddJumpListMenuItem(menu, ref index, new MenuItem { Header = MenuText(heading), IsEnabled = false, Style = MenuItemStyle.Style });
+                AddJumpListMenuItem(menu, ref index, new MenuItem { Header = MenuText(heading), IsEnabled = false, FontWeight = FontWeights.Bold, Style = MenuItemStyle.Style });
                 foreach (JumpListItem item in section.Take(Math.Min(JumpListSectionMax, JumpListMax - total)))
                 {
                     JumpListItem chosen = item;
