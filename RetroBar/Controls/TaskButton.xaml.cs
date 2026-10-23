@@ -355,7 +355,7 @@ namespace RetroBar.Controls
             // appearing - growing it in from zero width would push every tab to its right along with it
             // (see TaskListDropHandler, which slides the tabs into place instead).
             if (Settings.Instance.SlideTaskbarButtons && Host?.Host?.Orientation == Orientation.Horizontal
-                && DateTime.UtcNow > SuppressSlideInUntilUtc && (Host.IconOnly != true || Host.JustOpened(Window)))
+                && DateTime.UtcNow > SuppressSlideInUntilUtc && (Host.IconOnly != true || (Host.JustOpened(Window) && PinnedApps.FindLink(Window) == null)))
             {
                 Animate();
             }

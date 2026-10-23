@@ -825,6 +825,9 @@ namespace RetroBar.Controls
 
                 TabMargin = new Thickness(0, 0, -PixelStep, 0);
                 _pitch = pitch;
+                // What the list has beside its tabs is measured with the margin they had (the slack of the slide that is ending is still in the
+                // list's size until the next layout), not the one they are given now.
+                double slackBefore = TasksList.Margin.Left + TasksList.Margin.Right;
                 TasksList.Margin = new Thickness(_slideSlack, 0, _slideSlack, 0);
 
                 // A pinned program that is not running takes the room of a tab, so the row does not change size when it starts (and the pins
@@ -842,7 +845,7 @@ namespace RetroBar.Controls
                 ButtonWidth = iconWidth;
                 // Over what they need by what the list has beside its tabs (the grip at its left): the row wraps, and its last tab is out of
                 // sight, when it is short.
-                double beside = ActualWidth > 0 && TasksList.ActualWidth > 0 ? Math.Max(0, ActualWidth - TasksList.ActualWidth - TasksList.Margin.Left - TasksList.Margin.Right) : 6;
+                double beside = ActualWidth > 0 && TasksList.ActualWidth > 0 ? Math.Max(0, ActualWidth - TasksList.ActualWidth - slackBefore) : 6;
                 Width = pitch * ButtonsPerRow + beside + 2 * PixelStep + 2 * _slideSlack;
                 SetScrollable(false);
                 return;
