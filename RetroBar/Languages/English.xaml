@@ -218,7 +218,7 @@
     <s:String x:Key="jump_list_pinned">Pinned</s:String>
     <s:String x:Key="jump_list_recent">Recent</s:String>
     <s:String x:Key="jump_list_tasks">Tasks</s:String>
-    <s:String x:Key="jump_list_history">History</s:String>
+    <s:String x:Key="jump_list_frequent">Frequent</s:String>
     <s:String x:Key="jump_list_links">Links</s:String>
 
     <s:String x:Key="ime_input_tip_enabled">Right-click to open IME options.</s:String>

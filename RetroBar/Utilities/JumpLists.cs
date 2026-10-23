@@ -25,6 +25,9 @@ namespace RetroBar.Utilities
 
         public bool Pinned => PinIndex >= 0;
         public DateTime Time { get; init; }
+
+        /// <summary>How many times it has been used (what makes it a frequent one).</summary>
+        public int AccessCount { get; init; }
     }
 
     /// <summary>
@@ -67,6 +70,39 @@ namespace RetroBar.Utilities
             }
 
             return crc.ToString("x");
+        }
+
+        // What programs wrote in their jump lists in the language of the system (French here), in English. Exact texts, as the programs
+        // give them; any other text is left as it is.
+        private static readonly Dictionary<string, string> English = new(StringComparer.OrdinalIgnoreCase)
+        {
+            // Chromium-based browsers (Chrome, Edge, Brave, Vivaldi, Opera, Helium...)
+            ["Nouvelle fen\u00eatre"] = "New window",
+            ["Nouvelle fen\u00eatre de navigation priv\u00e9e"] = "New incognito window",
+            ["Nouvelle fen\u00eatre priv\u00e9e"] = "New private window",
+            ["Nouvel onglet"] = "New tab",
+            ["Les + visit\u00e9s"] = "Most visited",
+            ["Les plus visit\u00e9s"] = "Most visited",
+            ["R\u00e9cemment ferm\u00e9s"] = "Recently closed",
+            ["Acc\u00e8s rapide"] = "Quick access",
+            // Spotify
+            ["\u00c9cout\u00e9s r\u00e9cemment"] = "Recently played",
+            ["Titres lik\u00e9s"] = "Liked Songs",
+            ["Lire"] = "Play",
+            ["Pause"] = "Pause",
+            ["Suivant"] = "Next",
+            ["Pr\u00e9c\u00e9dent"] = "Previous",
+            // The headings the shell gives
+            ["Fr\u00e9quents"] = "Frequent",
+            ["R\u00e9cents"] = "Recent",
+            ["\u00c9pingl\u00e9s"] = "Pinned",
+            ["T\u00e2ches"] = "Tasks",
+        };
+
+        /// <summary>The text of a jump list entry or category in English, when it is one that is known in another language (see <see cref="English"/>).</summary>
+        public static string ToEnglish(string text)
+        {
+            return text != null && English.TryGetValue(text.Trim(), out string english) ? english : text;
         }
 
         // The folders whose place in a path Windows writes as their ID when it works out an application ID from an executable's path.
@@ -269,7 +305,7 @@ namespace RetroBar.Utilities
             }
 
             Dictionary<string, byte[]> streams = file.Streams();
-            var order = new Dictionary<uint, (DateTime Time, int Pin)>();
+            var order = new Dictionary<uint, (DateTime Time, int Pin, int Count)>();
             if (streams.TryGetValue("DestList", out byte[] list))
             {
                 ParseDestList(list, order);
@@ -303,6 +339,7 @@ namespace RetroBar.Utilities
                     WorkingDirectory = link.WorkingDirectory,
                     PinIndex = order.ContainsKey(id) ? known.Pin : -1,
                     Time = known.Time,
+                    AccessCount = known.Count,
                 });
             }
 
@@ -311,9 +348,9 @@ namespace RetroBar.Utilities
 
         // The list's entries (Windows 10 and 11 layout, versions 3 and up): after a 32-byte header, each has 130 bytes of fixed fields and
         // then its path (UTF-16, its length in characters at 128), and 4 more bytes. The fields used here: the number of the entry's
-        // stream at 88, when it was last used (a FILETIME, none for a pinned one) at 100 and its pin position at 108 (-1 when it is
-        // not pinned).
-        private static void ParseDestList(byte[] list, Dictionary<uint, (DateTime Time, int Pin)> order)
+        // stream at 88, when it was last used (a FILETIME, none for a pinned one) at 100, its pin position at 108 (-1 when it is
+        // not pinned) and how many times it was used at 116.
+        private static void ParseDestList(byte[] list, Dictionary<uint, (DateTime Time, int Pin, int Count)> order)
         {
             if (list.Length < 32)
             {
@@ -332,6 +369,7 @@ namespace RetroBar.Utilities
                 uint id = BitConverter.ToUInt32(list, at + 88);
                 long ticks = BitConverter.ToInt64(list, at + 100);
                 int pin = BitConverter.ToInt32(list, at + 108);
+                int count = BitConverter.ToInt32(list, at + 116);
                 int chars = BitConverter.ToUInt16(list, at + 128);
 
                 DateTime time = DateTime.MinValue;
@@ -340,7 +378,7 @@ namespace RetroBar.Utilities
                     time = DateTime.FromFileTimeUtc(ticks);
                 }
 
-                order[id] = (time, pin);
+                order[id] = (time, pin, count);
                 at += 130 + chars * 2 + (version >= 3 ? 4 : 0);
             }
         }
