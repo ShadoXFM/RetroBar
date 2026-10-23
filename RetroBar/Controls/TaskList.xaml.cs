@@ -60,8 +60,77 @@ namespace RetroBar.Controls
         // The windows of an app are one tab when the setting says so, and always in the Windows 11 style (where an app is one icon).
         private bool CombinesWindows => Settings.Instance.GroupTaskWindows || IconOnly;
 
+        // The size of the button of the first tab (a window's, not a launcher's) and of the slot it is in, or null before there is one.
+        private (double ButtonWidth, double ButtonHeight, double SlotWidth)? MeasureTabButton()
+        {
+            for (int i = 0; i < TasksList.Items.Count; i++)
+            {
+                if (TasksList.ItemContainerGenerator.ContainerFromIndex(i) is DependencyObject container &&
+                    FindTabButton(container) is TaskButton tab && tab.AppButton.ActualHeight > 0 && tab.AppButton.ActualWidth > 0)
+                {
+                    // The frame that is drawn (the theme's outer border), which is smaller than the button's own box; the box if there is none.
+                    var frame = tab.AppButton.Template?.FindName("ButtonOuterBottomBorder", tab.AppButton) as FrameworkElement;
+                    if (frame == null || frame.ActualHeight <= 0 || frame.ActualWidth <= 0)
+                    {
+                        frame = tab.AppButton;
+                    }
+
+                    return (frame.ActualWidth, frame.ActualHeight, tab.ActualWidth);
+                }
+            }
+
+            return null;
+        }
+
+        private static TaskButton FindTabButton(DependencyObject parent)
+        {
+            for (int i = 0; i < System.Windows.Media.VisualTreeHelper.GetChildrenCount(parent); i++)
+            {
+                DependencyObject child = System.Windows.Media.VisualTreeHelper.GetChild(parent, i);
+                if (child is TaskButton tab)
+                {
+                    return tab;
+                }
+
+                if (FindTabButton(child) is TaskButton found)
+                {
+                    return found;
+                }
+            }
+
+            return null;
+        }
+
+        private int _squareChecks;
+
+        // Once the tabs have their size, the button is measured and the width set again if it is not a square (a few times at most).
+        private void CheckSquare()
+        {
+            if (!IconOnly || _squareChecks > 6 || MeasureTabButton() is not (double w, double h, double _))
+            {
+                return;
+            }
+
+            if (Math.Abs(w - h) > PixelStep * 0.6)
+            {
+                _squareChecks++;
+                Dispatcher.BeginInvoke(new Action(SetTaskButtonWidth), DispatcherPriority.Background);
+            }
+            else
+            {
+                _squareChecks = 0;
+            }
+        }
+
         private void IconOnlyChanged()
         {
+            _squareChecks = 0;
+            TasksList.LayoutUpdated -= TasksList_LayoutUpdatedForSquare;
+            if (IconOnly)
+            {
+                TasksList.LayoutUpdated += TasksList_LayoutUpdatedForSquare;
+            }
+
             if (!IconOnly)
             {
                 ClearValue(WidthProperty);
@@ -324,6 +393,8 @@ namespace RetroBar.Controls
             return true;
         }
 
+        private void TasksList_LayoutUpdatedForSquare(object sender, EventArgs e) => CheckSquare();
+
         private bool groupSyncPending;
 
         private void SourceWindows_CollectionChanged(object sender, System.Collections.Specialized.NotifyCollectionChangedEventArgs e)
@@ -542,9 +613,17 @@ namespace RetroBar.Controls
                 // One row of small tabs: the height of the taskbar wide, or narrower if they do not all fit.
                 ButtonsPerRow = Math.Max(1, taskCount);
                 ExtraWidthCount = 0;
-                // The button itself (inside the margins the theme gives it) is a square: as wide as it is tall.
+                // The button itself (inside the margins the theme gives it) is a square: as wide as it is tall. What a tab's button measures
+                // is the truth (its style may have margins and borders of its own), so it is measured; before there is a tab, from the margins.
                 double side = Math.Max(16, ActualHeight - TaskButtonTopMargin - TaskButtonBottomMargin);
-                double iconWidth = Math.Round((side + TaskButtonLeftMargin + TaskButtonRightMargin) / PixelStep) * PixelStep;
+                double overhead = TaskButtonLeftMargin + TaskButtonRightMargin;
+                if (MeasureTabButton() is (double buttonWidth, double buttonHeight, double slotWidth) && buttonHeight > 8)
+                {
+                    side = buttonHeight;
+                    overhead = slotWidth - buttonWidth;
+                }
+
+                double iconWidth = Math.Round((side + overhead) / PixelStep) * PixelStep;
                 double room = AvailableWidth > 0 ? AvailableWidth : iconWidth * ButtonsPerRow;
                 if (iconWidth * ButtonsPerRow > room)
                 {

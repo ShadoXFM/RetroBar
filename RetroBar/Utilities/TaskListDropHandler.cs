@@ -28,7 +28,25 @@ namespace RetroBar.Utilities
         void IDropTarget.DragOver(IDropInfo dropInfo)
         {
             GongSolutions.Wpf.DragDrop.DragDrop.DefaultDropHandler.DragOver(dropInfo);
+
+            // The library's insertion mark is made again at every mouse move and flashes: ours is one line, moved (see DropIndicator).
+            if (dropInfo.Effects != System.Windows.DragDropEffects.None)
+            {
+                dropInfo.DropTargetAdorner = null;
+                DropIndicator.Show(_list, dropInfo.InsertIndex);
+            }
+            else
+            {
+                DropIndicator.Hide(_list);
+            }
         }
+
+#if NETCOREAPP3_1_OR_GREATER
+        public void DragLeave(IDropInfo dropInfo)
+        {
+            DropIndicator.Hide(_list);
+        }
+#endif
 
 #if !NETCOREAPP3_1_OR_GREATER
         public void DragEnter(IDropInfo dropInfo)
@@ -44,6 +62,7 @@ namespace RetroBar.Utilities
 
         void IDropTarget.Drop(IDropInfo dropInfo)
         {
+            DropIndicator.Hide(_list);
             Dictionary<object, Point> before = ItemSlideAnimation.Capture(_list);
 
             // The dragged tab's button gets recreated by the move; don't let it grow in from nothing.

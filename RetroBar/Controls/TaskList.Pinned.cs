@@ -152,8 +152,9 @@ namespace RetroBar.Controls
 
         /// <summary>
         /// Drag and drop in the Windows 11 style: a pin (a tab of a pinned program, or the icon of one that is not running) goes to another
-        /// place among the pins, and the order of the pins is saved - the quick launch toolbar of the classic style has it too. The tabs of
-        /// other programs are after the pins and stay there.
+        /// place among the pins, and the order of the pins is saved - the quick launch toolbar of the classic style has it too; the tab of a
+        /// program that is not pinned goes to another place among the other tabs. The pins are first: a place is taken to be the nearest
+        /// one in the group the dragged tab is of.
         /// </summary>
         private sealed class MergedDropHandler : GongSolutions.Wpf.DragDrop.IDropTarget
         {
@@ -164,26 +165,60 @@ namespace RetroBar.Controls
                 _owner = owner;
             }
 
+            private int PinCount => _owner._mergedItems.Count(item => _owner.LinkOf(item) != null);
+
+            // The place in the list for a drop of this tab: among the pins for a pin, after them for any other tab.
+            private int Place(object dragged, int insertIndex)
+            {
+                int pins = PinCount;
+                return _owner.LinkOf(dragged) != null ? Math.Min(insertIndex, pins) : Math.Max(insertIndex, pins);
+            }
+
             public void DragOver(GongSolutions.Wpf.DragDrop.IDropInfo dropInfo)
             {
-                // Only a pin can be dropped (a place after the pins is the last of them).
-                if (_owner.LinkOf(dropInfo.Data) == null)
+                if (dropInfo.Data is not (ApplicationWindow or ShellFile))
                 {
                     return;
                 }
 
-                dropInfo.DropTargetAdorner = GongSolutions.Wpf.DragDrop.DropTargetAdorners.Insert;
+                // No mark of the library's: it is made again at every mouse move and flashes (see DropIndicator).
+                dropInfo.DropTargetAdorner = null;
                 dropInfo.Effects = System.Windows.DragDropEffects.Move;
+                RetroBar.Utilities.DropIndicator.Show(_owner.TasksList, Place(dropInfo.Data, dropInfo.InsertIndex));
+            }
+
+            public void DragLeave(GongSolutions.Wpf.DragDrop.IDropInfo dropInfo)
+            {
+                RetroBar.Utilities.DropIndicator.Hide(_owner.TasksList);
             }
 
             public void Drop(GongSolutions.Wpf.DragDrop.IDropInfo dropInfo)
             {
+                RetroBar.Utilities.DropIndicator.Hide(_owner.TasksList);
+
+                int place = Place(dropInfo.Data, dropInfo.InsertIndex);
+                Dictionary<object, System.Windows.Point> before = ItemSlideAnimation.Capture(_owner.TasksList);
+
                 string moved = _owner.LinkOf(dropInfo.Data);
-                if (moved == null)
+                if (moved != null)
+                {
+                    DropPin(moved, place);
+                }
+                else if (dropInfo.Data is ApplicationWindow window)
+                {
+                    DropTab(window, place);
+                }
+                else
                 {
                     return;
                 }
 
+                _owner.RebuildMerged();
+                ItemSlideAnimation.Play(_owner.TasksList, before);
+            }
+
+            private void DropPin(string moved, int place)
+            {
                 var pins = _owner._mergedItems.Select(_owner.LinkOf).Where(link => link != null).ToList();
                 int from = pins.FindIndex(link => string.Equals(link, moved, StringComparison.OrdinalIgnoreCase));
                 if (from < 0)
@@ -191,7 +226,7 @@ namespace RetroBar.Controls
                     return;
                 }
 
-                int to = Math.Min(dropInfo.InsertIndex, pins.Count);
+                int to = Math.Min(place, pins.Count);
                 if (to > from)
                 {
                     to--;
@@ -202,16 +237,51 @@ namespace RetroBar.Controls
                     return;
                 }
 
-                Dictionary<object, System.Windows.Point> before = ItemSlideAnimation.Capture(_owner.TasksList);
                 pins.RemoveAt(from);
                 pins.Insert(to, moved);
 
-                // The pins that are not shown (not in the merged list: none, as every pin is) keep their places after these.
-                var all = PinnedApps.GetLinks();
-                pins.AddRange(all.Where(link => !pins.Any(p => string.Equals(p, link, StringComparison.OrdinalIgnoreCase))));
+                // The pins that are not shown keep their places after these.
+                pins.AddRange(PinnedApps.GetLinks().Where(link => !pins.Any(p => string.Equals(p, link, StringComparison.OrdinalIgnoreCase))));
                 PinnedApps.SaveOrder(pins);
-                _owner.RebuildMerged();
-                ItemSlideAnimation.Play(_owner.TasksList, before);
+            }
+
+            // A tab of a program that is not pinned: its window goes to just before the one of the tab it was dropped before (or to the
+            // end), with the others of its program after it.
+            private void DropTab(ApplicationWindow window, int place)
+            {
+                ObservableCollection<ApplicationWindow> source = _owner.startupSortSource;
+                if (source == null)
+                {
+                    return;
+                }
+
+                List<object> others = _owner._mergedItems.Where(item => !ReferenceEquals(item, window)).ToList();
+                int pins = PinCount;
+                int index = place - (_owner._mergedItems.IndexOf(window) < place ? 1 : 0);
+                index = Math.Clamp(index, pins, others.Count);
+
+                int from = source.IndexOf(window);
+                if (from < 0)
+                {
+                    return;
+                }
+
+                int to;
+                if (index < others.Count && others[index] is ApplicationWindow next && source.IndexOf(next) is int nextAt && nextAt >= 0)
+                {
+                    to = nextAt > from ? nextAt - 1 : nextAt;
+                }
+                else
+                {
+                    to = source.Count - 1;
+                }
+
+                if (to != from)
+                {
+                    source.Move(from, to);
+                }
+
+                TaskOpenOrderComparer.KeepAppWindowsTogether(source, window);
             }
         }
 

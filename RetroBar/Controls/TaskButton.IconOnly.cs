@@ -3,6 +3,8 @@ using System;
 using System.ComponentModel;
 using System.Windows;
 using System.Windows.Controls;
+using System.Windows.Data;
+using System.Windows.Media;
 
 namespace RetroBar.Controls
 {
@@ -36,6 +38,27 @@ namespace RetroBar.Controls
 
         private void IconOnly_OnChanged(object sender, EventArgs e) => ApplyIconOnly();
 
+        // The binding of the icon (the window's own, whatever its title bar shows: a folder, a page), put back when the tab is a classic one.
+        private BindingBase _windowIconBinding;
+
+        // The program's icon: its executable's (File Explorer's own, as the user may have set it), not the window's, which is the title
+        // bar's and changes with what the window shows. Null for a window that has no executable to ask (a packaged app).
+        private ImageSource ProgramIconForTab()
+        {
+            if (Window == null || Window.IsUWP || string.IsNullOrEmpty(Window.WinFileName))
+            {
+                return null;
+            }
+
+            if (Converters.TaskIconConverter.IsFileExplorerWindow(Window))
+            {
+                var converter = (IMultiValueConverter)FindResource("taskIconConverter");
+                return converter.Convert(new object[] { Window, Window.Icon, 2 }, typeof(ImageSource), null, System.Globalization.CultureInfo.CurrentCulture) as ImageSource;
+            }
+
+            return GetProgramIcon();
+        }
+
         private void ApplyIconOnly()
         {
             bool only = _iconOnlyHost?.IconOnly == true;
@@ -51,6 +74,14 @@ namespace RetroBar.Controls
                 TaskIconImage.VerticalAlignment = VerticalAlignment.Center;
                 TaskIconImage.Margin = new Thickness(0);
                 SetMonitorTag(TaskIconImage, "TaskIconOnly");
+
+                _windowIconBinding ??= BindingOperations.GetBindingBase(TaskIconImage, Image.SourceProperty);
+                ImageSource program = ProgramIconForTab();
+                if (program != null)
+                {
+                    BindingOperations.ClearBinding(TaskIconImage, Image.SourceProperty);
+                    TaskIconImage.Source = program;
+                }
             }
             else
             {
@@ -58,6 +89,11 @@ namespace RetroBar.Controls
                 TaskIconImage.ClearValue(FrameworkElement.VerticalAlignmentProperty);
                 TaskIconImage.ClearValue(FrameworkElement.MarginProperty);
                 SetMonitorTag(TaskIconImage, "TaskIcon");
+
+                if (_windowIconBinding != null)
+                {
+                    TaskIconImage.SetBinding(Image.SourceProperty, _windowIconBinding);
+                }
             }
         }
     }
