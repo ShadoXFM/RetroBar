@@ -80,6 +80,10 @@ namespace RetroBar.Controls
                         // Where the frame is in its slot: the room it leaves at the left less the room at the right (the theme's margins are not even).
                         Rect bounds = frame.TransformToAncestor(tab).TransformBounds(new Rect(0, 0, frame.ActualWidth, frame.ActualHeight));
                         _frameShift = bounds.Left - (tab.ActualWidth - bounds.Right);
+                        _frameLeft = bounds.Left;
+                        _frameTop = bounds.Top;
+                        _frameWidth = bounds.Width;
+                        _frameHeight = bounds.Height;
                     }
                     catch (InvalidOperationException)
                     {
@@ -152,6 +156,20 @@ namespace RetroBar.Controls
         // How far the frame of a tab is to the right in its slot (the room at its left less the room at its right), and the margin that puts a
         // launcher's icon in the middle of the free room between the frames of the tabs either side of it, as far from the one as the other.
         private double _frameShift;
+        private double _frameLeft;
+        private double _frameTop;
+        private double _frameWidth;
+        private double _frameHeight;
+
+        public static DependencyProperty LauncherHeightProperty = DependencyProperty.Register(nameof(LauncherHeight), typeof(double), typeof(TaskList), new PropertyMetadata(double.NaN));
+
+        public double LauncherHeight
+        {
+            get { return (double)GetValue(LauncherHeightProperty); }
+            set { SetValue(LauncherHeightProperty, value); }
+        }
+
+        private double _launcherLiftX;
 
         // A tab of the Windows 11 style overlaps the next one by this much (a pixel) of the empty margin the theme gives its button: the gap
         // between the frames is that much less.
@@ -188,6 +206,7 @@ namespace RetroBar.Controls
 
         private double _launcherShift;
         private double _launcherLift;
+        private double _launcherTop;
         private double _launcherLeft;
         private double _launcherRight;
         private int _alignChecks;
@@ -195,7 +214,9 @@ namespace RetroBar.Controls
         private void ApplyLauncherMargin()
         {
             // The side margins keep the slot as wide as it was; the top and bottom ones, equal and opposite, move the icon without changing the button's size.
-            LauncherMargin = new Thickness(_launcherLeft, _launcherLift, _launcherRight, -_launcherLift);
+            LauncherMargin = _frameWidth > 0 && _frameHeight > 0
+                ? new Thickness(_launcherLeft + _launcherLiftX, _launcherTop + _launcherLift, _launcherRight - _launcherLiftX, 0)
+                : new Thickness(_launcherLeft, _launcherLift, _launcherRight, -_launcherLift);
         }
 
         // The icon of a launcher is put at the height of the icon of a tab (the button of a launcher has its own offsets, so it sat lower): the
@@ -213,12 +234,23 @@ namespace RetroBar.Controls
 
             ToolbarButton launcher = null;
             TaskButton tab = null;
+            FrameworkElement launcherSlot = null;
+            FrameworkElement tabSlot = null;
             for (int i = 0; i < TasksList.Items.Count && (launcher == null || tab == null); i++)
             {
-                if (TasksList.ItemContainerGenerator.ContainerFromIndex(i) is DependencyObject container)
+                if (TasksList.ItemContainerGenerator.ContainerFromIndex(i) is FrameworkElement container)
                 {
-                    tab ??= FindTabButton(container);
-                    launcher ??= FindLauncherButton(container);
+                    if (tab == null && FindTabButton(container) is TaskButton foundTab)
+                    {
+                        tab = foundTab;
+                        tabSlot = container;
+                    }
+
+                    if (launcher == null && FindLauncherButton(container) is ToolbarButton foundLauncher)
+                    {
+                        launcher = foundLauncher;
+                        launcherSlot = container;
+                    }
                 }
             }
 
@@ -230,13 +262,16 @@ namespace RetroBar.Controls
 
             try
             {
-                Rect tabIcon = tab.IconOnlyImage.TransformToAncestor(TasksList).TransformBounds(new Rect(0, 0, tab.IconOnlyImage.ActualWidth, tab.IconOnlyImage.ActualHeight));
-                Rect launcherIcon = launcher.ToolbarIcon.TransformToAncestor(TasksList).TransformBounds(new Rect(0, 0, launcher.ToolbarIcon.ActualWidth, launcher.ToolbarIcon.ActualHeight));
+                // Each icon where it is in its own slot (the two are not in the same place in the row).
+                Rect tabIcon = tab.IconOnlyImage.TransformToAncestor(tabSlot).TransformBounds(new Rect(0, 0, tab.IconOnlyImage.ActualWidth, tab.IconOnlyImage.ActualHeight));
+                Rect launcherIcon = launcher.ToolbarIcon.TransformToAncestor(launcherSlot).TransformBounds(new Rect(0, 0, launcher.ToolbarIcon.ActualWidth, launcher.ToolbarIcon.ActualHeight));
                 double delta = (tabIcon.Top + tabIcon.Height / 2) - (launcherIcon.Top + launcherIcon.Height / 2);
-                if (Math.Abs(delta) >= PixelStep * 0.75)
+                double deltaX = _frameWidth > 0 ? (tabIcon.Left + tabIcon.Width / 2) - (launcherIcon.Left + launcherIcon.Width / 2) : 0;
+                if (Math.Abs(delta) >= PixelStep * 0.75 || Math.Abs(deltaX) >= PixelStep * 0.75)
                 {
                     _alignChecks++;
                     _launcherLift += Math.Round(delta / PixelStep) * PixelStep;
+                    _launcherLiftX += Math.Round(deltaX / PixelStep) * PixelStep;
                     ApplyLauncherMargin();
                 }
                 else
@@ -287,6 +322,7 @@ namespace RetroBar.Controls
             _slideSlack = 0;
             _alignChecks = 0;
             _launcherLift = 0;
+            _launcherLiftX = 0;
             TasksList.LayoutUpdated -= TasksList_LayoutUpdatedForSquare;
             if (IconOnly)
             {
@@ -845,12 +881,28 @@ namespace RetroBar.Controls
                 // are no closer together than the tabs are). Its button keeps the width its icon needs, with margins to make up the slot and
                 // to put the icon in the middle of the frame a tab has in the same place.
                 double launcherWidth = pitch;
-                double launcherButton = Math.Round(LauncherButtonWidth / PixelStep) * PixelStep;
-                // (A tab's frame is in the middle of the width it has, which reaches a pixel past its place in the row.)
-                _launcherShift = Math.Round((_frameShift + PixelStep) / PixelStep) * PixelStep;
-                _launcherLeft = Math.Round((launcherWidth - launcherButton + _launcherShift) / 2 / PixelStep) * PixelStep;
-                _launcherRight = launcherWidth - launcherButton - _launcherLeft;
-                LauncherWidth = launcherButton;
+                if (_frameWidth > 0 && _frameHeight > 0)
+                {
+                    // Once there is a tab to measure, the button of a pin is as big as the frame of a tab, in the same place in its slot, so
+                    // it can be hovered and pressed all over the frame a tab has.
+                    LauncherWidth = Math.Round(_frameWidth / PixelStep) * PixelStep;
+                    LauncherHeight = Math.Round(_frameHeight / PixelStep) * PixelStep;
+                    _launcherTop = Math.Round(_frameTop / PixelStep) * PixelStep;
+                    _launcherLeft = Math.Round(_frameLeft / PixelStep) * PixelStep;
+                    _launcherRight = launcherWidth - LauncherWidth - _launcherLeft;
+                }
+                else
+                {
+                    double launcherButton = Math.Round(LauncherButtonWidth / PixelStep) * PixelStep;
+                    // (A tab's frame is in the middle of the width it has, which reaches a pixel past its place in the row.)
+                    _launcherShift = Math.Round((_frameShift + PixelStep) / PixelStep) * PixelStep;
+                    _launcherLeft = Math.Round((launcherWidth - launcherButton + _launcherShift) / 2 / PixelStep) * PixelStep;
+                    _launcherRight = launcherWidth - launcherButton - _launcherLeft;
+                    _launcherTop = 0;
+                    LauncherWidth = launcherButton;
+                    LauncherHeight = double.NaN;
+                }
+
                 ApplyLauncherMargin();
 
                 ButtonWidth = iconWidth;

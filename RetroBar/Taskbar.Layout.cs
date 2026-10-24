@@ -2,6 +2,7 @@ using RetroBar.Utilities;
 using System;
 using System.Windows;
 using System.Windows.Controls;
+using System.Windows.Data;
 using System.ComponentModel;
 
 namespace RetroBar
@@ -13,6 +14,7 @@ namespace RetroBar
     public partial class Taskbar
     {
         private FrameworkElement _mediaBox;
+        private BindingBase _weatherTag;
         private StackPanel _weatherPlace;
         private Grid _centerStrip;
         private StackPanel _centerRow;
@@ -62,6 +64,12 @@ namespace RetroBar
                 TrayContent.Children.Insert(weatherAt, _weatherPlace);
 
                 _mediaBox = WeatherGroup;
+
+                // On the bar it has a tag of its own (WeatherGroupBar): the tag it has in the tray box (WeatherGroup, with Playing) is tuned
+                // for being level with the clock in the box.
+                _weatherTag = BindingOperations.GetBindingBase(WeatherGroup, MonitorOffset.TagProperty);
+                BindingOperations.ClearBinding(WeatherGroup, MonitorOffset.TagProperty);
+                MonitorOffset.SetTag(WeatherGroup, "WeatherGroupBar");
                 DockPanel.SetDock(_mediaBox, Dock.Left);
 
                 // The tabs: out of the dock, into a row that is centered in what the other boxes leave. The Start button stays where it
@@ -89,6 +97,11 @@ namespace RetroBar
                 _centerRow.Children.Remove(TaskListControl);
                 TaskbarDock.Children.Remove(_centerStrip);
                 TaskbarDock.Children.Remove(_mediaBox);
+                WeatherGroup.ClearValue(MonitorOffset.TagProperty);
+                if (_weatherTag != null)
+                {
+                    WeatherGroup.SetBinding(MonitorOffset.TagProperty, _weatherTag);
+                }
                 int placeAt = TrayContent.Children.IndexOf(_weatherPlace);
                 TrayContent.Children.Remove(_weatherPlace);
                 _weatherPlace = null;

@@ -89,13 +89,13 @@ A tag that is chosen by a state has variants: `Playing` (media is playing), `NoC
 | `StartLabel` | `Controls/StartButton.xaml` |  |
 | `TaskButton` | `Controls/TaskButton.xaml.cs` | `TaskButtonActive` |
 | `TaskButtonActive` | `Controls/TaskButton.xaml.cs` |  |
-| `TaskIcon` | `Controls/TaskButton.xaml.cs`, `Utilities/MonitorOffset.cs` | `TaskIconActive` |
+| `TaskIcon` | `Controls/TaskButton.IconOnly.cs`, `Controls/TaskButton.xaml.cs`, `Utilities/MonitorOffset.cs` | `TaskIconActive` |
 | `TaskIconActive` | `Controls/TaskButton.xaml.cs` |  |
 | `TaskLabel` | `Controls/TaskButton.xaml.cs` | `TaskLabelActive` |
 | `TaskLabelActive` | `Controls/TaskButton.xaml.cs` |  |
 | `TaskOverlayIcon` | `Controls/TaskButton.xaml.cs` | `TaskOverlayIconActive` |
 | `TaskOverlayIconActive` | `Controls/TaskButton.xaml.cs` |  |
-| `ToolbarButtonBox` | `Controls/ToolbarButton.xaml` |  |
+| `ToolbarButtonBox` | `Controls/ToolbarButton.xaml`, `Controls/ToolbarButton.xaml.cs` |  |
 | `ToolbarIcon` | `Controls/ToolbarButton.xaml` |  |
 | `TrayBox` | `Taskbar.xaml` |  |
 | `TrayBoxBevel` | `Themes/System.xaml`, `Themes/Windows XFM.xaml` | `TrayBoxBevelPlaying` |
@@ -120,6 +120,7 @@ A tag that is chosen by a state has variants: `Playing` (media is playing), `NoC
 | `VuMeterContainer` | `Controls/MediaPlayer.xaml.cs` |  |
 | `VuMeterContainerNoArt` | `Controls/MediaPlayer.xaml.cs` |  |
 | `WeatherGroup` | `Taskbar.xaml` | `WeatherGroupPlaying` |
+| `WeatherGroupBar` | `Taskbar.Layout.cs` |  |
 | `WeatherGroupPlaying` | `Taskbar.xaml` |  |
 | `WeatherIcon` | `Controls/WeatherDisplay.xaml` | `WeatherIconNoCpuTemp` |
 | `WeatherIconNoCpuTemp` | `Controls/WeatherDisplay.xaml` |  |

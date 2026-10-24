@@ -83,6 +83,7 @@ namespace RetroBar.Utilities
             "VuMeterContainer",
             "VuMeterContainerNoArt",
             "WeatherGroup",
+            "WeatherGroupBar",
             "WeatherGroupPlaying",
             "WeatherIcon",
             "WeatherIconNoCpuTemp",
