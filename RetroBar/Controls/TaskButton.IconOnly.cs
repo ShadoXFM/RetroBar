@@ -32,13 +32,44 @@ namespace RetroBar.Controls
             AppButton.SizeChanged += IconOnly_OnButtonSizeChanged;
             MonitorAdjustments.Changed -= IconOnly_OnAdjustmentsChanged;
             MonitorAdjustments.Changed += IconOnly_OnAdjustmentsChanged;
+            _pressedDescriptor ??= DependencyPropertyDescriptor.FromProperty(System.Windows.Controls.Primitives.ButtonBase.IsPressedProperty, typeof(System.Windows.Controls.Button));
+            _pressedDescriptor.RemoveValueChanged(AppButton, IconOnly_OnPressedChanged);
+            _pressedDescriptor.AddValueChanged(AppButton, IconOnly_OnPressedChanged);
             ApplyIconOnly();
+        }
+
+        private DependencyPropertyDescriptor _pressedDescriptor;
+        private Thickness _iconBaseMargin;
+        private Thickness _badgeBaseMargin;
+
+        // The theme moves what is in a pressed button down and to the right (by a pixel); the icon here is not in the button, so it is moved the
+        // same way, with its badge, while the button is pressed.
+        private void IconOnly_OnPressedChanged(object sender, EventArgs e)
+        {
+            if (_iconOnlyHost?.IconOnly != true || !_iconPlaced)
+            {
+                return;
+            }
+
+            if (AppButton.IsPressed)
+            {
+                double step = _iconOnlyHost.PixelStep > 0 ? _iconOnlyHost.PixelStep : 1;
+                double shift = Math.Max(step, Math.Round(1 / step) * step);
+                IconOnlyImage.Margin = new Thickness(_iconBaseMargin.Left + shift, _iconBaseMargin.Top + shift, 0, 0);
+                IconOnlyBadge.Margin = new Thickness(_badgeBaseMargin.Left + shift, _badgeBaseMargin.Top + shift, 0, 0);
+            }
+            else
+            {
+                IconOnlyImage.Margin = _iconBaseMargin;
+                IconOnlyBadge.Margin = _badgeBaseMargin;
+            }
         }
 
         private void ReleaseIconOnly()
         {
             AppButton.SizeChanged -= IconOnly_OnButtonSizeChanged;
             MonitorAdjustments.Changed -= IconOnly_OnAdjustmentsChanged;
+            _pressedDescriptor?.RemoveValueChanged(AppButton, IconOnly_OnPressedChanged);
             if (_iconOnlyHost != null)
             {
                 _iconOnlyDescriptor?.RemoveValueChanged(_iconOnlyHost, IconOnly_OnChanged);
@@ -267,10 +298,12 @@ namespace RetroBar.Controls
                 double iconLeft = Math.Round(left / step) * step;
                 double iconTop = Math.Round(top / step) * step;
                 IconOnlyImage.Margin = new Thickness(iconLeft, iconTop, 0, 0);
+                _iconBaseMargin = IconOnlyImage.Margin;
 
                 // The badge at the lower right of the icon, as the classic tab has it.
                 IconOnlyBadge.Margin = new Thickness(Math.Round((iconLeft + IconOnlyImage.Width - IconOnlyBadge.Width + 2) / step) * step,
                     Math.Round((iconTop + IconOnlyImage.Height - IconOnlyBadge.Height + 1) / step) * step, 0, 0);
+                _badgeBaseMargin = IconOnlyBadge.Margin;
                 IconOnlyImage.Opacity = 1;
                 IconOnlyBadge.Opacity = 1;
                 _iconPlaced = true;
