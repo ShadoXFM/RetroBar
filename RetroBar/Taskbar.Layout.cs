@@ -12,7 +12,7 @@ namespace RetroBar
     // two layouts when the setting changes, not made twice.
     public partial class Taskbar
     {
-        private GroupBox _mediaBox;
+        private FrameworkElement _mediaBox;
         private StackPanel _weatherPlace;
         private Grid _centerStrip;
         private StackPanel _centerRow;
@@ -52,7 +52,7 @@ namespace RetroBar
             UpdateTrayContentFlags();
             if (windows11)
             {
-                // The weather and the CPU temperature: out of the tray box, into a box of their own at the left; the media player is in
+                // The weather and the CPU temperature: out of the tray box, onto the bar at the left, in no box; the media player is in
                 // the tray box in their place (at its left, with the notification icons and the clock).
                 // What the tray box has in the weather's place is the weather group with nothing in it, as with the weather and the CPU
                 // temperature turned off: its margin is part of what the box's per-monitor margins (TrayNotifyListAlone and the like) were tuned with.
@@ -61,7 +61,7 @@ namespace RetroBar
                 _weatherPlace = new StackPanel { Orientation = Orientation.Horizontal, VerticalAlignment = VerticalAlignment.Center, Margin = WeatherGroup.Margin };
                 TrayContent.Children.Insert(weatherAt, _weatherPlace);
 
-                _mediaBox = new GroupBox { Style = (Style)FindResource("Tray"), Content = WeatherGroup, Margin = new Thickness(1, 0, 0, 0) };
+                _mediaBox = WeatherGroup;
                 DockPanel.SetDock(_mediaBox, Dock.Left);
 
                 // The tabs: out of the dock, into a row that is centered in what the other boxes leave. The Start button stays where it
@@ -89,7 +89,6 @@ namespace RetroBar
                 _centerRow.Children.Remove(TaskListControl);
                 TaskbarDock.Children.Remove(_centerStrip);
                 TaskbarDock.Children.Remove(_mediaBox);
-                _mediaBox.Content = null;
                 int placeAt = TrayContent.Children.IndexOf(_weatherPlace);
                 TrayContent.Children.Remove(_weatherPlace);
                 _weatherPlace = null;

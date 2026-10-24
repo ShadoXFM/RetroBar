@@ -200,9 +200,13 @@ namespace RetroBar.Controls
 
         // The icon of a launcher is put at the height of the icon of a tab (the button of a launcher has its own offsets, so it sat lower): the
         // two are measured and the difference taken up in the margin, a few times at most.
+        private bool _launchersAligned;
+
         private void AlignLauncherIcons()
         {
-            if (!IconOnly || _alignChecks > 6)
+            // Once, until the sizes are worked out again: a pressed launcher has its icon nudged by the theme (down and to the right), and
+            // measuring that took the nudge for a place to correct, which moved all the pins up.
+            if (!IconOnly || _alignChecks > 6 || _launchersAligned)
             {
                 return;
             }
@@ -218,7 +222,8 @@ namespace RetroBar.Controls
                 }
             }
 
-            if (launcher == null || tab == null || !tab.IconOnlyImage.IsVisible || launcher.ToolbarIcon.ActualHeight <= 0 || tab.IconOnlyImage.ActualHeight <= 0)
+            if (launcher == null || tab == null || !tab.IconOnlyImage.IsVisible || launcher.ToolbarIcon.ActualHeight <= 0 || tab.IconOnlyImage.ActualHeight <= 0 ||
+                launcher.IsMouseOver || launcher.IsMouseCaptureWithin || Mouse.LeftButton == MouseButtonState.Pressed)
             {
                 return;
             }
@@ -233,6 +238,10 @@ namespace RetroBar.Controls
                     _alignChecks++;
                     _launcherLift += Math.Round(delta / PixelStep) * PixelStep;
                     ApplyLauncherMargin();
+                }
+                else
+                {
+                    _launchersAligned = true;
                 }
             }
             catch (InvalidOperationException)
@@ -825,6 +834,8 @@ namespace RetroBar.Controls
 
                 TabMargin = new Thickness(0, 0, -PixelStep, 0);
                 _pitch = pitch;
+                _launchersAligned = false;
+                _alignChecks = 0;
                 // What the list has beside its tabs is measured with the margin they had (the slack of the slide that is ending is still in the
                 // list's size until the next layout), not the one they are given now.
                 double slackBefore = TasksList.Margin.Left + TasksList.Margin.Right;
