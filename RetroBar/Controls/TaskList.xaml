@@ -44,7 +44,8 @@
         </ResourceDictionary>
     </UserControl.Resources>
     <DockPanel>
-        <Thumb Style="{DynamicResource ToolbarThumb}">
+        <Thumb x:Name="TasksGrip"
+               Style="{DynamicResource ToolbarThumb}">
             <DockPanel.Dock>
                 <Binding Converter="{StaticResource dockOrientationConverter}"
                              ConverterParameter="leading"

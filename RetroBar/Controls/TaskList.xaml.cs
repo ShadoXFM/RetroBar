@@ -408,6 +408,8 @@ namespace RetroBar.Controls
 
         private void IconOnlyChanged()
         {
+            // The grip along the tabs, which the taskbar shows when it is unlocked, has nothing to move in the Windows 11 style.
+            TasksGrip.Visibility = IconOnly ? Visibility.Collapsed : Visibility.Visible;
             _squareChecks = 0;
             _measureLocked = false;
             TabMargin = new Thickness();
