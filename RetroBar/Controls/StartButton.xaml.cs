@@ -63,6 +63,8 @@ namespace RetroBar.Controls
                 StartLogo.HorizontalAlignment = HorizontalAlignment.Center;
                 // No room kept for the text beside the logo.
                 StartLogo.Margin = new Thickness(0);
+                logoDx = logoDy = 0;
+                logoPasses = 0;
                 Start.LayoutUpdated += Start_LayoutUpdatedForSquare;
             }
             else
@@ -75,12 +77,93 @@ namespace RetroBar.Controls
             }
         }
 
-        // The frame that is drawn (the theme's outer border, inside the button's own padding) is made as wide as it is tall.
+        // How far (in DIPs, as the logo is shown) the middle of the logo's visible drawing is from the middle of its image: the pixels that are
+        // opaque and not dark, so a shadow is not counted.
+        private (double X, double Y) ArtOffset(Rect shown)
+        {
+            if (StartLogo.Source is not System.Windows.Media.Imaging.BitmapSource source || source.PixelWidth <= 0 || source.PixelHeight <= 0)
+            {
+                return (0, 0);
+            }
+
+            try
+            {
+                var converted = new System.Windows.Media.Imaging.FormatConvertedBitmap(source, PixelFormats.Bgra32, null, 0);
+                int stride = converted.PixelWidth * 4;
+                byte[] data = new byte[stride * converted.PixelHeight];
+                converted.CopyPixels(data, stride, 0);
+                int minX = int.MaxValue, minY = int.MaxValue, maxX = -1, maxY = -1;
+                for (int y = 0; y < converted.PixelHeight; y++)
+                {
+                    for (int x = 0; x < converted.PixelWidth; x++)
+                    {
+                        int i = y * stride + x * 4;
+                        if (data[i + 3] >= 160 && Math.Max(data[i], Math.Max(data[i + 1], data[i + 2])) >= 110)
+                        {
+                            minX = Math.Min(minX, x);
+                            maxX = Math.Max(maxX, x);
+                            minY = Math.Min(minY, y);
+                            maxY = Math.Max(maxY, y);
+                        }
+                    }
+                }
+
+                if (maxX < 0)
+                {
+                    return (0, 0);
+                }
+
+                // Drawn as large as fits (Uniform), in the middle of the image's place.
+                double scale = Math.Min(shown.Width / converted.PixelWidth, shown.Height / converted.PixelHeight);
+                return (((minX + maxX + 1) / 2.0 - converted.PixelWidth / 2.0) * scale, ((minY + maxY + 1) / 2.0 - converted.PixelHeight / 2.0) * scale);
+            }
+            catch (Exception)
+            {
+                return (0, 0);
+            }
+        }
+
+        private double logoDx;
+        private double logoDy;
+        private int logoPasses;
+        private bool logoPending;
+
+        // The frame that is drawn (the theme's outer border, inside the button's own padding) is made as wide as it is tall, and the logo put in
+        // the middle of it.
         private void Start_LayoutUpdatedForSquare(object? sender, EventArgs e)
         {
             if (!IconOnly || Start.Template?.FindName("ButtonOuterBottomBorder", Start) is not FrameworkElement frame || frame.ActualHeight <= 0 || frame.ActualWidth <= 0)
             {
                 return;
+            }
+
+            if (logoPasses < 8 && !logoPending && StartLogo.ActualWidth > 0 && Math.Abs(Start.ActualWidth - Start.ActualHeight) < 12)
+            {
+                try
+                {
+                    double pixel = 1 / VisualTreeHelper.GetDpi(this).DpiScaleX;
+                    Rect frameRect = frame.TransformToAncestor(Start).TransformBounds(new Rect(0, 0, frame.ActualWidth, frame.ActualHeight));
+                    Rect logoRect = StartLogo.TransformToAncestor(Start).TransformBounds(new Rect(0, 0, StartLogo.ActualWidth, StartLogo.ActualHeight));
+                    // The drawing is not always in the middle of its image (a logo with a shadow below and to the right of it is to the
+                    // left of and above the middle): it is the drawing that is put in the middle of the frame.
+                    (double artX, double artY) = ArtOffset(logoRect);
+                    double dx = (frameRect.Left + frameRect.Width / 2) - (logoRect.Left + logoRect.Width / 2 + artX);
+                    double dy = (frameRect.Top + frameRect.Height / 2) - (logoRect.Top + logoRect.Height / 2 + artY);
+                    if (Math.Abs(dx) >= pixel * 0.55 || Math.Abs(dy) >= pixel * 0.55)
+                    {
+                        logoPasses++;
+                        // The layout event comes several times before the new margin is in the layout: the next measure waits for it.
+                        logoPending = true;
+                        Dispatcher.BeginInvoke(new Action(() => logoPending = false), DispatcherPriority.Loaded);
+                        logoDx += Math.Round(dx / pixel) * pixel;
+                        logoDy += Math.Round(dy / pixel) * pixel;
+                        // The logo's place is as wide as the logo and its margins (an Auto column), so it moves by its margin.
+                        StartLogo.Margin = new Thickness(Math.Max(0, logoDx), Math.Max(0, logoDy), Math.Max(0, -logoDx), Math.Max(0, -logoDy));
+                    }
+                }
+                catch (InvalidOperationException)
+                {
+                }
             }
 
             double dpi = VisualTreeHelper.GetDpi(this).DpiScaleX;

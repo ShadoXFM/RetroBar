@@ -141,6 +141,7 @@ namespace RetroBar.Controls
         private void QueuePlaceIcon()
         {
             _iconPlaced = false;
+            _fixPasses = 0;
             LayoutUpdated -= IconOnly_OnLayoutUpdated;
             LayoutUpdated += IconOnly_OnLayoutUpdated;
 
@@ -155,6 +156,37 @@ namespace RetroBar.Controls
                 _placeIconQueued = false;
                 PlaceIcon();
             }), DispatcherPriority.Loaded);
+        }
+
+        private double _iconFixX;
+        private double _iconFixY;
+        private int _fixPasses;
+
+        private void CenterIconInFrame()
+        {
+            if (_iconOnlyHost?.IconOnly != true || !IsLoaded || AppButton.IsPressed ||
+                AppButton.Template?.FindName("ButtonOuterBottomBorder", AppButton) is not FrameworkElement frame || frame.ActualWidth <= 0 || IconOnlyImage.ActualWidth <= 0)
+            {
+                return;
+            }
+
+            try
+            {
+                Rect frameRect = frame.TransformToAncestor(this).TransformBounds(new Rect(0, 0, frame.ActualWidth, frame.ActualHeight));
+                Rect iconRect = IconOnlyImage.TransformToAncestor(this).TransformBounds(new Rect(0, 0, IconOnlyImage.ActualWidth, IconOnlyImage.ActualHeight));
+                double step = _iconOnlyHost.PixelStep > 0 ? _iconOnlyHost.PixelStep : 1;
+                double dx = (frameRect.Left + frameRect.Width / 2) - (iconRect.Left + iconRect.Width / 2);
+                double dy = (frameRect.Top + frameRect.Height / 2) - (iconRect.Top + iconRect.Height / 2);
+                if (Math.Abs(dx) >= step * 0.75 || Math.Abs(dy) >= step * 0.75)
+                {
+                    _iconFixX += Math.Round(dx / step) * step;
+                    _iconFixY += Math.Round(dy / step) * step;
+                    PlaceIcon();
+                }
+            }
+            catch (InvalidOperationException)
+            {
+            }
         }
 
         // In the middle of the frame the theme draws (its outer border, which is smaller than the button's box), in whole device pixels.
@@ -212,8 +244,8 @@ namespace RetroBar.Controls
                     MonitorOffset.SetTag(IconOnlyImage, "TaskIconBar");
                 }
 
-                double left = bounds.Left + (bounds.Width - IconOnlyImage.Width) / 2 - shiftX;
-                double top = bounds.Top + (bounds.Height - IconOnlyImage.Height) / 2 - shiftY;
+                double left = bounds.Left + (bounds.Width - IconOnlyImage.Width) / 2 - shiftX + _iconFixX;
+                double top = bounds.Top + (bounds.Height - IconOnlyImage.Height) / 2 - shiftY + _iconFixY;
                 double iconLeft = Math.Round(left / step) * step;
                 double iconTop = Math.Round(top / step) * step;
                 IconOnlyImage.Margin = new Thickness(iconLeft, iconTop, 0, 0);
@@ -224,6 +256,14 @@ namespace RetroBar.Controls
                 IconOnlyImage.Opacity = 1;
                 IconOnlyBadge.Opacity = 1;
                 _iconPlaced = true;
+
+                // Where the icon ends up is measured, and what it is off the middle of the frame (the snapped transform of the monitor's
+                // adjustment rounds its own way) taken up, a few times at most.
+                if (_fixPasses < 3)
+                {
+                    _fixPasses++;
+                    Dispatcher.BeginInvoke(new Action(CenterIconInFrame), DispatcherPriority.Loaded);
+                }
             }
             catch (InvalidOperationException)
             {

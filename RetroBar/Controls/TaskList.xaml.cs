@@ -245,12 +245,20 @@ namespace RetroBar.Controls
         // The icon of a launcher is put at the height of the icon of a tab (the button of a launcher has its own offsets, so it sat lower): the
         // two are measured and the difference taken up in the margin, a few times at most.
         private bool _launchersAligned;
+        private bool _alignPending;
+
+        // After a correction the layout event comes several times before the new margins are in the layout: the next measure waits for it.
+        private void HoldAlignment()
+        {
+            _alignPending = true;
+            Dispatcher.BeginInvoke(new Action(() => _alignPending = false), DispatcherPriority.Loaded);
+        }
 
         private void AlignLauncherIcons()
         {
             // Once, until the sizes are worked out again: a pressed launcher has its icon nudged by the theme (down and to the right), and
             // measuring that took the nudge for a place to correct, which moved all the pins up.
-            if (!IconOnly || _alignChecks > 6 || _launchersAligned)
+            if (!IconOnly || _alignChecks > 6 || _launchersAligned || _alignPending)
             {
                 return;
             }
@@ -304,6 +312,7 @@ namespace RetroBar.Controls
                     if (Math.Max(Math.Max(Math.Abs(dl), Math.Abs(dt)), Math.Max(Math.Abs(dw), Math.Abs(dh))) >= PixelStep * 0.75)
                     {
                         _alignChecks++;
+                        HoldAlignment();
                         _boxDx += Math.Round(dl / PixelStep) * PixelStep;
                         _boxDy += Math.Round(dt / PixelStep) * PixelStep;
                         _boxDw += Math.Round(dw / PixelStep) * PixelStep;
@@ -319,6 +328,7 @@ namespace RetroBar.Controls
                     if (Math.Abs(ix) >= PixelStep * 0.75 || Math.Abs(iy) >= PixelStep * 0.75)
                     {
                         _alignChecks++;
+                        HoldAlignment();
                         _iconDx += Math.Round(ix / PixelStep) * PixelStep;
                         _iconDy += Math.Round(iy / PixelStep) * PixelStep;
                         ApplyLauncherMargin();
