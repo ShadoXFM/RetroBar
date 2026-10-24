@@ -540,6 +540,16 @@ namespace RetroBar.Utilities
             set => SetEnum(ref _invertIconsMode, value);
         }
 
+        // How the taskbar is laid out: as it always was, or in the way of Windows 11 (see Taskbar.Layout.cs): the program tabs, small and
+        // showing only their icons, with the pinned programs among them, in the middle with the Start button to their left, and the media
+        // player in a box of its own at the left.
+        private TaskbarStyleOption _taskbarStyle = TaskbarStyleOption.Classic;
+        public TaskbarStyleOption TaskbarStyle
+        {
+            get => _taskbarStyle;
+            set => SetEnum(ref _taskbarStyle, value);
+        }
+
         private bool _showTaskBadges = true;
         public bool ShowTaskBadges
         {
@@ -684,6 +694,12 @@ namespace RetroBar.Utilities
     }
 
     #region Enums
+    public enum TaskbarStyleOption
+    {
+        Classic,
+        Windows11
+    }
+
     public enum InvertIconsOption
     {
         WhenNeededByTheme,

@@ -45,7 +45,24 @@ namespace RetroBar.Controls
 
         // The area's width in DIPs, rounded to a whole number of device pixels so its edges (and the
         // frame around it) land cleanly on the pixel grid at any monitor scale.
-        private double AreaWidth => Math.Round(BoxWidth * SIZE_FACTOR * DpiScale) / DpiScale;
+        private double AreaWidth => Math.Round(EffectiveBoxWidth * SIZE_FACTOR * DpiScale) / DpiScale;
+
+        // The preview is as wide as its tab - except in the Windows 11 style of the taskbar, where the tab is a small square: the preview
+        // is then as wide as a tab of the classic style, by default.
+        private double EffectiveBoxWidth
+        {
+            get
+            {
+                if (Utilities.Settings.Instance.TaskbarStyle == Utilities.TaskbarStyleOption.Windows11 &&
+                    Utilities.Settings.Instance.Edge is ManagedShell.AppBar.AppBarEdge.Top or ManagedShell.AppBar.AppBarEdge.Bottom)
+                {
+                    double tab = Application.Current?.TryFindResource("TaskButtonWidth") as double? ?? DEFAULT_WIDTH;
+                    return Math.Max(BoxWidth, tab);
+                }
+
+                return BoxWidth;
+            }
+        }
 
         public double DpiScale = 1.0;
 

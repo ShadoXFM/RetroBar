@@ -21,332 +21,367 @@
          its icon/label content. This tag and the icon/label ones depend on two inputs (State and
          the context menu), which takes a MultiBinding: set in TaskButton.xaml.cs (SetMonitorTags),
          since an element with child content can't take a property-element tag in XAML. -->
-    <Button Name="AppButton"
-            Click="AppButton_OnClick"
-            MouseUp="AppButton_OnMouseUp"
-            MouseWheel="AppButton_OnMouseWheel"
-            PreviewMouseDown="AppButton_OnPreviewMouseDown"
-            ContextMenuOpening="AppButton_OnContextMenuOpening"
-            DragEnter="AppButton_OnDragEnter"
-            DragLeave="AppButton_OnDragLeave"
-            ToolTipService.ShowDuration="60000">
-        <Grid>
-            <Grid.ColumnDefinitions>
-                <ColumnDefinition Width="Auto" />
-                <ColumnDefinition Width="*" />
-            </Grid.ColumnDefinitions>
-            <!-- MonitorOffset.Tag is TaskIcon normally, TaskIconActive while State==Active - see
-                 TaskStateToMonitorTagConverter for why the active state needs its own tag. -->
-            <Image x:Name="TaskIconImage"
-                   Grid.Column="0"
-                   Style="{DynamicResource TaskIcon}">
-                <Image.Source>
-                    <MultiBinding Converter="{StaticResource taskIconConverter}" Mode="OneWay">
-                        <Binding />
-                        <Binding Path="Icon" />
-                        <Binding Source="{x:Static utilities:ExplorerWindowCount.Instance}" Path="Count" />
-                        <Binding Source="{x:Static utilities:ExplorerWindowCount.Instance}" Path="Tick" />
-                    </MultiBinding>
-                </Image.Source>
-            </Image>
-            <!-- MonitorOffset.Tag is TaskOverlayIcon normally, TaskOverlayIconActive while
-                 State==Active - see TaskStateToMonitorTagConverter for why the active state
-                 needs its own tag. -->
-            <Image x:Name="TaskOverlayIconImage"
-                   Source="{Binding Path=OverlayIcon, Mode=OneWay}"
-                   Grid.Column="0"
-                   Style="{DynamicResource TaskOverlayIcon}"
-                   Visibility="{Binding Source={x:Static utilities:Settings.Instance}, Path=ShowTaskBadges, UpdateSourceTrigger=PropertyChanged, Converter={StaticResource boolToVisibilityConverter}}" />
-            <!-- MonitorOffset.Tag is TaskLabel normally, TaskLabelActive while State==Active -
-                 see TaskStateToMonitorTagConverter for why the active state needs its own tag. -->
-            <TextBlock x:Name="TaskLabelText"
-                       Grid.Column="1"
-                       Style="{DynamicResource TaskLabel}">
-                <TextBlock.Text>
-                    <MultiBinding Converter="{StaticResource taskLabelConverter}">
-                        <Binding Path="Title" />
-                        <Binding Path="ProgressValue" />
-                        <Binding Path="ProgressState" />
-                        <Binding Path="Tag.Count" ElementName="AppButton" FallbackValue="1" />
-                        <Binding Source="{x:Static utilities:Settings.Instance}" Path="ShowProgramNameOnTabs" />
-                        <Binding />
-                        <Binding Source="{x:Static utilities:ExplorerWindowCount.Instance}" Path="Count" />
-                    </MultiBinding>
-                </TextBlock.Text>
-            </TextBlock>
-        </Grid>
-        <Button.ContextMenu>
-            <ContextMenu Opened="ContextMenu_OpenedOrClosed"
-                         Closed="ContextMenu_OpenedOrClosed">
-                <TextOptions.TextRenderingMode>
-                    <Binding Source="{x:Static utilities:Settings.Instance}" Path="AllowFontSmoothingMenu" Converter="{StaticResource menuTextRenderingModeConverter}" />
-                </TextOptions.TextRenderingMode>
-                <!-- Starts another instance of the program (see ProgramMenuItem_OnClick); the window's own operations
-                     (restore, move, ...) are on the context menu of its preview. -->
-                <MenuItem Name="ProgramMenuItem"
-                          Click="ProgramMenuItem_OnClick" />
-                <MenuItem Header="{DynamicResource pin_to_taskbar}"
-                          Click="PinMenuItem_OnClick"
-                          Name="PinMenuItem" />
-                <Separator />
-                <MenuItem Header="{DynamicResource end_task}"
-                          Click="EndTaskMenuItem_OnClick"
-                          Name="EndTaskMenuItem"
-                          Visibility="{Binding Source={x:Static utilities:Settings.Instance}, Path=ShowEndTaskButton, UpdateSourceTrigger=PropertyChanged, Converter={StaticResource boolToVisibilityConverter}}">
-                </MenuItem>
-                <MenuItem Header="{DynamicResource close}"
-                          Click="CloseMenuItem_OnClick"
-                          Name="CloseMenuItem">
-                    <MenuItem.Icon>
-                        <TextBlock FontFamily="Marlett"
-                                   Text="&#x72;"
-                                   HorizontalAlignment="Center"
-                                   VerticalAlignment="Center" />
-                    </MenuItem.Icon>
-                </MenuItem>
-            </ContextMenu>
-        </Button.ContextMenu>
-        <Button.ToolTip>
-            <controls:PreviewToolTip>
-                <ToolTip.Style>
-                    <Style TargetType="ToolTip"
-                           BasedOn="{StaticResource {x:Type ToolTip}}">
-                        <Style.Triggers>
-                            <DataTrigger Binding="{Binding Source={x:Static utilities:Settings.Instance}, Path=ShowTaskThumbnails, UpdateSourceTrigger=PropertyChanged}"
-                                                             Value="True">
-                                <DataTrigger.Setters>
-                                    <Setter Property="HorizontalOffset">
-                                        <Setter.Value>
-                                            <MultiBinding Converter="{StaticResource toolTipHorizontalOffsetConverter}" UpdateSourceTrigger="PropertyChanged">
-                                                <Binding RelativeSource="{RelativeSource Self}" Path="PlacementTarget.ActualWidth"/>
-                                                <Binding RelativeSource="{RelativeSource Self}" Path="ActualWidth"/>
-                                                <Binding Source="{x:Static utilities:Settings.Instance}" Path="TaskbarScale"/>
-                                                <Binding Source="{x:Static utilities:Settings.Instance}" Path="Edge"/>
-                                            </MultiBinding>
-                                        </Setter.Value>
-                                    </Setter>
-                                    <Setter Property="VerticalOffset">
-                                        <Setter.Value>
-                                            <MultiBinding Converter="{StaticResource toolTipVerticalOffsetConverter}" UpdateSourceTrigger="PropertyChanged">
-                                                <Binding RelativeSource="{RelativeSource Self}" Path="PlacementTarget.ActualHeight"/>
-                                                <Binding RelativeSource="{RelativeSource Self}" Path="ActualHeight"/>
-                                                <Binding Source="{x:Static utilities:Settings.Instance}" Path="TaskbarScale"/>
-                                                <Binding Source="{x:Static utilities:Settings.Instance}" Path="Edge"/>
-                                            </MultiBinding>
-                                        </Setter.Value>
-                                    </Setter>
-                                    <Setter Property="Placement">
-                                        <Setter.Value>
-                                            <MultiBinding Converter="{StaticResource toolTipPlacementConverter}" UpdateSourceTrigger="PropertyChanged">
-                                                <Binding Source="{x:Static utilities:Settings.Instance}" Path="Edge"/>
-                                            </MultiBinding>
-                                        </Setter.Value>
-                                    </Setter>
-                                    <Setter Property="Template">
-                                        <Setter.Value>
-                                            <ControlTemplate TargetType="ToolTip">
-                                                <!-- The close button's visibility/hover and the preview's
-                                                     click-to-activate are driven from TaskButton.Preview.cs
-                                                     (WPF never routes mouse input to this window). The title row exists
-                                                     for the close button: the thumbnail itself is drawn by
-                                                     DWM on top of the window, so anything WPF put over it
-                                                     would be hidden. -->
-                                                <Grid x:Name="PreviewRoot"
-                                                      Background="Transparent"
-                                                      RenderOptions.ClearTypeHint="Enabled">
-                                                    <!-- The shadow is its own element behind the frame, not an Effect on the frame: an Effect
-                                                         redraws everything inside it into an offscreen bitmap, which made the text and icons
-                                                         blurry. It falls on the right and bottom only (see PopupShadow). The 6 of margin around the
-                                                         frame is the room it has to spread into (the converters that place the popup take it
-                                                         off again, see PreviewShadowRoom). -->
-                                                    <controls:PopupShadow />
-                                                    <ContentControl Style="{DynamicResource TaskButtonThumbnail}"
-                                                                    ClipToBounds="True"
-                                                                    Margin="6">
-                                                        <!-- One block per window of the tab (just the one, unless windows of an app are
-                                                             combined - see TaskButton.GroupWindows, kept in the button's Tag). Side by side
-                                                             on a top/bottom taskbar, stacked on a left/right one. -->
-                                                        <ItemsControl x:Name="PreviewItems"
-                                                                      ItemsSource="{Binding Path=PlacementTarget.Tag, RelativeSource={RelativeSource TemplatedParent}}">
-                                                            <ItemsControl.Style>
-                                                                <Style TargetType="ItemsControl">
-                                                                    <!-- The gap between previews goes between them only (the container after the first
-                                                                         gets it), so no negative margin is needed to cancel a trailing one - which
-                                                                         left the frame a pixel wider than the previews at some scales. -->
-                                                                    <Setter Property="AlternationCount" Value="1000" />
-                                                                    <Setter Property="ItemsPanel">
-                                                                        <Setter.Value>
-                                                                            <ItemsPanelTemplate>
-                                                                                <StackPanel Orientation="Horizontal" />
-                                                                            </ItemsPanelTemplate>
-                                                                        </Setter.Value>
-                                                                    </Setter>
-                                                                    <Setter Property="ItemContainerStyle">
-                                                                        <Setter.Value>
-                                                                            <Style TargetType="ContentPresenter">
-                                                                                <Setter Property="Margin" Value="6.4,0,0,0" />
-                                                                                <Style.Triggers>
-                                                                                    <Trigger Property="ItemsControl.AlternationIndex" Value="0">
-                                                                                        <Setter Property="Margin" Value="0" />
-                                                                                    </Trigger>
-                                                                                </Style.Triggers>
-                                                                            </Style>
-                                                                        </Setter.Value>
-                                                                    </Setter>
-                                                                    <Style.Triggers>
-                                                                        <DataTrigger Binding="{Binding Source={x:Static utilities:Settings.Instance}, Path=Edge}" Value="Left">
-                                                                            <Setter Property="ItemsPanel">
-                                                                                <Setter.Value>
-                                                                                    <ItemsPanelTemplate>
-                                                                                        <StackPanel Orientation="Vertical" />
-                                                                                    </ItemsPanelTemplate>
-                                                                                </Setter.Value>
-                                                                            </Setter>
-                                                                            <Setter Property="ItemContainerStyle">
-                                                                                <Setter.Value>
-                                                                                    <Style TargetType="ContentPresenter">
-                                                                                <Setter Property="Margin" Value="0,6.4,0,0" />
-                                                                                <Style.Triggers>
-                                                                                    <Trigger Property="ItemsControl.AlternationIndex" Value="0">
-                                                                                        <Setter Property="Margin" Value="0" />
-                                                                                    </Trigger>
-                                                                                </Style.Triggers>
-                                                                            </Style>
-                                                                                </Setter.Value>
-                                                                            </Setter>
-                                                                        </DataTrigger>
-                                                                        <DataTrigger Binding="{Binding Source={x:Static utilities:Settings.Instance}, Path=Edge}" Value="Right">
-                                                                            <Setter Property="ItemsPanel">
-                                                                                <Setter.Value>
-                                                                                    <ItemsPanelTemplate>
-                                                                                        <StackPanel Orientation="Vertical" />
-                                                                                    </ItemsPanelTemplate>
-                                                                                </Setter.Value>
-                                                                            </Setter>
-                                                                            <Setter Property="ItemContainerStyle">
-                                                                                <Setter.Value>
-                                                                                    <Style TargetType="ContentPresenter">
-                                                                                <Setter Property="Margin" Value="0,6.4,0,0" />
-                                                                                <Style.Triggers>
-                                                                                    <Trigger Property="ItemsControl.AlternationIndex" Value="0">
-                                                                                        <Setter Property="Margin" Value="0" />
-                                                                                    </Trigger>
-                                                                                </Style.Triggers>
-                                                                            </Style>
-                                                                                </Setter.Value>
-                                                                            </Setter>
-                                                                        </DataTrigger>
-                                                                    </Style.Triggers>
-                                                                </Style>
-                                                            </ItemsControl.Style>
-                                                            <ItemsControl.ItemTemplate>
-                                                                <DataTemplate>
-                                                                    <Grid x:Name="PreviewItem">
-                                                                        <!-- The translucent fill behind whichever preview the pointer is on (same look as a
-                                                                             tab's hover fill); driven from TaskButton.Preview.cs. It reaches out to the frame's
-                                                                             inner edge, over the padding around the preview. -->
-                                                                        <Border x:Name="PreviewHover"
-                                                                                Margin="-3"
-                                                                                Background="{DynamicResource ClockForeground}"
-                                                                                Opacity="0"
-                                                                                IsHitTestVisible="False" />
-                                                                        <!-- Title row on top, then the picture centered in the space left under it: when
-                                                                             windows of different shapes sit side by side, the shorter picture is centered
-                                                                             rather than hanging from the top. -->
-                                                                        <Grid>
-                                                                            <Grid.RowDefinitions>
-                                                                                <RowDefinition Height="Auto" />
-                                                                                <RowDefinition Height="*" />
-                                                                            </Grid.RowDefinitions>
-                                                                        <!-- Exactly as wide as the thumbnail below, so a long title is trimmed
-                                                                             instead of widening the whole preview. -->
-                                                                        <!-- MonitorOffset.Tag: PreviewTitleRow - its Margin (the gap between the title/close
-                                                                             button row and the thumbnail) is tunable per monitor in monitor-adjustments.json. -->
-                                                                        <Grid Margin="0,0,0,3"
-                                                                              utilities:MonitorOffset.Tag="PreviewTitleRow"
-                                                                              Width="{Binding ElementName=PreviewThumbnail, Path=Width}">
-                                                                            <Grid.ColumnDefinitions>
-                                                                                <ColumnDefinition Width="Auto" />
-                                                                                <ColumnDefinition Width="*" />
-                                                                            </Grid.ColumnDefinitions>
-                                                                            <!-- The window's own icon (an Explorer window's folder, say), before its title; only the
-                                                                                 tab button always shows the regular File Explorer icon. -->
-                                                                            <Image x:Name="PreviewTitleIcon"
-                                                                                   Width="16"
-                                                                                   Height="16"
-                                                                                   Margin="1,0,2.4,0"
-                                                                                   VerticalAlignment="Center"
-                                                                                   UseLayoutRounding="True"
-                                                                                   SnapsToDevicePixels="True"
-                                                                                   RenderOptions.BitmapScalingMode="HighQuality"
-                                                                                   utilities:MonitorOffset.Tag="PreviewTitleIcon">
-                                                                                <Image.Source>
-                                                                                    <MultiBinding Converter="{StaticResource taskIconConverter}" ConverterParameter="window" Mode="OneWay">
-                                                                                        <Binding />
-                                                                                        <Binding Path="Icon" />
-                                                                                    </MultiBinding>
-                                                                                </Image.Source>
-                                                                            </Image>
-                                                                            <TextBlock Grid.Column="1"
-                                                                                       utilities:MonitorOffset.Tag="PreviewTitleText"
-                                                                                       Text="{Binding Path=Title}"
-                                                                                       Foreground="{DynamicResource ButtonForeground}"
-                                                                                       TextTrimming="CharacterEllipsis"
+    <Grid Background="Transparent">
+        <Button Name="AppButton"
+                Click="AppButton_OnClick"
+                MouseUp="AppButton_OnMouseUp"
+                MouseWheel="AppButton_OnMouseWheel"
+                PreviewMouseDown="AppButton_OnPreviewMouseDown"
+                ContextMenuOpening="AppButton_OnContextMenuOpening"
+                DragEnter="AppButton_OnDragEnter"
+                DragLeave="AppButton_OnDragLeave"
+                ToolTipService.ShowDuration="60000">
+            <Grid>
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="Auto" />
+                    <ColumnDefinition Width="*" />
+                </Grid.ColumnDefinitions>
+                <!-- MonitorOffset.Tag is TaskIcon normally, TaskIconActive while State==Active - see
+                     TaskStateToMonitorTagConverter for why the active state needs its own tag. -->
+                <Image x:Name="TaskIconImage"
+                       Grid.Column="0"
+                       Style="{DynamicResource TaskIcon}">
+                    <Image.Source>
+                        <MultiBinding Converter="{StaticResource taskIconConverter}" Mode="OneWay">
+                            <Binding />
+                            <Binding Path="Icon" />
+                            <Binding Source="{x:Static utilities:ExplorerWindowCount.Instance}" Path="Count" />
+                            <Binding Source="{x:Static utilities:ExplorerWindowCount.Instance}" Path="Tick" />
+                        </MultiBinding>
+                    </Image.Source>
+                </Image>
+                <!-- MonitorOffset.Tag is TaskOverlayIcon normally, TaskOverlayIconActive while
+                     State==Active - see TaskStateToMonitorTagConverter for why the active state
+                     needs its own tag. -->
+                <Image x:Name="TaskOverlayIconImage"
+                       Source="{Binding Path=OverlayIcon, Mode=OneWay}"
+                       Grid.Column="0"
+                       Style="{DynamicResource TaskOverlayIcon}"
+                       Visibility="{Binding Source={x:Static utilities:Settings.Instance}, Path=ShowTaskBadges, UpdateSourceTrigger=PropertyChanged, Converter={StaticResource boolToVisibilityConverter}}" />
+                <!-- MonitorOffset.Tag is TaskLabel normally, TaskLabelActive while State==Active -
+                     see TaskStateToMonitorTagConverter for why the active state needs its own tag. -->
+                <!-- The progress the window reports to the taskbar (see TaskButton.Progress.cs): a thin bar along the bottom of the tab. -->
+                <Rectangle x:Name="TaskProgressBar"
+                           Grid.ColumnSpan="2"
+                           Height="3"
+                           HorizontalAlignment="Left"
+                           VerticalAlignment="Bottom"
+                           IsHitTestVisible="False"
+                           Visibility="Collapsed" />
+                <TextBlock x:Name="TaskLabelText"
+                           Grid.Column="1"
+                           Style="{DynamicResource TaskLabel}">
+                    <TextBlock.Text>
+                        <MultiBinding Converter="{StaticResource taskLabelConverter}">
+                            <Binding Path="Title" />
+                            <Binding Path="ProgressValue" />
+                            <Binding Path="ProgressState" />
+                            <Binding Path="Tag.Count" ElementName="AppButton" FallbackValue="1" />
+                            <Binding Source="{x:Static utilities:Settings.Instance}" Path="ShowProgramNameOnTabs" />
+                            <Binding />
+                            <Binding Source="{x:Static utilities:ExplorerWindowCount.Instance}" Path="Count" />
+                        </MultiBinding>
+                    </TextBlock.Text>
+                </TextBlock>
+            </Grid>
+            <Button.ContextMenu>
+                <ContextMenu Opened="ContextMenu_OpenedOrClosed"
+                             Closed="ContextMenu_OpenedOrClosed">
+                    <TextOptions.TextRenderingMode>
+                        <Binding Source="{x:Static utilities:Settings.Instance}" Path="AllowFontSmoothingMenu" Converter="{StaticResource menuTextRenderingModeConverter}" />
+                    </TextOptions.TextRenderingMode>
+                    <!-- Starts another instance of the program (see ProgramMenuItem_OnClick); the window's own operations
+                         (restore, move, ...) are on the context menu of its preview. -->
+                    <MenuItem Name="ProgramMenuItem"
+                              Click="ProgramMenuItem_OnClick" />
+                    <MenuItem Header="{DynamicResource pin_to_taskbar}"
+                              Click="PinMenuItem_OnClick"
+                              Name="PinMenuItem" />
+                    <Separator />
+                    <MenuItem Header="{DynamicResource end_task}"
+                              Click="EndTaskMenuItem_OnClick"
+                              Name="EndTaskMenuItem"
+                              Visibility="{Binding Source={x:Static utilities:Settings.Instance}, Path=ShowEndTaskButton, UpdateSourceTrigger=PropertyChanged, Converter={StaticResource boolToVisibilityConverter}}">
+                    </MenuItem>
+                    <MenuItem Header="{DynamicResource close}"
+                              Click="CloseMenuItem_OnClick"
+                              Name="CloseMenuItem">
+                        <MenuItem.Icon>
+                            <TextBlock FontFamily="Marlett"
+                                       Text="&#x72;"
+                                       HorizontalAlignment="Center"
+                                       VerticalAlignment="Center" />
+                        </MenuItem.Icon>
+                    </MenuItem>
+                </ContextMenu>
+            </Button.ContextMenu>
+            <Button.ToolTip>
+                <controls:PreviewToolTip>
+                    <ToolTip.Style>
+                        <Style TargetType="ToolTip"
+                               BasedOn="{StaticResource {x:Type ToolTip}}">
+                            <Style.Triggers>
+                                <DataTrigger Binding="{Binding Source={x:Static utilities:Settings.Instance}, Path=ShowTaskThumbnails, UpdateSourceTrigger=PropertyChanged}"
+                                                                 Value="True">
+                                    <DataTrigger.Setters>
+                                        <Setter Property="HorizontalOffset">
+                                            <Setter.Value>
+                                                <MultiBinding Converter="{StaticResource toolTipHorizontalOffsetConverter}" UpdateSourceTrigger="PropertyChanged">
+                                                    <Binding RelativeSource="{RelativeSource Self}" Path="PlacementTarget.ActualWidth"/>
+                                                    <Binding RelativeSource="{RelativeSource Self}" Path="ActualWidth"/>
+                                                    <Binding Source="{x:Static utilities:Settings.Instance}" Path="TaskbarScale"/>
+                                                    <Binding Source="{x:Static utilities:Settings.Instance}" Path="Edge"/>
+                                                </MultiBinding>
+                                            </Setter.Value>
+                                        </Setter>
+                                        <Setter Property="VerticalOffset">
+                                            <Setter.Value>
+                                                <MultiBinding Converter="{StaticResource toolTipVerticalOffsetConverter}" UpdateSourceTrigger="PropertyChanged">
+                                                    <Binding RelativeSource="{RelativeSource Self}" Path="PlacementTarget.ActualHeight"/>
+                                                    <Binding RelativeSource="{RelativeSource Self}" Path="ActualHeight"/>
+                                                    <Binding Source="{x:Static utilities:Settings.Instance}" Path="TaskbarScale"/>
+                                                    <Binding Source="{x:Static utilities:Settings.Instance}" Path="Edge"/>
+                                                </MultiBinding>
+                                            </Setter.Value>
+                                        </Setter>
+                                        <Setter Property="Placement">
+                                            <Setter.Value>
+                                                <MultiBinding Converter="{StaticResource toolTipPlacementConverter}" UpdateSourceTrigger="PropertyChanged">
+                                                    <Binding Source="{x:Static utilities:Settings.Instance}" Path="Edge"/>
+                                                </MultiBinding>
+                                            </Setter.Value>
+                                        </Setter>
+                                        <Setter Property="Template">
+                                            <Setter.Value>
+                                                <ControlTemplate TargetType="ToolTip">
+                                                    <!-- The close button's visibility/hover and the preview's
+                                                         click-to-activate are driven from TaskButton.Preview.cs
+                                                         (WPF never routes mouse input to this window). The title row exists
+                                                         for the close button: the thumbnail itself is drawn by
+                                                         DWM on top of the window, so anything WPF put over it
+                                                         would be hidden. -->
+                                                    <Grid x:Name="PreviewRoot"
+                                                          Background="Transparent"
+                                                          RenderOptions.ClearTypeHint="Enabled">
+                                                        <!-- The shadow is its own element behind the frame, not an Effect on the frame: an Effect
+                                                             redraws everything inside it into an offscreen bitmap, which made the text and icons
+                                                             blurry. It falls on the right and bottom only (see PopupShadow). The 6 of margin around the
+                                                             frame is the room it has to spread into (the converters that place the popup take it
+                                                             off again, see PreviewShadowRoom). -->
+                                                        <controls:PopupShadow />
+                                                        <ContentControl Style="{DynamicResource TaskButtonThumbnail}"
+                                                                        ClipToBounds="True"
+                                                                        Margin="6">
+                                                            <!-- One block per window of the tab (just the one, unless windows of an app are
+                                                                 combined - see TaskButton.GroupWindows, kept in the button's Tag). Side by side
+                                                                 on a top/bottom taskbar, stacked on a left/right one. -->
+                                                            <ItemsControl x:Name="PreviewItems"
+                                                                          ItemsSource="{Binding Path=PlacementTarget.Tag, RelativeSource={RelativeSource TemplatedParent}}">
+                                                                <ItemsControl.Style>
+                                                                    <Style TargetType="ItemsControl">
+                                                                        <!-- The gap between previews goes between them only (the container after the first
+                                                                             gets it), so no negative margin is needed to cancel a trailing one - which
+                                                                             left the frame a pixel wider than the previews at some scales. -->
+                                                                        <Setter Property="AlternationCount" Value="1000" />
+                                                                        <Setter Property="ItemsPanel">
+                                                                            <Setter.Value>
+                                                                                <ItemsPanelTemplate>
+                                                                                    <StackPanel Orientation="Horizontal" />
+                                                                                </ItemsPanelTemplate>
+                                                                            </Setter.Value>
+                                                                        </Setter>
+                                                                        <Setter Property="ItemContainerStyle">
+                                                                            <Setter.Value>
+                                                                                <Style TargetType="ContentPresenter">
+                                                                                    <Setter Property="Margin" Value="6.4,0,0,0" />
+                                                                                    <Style.Triggers>
+                                                                                        <Trigger Property="ItemsControl.AlternationIndex" Value="0">
+                                                                                            <Setter Property="Margin" Value="0" />
+                                                                                        </Trigger>
+                                                                                    </Style.Triggers>
+                                                                                </Style>
+                                                                            </Setter.Value>
+                                                                        </Setter>
+                                                                        <Style.Triggers>
+                                                                            <DataTrigger Binding="{Binding Source={x:Static utilities:Settings.Instance}, Path=Edge}" Value="Left">
+                                                                                <Setter Property="ItemsPanel">
+                                                                                    <Setter.Value>
+                                                                                        <ItemsPanelTemplate>
+                                                                                            <StackPanel Orientation="Vertical" />
+                                                                                        </ItemsPanelTemplate>
+                                                                                    </Setter.Value>
+                                                                                </Setter>
+                                                                                <Setter Property="ItemContainerStyle">
+                                                                                    <Setter.Value>
+                                                                                        <Style TargetType="ContentPresenter">
+                                                                                    <Setter Property="Margin" Value="0,6.4,0,0" />
+                                                                                    <Style.Triggers>
+                                                                                        <Trigger Property="ItemsControl.AlternationIndex" Value="0">
+                                                                                            <Setter Property="Margin" Value="0" />
+                                                                                        </Trigger>
+                                                                                    </Style.Triggers>
+                                                                                </Style>
+                                                                                    </Setter.Value>
+                                                                                </Setter>
+                                                                            </DataTrigger>
+                                                                            <DataTrigger Binding="{Binding Source={x:Static utilities:Settings.Instance}, Path=Edge}" Value="Right">
+                                                                                <Setter Property="ItemsPanel">
+                                                                                    <Setter.Value>
+                                                                                        <ItemsPanelTemplate>
+                                                                                            <StackPanel Orientation="Vertical" />
+                                                                                        </ItemsPanelTemplate>
+                                                                                    </Setter.Value>
+                                                                                </Setter>
+                                                                                <Setter Property="ItemContainerStyle">
+                                                                                    <Setter.Value>
+                                                                                        <Style TargetType="ContentPresenter">
+                                                                                    <Setter Property="Margin" Value="0,6.4,0,0" />
+                                                                                    <Style.Triggers>
+                                                                                        <Trigger Property="ItemsControl.AlternationIndex" Value="0">
+                                                                                            <Setter Property="Margin" Value="0" />
+                                                                                        </Trigger>
+                                                                                    </Style.Triggers>
+                                                                                </Style>
+                                                                                    </Setter.Value>
+                                                                                </Setter>
+                                                                            </DataTrigger>
+                                                                        </Style.Triggers>
+                                                                    </Style>
+                                                                </ItemsControl.Style>
+                                                                <ItemsControl.ItemTemplate>
+                                                                    <DataTemplate>
+                                                                        <Grid x:Name="PreviewItem">
+                                                                            <!-- The translucent fill behind whichever preview the pointer is on (same look as a
+                                                                                 tab's hover fill); driven from TaskButton.Preview.cs. It reaches out to the frame's
+                                                                                 inner edge, over the padding around the preview. -->
+                                                                            <Border x:Name="PreviewHover"
+                                                                                    Margin="-3"
+                                                                                    Background="{DynamicResource ClockForeground}"
+                                                                                    Opacity="0"
+                                                                                    IsHitTestVisible="False" />
+                                                                            <!-- Title row on top, then the picture centered in the space left under it: when
+                                                                                 windows of different shapes sit side by side, the shorter picture is centered
+                                                                                 rather than hanging from the top. -->
+                                                                            <Grid>
+                                                                                <Grid.RowDefinitions>
+                                                                                    <RowDefinition Height="Auto" />
+                                                                                    <RowDefinition Height="*" />
+                                                                                </Grid.RowDefinitions>
+                                                                            <!-- Exactly as wide as the thumbnail below, so a long title is trimmed
+                                                                                 instead of widening the whole preview. -->
+                                                                            <!-- MonitorOffset.Tag: PreviewTitleRow - its Margin (the gap between the title/close
+                                                                                 button row and the thumbnail) is tunable per monitor in monitor-adjustments.json. -->
+                                                                            <Grid Margin="0,0,0,3"
+                                                                                  utilities:MonitorOffset.Tag="PreviewTitleRow"
+                                                                                  Width="{Binding ElementName=PreviewThumbnail, Path=Width}">
+                                                                                <Grid.ColumnDefinitions>
+                                                                                    <ColumnDefinition Width="Auto" />
+                                                                                    <ColumnDefinition Width="*" />
+                                                                                </Grid.ColumnDefinitions>
+                                                                                <!-- The window's own icon (an Explorer window's folder, say), before its title; only the
+                                                                                     tab button always shows the regular File Explorer icon. -->
+                                                                                <Image x:Name="PreviewTitleIcon"
+                                                                                       Width="16"
+                                                                                       Height="16"
+                                                                                       Margin="1,0,2.4,0"
                                                                                        VerticalAlignment="Center"
-                                                                                       Margin="0,0,22,0" />
-                                                                            <Button x:Name="PreviewCloseButton"
-                                                                                    Grid.Column="1"
-                                                                                    Style="{DynamicResource TaskPreviewCloseButton}"
-                                                                                    utilities:MonitorOffset.Tag="PreviewCloseButton"
-                                                                                    HorizontalAlignment="Right"
-                                                                                    VerticalAlignment="Center" />
+                                                                                       UseLayoutRounding="True"
+                                                                                       SnapsToDevicePixels="True"
+                                                                                       RenderOptions.BitmapScalingMode="HighQuality"
+                                                                                       utilities:MonitorOffset.Tag="PreviewTitleIcon">
+                                                                                    <Image.Source>
+                                                                                        <MultiBinding Converter="{StaticResource taskIconConverter}" ConverterParameter="window" Mode="OneWay">
+                                                                                            <Binding />
+                                                                                            <Binding Path="Icon" />
+                                                                                        </MultiBinding>
+                                                                                    </Image.Source>
+                                                                                </Image>
+                                                                                <TextBlock Grid.Column="1"
+                                                                                           utilities:MonitorOffset.Tag="PreviewTitleText"
+                                                                                           Text="{Binding Path=Title}"
+                                                                                           Foreground="{DynamicResource ButtonForeground}"
+                                                                                           TextTrimming="CharacterEllipsis"
+                                                                                           VerticalAlignment="Center"
+                                                                                           Margin="0,0,22,0" />
+                                                                                <Button x:Name="PreviewCloseButton"
+                                                                                        Grid.Column="1"
+                                                                                        Style="{DynamicResource TaskPreviewCloseButton}"
+                                                                                        utilities:MonitorOffset.Tag="PreviewCloseButton"
+                                                                                        HorizontalAlignment="Right"
+                                                                                        VerticalAlignment="Center" />
+                                                                            </Grid>
+                                                                            <!-- BoxWidth: the thumbnail area is as wide as the tab itself, so every
+                                                                                 preview is the same size rather than shaped like its window. -->
+                                                                            <!-- A shadow behind the picture, inside the frame: a black box the size of the thumbnail (a pixel
+                                                                                 in from its edges, so none of the black shows round it) with a drop shadow. The thumbnail is drawn by
+                                                                                 DWM over it, so only the shadow round the picture is seen. The Effect is on this box alone, not on
+                                                                                 anything with text in it. -->
+                                                                            <Grid Grid.Row="1"
+                                                                                  VerticalAlignment="Center"
+                                                                                  HorizontalAlignment="Center"
+                                                                                  IsHitTestVisible="False"
+                                                                                  Width="{Binding ElementName=PreviewThumbnail, Path=Width}"
+                                                                                  Height="{Binding ElementName=PreviewThumbnail, Path=Height}">
+                                                                                <Border Margin="1"
+                                                                                        Background="Black">
+                                                                                    <Border.Effect>
+                                                                                        <DropShadowEffect BlurRadius="6"
+                                                                                                          ShadowDepth="4"
+                                                                                                          Direction="315"
+                                                                                                          Opacity="0.7"
+                                                                                                          Color="Black" />
+                                                                                    </Border.Effect>
+                                                                                </Border>
+                                                                            </Grid>
+                                                                            <controls:TaskThumbnail x:Name="PreviewThumbnail"
+                                                                                                    Grid.Row="1"
+                                                                                                    VerticalAlignment="Center"
+                                                                                                    SourceWindowHandle="{Binding Path=Handle}"
+                                                                                                    Title="{Binding Path=Title}"
+                                                                                                    BoxWidth="{Binding Path=PlacementTarget.ActualWidth, RelativeSource={RelativeSource AncestorType=ToolTip}}"/>
+                                                                            </Grid>
                                                                         </Grid>
-                                                                        <!-- BoxWidth: the thumbnail area is as wide as the tab itself, so every
-                                                                             preview is the same size rather than shaped like its window. -->
-                                                                        <!-- A shadow behind the picture, inside the frame: a black box the size of the thumbnail (a pixel
-                                                                             in from its edges, so none of the black shows round it) with a drop shadow. The thumbnail is drawn by
-                                                                             DWM over it, so only the shadow round the picture is seen. The Effect is on this box alone, not on
-                                                                             anything with text in it. -->
-                                                                        <Grid Grid.Row="1"
-                                                                              VerticalAlignment="Center"
-                                                                              HorizontalAlignment="Center"
-                                                                              IsHitTestVisible="False"
-                                                                              Width="{Binding ElementName=PreviewThumbnail, Path=Width}"
-                                                                              Height="{Binding ElementName=PreviewThumbnail, Path=Height}">
-                                                                            <Border Margin="1"
-                                                                                    Background="Black">
-                                                                                <Border.Effect>
-                                                                                    <DropShadowEffect BlurRadius="6"
-                                                                                                      ShadowDepth="4"
-                                                                                                      Direction="315"
-                                                                                                      Opacity="0.7"
-                                                                                                      Color="Black" />
-                                                                                </Border.Effect>
-                                                                            </Border>
-                                                                        </Grid>
-                                                                        <controls:TaskThumbnail x:Name="PreviewThumbnail"
-                                                                                                Grid.Row="1"
-                                                                                                VerticalAlignment="Center"
-                                                                                                SourceWindowHandle="{Binding Path=Handle}"
-                                                                                                Title="{Binding Path=Title}"
-                                                                                                BoxWidth="{Binding Path=PlacementTarget.ActualWidth, RelativeSource={RelativeSource AncestorType=ToolTip}}"/>
-                                                                        </Grid>
-                                                                    </Grid>
-                                                                </DataTemplate>
-                                                            </ItemsControl.ItemTemplate>
-                                                        </ItemsControl>
-                                                    </ContentControl>
-                                                </Grid>
-                                            </ControlTemplate>
-                                        </Setter.Value>
-                                    </Setter>
-                                </DataTrigger.Setters>
-                            </DataTrigger>
-                        </Style.Triggers>
-                    </Style>
-                </ToolTip.Style>
-                <TextBlock Text="{Binding Path=Title}" />
-            </controls:PreviewToolTip>
-        </Button.ToolTip>
-    </Button>
+                                                                    </DataTemplate>
+                                                                </ItemsControl.ItemTemplate>
+                                                            </ItemsControl>
+                                                        </ContentControl>
+                                                    </Grid>
+                                                </ControlTemplate>
+                                            </Setter.Value>
+                                        </Setter>
+                                    </DataTrigger.Setters>
+                                </DataTrigger>
+                            </Style.Triggers>
+                        </Style>
+                    </ToolTip.Style>
+                    <TextBlock Text="{Binding Path=Title}" />
+                </controls:PreviewToolTip>
+            </Button.ToolTip>
+        </Button>
+        <!-- In the Windows 11 style of the taskbar the tab shows only the program's icon, as an image of its own over the button
+             (see TaskButton.IconOnly.cs), so it is not moved, or cut, by what the theme does to the content of a pressed or active tab. -->
+        <Image x:Name="IconOnlyImage"
+               Width="16"
+               Height="16"
+               HorizontalAlignment="Left"
+               VerticalAlignment="Top"
+               IsHitTestVisible="False"
+               UseLayoutRounding="True"
+               SnapsToDevicePixels="True"
+               RenderOptions.BitmapScalingMode="HighQuality"
+               Visibility="Collapsed" />
+        <!-- The badge (the app's overlay icon) of the tab, over that icon: the one in the button is under it. -->
+        <Image x:Name="IconOnlyBadge"
+               Source="{Binding Path=OverlayIcon, Mode=OneWay}"
+               Width="11"
+               Height="11"
+               HorizontalAlignment="Left"
+               VerticalAlignment="Top"
+               IsHitTestVisible="False"
+               Opacity="0"
+               UseLayoutRounding="True"
+               SnapsToDevicePixels="True"
+               RenderOptions.BitmapScalingMode="HighQuality"
+               Visibility="{Binding Source={x:Static utilities:Settings.Instance}, Path=ShowTaskBadges, UpdateSourceTrigger=PropertyChanged, Converter={StaticResource boolToVisibilityConverter}}" />
+    </Grid>
 </UserControl>

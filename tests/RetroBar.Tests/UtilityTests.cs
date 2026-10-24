@@ -457,5 +457,15 @@ namespace RetroBar.Tests
 
             Assert.Equal(new[] { 50.0, 60.0 }, CpuTemperatureHistory.Last().Select(sample => sample.Celsius).ToArray());
         }
+    
+        [Theory]
+        [InlineData("Microsoft.Windows.Explorer", "f01b4d95cf55d32a")]
+        [InlineData("microsoft.windows.explorer", "f01b4d95cf55d32a")]
+        [InlineData("com.squirrel.Discord.Discord", "a622d0c5f59316dd")]
+        [InlineData(@"{7C5A40EF-A0FB-4BFC-874A-C0F2E0B9FA8E}\foobar2000\foobar2000.exe", "5e4713eb935be0b1")]
+        public void A_jump_list_file_is_named_by_the_hash_of_the_application_id(string appId, string expected)
+        {
+            Assert.Equal(expected, JumpLists.AppIdHash(appId));
+        }
     }
 }

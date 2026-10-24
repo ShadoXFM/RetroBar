@@ -604,7 +604,7 @@ namespace RetroBar.Utilities
             }
         }
 
-        private static string FindDeviceName(DependencyObject element)
+        internal static string FindDeviceName(DependencyObject element)
         {
             if (element is not Visual visual)
             {

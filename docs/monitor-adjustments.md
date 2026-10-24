@@ -80,7 +80,7 @@ A tag that is chosen by a state has variants: `Playing` (media is playing), `NoC
 | `MediaTrackTextMax` | `Controls/MediaPlayer.Marquee.cs` |  |
 | `MediaTransportButtonsArea` | `Controls/MediaPlayer.xaml` |  |
 | `PreviewCloseButton` | `Controls/TaskButton.xaml` |  |
-| `PreviewTitleIcon` | `Controls/TaskButton.xaml`, `Controls/TaskButton.xaml.cs` |  |
+| `PreviewTitleIcon` | `Controls/TaskButton.JumpList.cs`, `Controls/TaskButton.xaml`, `Controls/TaskButton.xaml.cs` |  |
 | `PreviewTitleRow` | `Controls/TaskButton.xaml` |  |
 | `PreviewTitleText` | `Controls/TaskButton.xaml` |  |
 | `QuickLaunchToolbar` | `Taskbar.xaml` |  |
@@ -91,35 +91,37 @@ A tag that is chosen by a state has variants: `Playing` (media is playing), `NoC
 | `TaskButtonActive` | `Controls/TaskButton.xaml.cs` |  |
 | `TaskIcon` | `Controls/TaskButton.xaml.cs`, `Utilities/MonitorOffset.cs` | `TaskIconActive` |
 | `TaskIconActive` | `Controls/TaskButton.xaml.cs` |  |
+| `TaskIconBar` | `Controls/TaskButton.IconOnly.cs` |  |
 | `TaskLabel` | `Controls/TaskButton.xaml.cs` | `TaskLabelActive` |
 | `TaskLabelActive` | `Controls/TaskButton.xaml.cs` |  |
 | `TaskOverlayIcon` | `Controls/TaskButton.xaml.cs` | `TaskOverlayIconActive` |
 | `TaskOverlayIconActive` | `Controls/TaskButton.xaml.cs` |  |
-| `ToolbarButtonBox` | `Controls/ToolbarButton.xaml` |  |
+| `ToolbarButtonBox` | `Controls/ToolbarButton.xaml`, `Controls/ToolbarButton.xaml.cs` |  |
 | `ToolbarIcon` | `Controls/ToolbarButton.xaml` |  |
 | `TrayBox` | `Taskbar.xaml` |  |
-| `TrayBoxBevel` | `Themes/System.xaml`, `Themes/Windows XFM Light.xaml`, `Themes/Windows XFM.xaml` | `TrayBoxBevelPlaying` |
-| `TrayBoxBevelPlaying` | `Themes/System.xaml`, `Themes/Windows XFM Light.xaml`, `Themes/Windows XFM.xaml` |  |
-| `TrayBoxOuter` | `Themes/Windows XFM Light.xaml`, `Themes/Windows XFM.xaml` | `TrayBoxOuterPlaying` |
-| `TrayBoxOuterPlaying` | `Themes/Windows XFM Light.xaml`, `Themes/Windows XFM.xaml` |  |
+| `TrayBoxBevel` | `Themes/System.xaml`, `Themes/Windows XFM.xaml` | `TrayBoxBevelPlaying` |
+| `TrayBoxBevelPlaying` | `Themes/System.xaml`, `Themes/Windows XFM.xaml` |  |
+| `TrayBoxOuter` | `Themes/Windows XFM.xaml` | `TrayBoxOuterPlaying` |
+| `TrayBoxOuterPlaying` | `Themes/Windows XFM.xaml` |  |
 | `TrayIcon` | `Controls/NotifyIcon.xaml` |  |
 | `TrayNotifyIconsEnd` | `Controls/NotifyIconList.xaml` |  |
 | `TrayNotifyList` | `Taskbar.xaml` | `TrayNotifyListAlone` |
 | `TrayNotifyListAlone` | `Taskbar.xaml` |  |
-| `TrayToggleButton` | `Themes/System.xaml`, `Themes/Windows XFM Light.xaml`, `Themes/Windows XFM.xaml` | `TrayToggleButtonPlaying` |
-| `TrayToggleButtonArrow` | `Themes/Windows XFM Light.xaml`, `Themes/Windows XFM.xaml` |  |
-| `TrayToggleButtonBottom` | `Themes/Windows XFM Light.xaml`, `Themes/Windows XFM.xaml` |  |
+| `TrayToggleButton` | `Themes/System.xaml`, `Themes/Windows XFM.xaml` | `TrayToggleButtonPlaying` |
+| `TrayToggleButtonArrow` | `Themes/Windows XFM.xaml` |  |
+| `TrayToggleButtonBottom` | `Themes/Windows XFM.xaml` |  |
 | `TrayToggleButtonInner` | `Themes/System.xaml` |  |
-| `TrayToggleButtonLeft` | `Themes/Windows XFM Light.xaml`, `Themes/Windows XFM.xaml` |  |
+| `TrayToggleButtonLeft` | `Themes/Windows XFM.xaml` |  |
 | `TrayToggleButtonOuter` | `Themes/System.xaml` |  |
-| `TrayToggleButtonPlaying` | `Themes/Windows XFM Light.xaml`, `Themes/Windows XFM.xaml` |  |
-| `TrayToggleButtonRight` | `Themes/Windows XFM Light.xaml`, `Themes/Windows XFM.xaml` |  |
-| `TrayToggleButtonTop` | `Themes/Windows XFM Light.xaml`, `Themes/Windows XFM.xaml` |  |
+| `TrayToggleButtonPlaying` | `Themes/Windows XFM.xaml` |  |
+| `TrayToggleButtonRight` | `Themes/Windows XFM.xaml` |  |
+| `TrayToggleButtonTop` | `Themes/Windows XFM.xaml` |  |
 | `TrayToggleGlyph` | `Controls/NotifyIconList.xaml.cs` |  |
 | `TrayToggleHoverFill` | `Themes/System.xaml`, `Themes/Windows XFM.xaml` |  |
 | `VuMeterContainer` | `Controls/MediaPlayer.xaml.cs` |  |
 | `VuMeterContainerNoArt` | `Controls/MediaPlayer.xaml.cs` |  |
 | `WeatherGroup` | `Taskbar.xaml` | `WeatherGroupPlaying` |
+| `WeatherGroupBar` | `Taskbar.Layout.cs` |  |
 | `WeatherGroupPlaying` | `Taskbar.xaml` |  |
 | `WeatherIcon` | `Controls/WeatherDisplay.xaml` | `WeatherIconNoCpuTemp` |
 | `WeatherIconNoCpuTemp` | `Controls/WeatherDisplay.xaml` |  |

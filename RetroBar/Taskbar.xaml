@@ -63,7 +63,7 @@
              ever being clipped by an ancestor it's still logically positioned within -
              see MediaPlayer.xaml.cs and Utilities/UIElementAdorner.cs. -->
         <AdornerDecorator>
-        <DockPanel>
+        <DockPanel x:Name="TaskbarDock">
             <Button Visibility="Collapsed" x:Name="FocusDummyButton" />
             <controls:StartButton x:Name="StartButton"
                                   Host="{Binding RelativeSource={RelativeSource Mode=FindAncestor, AncestorType=Window}}">
@@ -97,6 +97,8 @@
                 </DockPanel.Dock>
             </controls:ShowDesktopButton>
             <GroupBox Style="{DynamicResource Tray}"
+                      x:Name="TrayBox"
+                      utilities:TrayBoxState.MediaPlaying="{Binding Path=IsMediaPlaying, RelativeSource={RelativeSource Mode=FindAncestor, AncestorType=Window}}"
                       utilities:MonitorOffset.Tag="TrayBox">
                 <GroupBox.ContextMenu>
                     <ContextMenu>
@@ -122,7 +124,7 @@
                              Path="Orientation"
                              RelativeSource="{RelativeSource Mode=FindAncestor, AncestorType=Window}" />
                 </DockPanel.Dock>
-                <StackPanel UseLayoutRounding="True">
+                <StackPanel UseLayoutRounding="True" x:Name="TrayContent">
                     <StackPanel.Orientation>
                         <Binding Converter="{StaticResource edgeOrientationConverter}"
                                  Path="Orientation"
@@ -135,10 +137,11 @@
                          media player). The tray box moves what is in it by a pixel or two (its padding and offsets), so this group has its
                          own per-monitor tag - WeatherGroup, or WeatherGroupPlaying while media plays, as the tray box's own bevel does - to
                          put them back level with the clock; the 5 of margin is the gap from the media buttons. -->
-                    <StackPanel Orientation="Horizontal"
+                    <StackPanel x:Name="WeatherGroup"
+                                Orientation="Horizontal"
                                 VerticalAlignment="Center"
                                 Margin="5,0,0,0"
-                                utilities:MonitorOffset.Tag="{Binding Path=IsMediaPlaying, RelativeSource={RelativeSource Mode=FindAncestor, AncestorType=Window}, Converter={StaticResource mediaPlayingToMonitorTagConverter}, ConverterParameter=WeatherGroup}">
+                                utilities:MonitorOffset.Tag="{Binding Path=(utilities:TrayBoxState.MediaPlaying), RelativeSource={RelativeSource Self}, Converter={StaticResource mediaPlayingToMonitorTagConverter}, ConverterParameter=WeatherGroup}">
                         <controls:WeatherDisplay VerticalAlignment="Center" />
                         <controls:CpuTempDisplay VerticalAlignment="Center" />
                     </StackPanel>
@@ -148,8 +151,8 @@
                         <utilities:MonitorOffset.Tag>
                             <MultiBinding Converter="{StaticResource trayAloneToMonitorTagConverter}" ConverterParameter="TrayNotifyList">
                                 <Binding Path="IsMediaPlaying" RelativeSource="{RelativeSource Mode=FindAncestor, AncestorType=Window}" />
-                                <Binding Path="IsWeatherShown" RelativeSource="{RelativeSource Mode=FindAncestor, AncestorType=Window}" />
-                                <Binding Path="IsCpuTempShown" RelativeSource="{RelativeSource Mode=FindAncestor, AncestorType=Window}" />
+                                <Binding Path="IsWeatherInTray" RelativeSource="{RelativeSource Mode=FindAncestor, AncestorType=Window}" />
+                                <Binding Path="IsCpuTempInTray" RelativeSource="{RelativeSource Mode=FindAncestor, AncestorType=Window}" />
                             </MultiBinding>
                         </utilities:MonitorOffset.Tag>
                     </controls:NotifyIconList>
@@ -183,6 +186,7 @@
                 </DockPanel.Dock>
             </controls:InputLanguage>
             <controls:TaskList VerticalAlignment="Stretch"
+                               x:Name="TaskListControl"
                                Host="{Binding RelativeSource={RelativeSource Mode=FindAncestor, AncestorType=Window}}"
                                Tasks="{Binding Tasks}"></controls:TaskList>
         </DockPanel>

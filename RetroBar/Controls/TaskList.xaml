@@ -4,6 +4,8 @@
              xmlns:local="clr-namespace:RetroBar.Controls"
              xmlns:converters="clr-namespace:RetroBar.Converters"
              xmlns:dd="urn:gong-wpf-dragdrop"
+             xmlns:tasks="clr-namespace:ManagedShell.WindowsTasks;assembly=ManagedShell.WindowsTasks"
+             xmlns:folders="clr-namespace:ManagedShell.ShellFolders;assembly=ManagedShell.ShellFolders"
              Loaded="TaskList_OnLoaded"
              Unloaded="TaskList_OnUnloaded"
              SizeChanged="TaskList_OnSizeChanged">
@@ -12,6 +14,33 @@
             <converters:DockOrientationConverter x:Key="dockOrientationConverter" />
             <converters:EdgeOrientationConverter x:Key="orientationConverter" />
             <converters:TaskButtonWidthConverter x:Key="taskButtonWidthConverter" />
+            <!-- A tab (a window, the first of its app when windows are combined), and, in the Windows 11 style of the taskbar, the pinned program
+                 that is not running (its icon, as the quick launch toolbar has it): see TaskList.Pinned.cs. -->
+            <DataTemplate DataType="{x:Type tasks:ApplicationWindow}">
+                <local:TaskButton Host="{Binding RelativeSource={RelativeSource FindAncestor, AncestorType=local:TaskList}}"
+                                  Margin="{Binding Path=TabMargin, RelativeSource={RelativeSource FindAncestor, AncestorType=local:TaskList}}">
+                    <local:TaskButton.Width>
+                        <MultiBinding Converter="{StaticResource taskButtonWidthConverter}">
+                                    <Binding Path="(ItemsControl.AlternationIndex)" RelativeSource="{RelativeSource Mode=FindAncestor, AncestorType=ContentPresenter}" />
+                                    <Binding Path="ButtonWidth" RelativeSource="{RelativeSource Mode=FindAncestor, AncestorType=local:TaskList}" />
+                                    <Binding Path="ExtraWidthCount" RelativeSource="{RelativeSource Mode=FindAncestor, AncestorType=local:TaskList}" />
+                                    <Binding Path="ButtonsPerRow" RelativeSource="{RelativeSource Mode=FindAncestor, AncestorType=local:TaskList}" />
+                                    <Binding Path="PixelStep" RelativeSource="{RelativeSource Mode=FindAncestor, AncestorType=local:TaskList}" />
+                                </MultiBinding>
+                    </local:TaskButton.Width>
+                </local:TaskButton>
+            </DataTemplate>
+            <DataTemplate DataType="{x:Type folders:ShellFile}">
+                <local:ToolbarButton DataContext="{Binding}"
+                                     Width="{Binding Path=LauncherWidth, RelativeSource={RelativeSource FindAncestor, AncestorType=local:TaskList}}"
+                                     Height="{Binding Path=LauncherHeight, RelativeSource={RelativeSource FindAncestor, AncestorType=local:TaskList}}"
+                                     Stretched="{Binding Path=IconOnly, RelativeSource={RelativeSource FindAncestor, AncestorType=local:TaskList}}"
+                                     IconMargin="{Binding Path=LauncherIconMargin, RelativeSource={RelativeSource FindAncestor, AncestorType=local:TaskList}}"
+                                     VerticalAlignment="Top"
+                                     Margin="{Binding Path=LauncherMargin, RelativeSource={RelativeSource FindAncestor, AncestorType=local:TaskList}}"
+                                     PreviewMouseLeftButtonUp="Launcher_OnPreviewMouseLeftButtonUp"
+                                     PreviewMouseRightButtonUp="Launcher_OnPreviewMouseRightButtonUp" />
+            </DataTemplate>
         </ResourceDictionary>
     </UserControl.Resources>
     <DockPanel>
@@ -36,7 +65,8 @@
                           dd:DragDrop.DragDropContext="TaskList">
                 <ItemsControl.ItemsPanel>
                     <ItemsPanelTemplate>
-                        <WrapPanel Style="{DynamicResource TaskListWrapPanel}">
+                        <!-- Transparent, not none: the gaps between the tabs are then part of the list, so a tab dragged over one is still over the list and keeps its drop mark. -->
+                        <WrapPanel Style="{DynamicResource TaskListWrapPanel}" Background="Transparent">
                             <WrapPanel.Orientation>
                                 <Binding Converter="{StaticResource orientationConverter}"
                                          Path="Orientation"
@@ -45,21 +75,6 @@
                         </WrapPanel>
                     </ItemsPanelTemplate>
                 </ItemsControl.ItemsPanel>
-                <ItemsControl.ItemTemplate>
-                    <ItemContainerTemplate>
-                        <local:TaskButton Host="{Binding RelativeSource={RelativeSource FindAncestor, AncestorType=local:TaskList}}">
-                            <local:TaskButton.Width>
-                                <MultiBinding Converter="{StaticResource taskButtonWidthConverter}">
-                                    <Binding Path="(ItemsControl.AlternationIndex)" RelativeSource="{RelativeSource Mode=FindAncestor, AncestorType=ContentPresenter}" />
-                                    <Binding Path="ButtonWidth" RelativeSource="{RelativeSource Mode=FindAncestor, AncestorType=local:TaskList}" />
-                                    <Binding Path="ExtraWidthCount" RelativeSource="{RelativeSource Mode=FindAncestor, AncestorType=local:TaskList}" />
-                                    <Binding Path="ButtonsPerRow" RelativeSource="{RelativeSource Mode=FindAncestor, AncestorType=local:TaskList}" />
-                                    <Binding Path="PixelStep" RelativeSource="{RelativeSource Mode=FindAncestor, AncestorType=local:TaskList}" />
-                                </MultiBinding>
-                            </local:TaskButton.Width>
-                        </local:TaskButton>
-                    </ItemContainerTemplate>
-                </ItemsControl.ItemTemplate>
             </ItemsControl>
         </ScrollViewer>
     </DockPanel>

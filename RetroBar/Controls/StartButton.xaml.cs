@@ -43,6 +43,139 @@ namespace RetroBar.Controls
             set { SetValue(StartMenuMonitorProperty, value); }
         }
 
+        /// <summary>Only the logo, on a square button (the Windows 11 style of the taskbar).</summary>
+        public static DependencyProperty IconOnlyProperty = DependencyProperty.Register(nameof(IconOnly), typeof(bool), typeof(StartButton),
+            new PropertyMetadata(false, (d, e) => ((StartButton)d).ApplyIconOnly()));
+
+        public bool IconOnly
+        {
+            get { return (bool)GetValue(IconOnlyProperty); }
+            set { SetValue(IconOnlyProperty, value); }
+        }
+
+        private void ApplyIconOnly()
+        {
+            Start.LayoutUpdated -= Start_LayoutUpdatedForSquare;
+            if (IconOnly)
+            {
+                StartLabelText.Visibility = Visibility.Collapsed;
+                Grid.SetColumnSpan(StartLogoHost, 2);
+                StartLogoHost.HorizontalAlignment = HorizontalAlignment.Center;
+                // No room kept for the text beside the logo.
+                StartLogo.Margin = new Thickness(0);
+                StartLogoHost.RenderTransform = null;
+                logoDx = logoDy = 0;
+                logoPasses = 0;
+                Start.LayoutUpdated += Start_LayoutUpdatedForSquare;
+            }
+            else
+            {
+                StartLabelText.Visibility = Visibility.Visible;
+                Grid.SetColumnSpan(StartLogoHost, 1);
+                StartLogoHost.ClearValue(HorizontalAlignmentProperty);
+                StartLogoHost.RenderTransform = null;
+                StartLogo.ClearValue(MarginProperty);
+                Start.ClearValue(WidthProperty);
+            }
+        }
+
+        // How far (in DIPs, as the logo is shown) the middle of the logo's visible drawing is from the middle of its image: the pixels that are
+        // opaque and not dark, so a shadow is not counted.
+        private (double X, double Y) ArtOffset(Rect shown)
+        {
+            if (StartLogo.Source is not System.Windows.Media.Imaging.BitmapSource source || source.PixelWidth <= 0 || source.PixelHeight <= 0)
+            {
+                return (0, 0);
+            }
+
+            try
+            {
+                var converted = new System.Windows.Media.Imaging.FormatConvertedBitmap(source, PixelFormats.Bgra32, null, 0);
+                int stride = converted.PixelWidth * 4;
+                byte[] data = new byte[stride * converted.PixelHeight];
+                converted.CopyPixels(data, stride, 0);
+                int minX = int.MaxValue, minY = int.MaxValue, maxX = -1, maxY = -1;
+                for (int y = 0; y < converted.PixelHeight; y++)
+                {
+                    for (int x = 0; x < converted.PixelWidth; x++)
+                    {
+                        int i = y * stride + x * 4;
+                        if (data[i + 3] >= 160 && Math.Max(data[i], Math.Max(data[i + 1], data[i + 2])) >= 110)
+                        {
+                            minX = Math.Min(minX, x);
+                            maxX = Math.Max(maxX, x);
+                            minY = Math.Min(minY, y);
+                            maxY = Math.Max(maxY, y);
+                        }
+                    }
+                }
+
+                if (maxX < 0)
+                {
+                    return (0, 0);
+                }
+
+                // Drawn as large as fits (Uniform), in the middle of the image's place.
+                double scale = Math.Min(shown.Width / converted.PixelWidth, shown.Height / converted.PixelHeight);
+                return (((minX + maxX + 1) / 2.0 - converted.PixelWidth / 2.0) * scale, ((minY + maxY + 1) / 2.0 - converted.PixelHeight / 2.0) * scale);
+            }
+            catch (Exception)
+            {
+                return (0, 0);
+            }
+        }
+
+        private double logoDx;
+        private double logoDy;
+        private int logoPasses;
+        private bool logoPending;
+
+        // The frame that is drawn (the theme's outer border, inside the button's own padding) is made as wide as it is tall, and the logo put in
+        // the middle of it.
+        private void Start_LayoutUpdatedForSquare(object? sender, EventArgs e)
+        {
+            if (!IconOnly || Start.Template?.FindName("ButtonOuterBottomBorder", Start) is not FrameworkElement frame || frame.ActualHeight <= 0 || frame.ActualWidth <= 0)
+            {
+                return;
+            }
+
+            if (logoPasses < 8 && !logoPending && StartLogo.ActualWidth > 0 && Math.Abs(Start.ActualWidth - Start.ActualHeight) < 12)
+            {
+                try
+                {
+                    double pixel = 1 / VisualTreeHelper.GetDpi(this).DpiScaleX;
+                    Rect frameRect = frame.TransformToAncestor(Start).TransformBounds(new Rect(0, 0, frame.ActualWidth, frame.ActualHeight));
+                    Rect logoRect = StartLogo.TransformToAncestor(Start).TransformBounds(new Rect(0, 0, StartLogo.ActualWidth, StartLogo.ActualHeight));
+                    // The drawing is not always in the middle of its image (a logo with a shadow below and to the right of it is to the
+                    // left of and above the middle): it is the drawing that is put in the middle of the frame.
+                    (double artX, double artY) = ArtOffset(logoRect);
+                    double dx = (frameRect.Left + frameRect.Width / 2) - (logoRect.Left + logoRect.Width / 2 + artX);
+                    double dy = (frameRect.Top + frameRect.Height / 2) - (logoRect.Top + logoRect.Height / 2 + artY);
+                    if (Math.Abs(dx) >= pixel * 0.55 || Math.Abs(dy) >= pixel * 0.55)
+                    {
+                        logoPasses++;
+                        // The layout event comes several times before the new margin is in the layout: the next measure waits for it.
+                        logoPending = true;
+                        Dispatcher.BeginInvoke(new Action(() => logoPending = false), DispatcherPriority.Loaded);
+                        logoDx += Math.Round(dx / pixel) * pixel;
+                        logoDy += Math.Round(dy / pixel) * pixel;
+                        StartLogoHost.RenderTransform = new TranslateTransform(logoDx, logoDy);
+                    }
+                }
+                catch (InvalidOperationException)
+                {
+                }
+            }
+
+            double dpi = VisualTreeHelper.GetDpi(this).DpiScaleX;
+            double padding = Start.ActualWidth - frame.ActualWidth;
+            double width = Math.Round((frame.ActualHeight + padding) * dpi) / dpi;
+            if (Math.Abs(width - Start.ActualWidth) > 0.5 / dpi && (double.IsNaN(Start.Width) || Math.Abs(Start.Width - width) > 0.5 / dpi))
+            {
+                Start.Width = width;
+            }
+        }
+
         public StartButton()
         {
             InitializeComponent();
@@ -60,6 +193,16 @@ namespace RetroBar.Controls
         {
             if (e.PropertyName == nameof(Settings.Theme))
             {
+                if (IconOnly)
+                {
+                    // The frame and the logo are the new theme's: the square and the middle are worked out again.
+                    Dispatcher.BeginInvoke(new Action(() =>
+                    {
+                        Start.ClearValue(WidthProperty);
+                        ApplyIconOnly();
+                    }), DispatcherPriority.Loaded);
+                }
+
                 bool useFloatingStartButton = Application.Current.FindResource("UseFloatingStartButton") as bool? ?? false;
 
                 if (!useFloatingStartButton && floatingStartButton != null)

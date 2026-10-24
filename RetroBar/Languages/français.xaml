@@ -94,6 +94,12 @@
         <s:String>La même barre des tâches que la fenêtre</s:String>
         <s:String>La même barre des tâches que la fenêtre et la barre des tâches primaire</s:String>
     </x:Array>
+    <s:String x:Key="taskbar_style_text">St_yle de la barre des tâches :</s:String>
+    <s:String x:Key="taskbar_style_tip">Classique : les onglets occupent la largeur de la barre, avec le bouton Démarrer à gauche. Windows 11 : de petits onglets avec seulement les icônes, les programmes épinglés parmi eux, au milieu avec le bouton Démarrer à leur gauche ; le lecteur multimédia est dans un cadre à gauche. Pour une barre en haut ou en bas.</s:String>
+    <x:Array x:Key="taskbar_style_values" Type="s:String">
+        <s:String>Classique</s:String>
+        <s:String>Windows 11</s:String>
+    </x:Array>
     <s:String x:Key="invert_grayscale_colors">_Inverser les couleurs en niveaux de gris:</s:String>
     <x:Array x:Key="invert_grayscale_colors_values" Type="s:String">
         <s:String>Si nécessaire par le thème</s:String>
@@ -215,6 +221,21 @@
     <s:String x:Key="hide">Masquer</s:String>
 
     <s:String x:Key="open_folder">&amp;Ouvrir le dossier</s:String>
+    <s:String x:Key="jump_list_pinned">Épinglés</s:String>
+    <s:String x:Key="jump_list_recent">Récents</s:String>
+    <s:String x:Key="jump_list_tasks">Tâches</s:String>
+    <s:String x:Key="jump_list_frequent">Fréquents</s:String>
+    <s:String x:Key="jump_list_links">Liens</s:String>
+    <s:String x:Key="jump_text_new_window">Nouvelle fenêtre</s:String>
+    <s:String x:Key="jump_text_new_incognito">Nouvelle fenêtre de navigation privée</s:String>
+    <s:String x:Key="jump_text_new_private">Nouvelle fenêtre privée</s:String>
+    <s:String x:Key="jump_text_new_inprivate">Nouvelle fenêtre InPrivate</s:String>
+    <s:String x:Key="jump_text_new_tab">Nouvel onglet</s:String>
+    <s:String x:Key="jump_text_most_visited">Les + visités</s:String>
+    <s:String x:Key="jump_text_recently_closed">Récemment fermés</s:String>
+    <s:String x:Key="jump_text_quick_access">Accès rapide</s:String>
+    <s:String x:Key="jump_text_recently_played">Écoutés récemment</s:String>
+    <s:String x:Key="jump_text_liked_songs">Titres likés</s:String>
 
     <s:String x:Key="ime_input_tip_enabled">Clic droit pour les options IME</s:String>
     <s:String x:Key="ime_input_tip_disabled">IME désactivé</s:String>

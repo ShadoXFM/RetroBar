@@ -269,6 +269,14 @@ namespace RetroBar.Controls
             // Each its own text, to be spread across the width: the word in the theme's font, the temperature in Tahoma bold as the others.
             void Stat(TextBlock block, string key, string fallback, double? celsius)
             {
+                // Left as it is while it reads the same, so the line is not laid out and drawn again every two seconds.
+                string reading = celsius == null ? null : (TryFindResource(key) as string ?? fallback) + Degrees(celsius.Value);
+                if (reading == (block.Tag as string))
+                {
+                    return;
+                }
+
+                block.Tag = reading;
                 block.Inlines.Clear();
                 if (celsius == null)
                 {

@@ -1,6 +1,7 @@
 using GongSolutions.Wpf.DragDrop;
 using System;
 using System.Collections.Generic;
+using System.Linq;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Media;
@@ -57,6 +58,13 @@ namespace RetroBar.Utilities
                 if (Settings.Instance.GroupTaskWindows)
                 {
                     TaskOpenOrderComparer.KeepAppWindowsTogether(source, dropInfo.Data as ManagedShell.WindowsTasks.ApplicationWindow);
+                }
+
+                // A tab of a pinned program dropped in another place moves its pin there: the order of the tabs is the order of the pins.
+                if (dropInfo.Data is ManagedShell.WindowsTasks.ApplicationWindow dragged &&
+                    PinnedApps.IndexOf(dragged, PinnedApps.Get()) >= 0)
+                {
+                    PinnedApps.SaveOrder(PinnedApps.OrderByTabs(view.OfType<ManagedShell.WindowsTasks.ApplicationWindow>()));
                 }
             }
 

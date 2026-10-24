@@ -102,6 +102,12 @@
         <s:String>Same taskbar as window</s:String>
         <s:String>Same taskbar as window and primary taskbar</s:String>
     </x:Array>
+    <s:String x:Key="taskbar_style_text">Ta_skbar style:</s:String>
+    <s:String x:Key="taskbar_style_tip">Classic: the tabs are the width of the taskbar, with the Start button at the left. Windows 11: small tabs with only the icons, the pinned programs among them, in the middle; the Start button stays at the left edge, with the media player in a box after it. For a taskbar at the top or the bottom.</s:String>
+    <x:Array x:Key="taskbar_style_values" Type="s:String">
+        <s:String>Classic</s:String>
+        <s:String>Windows 11</s:String>
+    </x:Array>
     <s:String x:Key="invert_grayscale_colors">_Invert grayscale colors:</s:String>
     <x:Array x:Key="invert_grayscale_colors_values" Type="s:String">
         <s:String>When needed by theme</s:String>
@@ -215,6 +221,21 @@
     <s:String x:Key="hide">Hide</s:String>
 
     <s:String x:Key="open_folder">&amp;Open Folder</s:String>
+    <s:String x:Key="jump_list_pinned">Pinned</s:String>
+    <s:String x:Key="jump_list_recent">Recent</s:String>
+    <s:String x:Key="jump_list_tasks">Tasks</s:String>
+    <s:String x:Key="jump_list_frequent">Frequent</s:String>
+    <s:String x:Key="jump_list_links">Links</s:String>
+    <s:String x:Key="jump_text_new_window">New window</s:String>
+    <s:String x:Key="jump_text_new_incognito">New incognito window</s:String>
+    <s:String x:Key="jump_text_new_private">New private window</s:String>
+    <s:String x:Key="jump_text_new_inprivate">New InPrivate window</s:String>
+    <s:String x:Key="jump_text_new_tab">New tab</s:String>
+    <s:String x:Key="jump_text_most_visited">Most visited</s:String>
+    <s:String x:Key="jump_text_recently_closed">Recently closed</s:String>
+    <s:String x:Key="jump_text_quick_access">Quick access</s:String>
+    <s:String x:Key="jump_text_recently_played">Recently played</s:String>
+    <s:String x:Key="jump_text_liked_songs">Liked Songs</s:String>
 
     <s:String x:Key="ime_input_tip_enabled">Right-click to open IME options.</s:String>
     <s:String x:Key="ime_input_tip_disabled">IME disabled</s:String>

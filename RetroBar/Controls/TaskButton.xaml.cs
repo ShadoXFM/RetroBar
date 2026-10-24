@@ -50,6 +50,7 @@ namespace RetroBar.Controls
             SetStyle();
             SetMonitorTags();
             InitHoverablePreview();
+            InitProgressBar();
             AppButton.Tag = GroupWindows;
             HitAreaExtension.SetEnabled(AppButton, true);
         }
@@ -132,6 +133,7 @@ namespace RetroBar.Controls
             }
 
             UpdateGroupActive();
+            UpdateProgressBar();
         }
 
         private void ReleaseGroup()
@@ -157,6 +159,11 @@ namespace RetroBar.Controls
 
         private void GroupWindow_PropertyChanged(object sender, PropertyChangedEventArgs e)
         {
+            if (e.PropertyName == "ProgressState" || e.PropertyName == "ProgressValue")
+            {
+                Dispatcher.BeginInvoke(new Action(UpdateProgressBar));
+            }
+
             if (e.PropertyName == "State")
             {
                 if (sender is ApplicationWindow changed)
@@ -246,12 +253,17 @@ namespace RetroBar.Controls
 
             foreach ((FrameworkElement element, string tag) in tags)
             {
-                var multiBinding = new MultiBinding { Converter = TagConverter, ConverterParameter = tag };
-                multiBinding.Bindings.Add(new Binding("State"));
-                multiBinding.Bindings.Add(new Binding(nameof(IsContextMenuActive)) { Source = this });
-                multiBinding.Bindings.Add(new Binding(nameof(IsGroupActive)) { Source = this });
-                element.SetBinding(MonitorOffset.TagProperty, multiBinding);
+                SetMonitorTag(element, tag);
             }
+        }
+
+        private void SetMonitorTag(FrameworkElement element, string tag)
+        {
+            var multiBinding = new MultiBinding { Converter = TagConverter, ConverterParameter = tag };
+            multiBinding.Bindings.Add(new Binding("State"));
+            multiBinding.Bindings.Add(new Binding(nameof(IsContextMenuActive)) { Source = this });
+            multiBinding.Bindings.Add(new Binding(nameof(IsGroupActive)) { Source = this });
+            element.SetBinding(MonitorOffset.TagProperty, multiBinding);
         }
 
         private void SetStyle()
@@ -284,6 +296,20 @@ namespace RetroBar.Controls
         {
             var ease = new SineEase();
             ease.EasingMode = EasingMode.EaseInOut;
+
+            if (Host?.IconOnly == true)
+            {
+                // The tabs of the Windows 11 style are centered in a list that already has its final width: the other tabs slide to their
+                // places (TaskList), and this one grows from its left edge, to the right, and comes in from nothing, as the classic tab does.
+                var scale = new ScaleTransform(0, 1);
+                RenderTransformOrigin = new Point(0, 0.5);
+                RenderTransform = scale;
+                var grow = new DoubleAnimation(0, 1, new Duration(TimeSpan.FromMilliseconds(250))) { EasingFunction = ease };
+                grow.Completed += (s, e) => RenderTransform = null;
+                scale.BeginAnimation(ScaleTransform.ScaleXProperty, grow);
+                BeginAnimation(OpacityProperty, new DoubleAnimation(0, 1, new Duration(TimeSpan.FromMilliseconds(250))) { EasingFunction = ease, FillBehavior = FillBehavior.Stop });
+                return;
+            }
 
             DoubleAnimation animation = new DoubleAnimation();
             animation.From = 0;
@@ -322,13 +348,14 @@ namespace RetroBar.Controls
                 _groupHost.GroupsChanged += Host_GroupsChanged;
             }
 
+            InitIconOnly();
             RefreshGroup();
 
             // A button recreated because the user just dragged it somewhere else isn't a new window
             // appearing - growing it in from zero width would push every tab to its right along with it
             // (see TaskListDropHandler, which slides the tabs into place instead).
             if (Settings.Instance.SlideTaskbarButtons && Host?.Host?.Orientation == Orientation.Horizontal
-                && DateTime.UtcNow > SuppressSlideInUntilUtc)
+                && DateTime.UtcNow > SuppressSlideInUntilUtc && (Host.IconOnly != true || (Host.JustOpened(Window) && PinnedApps.FindLink(Window) == null)))
             {
                 Animate();
             }
@@ -364,6 +391,7 @@ namespace RetroBar.Controls
 
         private void TaskButton_OnUnloaded(object sender, RoutedEventArgs e)
         {
+            ReleaseIconOnly();
             if (!_isLoaded)
             {
                 return;
@@ -413,6 +441,9 @@ namespace RetroBar.Controls
             PinMenuItem.Visibility = Window.IsUWP || string.IsNullOrEmpty(Window.WinFileName) ? Visibility.Collapsed : Visibility.Visible;
             PinMenuItem.Header = FindResource(PinnedApps.FindLink(Window) != null ? "unpin_from_taskbar" : "pin_to_taskbar");
             CloseMenuItem.FontWeight = FontWeights.Bold;
+
+            // The program's jump list and, for a browser, its pages, above the rest of the menu (see TaskButton.JumpList.cs).
+            UpdateJumpListMenu();
         }
 
         private static readonly Dictionary<string, ImageSource> ProgramIcons = new(StringComparer.OrdinalIgnoreCase);
@@ -438,12 +469,31 @@ namespace RetroBar.Controls
             ImageSource icon = null;
             try
             {
-                using System.Drawing.Icon extracted = System.Drawing.Icon.ExtractAssociatedIcon(path);
-                if (extracted != null)
+                // The shell's large icon (the most there is of the picture; the tab makes it to its own size, see TaskButton.IconOnly.cs).
+                IntPtr handle = ManagedShell.Common.Helpers.IconHelper.GetIconByFilename(path, ManagedShell.Common.Enums.IconSize.Large);
+                if (handle != IntPtr.Zero)
                 {
-                    BitmapSource bitmap = System.Windows.Interop.Imaging.CreateBitmapSourceFromHIcon(extracted.Handle, Int32Rect.Empty, BitmapSizeOptions.FromEmptyOptions());
-                    bitmap.Freeze();
-                    icon = bitmap;
+                    try
+                    {
+                        BitmapSource shell = System.Windows.Interop.Imaging.CreateBitmapSourceFromHIcon(handle, Int32Rect.Empty, BitmapSizeOptions.FromEmptyOptions());
+                        shell.Freeze();
+                        icon = shell;
+                    }
+                    finally
+                    {
+                        DestroyIcon(handle);
+                    }
+                }
+
+                if (icon == null)
+                {
+                    using System.Drawing.Icon extracted = System.Drawing.Icon.ExtractAssociatedIcon(path);
+                    if (extracted != null)
+                    {
+                        BitmapSource bitmap = System.Windows.Interop.Imaging.CreateBitmapSourceFromHIcon(extracted.Handle, Int32Rect.Empty, BitmapSizeOptions.FromEmptyOptions());
+                        bitmap.Freeze();
+                        icon = bitmap;
+                    }
                 }
             }
             catch (Exception)
@@ -729,6 +779,7 @@ namespace RetroBar.Controls
             if (e.PropertyName == nameof(Settings.Theme))
             {
                 SetStyle();
+                ThemeChangedForIconOnly();
             }
         }
 

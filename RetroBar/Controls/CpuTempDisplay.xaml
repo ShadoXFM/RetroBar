@@ -43,8 +43,13 @@
            StaysOpen="True"
            AllowsTransparency="True"
            PopupAnimation="None">
+        <!-- Text on whole pixels, hinted as the graph's own labels are (the taskbar's smoothed text would blur the line of Min, Average
+             and Max, which are laid out at the middle of the width, on half pixels). -->
         <Grid x:Name="GraphFrame"
               ClipToBounds="True"
+              UseLayoutRounding="True"
+              SnapsToDevicePixels="True"
+              TextOptions.TextFormattingMode="Display"
               RenderOptions.ClearTypeHint="Enabled">
             <Grid x:Name="GraphSlideHost">
                 <controls:PopupShadow />

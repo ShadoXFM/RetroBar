@@ -19,10 +19,16 @@
                 <ColumnDefinition Width="Auto" />
                 <ColumnDefinition Width="*" />
             </Grid.ColumnDefinitions>
-            <Image Grid.Column="0"
-                   Style="{DynamicResource StartIcon}"
-                   utilities:MonitorOffset.Tag="StartIcon" />
-            <TextBlock Grid.Column="1"
+            <!-- The logo is moved by a transform of its host (see StartButton.xaml.cs), which does not touch the layout: a margin that made it
+                 wider than its place in the square button had its edge cut. -->
+            <Grid x:Name="StartLogoHost"
+                  Grid.Column="0">
+                <Image x:Name="StartLogo"
+                       Style="{DynamicResource StartIcon}"
+                       utilities:MonitorOffset.Tag="StartIcon" />
+            </Grid>
+            <TextBlock x:Name="StartLabelText"
+                       Grid.Column="1"
                        Style="{DynamicResource StartLabel}"
                        utilities:MonitorOffset.Tag="StartLabel" />
         </Grid>
