@@ -114,7 +114,8 @@ namespace RetroBar
                 StartButton.SizeChanged += (s, e) => UpdateCenterWidth();
                 TrayBox.SizeChanged += (s, e) => UpdateCenterWidth();
 
-                TaskbarDock.Children.Insert(TaskbarDock.Children.IndexOf(StartButton) + 1, _mediaBox);
+                // After the Start button and the edge that opens the menu when there is no button: before it, the edge came after the weather.
+                TaskbarDock.Children.Insert(TaskbarDock.Children.IndexOf(StartEdge) + 1, _mediaBox);
                 TaskbarDock.Children.Add(_centerStrip);
 
                 QuickLaunchToolbar.Visibility = Visibility.Collapsed;
