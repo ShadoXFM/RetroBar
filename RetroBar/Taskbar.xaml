@@ -74,6 +74,23 @@
                              RelativeSource="{RelativeSource Mode=FindAncestor, AncestorType=Window}" />
                 </DockPanel.Dock>
             </controls:StartButton>
+            <!-- With no Start button, the edge of the taskbar where it was opens the Start menu when it is clicked (as the corner of the
+                 desktop's peek button does at the other edge), not when the pointer is only over it. It takes no room of its own (the
+                 negative margin): what is docked after it is drawn over it, so only the strip at the very edge is left to click.
+                 Shown by Taskbar.UpdateStartButton. -->
+            <Border x:Name="StartEdge"
+                    Width="6"
+                    Margin="0,0,-6,0"
+                    Background="Transparent"
+                    Visibility="Collapsed"
+                    PreviewMouseLeftButtonUp="StartEdge_OnPreviewMouseLeftButtonUp">
+                <DockPanel.Dock>
+                    <Binding Converter="{StaticResource dockOrientationConverter}"
+                             ConverterParameter="leading"
+                             Path="Orientation"
+                             RelativeSource="{RelativeSource Mode=FindAncestor, AncestorType=Window}" />
+                </DockPanel.Dock>
+            </Border>
             <controls:Toolbar x:Name="QuickLaunchToolbar"
                               Visibility="Collapsed"
                               Path="{Binding Source={x:Static utilities:Settings.Instance}, Path=QuickLaunchPath}"

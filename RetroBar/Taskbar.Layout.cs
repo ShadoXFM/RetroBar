@@ -14,6 +14,22 @@ namespace RetroBar
     public partial class Taskbar
     {
         private FrameworkElement _mediaBox;
+        private Thickness _weatherBaseMargin;
+
+        private void StartButton_IsVisibleChangedForWeather(object sender, DependencyPropertyChangedEventArgs e) => UpdateWeatherMargin();
+
+        // With no Start button before it (the option is off, or this is a taskbar that has none) the weather is 2 pixels further from the edge.
+        private void UpdateWeatherMargin()
+        {
+            if (!_windows11Applied)
+            {
+                return;
+            }
+
+            double dpi = System.Windows.Media.VisualTreeHelper.GetDpi(this).DpiScaleX;
+            double extra = StartButton.Visibility == Visibility.Visible ? 0 : 2 / (dpi > 0 ? dpi : 1);
+            WeatherGroup.Margin = new Thickness(_weatherBaseMargin.Left + extra, _weatherBaseMargin.Top, _weatherBaseMargin.Right, _weatherBaseMargin.Bottom);
+        }
         private BindingBase _weatherTag;
         private StackPanel _weatherPlace;
         private Grid _centerStrip;
@@ -71,6 +87,9 @@ namespace RetroBar
                 TrayContent.Children.Insert(weatherAt, _weatherPlace);
 
                 _mediaBox = WeatherGroup;
+                _weatherBaseMargin = WeatherGroup.Margin;
+                StartButton.IsVisibleChanged += StartButton_IsVisibleChangedForWeather;
+                UpdateWeatherMargin();
 
                 // On the bar it has a tag of its own (WeatherGroupBar): the tag it has in the tray box (WeatherGroup, with Playing) is tuned
                 // for being level with the clock in the box.
@@ -110,6 +129,8 @@ namespace RetroBar
                 _centerRow.Children.Remove(TaskListControl);
                 TaskbarDock.Children.Remove(_centerStrip);
                 TaskbarDock.Children.Remove(_mediaBox);
+                StartButton.IsVisibleChanged -= StartButton_IsVisibleChangedForWeather;
+                WeatherGroup.Margin = _weatherBaseMargin;
                 WeatherGroup.ClearValue(MonitorOffset.TagProperty);
                 if (_weatherTag != null)
                 {

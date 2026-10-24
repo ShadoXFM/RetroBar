@@ -233,6 +233,18 @@ namespace RetroBar.Controls
             SetStartMenuState(false);
         }
 
+        /// <summary>Opens the Start menu, or closes it if it is open: for the edge of a taskbar with no Start button of its own.</summary>
+        public void ToggleStartMenu()
+        {
+            if (Start.IsChecked == true)
+            {
+                SetStartMenuState(false);
+                return;
+            }
+
+            OpenStartMenu();
+        }
+
         private void OpenStartMenu()
         {
             // Open Shell positions its menu using the shell tray position. Moving the tray host to this

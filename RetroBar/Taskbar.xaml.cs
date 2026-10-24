@@ -852,6 +852,11 @@ namespace RetroBar
 
         private void UpdateStartButton()
         {
+            // The edge where the button was opens the Start menu when it is clicked, if the button is off by the option (not just a taskbar
+            // that has none) and this taskbar can open it.
+            bool canOpenStart = Screen.Primary || Settings.Instance.ShowStartButtonMultiMon;
+            StartEdge.Visibility = !Settings.Instance.ShowStartButton && canOpenStart && Orientation == Orientation.Horizontal ? Visibility.Visible : Visibility.Collapsed;
+
             if (!Settings.Instance.ShowStartButton || (!Screen.Primary && !Settings.Instance.ShowStartButtonMultiMon))
             {
                 StartButton.Visibility = Visibility.Collapsed;
@@ -859,6 +864,12 @@ namespace RetroBar
             }
 
             StartButton.Visibility = Visibility.Visible;
+        }
+
+        private void StartEdge_OnPreviewMouseLeftButtonUp(object sender, System.Windows.Input.MouseButtonEventArgs e)
+        {
+            StartButton.ToggleStartMenu();
+            e.Handled = true;
         }
 
         private bool HasFullScreenApp()
