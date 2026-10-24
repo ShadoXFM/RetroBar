@@ -59,10 +59,11 @@ namespace RetroBar.Controls
             if (IconOnly)
             {
                 StartLabelText.Visibility = Visibility.Collapsed;
-                Grid.SetColumnSpan(StartLogo, 2);
-                StartLogo.HorizontalAlignment = HorizontalAlignment.Center;
+                Grid.SetColumnSpan(StartLogoHost, 2);
+                StartLogoHost.HorizontalAlignment = HorizontalAlignment.Center;
                 // No room kept for the text beside the logo.
                 StartLogo.Margin = new Thickness(0);
+                StartLogoHost.RenderTransform = null;
                 logoDx = logoDy = 0;
                 logoPasses = 0;
                 Start.LayoutUpdated += Start_LayoutUpdatedForSquare;
@@ -70,8 +71,9 @@ namespace RetroBar.Controls
             else
             {
                 StartLabelText.Visibility = Visibility.Visible;
-                Grid.SetColumnSpan(StartLogo, 1);
-                StartLogo.ClearValue(HorizontalAlignmentProperty);
+                Grid.SetColumnSpan(StartLogoHost, 1);
+                StartLogoHost.ClearValue(HorizontalAlignmentProperty);
+                StartLogoHost.RenderTransform = null;
                 StartLogo.ClearValue(MarginProperty);
                 Start.ClearValue(WidthProperty);
             }
@@ -157,8 +159,7 @@ namespace RetroBar.Controls
                         Dispatcher.BeginInvoke(new Action(() => logoPending = false), DispatcherPriority.Loaded);
                         logoDx += Math.Round(dx / pixel) * pixel;
                         logoDy += Math.Round(dy / pixel) * pixel;
-                        // The logo's place is as wide as the logo and its margins (an Auto column), so it moves by its margin.
-                        StartLogo.Margin = new Thickness(Math.Max(0, logoDx), Math.Max(0, logoDy), Math.Max(0, -logoDx), Math.Max(0, -logoDy));
+                        StartLogoHost.RenderTransform = new TranslateTransform(logoDx, logoDy);
                     }
                 }
                 catch (InvalidOperationException)
