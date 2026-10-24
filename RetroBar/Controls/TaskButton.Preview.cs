@@ -425,6 +425,8 @@ namespace RetroBar.Controls
             return pressed;
         }
 
+        private ApplicationWindow _dragActivatedWindow;
+
         private void PreviewPollTimer_Tick(object sender, EventArgs e)
         {
             if (AppButton.ToolTip is not ToolTip tip || !tip.IsOpen)
@@ -470,6 +472,15 @@ namespace RetroBar.Controls
                     StopPeek();
                     _previewHoverTarget = target;
                     _previewHoverSince = DateTime.UtcNow;
+                    _dragActivatedWindow = null;
+                }
+                else if ((GetAsyncKeyState(0x01) & 0x8000) != 0 && !ReferenceEquals(_dragActivatedWindow, target) &&
+                         _previewHoverSince.HasValue && DateTime.UtcNow - _previewHoverSince.Value >= SystemParameters.MouseHoverTime)
+                {
+                    // Something is being dragged (the button is down) and has rested on this window's preview: the window is brought up, as a
+                    // dragged file does to a tab of one window, so the file can be dropped on it.
+                    _dragActivatedWindow = target;
+                    target.BringToFront();
                 }
                 else if (!_isPeekingAtWindow && _windowMenu?.IsOpen != true && _previewHoverSince.HasValue && DateTime.UtcNow - _previewHoverSince.Value >= PeekDelay)
                 {
@@ -528,6 +539,7 @@ namespace RetroBar.Controls
             _previewPollTimer?.Stop();
             _previewKeepWhilePointerIn = null;
             _previewClicked = false;
+            _dragActivatedWindow = null;
             _previewKeysKnown = false;
             _previewOutsideSince = null;
             _previewHoverSince = null;

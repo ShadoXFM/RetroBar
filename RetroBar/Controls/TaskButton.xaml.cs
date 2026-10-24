@@ -333,6 +333,14 @@ namespace RetroBar.Controls
 
             dragHandler = new DelayedActivationHandler(() =>
             {
+                // A file dragged onto a tab that stands for several windows shows their previews (the one to drop it on is picked from there:
+                // see PreviewPollTimer_Tick), instead of bringing one of them up.
+                if (ShowsGroupPreviewOnClick)
+                {
+                    OpenPreview(true);
+                    return;
+                }
+
                 Window?.BringToFront();
             });
 
