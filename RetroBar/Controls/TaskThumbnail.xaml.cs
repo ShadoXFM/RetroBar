@@ -35,7 +35,7 @@ namespace RetroBar.Controls
         // window's shape only up to MAX_HEIGHT_RATIO of the width (about 4:3), and a taller window gets
         // its picture fitted into that box instead of a preview that keeps growing taller. The thumbnail
         // is then exactly as big as the picture (narrower than the tab, for a tall window): there are
-        // no bars round it, so the shadow behind it falls along the picture's own edges.
+        // no bars round it.
         private const double MAX_HEIGHT_RATIO = 0.75;
 
         // Size of the thumbnail (the picture) for the window currently being shown, in DIPs (set by Refresh).

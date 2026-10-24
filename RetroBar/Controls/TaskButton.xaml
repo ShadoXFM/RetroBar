@@ -312,27 +312,6 @@
                                                                             </Grid>
                                                                             <!-- BoxWidth: the thumbnail area is as wide as the tab itself, so every
                                                                                  preview is the same size rather than shaped like its window. -->
-                                                                            <!-- A shadow behind the picture, inside the frame: a black box the size of the thumbnail (a pixel
-                                                                                 in from its edges, so none of the black shows round it) with a drop shadow. The thumbnail is drawn by
-                                                                                 DWM over it, so only the shadow round the picture is seen. The Effect is on this box alone, not on
-                                                                                 anything with text in it. -->
-                                                                            <Grid Grid.Row="1"
-                                                                                  VerticalAlignment="Center"
-                                                                                  HorizontalAlignment="Center"
-                                                                                  IsHitTestVisible="False"
-                                                                                  Width="{Binding ElementName=PreviewThumbnail, Path=Width}"
-                                                                                  Height="{Binding ElementName=PreviewThumbnail, Path=Height}">
-                                                                                <Border Margin="1"
-                                                                                        Background="Black">
-                                                                                    <Border.Effect>
-                                                                                        <DropShadowEffect BlurRadius="6"
-                                                                                                          ShadowDepth="4"
-                                                                                                          Direction="315"
-                                                                                                          Opacity="0.7"
-                                                                                                          Color="Black" />
-                                                                                    </Border.Effect>
-                                                                                </Border>
-                                                                            </Grid>
                                                                             <controls:TaskThumbnail x:Name="PreviewThumbnail"
                                                                                                     Grid.Row="1"
                                                                                                     VerticalAlignment="Center"
