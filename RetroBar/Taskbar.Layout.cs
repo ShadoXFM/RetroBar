@@ -82,11 +82,15 @@ namespace RetroBar
                 // The tabs: out of the dock, into a row that is centered in what the other boxes leave. The Start button stays where it
                 // was, at the left edge, with the media player's box after it.
                 TaskbarDock.Children.Remove(TaskListControl);
-                _centerRow = new StackPanel { Orientation = Orientation.Horizontal, HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Stretch };
+                // At the left, with a margin that is worked out in whole pixels (see ApplyCenterMargin): left to be centered by the layout,
+                // the row moved by a pixel whenever a box beside it changed by a fraction of one, and its tabs with it.
+                _centerRow = new StackPanel { Orientation = Orientation.Horizontal, HorizontalAlignment = HorizontalAlignment.Left, VerticalAlignment = VerticalAlignment.Stretch };
+                _centerRowLeft = double.NaN;
                 _centerRow.Children.Add(TaskListControl);
                 _centerStrip = new Grid();
                 _centerStrip.Children.Add(_centerRow);
                 _centerStrip.SizeChanged += (s, e) => UpdateCenterWidth();
+                TaskListControl.SizeChanged += (s, e) => UpdateCenterWidth();
                 _mediaBox.SizeChanged += (s, e) => UpdateCenterWidth();
                 StartButton.SizeChanged += (s, e) => UpdateCenterWidth();
                 TrayBox.SizeChanged += (s, e) => UpdateCenterWidth();
@@ -135,14 +139,34 @@ namespace RetroBar
                 return;
             }
 
-            double left = StartButton.ActualWidth + (_mediaBox?.ActualWidth ?? 0) + (_mediaBox?.Margin.Left ?? 0);
-            double right = TrayBox.ActualWidth;
-            double shift = right - left + _centerCorrection;
-            double difference = Math.Abs(shift);
-            _centerRow.Margin = shift > 0 ? new Thickness(difference, 0, 0, 0) : new Thickness(0, 0, difference, 0);
+            double difference = Math.Abs(CenterShift());
+            ApplyCenterMargin();
             TaskListControl.AvailableWidth = Math.Max(0, _centerStrip.ActualWidth - difference);
 
             Dispatcher.BeginInvoke(new Action(() => CenterTabs(0)), System.Windows.Threading.DispatcherPriority.Loaded);
+        }
+
+        private double _centerRowLeft = double.NaN;
+
+        // How much more room there is at the left of the middle than at the right (the boxes either side), and what is left over from it.
+        private double CenterShift()
+        {
+            double left = StartButton.ActualWidth + (_mediaBox?.ActualWidth ?? 0) + (_mediaBox?.Margin.Left ?? 0);
+            return TrayBox.ActualWidth - left + _centerCorrection;
+        }
+
+        // The row of tabs is put in whole pixels, and moved only when it is off by more than a pixel: the boxes beside it are as wide as their text
+        // is (a fraction of a pixel more or less), and with the row centered by the layout that was a pixel to the left or the right, all the
+        // tabs together, now and then.
+        private void ApplyCenterMargin()
+        {
+            double pixel = 1 / System.Windows.Media.VisualTreeHelper.GetDpi(this).DpiScaleX;
+            double wanted = (_centerStrip.ActualWidth + CenterShift() - TaskListControl.ActualWidth) / 2;
+            if (double.IsNaN(_centerRowLeft) || Math.Abs(wanted - _centerRowLeft) > pixel * 0.75)
+            {
+                _centerRowLeft = Math.Max(0, Math.Round(wanted / pixel) * pixel);
+                _centerRow.Margin = new Thickness(_centerRowLeft, 0, 0, 0);
+            }
         }
 
         // What is left over from the sum above (the room beside the tabs in their list, the gaps the boxes have): the middle of the tabs is
@@ -167,9 +191,8 @@ namespace RetroBar
                 }
 
                 _centerCorrection += Math.Round(2 * off / pixel) * pixel;
-                double left = StartButton.ActualWidth + (_mediaBox?.ActualWidth ?? 0) + (_mediaBox?.Margin.Left ?? 0);
-                double shift = TrayBox.ActualWidth - left + _centerCorrection;
-                _centerRow.Margin = shift > 0 ? new Thickness(shift, 0, 0, 0) : new Thickness(0, 0, -shift, 0);
+                _centerRowLeft = double.NaN;
+                ApplyCenterMargin();
                 Dispatcher.BeginInvoke(new Action(() => CenterTabs(pass + 1)), System.Windows.Threading.DispatcherPriority.Loaded);
             }
             catch (InvalidOperationException)

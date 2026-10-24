@@ -62,11 +62,23 @@ namespace RetroBar.Controls
 
         private (double ButtonWidth, double ButtonHeight, double SlotWidth)? _lastTabMeasure;
 
+        // Once the tabs are the size they should be, what was measured stands until the sizes can have changed (the theme, the style, the
+        // height of the row, the DPI): measured again from whichever tab is at rest, it came out a pixel different from one tab to another
+        // (they are not all at the same fraction of a pixel), and the pins and the tabs changed size with the window that was in use.
+        private bool _measureLocked;
+        private (double Height, double Step) _measureKey;
+
         // The size of the button of the first tab (a window's, not a launcher's) and of the slot it is in, or null before there is one. A tab
         // that is in use (the active window's, or with its menu open) is another size in some themes, and measured, made every tab larger when
         // it was the first: only the tabs at rest are measured, and the last measure stands while there is none.
         private (double ButtonWidth, double ButtonHeight, double SlotWidth)? MeasureTabButton()
         {
+            if (_measureLocked && _lastTabMeasure != null && _measureKey == (ActualHeight, PixelStep))
+            {
+                return _lastTabMeasure;
+            }
+
+            _measureLocked = false;
             for (int i = 0; i < TasksList.Items.Count; i++)
             {
                 if (TasksList.ItemContainerGenerator.ContainerFromIndex(i) is DependencyObject container &&
@@ -143,6 +155,8 @@ namespace RetroBar.Controls
             else
             {
                 _squareChecks = 0;
+                _measureLocked = true;
+                _measureKey = (ActualHeight, PixelStep);
             }
         }
 
@@ -395,6 +409,7 @@ namespace RetroBar.Controls
         private void IconOnlyChanged()
         {
             _squareChecks = 0;
+            _measureLocked = false;
             TabMargin = new Thickness();
             TasksList.Margin = new Thickness();
             _slideSlack = 0;
@@ -547,6 +562,7 @@ namespace RetroBar.Controls
         private void ThemeChanged()
         {
             _lastTabMeasure = null;
+            _measureLocked = false;
             _frameShift = _frameLeft = _frameTop = _frameWidth = _frameHeight = 0;
             _boxDx = _boxDy = _boxDw = _boxDh = _iconDx = _iconDy = 0;
             _launcherLift = 0;
@@ -841,12 +857,17 @@ namespace RetroBar.Controls
         // new comes in with the opening animation.
         private readonly Dictionary<ApplicationWindow, DateTime> _openedAt = new();
 
+        // For a while after RetroBar starts (at the logon, with the windows of what starts with the PC coming up one after the other, on a
+        // machine that is busy) every window is new: none of them comes in with the opening animation, which then showed the tabs half
+        // grown for seconds.
+        private static bool InStartup => DateTime.Now - System.Diagnostics.Process.GetCurrentProcess().StartTime < TimeSpan.FromSeconds(60);
+
         public bool JustOpened(ApplicationWindow window) =>
-            window != null && _openedAt.TryGetValue(window, out DateTime at) && DateTime.UtcNow - at < TimeSpan.FromSeconds(2);
+            window != null && !InStartup && _openedAt.TryGetValue(window, out DateTime at) && DateTime.UtcNow - at < TimeSpan.FromSeconds(2);
 
         private void GroupedWindows_CollectionChanged(object sender, System.Collections.Specialized.NotifyCollectionChangedEventArgs e)
         {
-            if (IconOnly && e.Action == System.Collections.Specialized.NotifyCollectionChangedAction.Remove &&
+            if (IconOnly && e.Action == System.Collections.Specialized.NotifyCollectionChangedAction.Remove && !InStartup &&
                 Settings.Instance.SlideTaskbarButtons && DateTime.UtcNow > TaskButton.SuppressSlideInUntilUtc)
             {
                 BeginSlideSlack();
@@ -873,7 +894,7 @@ namespace RetroBar.Controls
             // In the Windows 11 style the tabs are centered, so one that opens moves the others too (they slide as the list is made, and the
             // new one comes in as it appears); in the classic style the new tab grows from nothing and pushes the others (TaskButton.Animate).
             if ((e.Action == System.Collections.Specialized.NotifyCollectionChangedAction.Remove ||
-                 (IconOnly && e.Action == System.Collections.Specialized.NotifyCollectionChangedAction.Add)) &&
+                 (IconOnly && e.Action == System.Collections.Specialized.NotifyCollectionChangedAction.Add)) && !InStartup &&
                 Settings.Instance.SlideTaskbarButtons && Host?.Orientation == Orientation.Horizontal &&
                 DateTime.UtcNow > TaskButton.SuppressSlideInUntilUtc)
             {
