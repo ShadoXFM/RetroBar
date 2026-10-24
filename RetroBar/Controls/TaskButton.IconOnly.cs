@@ -39,30 +39,21 @@ namespace RetroBar.Controls
         }
 
         private DependencyPropertyDescriptor _pressedDescriptor;
-        private Thickness _iconBaseMargin;
-        private Thickness _badgeBaseMargin;
 
-        // The theme moves what is in a pressed button down and to the right (by a pixel); the icon here is not in the button, so it is moved the
-        // same way, with its badge, while the button is pressed.
+        // The theme moves what is in a pressed button down and to the right (by a pixel); the icon here is not in the button, so its layer is
+        // moved the same way while the button is pressed. A transform of the layer, whatever the icon and the badge are doing, so it works
+        // whenever the tab is pressed (a margin of the icon was lost when the icon was being placed again, or not in place yet).
         private void IconOnly_OnPressedChanged(object sender, EventArgs e)
         {
-            if (_iconOnlyHost?.IconOnly != true || !_iconPlaced)
+            if (_iconOnlyHost?.IconOnly != true || !AppButton.IsPressed)
             {
+                IconOnlyLayer.RenderTransform = null;
                 return;
             }
 
-            if (AppButton.IsPressed)
-            {
-                double step = _iconOnlyHost.PixelStep > 0 ? _iconOnlyHost.PixelStep : 1;
-                double shift = Math.Max(step, Math.Round(1 / step) * step);
-                IconOnlyImage.Margin = new Thickness(_iconBaseMargin.Left + shift, _iconBaseMargin.Top + shift, 0, 0);
-                IconOnlyBadge.Margin = new Thickness(_badgeBaseMargin.Left + shift, _badgeBaseMargin.Top + shift, 0, 0);
-            }
-            else
-            {
-                IconOnlyImage.Margin = _iconBaseMargin;
-                IconOnlyBadge.Margin = _badgeBaseMargin;
-            }
+            double step = _iconOnlyHost.PixelStep > 0 ? _iconOnlyHost.PixelStep : 1;
+            double shift = Math.Max(step, Math.Round(1 / step) * step);
+            IconOnlyLayer.RenderTransform = new TranslateTransform(shift, shift);
         }
 
         private void ReleaseIconOnly()
@@ -298,12 +289,10 @@ namespace RetroBar.Controls
                 double iconLeft = Math.Round(left / step) * step;
                 double iconTop = Math.Round(top / step) * step;
                 IconOnlyImage.Margin = new Thickness(iconLeft, iconTop, 0, 0);
-                _iconBaseMargin = IconOnlyImage.Margin;
 
                 // The badge at the lower right of the icon, as the classic tab has it.
                 IconOnlyBadge.Margin = new Thickness(Math.Round((iconLeft + IconOnlyImage.Width - IconOnlyBadge.Width + 2) / step) * step,
                     Math.Round((iconTop + IconOnlyImage.Height - IconOnlyBadge.Height + 1) / step) * step, 0, 0);
-                _badgeBaseMargin = IconOnlyBadge.Margin;
                 IconOnlyImage.Opacity = 1;
                 IconOnlyBadge.Opacity = 1;
                 _iconPlaced = true;

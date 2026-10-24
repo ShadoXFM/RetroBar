@@ -339,28 +339,32 @@
         </Button>
         <!-- In the Windows 11 style of the taskbar the tab shows only the program's icon, as an image of its own over the button
              (see TaskButton.IconOnly.cs), so it is not moved, or cut, by what the theme does to the content of a pressed or active tab. -->
-        <Image x:Name="IconOnlyImage"
-               Width="16"
-               Height="16"
-               HorizontalAlignment="Left"
-               VerticalAlignment="Top"
-               IsHitTestVisible="False"
-               UseLayoutRounding="True"
-               SnapsToDevicePixels="True"
-               RenderOptions.BitmapScalingMode="HighQuality"
-               Visibility="Collapsed" />
-        <!-- The badge (the app's overlay icon) of the tab, over that icon: the one in the button is under it. -->
-        <Image x:Name="IconOnlyBadge"
-               Source="{Binding Path=OverlayIcon, Mode=OneWay}"
-               Width="11"
-               Height="11"
-               HorizontalAlignment="Left"
-               VerticalAlignment="Top"
-               IsHitTestVisible="False"
-               Opacity="0"
-               UseLayoutRounding="True"
-               SnapsToDevicePixels="True"
-               RenderOptions.BitmapScalingMode="HighQuality"
-               Visibility="{Binding Source={x:Static utilities:Settings.Instance}, Path=ShowTaskBadges, UpdateSourceTrigger=PropertyChanged, Converter={StaticResource boolToVisibilityConverter}}" />
+        <!-- The icon and its badge are one layer, which the pressed tab moves by a pixel with a transform (see TaskButton.IconOnly.cs). -->
+        <Grid x:Name="IconOnlyLayer"
+              IsHitTestVisible="False">
+            <Image x:Name="IconOnlyImage"
+                   Width="16"
+                   Height="16"
+                   HorizontalAlignment="Left"
+                   VerticalAlignment="Top"
+                   IsHitTestVisible="False"
+                   UseLayoutRounding="True"
+                   SnapsToDevicePixels="True"
+                   RenderOptions.BitmapScalingMode="HighQuality"
+                   Visibility="Collapsed" />
+            <!-- The badge (the app's overlay icon) of the tab, over that icon: the one in the button is under it. -->
+            <Image x:Name="IconOnlyBadge"
+                   Source="{Binding Path=OverlayIcon, Mode=OneWay}"
+                   Width="11"
+                   Height="11"
+                   HorizontalAlignment="Left"
+                   VerticalAlignment="Top"
+                   IsHitTestVisible="False"
+                   Opacity="0"
+                   UseLayoutRounding="True"
+                   SnapsToDevicePixels="True"
+                   RenderOptions.BitmapScalingMode="HighQuality"
+                   Visibility="{Binding Source={x:Static utilities:Settings.Instance}, Path=ShowTaskBadges, UpdateSourceTrigger=PropertyChanged, Converter={StaticResource boolToVisibilityConverter}}" />
+        </Grid>
     </Grid>
 </UserControl>
