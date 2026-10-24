@@ -35,6 +35,7 @@
                                      Width="{Binding Path=LauncherWidth, RelativeSource={RelativeSource FindAncestor, AncestorType=local:TaskList}}"
                                      Height="{Binding Path=LauncherHeight, RelativeSource={RelativeSource FindAncestor, AncestorType=local:TaskList}}"
                                      Stretched="{Binding Path=IconOnly, RelativeSource={RelativeSource FindAncestor, AncestorType=local:TaskList}}"
+                                     IconMargin="{Binding Path=LauncherIconMargin, RelativeSource={RelativeSource FindAncestor, AncestorType=local:TaskList}}"
                                      VerticalAlignment="Top"
                                      Margin="{Binding Path=LauncherMargin, RelativeSource={RelativeSource FindAncestor, AncestorType=local:TaskList}}"
                                      PreviewMouseLeftButtonUp="Launcher_OnPreviewMouseLeftButtonUp"

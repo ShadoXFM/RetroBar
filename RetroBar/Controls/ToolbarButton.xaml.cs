@@ -21,6 +21,25 @@ namespace RetroBar.Controls
             set => SetValue(StretchedProperty, value);
         }
 
+        // The place of the icon in the button, as the task list works it out (the icon of a pin is put where the icon of a tab is, in a
+        // button that is the size of a tab's frame). Used while Stretched.
+        public static readonly DependencyProperty IconMarginProperty = DependencyProperty.Register(
+            nameof(IconMargin), typeof(Thickness), typeof(ToolbarButton), new PropertyMetadata(new Thickness(), (d, e) => ((ToolbarButton)d).ApplyIconMargin()));
+
+        public Thickness IconMargin
+        {
+            get => (Thickness)GetValue(IconMarginProperty);
+            set => SetValue(IconMarginProperty, value);
+        }
+
+        private void ApplyIconMargin()
+        {
+            if (Stretched)
+            {
+                ToolbarIcon.Margin = IconMargin;
+            }
+        }
+
         private void ApplyStretched()
         {
             if (Stretched)
@@ -28,12 +47,12 @@ namespace RetroBar.Controls
                 MonitorOffset.SetTag(LauncherButton, null);
                 LauncherButton.ClearValue(WidthProperty);
                 LauncherButton.ClearValue(HeightProperty);
-                LauncherButton.ClearValue(MarginProperty);
+                LauncherButton.Margin = new Thickness(0);
                 LauncherButton.ClearValue(RenderTransformProperty);
                 LauncherButton.HorizontalAlignment = HorizontalAlignment.Stretch;
                 LauncherButton.VerticalAlignment = VerticalAlignment.Stretch;
                 // The button is only as wide as a tab's frame, so no room is spared for the icon's own margin (it was cut at the right).
-                ToolbarIcon.Margin = new Thickness(0);
+                ToolbarIcon.Margin = IconMargin;
             }
             else
             {

@@ -48,12 +48,16 @@ namespace RetroBar.Controls
 
         private void IconOnly_OnChanged(object sender, EventArgs e) => ApplyIconOnly();
 
+        // Raised on the thread of the file watcher: nothing of the tab is touched until it is on the UI thread.
         private void IconOnly_OnAdjustmentsChanged(object sender, EventArgs e)
         {
-            if (_iconOnlyHost?.IconOnly == true)
+            Dispatcher.BeginInvoke(new Action(() =>
             {
-                Dispatcher.BeginInvoke(new Action(QueuePlaceIcon));
-            }
+                if (_iconOnlyHost?.IconOnly == true)
+                {
+                    QueuePlaceIcon();
+                }
+            }));
         }
 
         private void IconOnly_OnButtonSizeChanged(object sender, SizeChangedEventArgs e)
