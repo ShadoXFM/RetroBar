@@ -19,10 +19,12 @@
                 <ColumnDefinition Width="Auto" />
                 <ColumnDefinition Width="*" />
             </Grid.ColumnDefinitions>
-            <Image Grid.Column="0"
+            <Image x:Name="StartLogo"
+                   Grid.Column="0"
                    Style="{DynamicResource StartIcon}"
                    utilities:MonitorOffset.Tag="StartIcon" />
-            <TextBlock Grid.Column="1"
+            <TextBlock x:Name="StartLabelText"
+                       Grid.Column="1"
                        Style="{DynamicResource StartLabel}"
                        utilities:MonitorOffset.Tag="StartLabel" />
         </Grid>

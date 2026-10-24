@@ -43,6 +43,55 @@ namespace RetroBar.Controls
             set { SetValue(StartMenuMonitorProperty, value); }
         }
 
+        /// <summary>Only the logo, on a square button (the Windows 11 style of the taskbar).</summary>
+        public static DependencyProperty IconOnlyProperty = DependencyProperty.Register(nameof(IconOnly), typeof(bool), typeof(StartButton),
+            new PropertyMetadata(false, (d, e) => ((StartButton)d).ApplyIconOnly()));
+
+        public bool IconOnly
+        {
+            get { return (bool)GetValue(IconOnlyProperty); }
+            set { SetValue(IconOnlyProperty, value); }
+        }
+
+        private void ApplyIconOnly()
+        {
+            Start.LayoutUpdated -= Start_LayoutUpdatedForSquare;
+            if (IconOnly)
+            {
+                StartLabelText.Visibility = Visibility.Collapsed;
+                Grid.SetColumnSpan(StartLogo, 2);
+                StartLogo.HorizontalAlignment = HorizontalAlignment.Center;
+                // No room kept for the text beside the logo.
+                StartLogo.Margin = new Thickness(0);
+                Start.LayoutUpdated += Start_LayoutUpdatedForSquare;
+            }
+            else
+            {
+                StartLabelText.Visibility = Visibility.Visible;
+                Grid.SetColumnSpan(StartLogo, 1);
+                StartLogo.ClearValue(HorizontalAlignmentProperty);
+                StartLogo.ClearValue(MarginProperty);
+                Start.ClearValue(WidthProperty);
+            }
+        }
+
+        // The frame that is drawn (the theme's outer border, inside the button's own padding) is made as wide as it is tall.
+        private void Start_LayoutUpdatedForSquare(object? sender, EventArgs e)
+        {
+            if (!IconOnly || Start.Template?.FindName("ButtonOuterBottomBorder", Start) is not FrameworkElement frame || frame.ActualHeight <= 0 || frame.ActualWidth <= 0)
+            {
+                return;
+            }
+
+            double dpi = VisualTreeHelper.GetDpi(this).DpiScaleX;
+            double padding = Start.ActualWidth - frame.ActualWidth;
+            double width = Math.Round((frame.ActualHeight + padding) * dpi) / dpi;
+            if (Math.Abs(width - Start.ActualWidth) > 0.5 / dpi && (double.IsNaN(Start.Width) || Math.Abs(Start.Width - width) > 0.5 / dpi))
+            {
+                Start.Width = width;
+            }
+        }
+
         public StartButton()
         {
             InitializeComponent();

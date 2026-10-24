@@ -89,10 +89,12 @@ namespace RetroBar
 
                 QuickLaunchToolbar.Visibility = Visibility.Collapsed;
                 TaskListControl.IconOnly = true;
+                StartButton.IconOnly = true;
             }
             else
             {
                 TaskListControl.IconOnly = false;
+                StartButton.IconOnly = false;
 
                 _centerRow.Children.Remove(TaskListControl);
                 TaskbarDock.Children.Remove(_centerStrip);
