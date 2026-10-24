@@ -608,6 +608,13 @@ namespace RetroBar.Utilities
             set => Set(ref _showEndTaskButton, value);
         }
 
+        private bool _showStartButton = true;
+        public bool ShowStartButton
+        {
+            get => _showStartButton;
+            set => Set(ref _showStartButton, value);
+        }
+
         private bool _showStartButtonMultiMon = false;
         public bool ShowStartButtonMultiMon
         {

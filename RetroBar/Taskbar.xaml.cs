@@ -386,7 +386,7 @@ namespace RetroBar
                 PeekDuringAutoHide();
                 RecalculateSize();
             }
-            else if (e.PropertyName == nameof(Settings.ShowStartButtonMultiMon))
+            else if (e.PropertyName == nameof(Settings.ShowStartButtonMultiMon) || e.PropertyName == nameof(Settings.ShowStartButton))
             {
                 UpdateStartButton();
             }
@@ -852,7 +852,7 @@ namespace RetroBar
 
         private void UpdateStartButton()
         {
-            if (!Screen.Primary && !Settings.Instance.ShowStartButtonMultiMon)
+            if (!Settings.Instance.ShowStartButton || (!Screen.Primary && !Settings.Instance.ShowStartButtonMultiMon))
             {
                 StartButton.Visibility = Visibility.Collapsed;
                 return;

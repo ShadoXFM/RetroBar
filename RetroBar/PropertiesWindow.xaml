@@ -255,6 +255,10 @@
                                           SelectedIndex="{Binding Source={x:Static Settings:Settings.Instance}, Path=TaskbarStyle, UpdateSourceTrigger=PropertyChanged, Converter={StaticResource enumConverter}}"
                                           SelectionChanged="CboTaskbarStyle_SelectionChanged" />
                             </DockPanel>
+                            <CheckBox x:Name="cbShowStartButton"
+                                      IsChecked="{Binding Source={x:Static Settings:Settings.Instance}, Path=ShowStartButton, UpdateSourceTrigger=PropertyChanged}">
+                                <Label Content="{DynamicResource show_start_button}" />
+                            </CheckBox>
                             <DockPanel>
                                 <Label VerticalAlignment="Center"
                                        Target="{Binding ElementName=cboEdgeSelect}">

@@ -94,6 +94,7 @@
         <s:String>La même barre des tâches que la fenêtre</s:String>
         <s:String>La même barre des tâches que la fenêtre et la barre des tâches primaire</s:String>
     </x:Array>
+    <s:String x:Key="show_start_button">Afficher le _bouton Démarrer</s:String>
     <s:String x:Key="taskbar_style_text">St_yle de la barre des tâches :</s:String>
     <s:String x:Key="taskbar_style_tip">Classique : les onglets occupent la largeur de la barre, avec le bouton Démarrer à gauche. Windows 11 : de petits onglets avec seulement les icônes, les programmes épinglés parmi eux, au milieu avec le bouton Démarrer à leur gauche ; le lecteur multimédia est dans un cadre à gauche. Pour une barre en haut ou en bas.</s:String>
     <x:Array x:Key="taskbar_style_values" Type="s:String">

@@ -42,10 +42,7 @@ namespace RetroBar.Controls
             AppButton.AddHandler(UIElement.PreviewMouseLeftButtonDownEvent, new MouseButtonEventHandler(IconOnly_OnMouseDown), true);
             AppButton.RemoveHandler(UIElement.PreviewMouseLeftButtonUpEvent, new MouseButtonEventHandler(IconOnly_OnMouseUp));
             AppButton.AddHandler(UIElement.PreviewMouseLeftButtonUpEvent, new MouseButtonEventHandler(IconOnly_OnMouseUp), true);
-            AppButton.MouseLeave -= IconOnly_OnMouseLeave;
-            AppButton.MouseLeave += IconOnly_OnMouseLeave;
-            AppButton.LostMouseCapture -= IconOnly_OnLostCapture;
-            AppButton.LostMouseCapture += IconOnly_OnLostCapture;
+
             ApplyIconOnly();
         }
 
@@ -56,32 +53,36 @@ namespace RetroBar.Controls
         // whenever the tab is pressed (a margin of the icon was lost when the icon was being placed again, or not in place yet).
         private bool _mouseDownOnTab;
 
+        private DispatcherTimer _pressTimer;
+
+        // The press goes on as long as the button is held with the pointer on the tab: the button's own pressed state does not (the preview,
+        // a drag that begins or the menu take the mouse from it a moment after the press), so the held button is read from the mouse.
         private void IconOnly_OnMouseDown(object sender, MouseButtonEventArgs e)
         {
             _mouseDownOnTab = true;
             UpdatePressShift();
+            if (_pressTimer == null)
+            {
+                _pressTimer = new DispatcherTimer { Interval = TimeSpan.FromMilliseconds(25) };
+                _pressTimer.Tick += (s, args) =>
+                {
+                    if ((GetAsyncKeyState(0x01) & 0x8000) == 0 || !IsPointerOverTab())
+                    {
+                        _pressTimer.Stop();
+                        _mouseDownOnTab = false;
+                    }
+
+                    UpdatePressShift();
+                };
+            }
+
+            _pressTimer.Start();
         }
 
         private void IconOnly_OnMouseUp(object sender, MouseButtonEventArgs e)
         {
+            _pressTimer?.Stop();
             _mouseDownOnTab = false;
-            UpdatePressShift();
-        }
-
-        private void IconOnly_OnMouseLeave(object sender, MouseEventArgs e)
-        {
-            // Leaving the tab with the button down gives the press up (a button lets go of a press that leaves it).
-            _mouseDownOnTab = false;
-            UpdatePressShift();
-        }
-
-        private void IconOnly_OnLostCapture(object sender, MouseEventArgs e)
-        {
-            if (!AppButton.IsMouseOver)
-            {
-                _mouseDownOnTab = false;
-            }
-
             UpdatePressShift();
         }
 
@@ -108,8 +109,8 @@ namespace RetroBar.Controls
             _pressedDescriptor?.RemoveValueChanged(AppButton, IconOnly_OnPressedChanged);
             AppButton.RemoveHandler(UIElement.PreviewMouseLeftButtonDownEvent, new MouseButtonEventHandler(IconOnly_OnMouseDown));
             AppButton.RemoveHandler(UIElement.PreviewMouseLeftButtonUpEvent, new MouseButtonEventHandler(IconOnly_OnMouseUp));
-            AppButton.MouseLeave -= IconOnly_OnMouseLeave;
-            AppButton.LostMouseCapture -= IconOnly_OnLostCapture;
+            _pressTimer?.Stop();
+            _mouseDownOnTab = false;
             if (_iconOnlyHost != null)
             {
                 _iconOnlyDescriptor?.RemoveValueChanged(_iconOnlyHost, IconOnly_OnChanged);
