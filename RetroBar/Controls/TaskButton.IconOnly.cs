@@ -4,6 +4,7 @@ using System.ComponentModel;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Data;
+using System.Windows.Input;
 using System.Windows.Media;
 using System.Windows.Threading;
 
@@ -35,6 +36,16 @@ namespace RetroBar.Controls
             _pressedDescriptor ??= DependencyPropertyDescriptor.FromProperty(System.Windows.Controls.Primitives.ButtonBase.IsPressedProperty, typeof(System.Windows.Controls.Button));
             _pressedDescriptor.RemoveValueChanged(AppButton, IconOnly_OnPressedChanged);
             _pressedDescriptor.AddValueChanged(AppButton, IconOnly_OnPressedChanged);
+            // The mouse itself as well: with several windows a click does not always leave the button pressed (the preview of the group, the
+            // menu, a drag that has begun take the mouse), and the tab is still being pressed as far as whoever is pressing it can tell.
+            AppButton.RemoveHandler(UIElement.PreviewMouseLeftButtonDownEvent, new MouseButtonEventHandler(IconOnly_OnMouseDown));
+            AppButton.AddHandler(UIElement.PreviewMouseLeftButtonDownEvent, new MouseButtonEventHandler(IconOnly_OnMouseDown), true);
+            AppButton.RemoveHandler(UIElement.PreviewMouseLeftButtonUpEvent, new MouseButtonEventHandler(IconOnly_OnMouseUp));
+            AppButton.AddHandler(UIElement.PreviewMouseLeftButtonUpEvent, new MouseButtonEventHandler(IconOnly_OnMouseUp), true);
+            AppButton.MouseLeave -= IconOnly_OnMouseLeave;
+            AppButton.MouseLeave += IconOnly_OnMouseLeave;
+            AppButton.LostMouseCapture -= IconOnly_OnLostCapture;
+            AppButton.LostMouseCapture += IconOnly_OnLostCapture;
             ApplyIconOnly();
         }
 
@@ -43,16 +54,50 @@ namespace RetroBar.Controls
         // The theme moves what is in a pressed button down and to the right (by a pixel); the icon here is not in the button, so its layer is
         // moved the same way while the button is pressed. A transform of the layer, whatever the icon and the badge are doing, so it works
         // whenever the tab is pressed (a margin of the icon was lost when the icon was being placed again, or not in place yet).
-        private void IconOnly_OnPressedChanged(object sender, EventArgs e)
+        private bool _mouseDownOnTab;
+
+        private void IconOnly_OnMouseDown(object sender, MouseButtonEventArgs e)
         {
-            if (_iconOnlyHost?.IconOnly != true || !AppButton.IsPressed)
+            _mouseDownOnTab = true;
+            UpdatePressShift();
+        }
+
+        private void IconOnly_OnMouseUp(object sender, MouseButtonEventArgs e)
+        {
+            _mouseDownOnTab = false;
+            UpdatePressShift();
+        }
+
+        private void IconOnly_OnMouseLeave(object sender, MouseEventArgs e)
+        {
+            // Leaving the tab with the button down gives the press up (a button lets go of a press that leaves it).
+            _mouseDownOnTab = false;
+            UpdatePressShift();
+        }
+
+        private void IconOnly_OnLostCapture(object sender, MouseEventArgs e)
+        {
+            if (!AppButton.IsMouseOver)
+            {
+                _mouseDownOnTab = false;
+            }
+
+            UpdatePressShift();
+        }
+
+        private void IconOnly_OnPressedChanged(object sender, EventArgs e) => UpdatePressShift();
+
+        private void UpdatePressShift()
+        {
+            if (_iconOnlyHost?.IconOnly != true || !(AppButton.IsPressed || _mouseDownOnTab))
             {
                 IconOnlyLayer.RenderTransform = null;
                 return;
             }
 
-            double step = _iconOnlyHost.PixelStep > 0 ? _iconOnlyHost.PixelStep : 1;
-            double shift = Math.Max(step, Math.Round(1 / step) * step);
+            // One device pixel, whatever the monitor's scaling: from this window's own, not from what the list last worked out.
+            double dpi = VisualTreeHelper.GetDpi(this).DpiScaleX;
+            double shift = 1 / (dpi > 0 ? dpi : 1);
             IconOnlyLayer.RenderTransform = new TranslateTransform(shift, shift);
         }
 
@@ -61,6 +106,10 @@ namespace RetroBar.Controls
             AppButton.SizeChanged -= IconOnly_OnButtonSizeChanged;
             MonitorAdjustments.Changed -= IconOnly_OnAdjustmentsChanged;
             _pressedDescriptor?.RemoveValueChanged(AppButton, IconOnly_OnPressedChanged);
+            AppButton.RemoveHandler(UIElement.PreviewMouseLeftButtonDownEvent, new MouseButtonEventHandler(IconOnly_OnMouseDown));
+            AppButton.RemoveHandler(UIElement.PreviewMouseLeftButtonUpEvent, new MouseButtonEventHandler(IconOnly_OnMouseUp));
+            AppButton.MouseLeave -= IconOnly_OnMouseLeave;
+            AppButton.LostMouseCapture -= IconOnly_OnLostCapture;
             if (_iconOnlyHost != null)
             {
                 _iconOnlyDescriptor?.RemoveValueChanged(_iconOnlyHost, IconOnly_OnChanged);
