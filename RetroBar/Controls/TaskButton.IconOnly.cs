@@ -105,7 +105,7 @@ namespace RetroBar.Controls
                 {
                     BindingOperations.ClearBinding(IconOnlyImage, Image.SourceProperty);
                     IconOnlyImage.Source = program;
-                    MonitorOffset.SetTag(IconOnlyImage, "TaskIcon");
+                    MonitorOffset.SetTag(IconOnlyImage, "TaskIconBar");
                 }
                 else
                 {
@@ -184,9 +184,36 @@ namespace RetroBar.Controls
 
                 // The classic style's own look for the icon: its monitor's TaskIcon adjustment (the Scale, drawn by MonitorOffset as it draws the
                 // classic tab's) - its X and Y, which move the icon inside the classic button, are taken off the place so the icon is in the middle.
-                MonitorOffsetValue adjust = MonitorAdjustments.Get(MonitorOffset.FindDeviceName(this), "TaskIcon");
-                double left = bounds.Left + (bounds.Width - IconOnlyImage.Width) / 2 - adjust.X;
-                double top = bounds.Top + (bounds.Height - IconOnlyImage.Height) / 2 - adjust.Y;
+                MonitorOffsetValue adjust = MonitorAdjustments.Get(MonitorOffset.FindDeviceName(this), "TaskIconBar");
+
+                // With a BitmapScaling in the monitor's TaskIconBar adjustment the icon is not drawn through MonitorOffset's snapped transform but
+                // as an image of the scaled size, resampled by WPF in that mode: softer than the classic tab's, which is crisp on whole pixels.
+                double shiftX = adjust.X;
+                double shiftY = adjust.Y;
+                if (!string.IsNullOrEmpty(adjust.BitmapScaling) && Enum.TryParse(adjust.BitmapScaling, out BitmapScalingMode scalingMode))
+                {
+                    if (MonitorOffset.GetTag(IconOnlyImage) != null)
+                    {
+                        MonitorOffset.SetTag(IconOnlyImage, null);
+                        IconOnlyImage.ClearValue(RenderTransformProperty);
+                    }
+
+                    double side = Math.Max(step, Math.Round(16 * (adjust.Scale ?? 1) / step) * step);
+                    IconOnlyImage.Width = side;
+                    IconOnlyImage.Height = side;
+                    RenderOptions.SetBitmapScalingMode(IconOnlyImage, scalingMode);
+                    shiftX = 0;
+                    shiftY = 0;
+                }
+                else if (MonitorOffset.GetTag(IconOnlyImage) == null)
+                {
+                    IconOnlyImage.Width = 16;
+                    IconOnlyImage.Height = 16;
+                    MonitorOffset.SetTag(IconOnlyImage, "TaskIconBar");
+                }
+
+                double left = bounds.Left + (bounds.Width - IconOnlyImage.Width) / 2 - shiftX;
+                double top = bounds.Top + (bounds.Height - IconOnlyImage.Height) / 2 - shiftY;
                 double iconLeft = Math.Round(left / step) * step;
                 double iconTop = Math.Round(top / step) * step;
                 IconOnlyImage.Margin = new Thickness(iconLeft, iconTop, 0, 0);

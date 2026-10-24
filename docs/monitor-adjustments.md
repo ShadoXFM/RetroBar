@@ -89,8 +89,9 @@ A tag that is chosen by a state has variants: `Playing` (media is playing), `NoC
 | `StartLabel` | `Controls/StartButton.xaml` |  |
 | `TaskButton` | `Controls/TaskButton.xaml.cs` | `TaskButtonActive` |
 | `TaskButtonActive` | `Controls/TaskButton.xaml.cs` |  |
-| `TaskIcon` | `Controls/TaskButton.IconOnly.cs`, `Controls/TaskButton.xaml.cs`, `Utilities/MonitorOffset.cs` | `TaskIconActive` |
+| `TaskIcon` | `Controls/TaskButton.xaml.cs`, `Utilities/MonitorOffset.cs` | `TaskIconActive` |
 | `TaskIconActive` | `Controls/TaskButton.xaml.cs` |  |
+| `TaskIconBar` | `Controls/TaskButton.IconOnly.cs` |  |
 | `TaskLabel` | `Controls/TaskButton.xaml.cs` | `TaskLabelActive` |
 | `TaskLabelActive` | `Controls/TaskButton.xaml.cs` |  |
 | `TaskOverlayIcon` | `Controls/TaskButton.xaml.cs` | `TaskOverlayIconActive` |
