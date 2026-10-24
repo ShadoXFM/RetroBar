@@ -158,6 +158,24 @@ namespace RetroBar.Controls
             }), DispatcherPriority.Loaded);
         }
 
+        /// <summary>Whether the tab is in use (the active window's, with its menu open or pressed): its frame is not the size of a tab at rest in some themes.</summary>
+        public bool IsInUse => Window?.State == ManagedShell.WindowsTasks.ApplicationWindow.WindowState.Active || IsGroupActive || IsContextMenuActive || AppButton.IsPressed;
+
+        // The corrections to the place of the icon were made against the frame of the old theme.
+        private void ThemeChangedForIconOnly()
+        {
+            _iconFixX = 0;
+            _iconFixY = 0;
+            if (_iconOnlyHost?.IconOnly == true)
+            {
+                Dispatcher.BeginInvoke(new Action(() =>
+                {
+                    ApplyIconOnly();
+                    QueuePlaceIcon();
+                }), DispatcherPriority.Loaded);
+            }
+        }
+
         private double _iconFixX;
         private double _iconFixY;
         private int _fixPasses;

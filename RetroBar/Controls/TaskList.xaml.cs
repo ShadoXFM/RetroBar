@@ -60,13 +60,18 @@ namespace RetroBar.Controls
         // The windows of an app are one tab when the setting says so, and always in the Windows 11 style (where an app is one icon).
         private bool CombinesWindows => Settings.Instance.GroupTaskWindows || IconOnly;
 
-        // The size of the button of the first tab (a window's, not a launcher's) and of the slot it is in, or null before there is one.
+        private (double ButtonWidth, double ButtonHeight, double SlotWidth)? _lastTabMeasure;
+
+        // The size of the button of the first tab (a window's, not a launcher's) and of the slot it is in, or null before there is one. A tab
+        // that is in use (the active window's, or with its menu open) is another size in some themes, and measured, made every tab larger when
+        // it was the first: only the tabs at rest are measured, and the last measure stands while there is none.
         private (double ButtonWidth, double ButtonHeight, double SlotWidth)? MeasureTabButton()
         {
             for (int i = 0; i < TasksList.Items.Count; i++)
             {
                 if (TasksList.ItemContainerGenerator.ContainerFromIndex(i) is DependencyObject container &&
-                    FindTabButton(container) is TaskButton tab && tab.AppButton.ActualHeight > 0 && tab.AppButton.ActualWidth > 0)
+                    FindTabButton(container) is TaskButton tab && tab.AppButton.ActualHeight > 0 && tab.AppButton.ActualWidth > 0 &&
+                    !tab.IsInUse)
                 {
                     // The frame that is drawn (the theme's outer border), which is smaller than the button's own box; the box if there is none.
                     var frame = tab.AppButton.Template?.FindName("ButtonOuterBottomBorder", tab.AppButton) as FrameworkElement;
@@ -89,11 +94,12 @@ namespace RetroBar.Controls
                     {
                     }
 
-                    return (frame.ActualWidth, frame.ActualHeight, tab.ActualWidth);
+                    _lastTabMeasure = (frame.ActualWidth, frame.ActualHeight, tab.ActualWidth);
+                    return _lastTabMeasure;
                 }
             }
 
-            return null;
+            return _lastTabMeasure;
         }
 
         private static TaskButton FindTabButton(DependencyObject parent)
@@ -536,9 +542,33 @@ namespace RetroBar.Controls
             }
         }
 
+        // A theme has other margins, frames and icon places: what was measured of the tabs, and the corrections made to the pins and the icons
+        // for it, are dropped and worked out again once the new theme is in.
+        private void ThemeChanged()
+        {
+            _lastTabMeasure = null;
+            _frameShift = _frameLeft = _frameTop = _frameWidth = _frameHeight = 0;
+            _boxDx = _boxDy = _boxDw = _boxDh = _iconDx = _iconDy = 0;
+            _launcherLift = 0;
+            _launchersAligned = false;
+            _alignChecks = 0;
+            _squareChecks = 0;
+            SetStyles();
+            if (IconOnly)
+            {
+                // The button of a pin is the one of the new theme, whose size is the tag's, until it is measured against a tab again.
+                LauncherHeight = double.NaN;
+                Dispatcher.BeginInvoke(new Action(SetTaskButtonWidth), DispatcherPriority.Loaded);
+            }
+        }
+
         private void Settings_PropertyChanged(object sender, PropertyChangedEventArgs e)
         {
-            if (e.PropertyName == nameof(Settings.GroupTaskWindows))
+            if (e.PropertyName == nameof(Settings.Theme))
+            {
+                Dispatcher.BeginInvoke(new Action(ThemeChanged), DispatcherPriority.Loaded);
+            }
+            else if (e.PropertyName == nameof(Settings.GroupTaskWindows))
             {
                 ScheduleGroupSync();
             }

@@ -29,6 +29,13 @@ namespace RetroBar
             ApplyTaskbarStyle();
         }
 
+        // A taskbar that is closed (the theme can make the taskbars again) no longer follows the style; left listening, it moved the controls of a
+        // window that was gone, and asked the new ones' shared things to be set again.
+        private void ReleaseTaskbarStyle()
+        {
+            Settings.Instance.PropertyChanged -= TaskbarStyle_SettingChanged;
+        }
+
         private void TaskbarStyle_SettingChanged(object sender, PropertyChangedEventArgs e)
         {
             if (e.PropertyName == nameof(Settings.TaskbarStyle) || e.PropertyName == nameof(Settings.Edge))

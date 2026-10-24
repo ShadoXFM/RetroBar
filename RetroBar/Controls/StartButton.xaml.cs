@@ -193,6 +193,16 @@ namespace RetroBar.Controls
         {
             if (e.PropertyName == nameof(Settings.Theme))
             {
+                if (IconOnly)
+                {
+                    // The frame and the logo are the new theme's: the square and the middle are worked out again.
+                    Dispatcher.BeginInvoke(new Action(() =>
+                    {
+                        Start.ClearValue(WidthProperty);
+                        ApplyIconOnly();
+                    }), DispatcherPriority.Loaded);
+                }
+
                 bool useFloatingStartButton = Application.Current.FindResource("UseFloatingStartButton") as bool? ?? false;
 
                 if (!useFloatingStartButton && floatingStartButton != null)

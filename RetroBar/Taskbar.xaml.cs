@@ -523,6 +523,7 @@ namespace RetroBar
                 QuickLaunchToolbar.Visibility = Visibility.Collapsed;
 
                 Settings.Instance.PropertyChanged -= Settings_PropertyChanged;
+                ReleaseTaskbarStyle();
                 MonitorAdjustments.Changed -= MonitorAdjustments_Changed;
                 _startMenuMonitor.StartMenuVisibilityChanged -= StartMenuMonitor_StartMenuVisibilityChanged;
                 _shellManager.TasksService.WindowActivated -= TasksService_WindowActivated;

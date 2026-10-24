@@ -779,6 +779,7 @@ namespace RetroBar.Controls
             if (e.PropertyName == nameof(Settings.Theme))
             {
                 SetStyle();
+                ThemeChangedForIconOnly();
             }
         }
 
