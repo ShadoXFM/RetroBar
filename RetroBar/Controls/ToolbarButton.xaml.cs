@@ -1,7 +1,11 @@
 ﻿using RetroBar.Utilities;
+using System;
+using System.ComponentModel;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Data;
+using System.Windows.Media;
+using System.Windows.Threading;
 
 namespace RetroBar.Controls
 {
@@ -40,6 +44,190 @@ namespace RetroBar.Controls
             }
         }
 
+        // Where the middle of the picture of a tab's icon is in the frame of its tab (device pixels from the frame's top left), as the task
+        // list reads it from a tab at rest; NaN until it is known. This icon is put at that place of its own box (which is the size and place a
+        // tab's frame has), by whole device pixels added after its snapping (MonitorOffset.Nudge) - an icon with more empty space at one side,
+        // like Opera's, was a pixel or two off its tab's when the program opened or closed.
+        public static readonly DependencyProperty IconTargetProperty = DependencyProperty.Register(
+            nameof(IconTarget), typeof(Vector), typeof(ToolbarButton), new PropertyMetadata(new Vector(double.NaN, double.NaN), (d, e) => ((ToolbarButton)d).QueueCenterIcon(true)));
+
+        public Vector IconTarget
+        {
+            get => (Vector)GetValue(IconTargetProperty);
+            set => SetValue(IconTargetProperty, value);
+        }
+
+        private (double X, double Y)? _pendingMove;
+
+        // Where each program's icon was last put (whole device pixels): a pin made anew when its program closes starts there, and is not
+        // seen moving to it.
+        private static readonly System.Collections.Generic.Dictionary<string, Vector> LastNudges = new(StringComparer.OrdinalIgnoreCase);
+        private string _programExe;
+        private DispatcherTimer _revealTimer;
+
+        // If it has not come to rest by now (the pointer is over it, or the layout does not stop), it is shown where it is.
+        private void RevealTimer_Tick(object sender, EventArgs e)
+        {
+            _revealTimer.Stop();
+            ToolbarIcon.ClearValue(OpacityProperty);
+        }
+        private bool _centerQueued;
+        private Point _lastBoxOrigin = new(double.NaN, double.NaN);
+
+        private void QueueCenterIcon(bool reset)
+        {
+            if (reset)
+            {
+                _pendingMove = null;
+            }
+
+            if (_centerQueued)
+            {
+                return;
+            }
+
+            _centerQueued = true;
+            Dispatcher.BeginInvoke(new Action(() =>
+            {
+                _centerQueued = false;
+                CenterIcon();
+            }), DispatcherPriority.ApplicationIdle);
+        }
+
+        private void CenterIcon()
+        {
+            if (!Stretched)
+            {
+                return;
+            }
+
+            try
+            {
+                var box = LauncherButton.Template?.FindName("ButtonRightBottomBorder", LauncherButton) as FrameworkElement;
+                if (box == null || box.ActualWidth <= 0 || !ToolbarIcon.IsVisible || ToolbarIcon.ActualWidth <= 0 || double.IsNaN(IconTarget.X) || ToolbarIcon.Source == null)
+                {
+                    return;
+                }
+
+                if (LauncherButton.IsPressed || LauncherButton.IsMouseOver)
+                {
+                    ToolbarIcon.ClearValue(OpacityProperty);
+                    return;
+                }
+
+                Point boxTopLeft = box.PointToScreen(new Point(0, 0));
+                Point iconTopLeft = ToolbarIcon.PointToScreen(new Point(0, 0));
+                Point iconBottomRight = ToolbarIcon.PointToScreen(new Point(ToolbarIcon.ActualWidth, ToolbarIcon.ActualHeight));
+                (double artX, double artY) = TaskButton.ArtCenterOffset(ToolbarIcon.Source, iconBottomRight.X - iconTopLeft.X, iconBottomRight.Y - iconTopLeft.Y);
+                double dx = IconTarget.X - ((iconTopLeft.X + iconBottomRight.X) / 2 + artX - boxTopLeft.X);
+                double dy = IconTarget.Y - ((iconTopLeft.Y + iconBottomRight.Y) / 2 + artY - boxTopLeft.Y);
+                if (TaskButton.WholePixels(dx) == 0 && TaskButton.WholePixels(dy) == 0)
+                {
+                    _pendingMove = null;
+                    ToolbarIcon.ClearValue(OpacityProperty);
+                    if (_programExe != null)
+                    {
+                        LastNudges[_programExe] = MonitorOffset.GetNudge(ToolbarIcon);
+                    }
+
+                    return;
+                }
+
+                // Only when it is off by the same amount twice running, a render apart (the snapping works on the layout, and a move made on
+                // what the last one had not reached yet added up): as a tab's icon is.
+                if (_pendingMove is (double px, double py) && px == dx && py == dy)
+                {
+                    _pendingMove = null;
+                    Vector nudge = MonitorOffset.GetNudge(ToolbarIcon);
+                    MonitorOffset.SetNudge(ToolbarIcon, new Vector(Math.Clamp(nudge.X + TaskButton.WholePixels(dx), -6, 6), Math.Clamp(nudge.Y + TaskButton.WholePixels(dy), -6, 6)));
+                }
+                else
+                {
+                    _pendingMove = (dx, dy);
+                }
+
+                QueueCenterIcon(false);
+            }
+            catch (InvalidOperationException)
+            {
+            }
+        }
+
+        private void ToolbarIcon_OnSourceChanged(object sender, EventArgs e) => QueueCenterIcon(true);
+
+        // The icon of the program the pin starts, the one its tab shows when it is open (not the small icon of the link, which is another
+        // picture, with its own empty space at the sides, and was a pixel or two off its tab's icon when the program opened or closed).
+        private void ApplyProgramIcon()
+        {
+            if (!Stretched)
+            {
+                return;
+            }
+
+            ImageSource program = null;
+            try
+            {
+                if (DataContext is ManagedShell.ShellFolders.ShellFile file && !string.IsNullOrEmpty(file.Path))
+                {
+                    string exe = PinnedApps.TargetPath(file.Path);
+                    if (!string.IsNullOrEmpty(exe) && !exe.Contains("\\WindowsApps\\",StringComparison.OrdinalIgnoreCase))
+                    {
+                        program = TaskButton.ProgramIconOf(exe, null);
+                        _programExe = program != null ? exe : null;
+                    }
+                }
+            }
+            catch (Exception)
+            {
+            }
+
+            if (program != null)
+            {
+                BindingOperations.ClearBinding(ToolbarIcon, Image.SourceProperty);
+                ToolbarIcon.Source = program;
+                if (_programExe != null && LastNudges.TryGetValue(_programExe, out Vector known))
+                {
+                    MonitorOffset.SetNudge(ToolbarIcon, known);
+                }
+
+                // Not seen until it is where it is to be (a pixel or two off, for a moment, at its first place, while the tabs slide).
+                ToolbarIcon.Opacity = 0;
+                _revealTimer ??= new DispatcherTimer { Interval = TimeSpan.FromMilliseconds(700) };
+                _revealTimer.Stop();
+                _revealTimer.Tick -= RevealTimer_Tick;
+                _revealTimer.Tick += RevealTimer_Tick;
+                _revealTimer.Start();
+            }
+            else
+            {
+                _programExe = null;
+                setIconBinding("LargeIcon");
+            }
+        }
+
+        // Where this button is on the screen moves with the tabs (they slide, a window opens or closes): where the icon falls on the pixels
+        // depends on it, so it is looked at again.
+        private void ToolbarButton_OnLayoutUpdated(object sender, EventArgs e)
+        {
+            if (!Stretched)
+            {
+                return;
+            }
+
+            try
+            {
+                Point origin = PointToScreen(new Point(0, 0));
+                if (origin != _lastBoxOrigin)
+                {
+                    _lastBoxOrigin = origin;
+                    QueueCenterIcon(true);
+                }
+            }
+            catch (InvalidOperationException)
+            {
+            }
+        }
+
         private void ApplyStretched()
         {
             if (Stretched)
@@ -53,9 +241,24 @@ namespace RetroBar.Controls
                 LauncherButton.VerticalAlignment = VerticalAlignment.Stretch;
                 // The button is only as wide as a tab's frame, so no room is spared for the icon's own margin (it was cut at the right).
                 ToolbarIcon.Margin = IconMargin;
+                // Drawn as the icon of a tab is (its size, and the pixels it snaps to), so the two are the same when a program opens and closes.
+                MonitorOffset.SetTag(ToolbarIcon, "TaskIconBar");
+                // The shell's large icon, made to the size of the tab's icon the same way (a tab makes its icon from the large one, and the small
+                // one made bigger or smaller by a fraction of a pixel looked soft).
+                RenderOptions.SetBitmapScalingMode(ToolbarIcon, BitmapScalingMode.HighQuality);
+                ToolbarIcon.UseLayoutRounding = true;
+                ToolbarIcon.SnapsToDevicePixels = true;
+                ApplyProgramIcon();
+                QueueCenterIcon(true);
             }
             else
             {
+                MonitorOffset.SetTag(ToolbarIcon, "ToolbarIcon");
+                MonitorOffset.SetNudge(ToolbarIcon, new Vector(0, 0));
+                ToolbarIcon.ClearValue(RenderOptions.BitmapScalingModeProperty);
+                ToolbarIcon.ClearValue(UseLayoutRoundingProperty);
+                ToolbarIcon.ClearValue(SnapsToDevicePixelsProperty);
+                setIconBinding();
                 ToolbarIcon.ClearValue(MarginProperty);
                 LauncherButton.ClearValue(HorizontalAlignmentProperty);
                 LauncherButton.ClearValue(VerticalAlignmentProperty);
@@ -68,16 +271,32 @@ namespace RetroBar.Controls
             InitializeComponent();
 
             setIconBinding();
+            DataContextChanged += (s, e) => ApplyProgramIcon();
+
+            // The source comes after the icon is laid out, and the place of the picture in it is only known then.
+            DependencyPropertyDescriptor sourceDescriptor = DependencyPropertyDescriptor.FromProperty(Image.SourceProperty, typeof(Image));
+            Loaded += (s, e) =>
+            {
+                sourceDescriptor.AddValueChanged(ToolbarIcon, ToolbarIcon_OnSourceChanged);
+                LayoutUpdated += ToolbarButton_OnLayoutUpdated;
+                QueueCenterIcon(true);
+            };
+            Unloaded += (s, e) =>
+            {
+                sourceDescriptor.RemoveValueChanged(ToolbarIcon, ToolbarIcon_OnSourceChanged);
+                LayoutUpdated -= ToolbarButton_OnLayoutUpdated;
+            };
+            ToolbarIcon.SizeChanged += (s, e) => QueueCenterIcon(true);
         }
 
-        private void setIconBinding()
+        private void setIconBinding(string forcedPath = null)
         {
             string bindingPath = "SmallIcon";
             bool useLargeIcons = Settings.Instance.TaskbarScale > 1 || (Application.Current.FindResource("UseLargeIcons") as bool? ?? false);
 
-            if (useLargeIcons)
+            if (useLargeIcons || forcedPath != null)
             {
-                bindingPath = "LargeIcon";
+                bindingPath = forcedPath ?? "LargeIcon";
             }
 
             Binding iconBinding = new Binding(bindingPath);

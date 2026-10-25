@@ -141,6 +141,7 @@ namespace RetroBar.Controls
         // Once the tabs have their size, the button is measured and the width set again if it is not a square (a few times at most).
         private void CheckSquare()
         {
+            UpdateLauncherIconTarget();
             AlignLauncherIcons();
             if (!IconOnly || _squareChecks > 6 || MeasureTabButton() is not (double w, double h, double _))
             {
@@ -187,6 +188,51 @@ namespace RetroBar.Controls
         {
             get { return (double)GetValue(LauncherHeightProperty); }
             set { SetValue(LauncherHeightProperty, value); }
+        }
+
+        // Where the middle of the picture of a tab's icon is in the frame of the tab, which the launchers put their icons at (see ToolbarButton.IconTarget).
+        public static DependencyProperty LauncherIconTargetProperty = DependencyProperty.Register(nameof(LauncherIconTarget), typeof(Vector), typeof(TaskList), new PropertyMetadata(new Vector(double.NaN, double.NaN)));
+
+        public Vector LauncherIconTarget
+        {
+            get { return (Vector)GetValue(LauncherIconTargetProperty); }
+            set { SetValue(LauncherIconTargetProperty, value); }
+        }
+
+        // Where the middle of the frame of a tab at rest is, in device pixels from the top left of the tab: a tab with no frame to read (an
+        // active one, in some themes) puts its icon there, so it does not move when the tab is or is not active.
+        internal Vector IconTabTarget = new(double.NaN, double.NaN);
+
+        // Read from the first tab that is at rest, and again when it differs by a pixel.
+        private void UpdateLauncherIconTarget()
+        {
+            if (!IconOnly)
+            {
+                return;
+            }
+
+            for (int i = 0; i < TasksList.Items.Count; i++)
+            {
+                if (TasksList.ItemContainerGenerator.ContainerFromIndex(i) is FrameworkElement container && FindTabButton(container) is TaskButton tab)
+                {
+                    if (tab.FrameCenterAtRest() is (double x, double y, double frameLeft, double frameTop))
+                    {
+                        if (double.IsNaN(IconTabTarget.X) || Math.Abs(IconTabTarget.X - x) >= 0.5 || Math.Abs(IconTabTarget.Y - y) >= 0.5)
+                        {
+                            IconTabTarget = new Vector(x, y);
+                        }
+
+                        // The launchers' boxes are the size and place of a tab's frame: the same place in them, from the top left of the box.
+                        Vector current = LauncherIconTarget;
+                        if (double.IsNaN(current.X) || Math.Abs(current.X - (x - frameLeft)) >= 0.5 || Math.Abs(current.Y - (y - frameTop)) >= 0.5)
+                        {
+                            LauncherIconTarget = new Vector(x - frameLeft, y - frameTop);
+                        }
+
+                        return;
+                    }
+                }
+            }
         }
 
         public static DependencyProperty LauncherIconMarginProperty = DependencyProperty.Register(nameof(LauncherIconMargin), typeof(Thickness), typeof(TaskList), new PropertyMetadata(new Thickness()));
@@ -319,8 +365,8 @@ namespace RetroBar.Controls
 
                 if (_frameWidth > 0 && _frameHeight > 0)
                 {
-                    // First the box (the drawn frame of the button, which has its own padding and borders) is made the frame of a tab, then
-                    // the icon is put where a tab's icon is in its frame.
+                    // The box (the drawn frame of the button, which has its own padding and borders) is made the frame of a tab; the icon is put
+                    // where a tab's icon is in its frame by the launcher itself (ToolbarButton.CenterIcon).
                     var box = launcher.LauncherButton.Template?.FindName("ButtonRightBottomBorder", launcher.LauncherButton) as FrameworkElement;
                     if (box == null || box.ActualWidth <= 0)
                     {
@@ -337,20 +383,6 @@ namespace RetroBar.Controls
                         _boxDy += Math.Round(dt / PixelStep) * PixelStep;
                         _boxDw += Math.Round(dw / PixelStep) * PixelStep;
                         _boxDh += Math.Round(dh / PixelStep) * PixelStep;
-                        ApplyLauncherMargin();
-                        return;
-                    }
-
-                    double wantX = (tabIcon.Left + tabIcon.Width / 2) - (_frameLeft + _frameWidth / 2) + (boxRect.Left + boxRect.Width / 2);
-                    double wantY = (tabIcon.Top + tabIcon.Height / 2) - (_frameTop + _frameHeight / 2) + (boxRect.Top + boxRect.Height / 2);
-                    double ix = wantX - (launcherIcon.Left + launcherIcon.Width / 2);
-                    double iy = wantY - (launcherIcon.Top + launcherIcon.Height / 2);
-                    if (Math.Abs(ix) >= PixelStep * 0.75 || Math.Abs(iy) >= PixelStep * 0.75)
-                    {
-                        _alignChecks++;
-                        HoldAlignment();
-                        _iconDx += Math.Round(ix / PixelStep) * PixelStep;
-                        _iconDy += Math.Round(iy / PixelStep) * PixelStep;
                         ApplyLauncherMargin();
                         return;
                     }
@@ -565,6 +597,8 @@ namespace RetroBar.Controls
         {
             _lastTabMeasure = null;
             _measureLocked = false;
+            IconTabTarget = new Vector(double.NaN, double.NaN);
+            LauncherIconTarget = new Vector(double.NaN, double.NaN);
             _frameShift = _frameLeft = _frameTop = _frameWidth = _frameHeight = 0;
             _boxDx = _boxDy = _boxDw = _boxDh = _iconDx = _iconDy = 0;
             _launcherLift = 0;

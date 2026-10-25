@@ -458,12 +458,14 @@ namespace RetroBar.Controls
 
         // The icon of the program itself (its executable's), not the one the tab is showing at the moment (a folder's, a
         // document's, ...). A packaged app has no executable of its own to ask, so it keeps the tab's.
-        private ImageSource GetProgramIcon()
+        private ImageSource GetProgramIcon() => ProgramIconOf(Window.IsUWP ? null : Window.WinFileName, TaskIconImage.Source);
+
+        /// <summary>The icon of the program at this path (the same one for its tab and for its pin when it is not open), or <paramref name="fallback"/>.</summary>
+        internal static ImageSource ProgramIconOf(string path, ImageSource fallback)
         {
-            string path = Window.IsUWP ? null : Window.WinFileName;
             if (string.IsNullOrEmpty(path))
             {
-                return TaskIconImage.Source;
+                return fallback;
             }
 
             lock (ProgramIcons)
@@ -508,11 +510,14 @@ namespace RetroBar.Controls
             {
             }
 
-            icon ??= TaskIconImage.Source;
+            icon ??= fallback;
 
-            lock (ProgramIcons)
+            if (icon != null)
             {
-                ProgramIcons[path] = icon;
+                lock (ProgramIcons)
+                {
+                    ProgramIcons[path] = icon;
+                }
             }
 
             return icon;

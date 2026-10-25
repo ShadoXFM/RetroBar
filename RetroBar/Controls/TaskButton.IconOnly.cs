@@ -180,6 +180,7 @@ namespace RetroBar.Controls
             TaskOverlayIconImage.Opacity = only ? 0 : 1;
             IconOnlyBadge.Opacity = 0;
             IconOnlyImage.Opacity = 0;
+            _iconCentered = false;
             IconOnlyImage.Visibility = only ? Visibility.Visible : Visibility.Collapsed;
 
             if (only)
@@ -225,6 +226,24 @@ namespace RetroBar.Controls
             {
                 PlaceIcon();
                 return;
+            }
+
+            // The frame comes and goes with the state of the tab (an active tab has none in some themes), and a tab that has just opened has none
+            // until its template is in: the icon is centered again, by the frame or by what a tab at rest has.
+            bool hasFrame = DrawnFrame() != null;
+            if (_frameWaiting && (hasFrame || _iconOnlyHost.IconTabTarget.X is double known && !double.IsNaN(known)))
+            {
+                _frameWaiting = false;
+                QueuePlaceIcon();
+                return;
+            }
+
+            if (hasFrame != _hadFrame)
+            {
+                _hadFrame = hasFrame;
+                _pendingFix = null;
+                _fixPasses = 0;
+                Dispatcher.BeginInvoke(new Action(CenterIconInFrame), DispatcherPriority.ApplicationIdle);
             }
 
             // The tab has come to be somewhere else on the screen (the others slid, or a window opened or closed): where the borders and the
@@ -361,9 +380,12 @@ namespace RetroBar.Controls
 
         // How far (device pixels, for an icon drawn shownWidth by shownHeight) the middle of the icon's picture - the pixels that are seen
         // (opaque, and not dark) - is from the middle of its image. (0, 0) when it cannot be told.
-        private (double X, double Y) ArtCenterOffset(double shownWidth, double shownHeight)
+        private (double X, double Y) ArtCenterOffset(double shownWidth, double shownHeight) => ArtCenterOffset(IconOnlyImage.Source, shownWidth, shownHeight);
+
+        /// <summary>The same for the icon of a pinned program that is not open (a launcher), so it sits where its tab's icon will.</summary>
+        internal static (double X, double Y) ArtCenterOffset(ImageSource imageSource, double shownWidth, double shownHeight)
         {
-            if (IconOnlyImage.Source is not System.Windows.Media.Imaging.BitmapSource source || source.PixelWidth <= 0 || source.PixelHeight <= 0)
+            if (imageSource is not System.Windows.Media.Imaging.BitmapSource source || source.PixelWidth <= 0 || source.PixelHeight <= 0)
             {
                 return (0, 0);
             }
@@ -408,45 +430,120 @@ namespace RetroBar.Controls
         private double _iconFixX;
         private double _iconFixY;
         private int _fixPasses;
+        private bool _frameWaiting;
+        private bool _iconCentered;
+        private DispatcherTimer _iconRevealTimer;
+
+        private void RevealIcon()
+        {
+            _iconCentered = true;
+            _iconRevealTimer?.Stop();
+            if (_iconPlaced && _iconOnlyHost?.IconOnly == true)
+            {
+                IconOnlyImage.Opacity = 1;
+                IconOnlyBadge.Opacity = 1;
+            }
+        }
+
+        // If it could not be centered by now (no frame, nothing to go by), it is shown where it is.
+        private void IconRevealTimer_Tick(object sender, EventArgs e) => RevealIcon();
+
+        /// <summary>The whole pixels to move by to be as near the middle as can be: a half goes to the right/down, always (the middle of a frame is on a
+        /// half pixel as often as not, and an icon left where it was by a half either way ended on one side or the other from one start to the next).</summary>
+        internal static double WholePixels(double distance) => Math.Floor(distance + 0.5 + 1e-6);
+
+        // Whether the tab had its frame (the theme's named outer border) when its icon was last looked at: an active tab has none in some themes,
+        // and the icon is then put where it is for a tab at rest (the task list's IconTabTarget), so it does not move when the tab is or is not active.
+        private bool _hadFrame;
+
+        private FrameworkElement DrawnFrame()
+        {
+            return AppButton.Template?.FindName("ButtonOuterBottomBorder", AppButton) is FrameworkElement frame && frame.ActualWidth > 0 && frame.ActualHeight > 0 ? frame : null;
+        }
+
+        /// <summary>The middle of the frame as it is drawn, in device pixels from the top left of the tab, and where the frame starts in the tab; null if the tab
+        /// has no frame to read (not laid out, or its template has none).</summary>
+        internal (double X, double Y, double FrameLeft, double FrameTop)? FrameCenterInTab()
+        {
+            try
+            {
+                FrameworkElement frame = DrawnFrame();
+                if (frame == null)
+                {
+                    return null;
+                }
+
+                Point origin = PointToScreen(new Point(0, 0));
+                Point frameTopLeft = frame.PointToScreen(new Point(0, 0));
+                Point frameBottomRight = frame.PointToScreen(new Point(frame.ActualWidth, frame.ActualHeight));
+                // The frame is seen from its bright line at the left to the end of its top line (the borders at its right are nearly the colour of
+                // the bar and are not seen), read from the pixels of the tab - where the borders come to be depends on the position of the tab, a
+                // pixel one way or the other, so the geometry does not tell. The icon goes in the middle of that.
+                double x = DrawnFrameEdges() is (double left, double right) ? (left + 1 + right) / 2 : (frameTopLeft.X + frameBottomRight.X) / 2 - origin.X;
+                double y = (frameTopLeft.Y + frameBottomRight.Y) / 2 - origin.Y;
+                return (x, y, frameTopLeft.X - origin.X, frameTopLeft.Y - origin.Y);
+            }
+            catch (InvalidOperationException)
+            {
+                return null;
+            }
+        }
+
+        /// <summary>The same for a tab that is at rest (not active, pressed or pending a correction), which the task list takes the place of the icons from.</summary>
+        internal (double X, double Y, double FrameLeft, double FrameTop)? FrameCenterAtRest()
+        {
+            if (_iconOnlyHost?.IconOnly != true || !_iconPlaced || _pendingFix != null || IsInUse || !IsLoaded)
+            {
+                return null;
+            }
+
+            return FrameCenterInTab();
+        }
 
         private void CenterIconInFrame()
         {
-            if (_iconOnlyHost?.IconOnly != true || !IsLoaded || AppButton.IsPressed ||
-                AppButton.Template?.FindName("ButtonOuterBottomBorder", AppButton) is not FrameworkElement frame || frame.ActualWidth <= 0 || IconOnlyImage.ActualWidth <= 0)
+            if (_iconOnlyHost?.IconOnly != true || !IsLoaded || AppButton.IsPressed || IconOnlyImage.ActualWidth <= 0)
             {
                 return;
             }
 
             try
             {
-                // In device pixels, on the screen (what is drawn, after the snapping of the icon to whole pixels, which the layout does not
-                // show): the icon is moved when its middle is a pixel or more off the middle of the frame.
-                Point frameTopLeft = frame.PointToScreen(new Point(0, 0));
-                Point frameBottomRight = frame.PointToScreen(new Point(frame.ActualWidth, frame.ActualHeight));
+                // Where the middle of the icon's picture goes, from the top left of the tab (device pixels, on the screen: what is drawn, after
+                // the snapping of the icon to whole pixels, which the layout does not show).
+                var frameCenter = FrameCenterInTab();
+                bool hasFrame = frameCenter != null;
+                (double X, double Y)? center = null;
+                if (frameCenter is (double fx, double fy, double _, double _))
+                {
+                    center = (fx, fy);
+                }
+                else if (_iconOnlyHost.IconTabTarget is Vector target && !double.IsNaN(target.X))
+                {
+                    center = (target.X, target.Y);
+                }
+
+                if (center is not (double centerX, double centerY))
+                {
+                    // A tab that has just opened has no frame yet (the theme's template is not applied, or it is not laid out): its icon was placed by
+                    // its button's box and left there - a pixel one way or the other, from one start to the next - and not centered. It is placed
+                    // again, and centered, when there is something to center it by (see IconOnly_OnLayoutUpdated).
+                    _frameWaiting = true;
+                    return;
+                }
+
+                _frameWaiting = false;
+                _hadFrame = hasFrame;
+
+                Point origin = PointToScreen(new Point(0, 0));
                 Point iconTopLeft = IconOnlyImage.PointToScreen(new Point(0, 0));
                 Point iconBottomRight = IconOnlyImage.PointToScreen(new Point(IconOnlyImage.ActualWidth, IconOnlyImage.ActualHeight));
-                double dpi = VisualTreeHelper.GetDpi(this).DpiScaleX;
                 // The middle of the picture, not of the image: an icon with more empty space at one side (foobar2000's, Opera's) is not
                 // in the middle of its frame by its box, and is by what is seen.
                 (double artX, double artY) = ArtCenterOffset(iconBottomRight.X - iconTopLeft.X, iconBottomRight.Y - iconTopLeft.Y);
-                // The frame is seen from its bright line at the left to the end of its top line at the right (its dark right border is not
-                // seen on the bar): the middle of that, a pixel to the right of the middle of the frame with its borders.
-                // The frame as it is drawn: from its bright line at the left to the end of its top line (the borders at its right are
-                // nearly the colour of the bar and are not seen), read from the pixels of the tab - where the borders come to be depends on
-                // the position of the tab, a pixel one way or the other, so the geometry does not tell. The icon goes in the middle of that.
-                double dxPixels;
-                Point origin = PointToScreen(new Point(0, 0));
-                if (DrawnFrameEdges() is (double left, double right))
-                {
-                    double iconCenter = (iconTopLeft.X + iconBottomRight.X) / 2 - origin.X + artX;
-                    dxPixels = (left + 1 + right) / 2 - iconCenter;
-                }
-                else
-                {
-                    dxPixels = ((frameTopLeft.X + frameBottomRight.X) - (iconTopLeft.X + iconBottomRight.X)) / 2 - artX;
-                }
-                double dyPixels = ((frameTopLeft.Y + frameBottomRight.Y) - (iconTopLeft.Y + iconBottomRight.Y)) / 2 - artY;
-                if (Math.Abs(dxPixels) >= 0.99 || Math.Abs(dyPixels) >= 0.99)
+                double dxPixels = centerX - ((iconTopLeft.X + iconBottomRight.X) / 2 - origin.X + artX);
+                double dyPixels = centerY - ((iconTopLeft.Y + iconBottomRight.Y) / 2 - origin.Y + artY);
+                if (WholePixels(dxPixels) != 0 || WholePixels(dyPixels) != 0)
                 {
                     // Only when it is off by the same amount twice running, a render apart: the icon takes a layout pass or two to get where a
                     // margin put it (the snapping works on the layout), and a correction made on what the last one had not reached yet went on
@@ -456,8 +553,8 @@ namespace RetroBar.Controls
                         _pendingFix = null;
                         // Whole device pixels added after the snapping (MonitorOffset.Nudge): a margin of one pixel moved some icons by two (the
                         // rounding of a half pixel), and the correction went back and forth over the middle.
-                        _iconFixX = Math.Clamp(_iconFixX + Math.Round(dxPixels), -4, 4);
-                        _iconFixY = Math.Clamp(_iconFixY + Math.Round(dyPixels), -4, 4);
+                        _iconFixX = Math.Clamp(_iconFixX + WholePixels(dxPixels), -4, 4);
+                        _iconFixY = Math.Clamp(_iconFixY + WholePixels(dyPixels), -4, 4);
                         UpdatePressShift();
                     }
                     else
@@ -469,6 +566,7 @@ namespace RetroBar.Controls
                 else
                 {
                     _pendingFix = null;
+                    RevealIcon();
                 }
             }
             catch (InvalidOperationException)
@@ -488,6 +586,7 @@ namespace RetroBar.Controls
             {
                 var frame = AppButton.Template?.FindName("ButtonOuterBottomBorder", AppButton) as FrameworkElement;
                 FrameworkElement reference = frame != null && frame.ActualWidth > 0 && frame.ActualHeight > 0 ? frame : AppButton;
+                _frameWaiting = reference != frame && double.IsNaN(_iconOnlyHost.IconTabTarget.X);
                 if (reference.ActualWidth <= 0 || reference.ActualHeight <= 0)
                 {
                     // Not laid out yet (a tab that has just opened): its icon is shown once it has a place, not at the corner it would be put
@@ -540,10 +639,19 @@ namespace RetroBar.Controls
                 // The badge at the lower right of the icon, as the classic tab has it.
                 IconOnlyBadge.Margin = new Thickness(Math.Round((iconLeft + IconOnlyImage.Width - IconOnlyBadge.Width + 2) / step) * step,
                     Math.Round((iconTop + IconOnlyImage.Height - IconOnlyBadge.Height + 1) / step) * step, 0, 0);
-                IconOnlyImage.Opacity = 1;
-                IconOnlyBadge.Opacity = 1;
+                // Not seen until it has been centered (a moment after it is placed, which can be a while when the thread is busy with the
+                // window that has just opened): the place it is put at first is a pixel or so off, and it was seen going to the right one.
+                IconOnlyImage.Opacity = _iconCentered ? 1 : 0;
+                IconOnlyBadge.Opacity = _iconCentered ? 1 : 0;
                 _iconPlaced = true;
-
+                if (!_iconCentered)
+                {
+                    _iconRevealTimer ??= new DispatcherTimer { Interval = TimeSpan.FromMilliseconds(900) };
+                    _iconRevealTimer.Stop();
+                    _iconRevealTimer.Tick -= IconRevealTimer_Tick;
+                    _iconRevealTimer.Tick += IconRevealTimer_Tick;
+                    _iconRevealTimer.Start();
+                }
                 // Where the icon ends up is measured, and what it is off the middle of the frame (the snapped transform of the monitor's
                 // adjustment rounds its own way) taken up, a few times at most.
                 if (_fixPasses < 6)

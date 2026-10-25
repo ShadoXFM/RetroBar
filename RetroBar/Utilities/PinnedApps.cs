@@ -137,6 +137,53 @@ namespace RetroBar.Utilities
             return result;
         }
 
+        private static readonly Dictionary<string, (DateTime Written, string Path)> TargetPathCache = new(StringComparer.OrdinalIgnoreCase);
+
+        /// <summary>The full path of the program a pin starts, or an empty string (File Explorer's pin, a program started through an updater, ...).</summary>
+        public static string TargetPath(string link)
+        {
+            try
+            {
+                DateTime written = File.GetLastWriteTimeUtc(link);
+                lock (TargetPathCache)
+                {
+                    if (TargetPathCache.TryGetValue(link, out var cached) && cached.Written == written)
+                    {
+                        return cached.Path;
+                    }
+                }
+
+                string path = "";
+                try
+                {
+                    Type shellType = Type.GetTypeFromProgID("WScript.Shell");
+                    dynamic shell = Activator.CreateInstance(shellType);
+                    dynamic shortcut = shell.CreateShortcut(link);
+                    string target = shortcut.TargetPath;
+                    string arguments = shortcut.Arguments;
+                    // A program started through an updater ("Update.exe --processStart Discord.exe") has its icon in another file.
+                    if (!string.IsNullOrEmpty(target) && File.Exists(target) && (arguments == null || arguments.IndexOf("--processStart ", StringComparison.OrdinalIgnoreCase) < 0))
+                    {
+                        path = target;
+                    }
+                }
+                catch (Exception)
+                {
+                }
+
+                lock (TargetPathCache)
+                {
+                    TargetPathCache[link] = (written, path);
+                }
+
+                return path;
+            }
+            catch (Exception)
+            {
+                return "";
+            }
+        }
+
         private static string GetTargetExe(string link)
         {
             DateTime written = File.GetLastWriteTimeUtc(link);
