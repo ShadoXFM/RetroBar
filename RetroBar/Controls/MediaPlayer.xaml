@@ -196,6 +196,7 @@
                   UseLayoutRounding="True"
                   SnapsToDevicePixels="True"
                   ClipToBounds="True"
+                  SizeChanged="SeekPopupRoot_OnSizeChanged"
                   PreviewMouseWheel="SeekPopupRoot_OnPreviewMouseWheel"
                   PreviewMouseDown="SeekPopupRoot_OnPreviewMouseDown"
                   PreviewMouseLeftButtonDown="SeekPopupRoot_OnPreviewMouseLeftButtonDown"

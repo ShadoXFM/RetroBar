@@ -402,11 +402,38 @@ namespace RetroBar.Controls
             });
         }
 
+        private bool _seekPopupReplaceFlip;
+
+        // The popup is placed once, for the size it has then: when it gets taller (the lyrics of a song after one with none) its window grew
+        // down from where it was, over the taskbar, instead of up. It is placed again for its new size - up from the taskbar, as it opened -
+        // unless it has been moved or is on top, which have their own place.
+        private void SeekPopupRoot_OnSizeChanged(object sender, SizeChangedEventArgs e)
+        {
+            if (!e.HeightChanged || !SeekPopup.IsOpen || _seekSlide == null || _seekSlide.Closing || _seekPopupMovedTo != null || _seekPopupPinned)
+            {
+                return;
+            }
+
+            Dispatcher.BeginInvoke(new Action(() =>
+            {
+                if (!SeekPopup.IsOpen || _seekSlide.Closing || _seekPopupMovedTo != null || _seekPopupPinned)
+                {
+                    return;
+                }
+
+                // Changing an offset is what makes a popup place itself again; a thousandth of a DIP, which is not seen.
+                _seekPopupReplaceFlip = !_seekPopupReplaceFlip;
+                SeekPopup.VerticalOffset = SeekPopupOffset + (_seekPopupReplaceFlip ? 0.001 : 0);
+                _seekSlide.UpdateClip();
+            }), System.Windows.Threading.DispatcherPriority.Render);
+        }
+
         private void OpenSeekPopupAnimated()
         {
             // The weather's forecast or the CPU temperature's graph, if one is open, slides away first (see HoverPopups).
             HoverPopups.CloseThen(() =>
             {
+                _seekPopupReplaceFlip = false;
                 SeekPopup.VerticalOffset = SeekPopupOffset;
                 _seekSlide.Show();
             });
