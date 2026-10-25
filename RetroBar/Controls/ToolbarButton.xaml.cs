@@ -99,35 +99,50 @@ namespace RetroBar.Controls
             }), priority);
         }
 
-        private void CenterIcon()
+        // How far (device pixels) the middle of the icon's picture is off where it goes; false if it cannot be told yet.
+        private bool MeasureIcon(out double dx, out double dy, out int press)
         {
-            if (!Stretched)
-            {
-                return;
-            }
-
+            dx = dy = 0;
+            // The theme moves what is in a pressed button down and to the right by a DIP, which the snapping of the icon rounds as it
+            // likes (a pixel down and nothing to the right, for one): it is put a pixel down and to the right of where it is at rest.
+            press = LauncherButton.IsPressed ? 1 : 0;
             try
             {
                 var box = LauncherButton.Template?.FindName("ButtonRightBottomBorder", LauncherButton) as FrameworkElement;
-                if (box == null || box.ActualWidth <= 0 || !ToolbarIcon.IsVisible || ToolbarIcon.ActualWidth <= 0 || double.IsNaN(IconTarget.X) || ToolbarIcon.Source == null)
+                if (!Stretched || box == null || box.ActualWidth <= 0 || !ToolbarIcon.IsVisible || ToolbarIcon.ActualWidth <= 0 || double.IsNaN(IconTarget.X) || ToolbarIcon.Source == null)
                 {
-                    return;
+                    return false;
                 }
-
-                // The theme moves what is in a pressed button down and to the right by a DIP, which the snapping of the icon rounds as it
-                // likes (a pixel down and nothing to the right, for one): it is put a pixel down and to the right of where it is at rest.
-                int press = LauncherButton.IsPressed ? 1 : 0;
 
                 Point boxTopLeft = box.PointToScreen(new Point(0, 0));
                 Point iconTopLeft = ToolbarIcon.PointToScreen(new Point(0, 0));
                 Point iconBottomRight = ToolbarIcon.PointToScreen(new Point(ToolbarIcon.ActualWidth, ToolbarIcon.ActualHeight));
                 (double artX, double artY) = TaskButton.ArtCenterOffset(ToolbarIcon.Source, iconBottomRight.X - iconTopLeft.X, iconBottomRight.Y - iconTopLeft.Y);
-                double dx = IconTarget.X + press - ((iconTopLeft.X + iconBottomRight.X) / 2 + artX - boxTopLeft.X);
-                double dy = IconTarget.Y + press - ((iconTopLeft.Y + iconBottomRight.Y) / 2 + artY - boxTopLeft.Y);
+                dx = IconTarget.X + press - ((iconTopLeft.X + iconBottomRight.X) / 2 + artX - boxTopLeft.X);
+                dy = IconTarget.Y + press - ((iconTopLeft.Y + iconBottomRight.Y) / 2 + artY - boxTopLeft.Y);
+                return true;
+            }
+            catch (InvalidOperationException)
+            {
+                return false;
+            }
+        }
+
+        // Here and now, the layout brought up to date each time (a few times at most): a pin made anew when a program closes is seen from its
+        // first frame, in its place, not a pixel off for a moment and not hidden for one.
+        private void CenterIconNow()
+        {
+            for (int pass = 0; pass < 4; pass++)
+            {
+                UpdateLayout();
+                if (!MeasureIcon(out double dx, out double dy, out _))
+                {
+                    return;
+                }
+
                 if (TaskButton.WholePixels(dx) == 0 && TaskButton.WholePixels(dy) == 0)
                 {
                     _pendingMove = null;
-                    ToolbarIcon.ClearValue(OpacityProperty);
                     if (_programExe != null)
                     {
                         LastNudges[_programExe] = MonitorOffset.GetNudge(ToolbarIcon);
@@ -136,24 +151,43 @@ namespace RetroBar.Controls
                     return;
                 }
 
-                // Only when it is off by the same amount twice running, a render apart (the snapping works on the layout, and a move made on
-                // what the last one had not reached yet added up): as a tab's icon is.
-                if (_pendingMove is (double px, double py) && px == dx && py == dy)
+                Vector nudge = MonitorOffset.GetNudge(ToolbarIcon);
+                MonitorOffset.SetNudge(ToolbarIcon, new Vector(Math.Clamp(nudge.X + TaskButton.WholePixels(dx), -6, 6), Math.Clamp(nudge.Y + TaskButton.WholePixels(dy), -6, 6)));
+            }
+        }
+
+        private void CenterIcon()
+        {
+            if (!MeasureIcon(out double dx, out double dy, out int press))
+            {
+                return;
+            }
+
+            if (TaskButton.WholePixels(dx) == 0 && TaskButton.WholePixels(dy) == 0)
+            {
+                _pendingMove = null;
+                if (_programExe != null)
                 {
-                    _pendingMove = null;
-                    Vector nudge = MonitorOffset.GetNudge(ToolbarIcon);
-                    MonitorOffset.SetNudge(ToolbarIcon, new Vector(Math.Clamp(nudge.X + TaskButton.WholePixels(dx), -6, 6), Math.Clamp(nudge.Y + TaskButton.WholePixels(dy), -6, 6)));
-                }
-                else
-                {
-                    _pendingMove = (dx, dy);
+                    LastNudges[_programExe] = MonitorOffset.GetNudge(ToolbarIcon);
                 }
 
-                QueueCenterIcon(false, press == 1 ? DispatcherPriority.Render : DispatcherPriority.ApplicationIdle);
+                return;
             }
-            catch (InvalidOperationException)
+
+            // Only when it is off by the same amount twice running, a render apart (the snapping works on the layout, and a move made on
+            // what the last one had not reached yet added up): as a tab's icon is.
+            if (_pendingMove is (double px, double py) && px == dx && py == dy)
             {
+                _pendingMove = null;
+                Vector nudge = MonitorOffset.GetNudge(ToolbarIcon);
+                MonitorOffset.SetNudge(ToolbarIcon, new Vector(Math.Clamp(nudge.X + TaskButton.WholePixels(dx), -6, 6), Math.Clamp(nudge.Y + TaskButton.WholePixels(dy), -6, 6)));
             }
+            else
+            {
+                _pendingMove = (dx, dy);
+            }
+
+            QueueCenterIcon(false, press == 1 ? DispatcherPriority.Render : DispatcherPriority.ApplicationIdle);
         }
 
         private void LauncherButton_OnPressedChanged(object sender, EventArgs e) => QueueCenterIcon(true, DispatcherPriority.Render);
@@ -195,14 +229,6 @@ namespace RetroBar.Controls
                     // Starts where it was last time, which is mostly right.
                     MonitorOffset.SetNudge(ToolbarIcon, known);
                 }
-
-                // Not seen until it is where it is to be (a pixel or two off, for a moment, while the tabs slide).
-                ToolbarIcon.Opacity = 0;
-                _revealTimer ??= new DispatcherTimer { Interval = TimeSpan.FromMilliseconds(700) };
-                _revealTimer.Stop();
-                _revealTimer.Tick -= RevealTimer_Tick;
-                _revealTimer.Tick += RevealTimer_Tick;
-                _revealTimer.Start();
             }
             else
             {
@@ -287,6 +313,7 @@ namespace RetroBar.Controls
                 sourceDescriptor.AddValueChanged(ToolbarIcon, ToolbarIcon_OnSourceChanged);
                 pressedDescriptor.AddValueChanged(LauncherButton, LauncherButton_OnPressedChanged);
                 LayoutUpdated += ToolbarButton_OnLayoutUpdated;
+                CenterIconNow();
                 QueueCenterIcon(true);
             };
             Unloaded += (s, e) =>
