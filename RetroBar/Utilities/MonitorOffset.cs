@@ -54,6 +54,19 @@ namespace RetroBar.Utilities
             }
         }
 
+        /// <summary>Device pixels an Image is moved by on top of its snapped position (see TryApplySnappedImageTransform).</summary>
+        public static readonly DependencyProperty NudgeProperty = DependencyProperty.RegisterAttached(
+            "Nudge", typeof(Vector), typeof(MonitorOffset), new PropertyMetadata(new Vector(0, 0), (d, e) =>
+            {
+                if (d is FrameworkElement element)
+                {
+                    Apply(element);
+                }
+            }));
+
+        public static Vector GetNudge(DependencyObject obj) => (Vector)obj.GetValue(NudgeProperty);
+        public static void SetNudge(DependencyObject obj, Vector value) => obj.SetValue(NudgeProperty, value);
+
         public static string GetTag(DependencyObject obj) => (string)obj.GetValue(TagProperty);
         public static void SetTag(DependencyObject obj, string value) => obj.SetValue(TagProperty, value);
 
@@ -416,8 +429,12 @@ namespace RetroBar.Utilities
             // Left/top edge of the scaled image before snapping (scaling is about the element's center).
             double baseLeft = position.X + (size.Width - scaledWidth) / 2;
             double baseTop = position.Y + (size.Height - scaledHeight) / 2;
-            double translateX = (Math.Round(baseLeft + offset.X * dpi.DpiScaleX) - baseLeft) / dpi.DpiScaleX;
-            double translateY = (Math.Round(baseTop + offset.Y * dpi.DpiScaleY) - baseTop) / dpi.DpiScaleY;
+            // A whole number of device pixels the caller moves the image by after it is snapped (the press of a tab moves its icon by one): added to
+            // the snapped position, so that it is not rounded away with the rest - a position on a half pixel loses a one pixel move to the
+            // rounding, on one axis or both, a tab at a time, when it is the layout that moves.
+            Vector nudge = GetNudge(element);
+            double translateX = (Math.Round(baseLeft + offset.X * dpi.DpiScaleX) - baseLeft + nudge.X) / dpi.DpiScaleX;
+            double translateY = (Math.Round(baseTop + offset.Y * dpi.DpiScaleY) - baseTop + nudge.Y) / dpi.DpiScaleY;
 
             var group = new TransformGroup();
             if (scaledWidth != size.Width || scaledHeight != size.Height)

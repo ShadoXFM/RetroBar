@@ -38,10 +38,10 @@ namespace RetroBar.Controls
             _pressedDescriptor.AddValueChanged(AppButton, IconOnly_OnPressedChanged);
             // The mouse itself as well: with several windows a click does not always leave the button pressed (the preview of the group, the
             // menu, a drag that has begun take the mouse), and the tab is still being pressed as far as whoever is pressing it can tell.
-            AppButton.RemoveHandler(UIElement.PreviewMouseLeftButtonDownEvent, new MouseButtonEventHandler(IconOnly_OnMouseDown));
-            AppButton.AddHandler(UIElement.PreviewMouseLeftButtonDownEvent, new MouseButtonEventHandler(IconOnly_OnMouseDown), true);
-            AppButton.RemoveHandler(UIElement.PreviewMouseLeftButtonUpEvent, new MouseButtonEventHandler(IconOnly_OnMouseUp));
-            AppButton.AddHandler(UIElement.PreviewMouseLeftButtonUpEvent, new MouseButtonEventHandler(IconOnly_OnMouseUp), true);
+            RemoveHandler(UIElement.PreviewMouseLeftButtonDownEvent, new MouseButtonEventHandler(IconOnly_OnMouseDown));
+            AddHandler(UIElement.PreviewMouseLeftButtonDownEvent, new MouseButtonEventHandler(IconOnly_OnMouseDown), true);
+            RemoveHandler(UIElement.PreviewMouseLeftButtonUpEvent, new MouseButtonEventHandler(IconOnly_OnMouseUp));
+            AddHandler(UIElement.PreviewMouseLeftButtonUpEvent, new MouseButtonEventHandler(IconOnly_OnMouseUp), true);
 
             ApplyIconOnly();
         }
@@ -90,16 +90,20 @@ namespace RetroBar.Controls
 
         private void UpdatePressShift()
         {
-            if (_iconOnlyHost?.IconOnly != true || !(AppButton.IsPressed || _mouseDownOnTab))
+            bool pressed = _iconOnlyHost?.IconOnly == true && (AppButton.IsPressed || _mouseDownOnTab);
+
+            // One device pixel down and to the right. The icon is placed by the monitor tag's snapping (whole pixels), which takes the move
+            // as an addition to what it works out (a move of the layout or of a parent was rounded away by it, on one axis or both, for some
+            // tabs); the badge is not snapped, so its own transform does.
+            Vector nudge = pressed ? new Vector(1, 1) : new Vector(0, 0);
+            if (MonitorOffset.GetNudge(IconOnlyImage) != nudge)
             {
-                IconOnlyLayer.RenderTransform = null;
-                return;
+                MonitorOffset.SetNudge(IconOnlyImage, nudge);
             }
 
-            // One device pixel, whatever the monitor's scaling: from this window's own, not from what the list last worked out.
             double dpi = VisualTreeHelper.GetDpi(this).DpiScaleX;
             double shift = 1 / (dpi > 0 ? dpi : 1);
-            IconOnlyLayer.RenderTransform = new TranslateTransform(shift, shift);
+            IconOnlyBadge.RenderTransform = pressed ? new TranslateTransform(shift, shift) : null;
         }
 
         private void ReleaseIconOnly()
@@ -107,8 +111,8 @@ namespace RetroBar.Controls
             AppButton.SizeChanged -= IconOnly_OnButtonSizeChanged;
             MonitorAdjustments.Changed -= IconOnly_OnAdjustmentsChanged;
             _pressedDescriptor?.RemoveValueChanged(AppButton, IconOnly_OnPressedChanged);
-            AppButton.RemoveHandler(UIElement.PreviewMouseLeftButtonDownEvent, new MouseButtonEventHandler(IconOnly_OnMouseDown));
-            AppButton.RemoveHandler(UIElement.PreviewMouseLeftButtonUpEvent, new MouseButtonEventHandler(IconOnly_OnMouseUp));
+            RemoveHandler(UIElement.PreviewMouseLeftButtonDownEvent, new MouseButtonEventHandler(IconOnly_OnMouseDown));
+            RemoveHandler(UIElement.PreviewMouseLeftButtonUpEvent, new MouseButtonEventHandler(IconOnly_OnMouseUp));
             _pressTimer?.Stop();
             _mouseDownOnTab = false;
             if (_iconOnlyHost != null)
@@ -145,6 +149,13 @@ namespace RetroBar.Controls
         private ImageSource ProgramIconForTab()
         {
             if (Window == null || Window.IsUWP || string.IsNullOrEmpty(Window.WinFileName))
+            {
+                return null;
+            }
+
+            // A packaged app (WhatsApp, say) has its logo in its manifest, not in its executable, which the shell can give only the generic
+            // icon of a program for (and an icon that did not display): the window's own icon is the one.
+            if (Window.WinFileName.Contains("\\WindowsApps\\", StringComparison.OrdinalIgnoreCase))
             {
                 return null;
             }
@@ -248,6 +259,7 @@ namespace RetroBar.Controls
             }
         }
 
+        private (double X, double Y)? _pendingFix;
         private double _iconFixX;
         private double _iconFixY;
         private int _fixPasses;
@@ -262,16 +274,36 @@ namespace RetroBar.Controls
 
             try
             {
-                Rect frameRect = frame.TransformToAncestor(this).TransformBounds(new Rect(0, 0, frame.ActualWidth, frame.ActualHeight));
-                Rect iconRect = IconOnlyImage.TransformToAncestor(this).TransformBounds(new Rect(0, 0, IconOnlyImage.ActualWidth, IconOnlyImage.ActualHeight));
-                double step = _iconOnlyHost.PixelStep > 0 ? _iconOnlyHost.PixelStep : 1;
-                double dx = (frameRect.Left + frameRect.Width / 2) - (iconRect.Left + iconRect.Width / 2);
-                double dy = (frameRect.Top + frameRect.Height / 2) - (iconRect.Top + iconRect.Height / 2);
-                if (Math.Abs(dx) >= step * 0.75 || Math.Abs(dy) >= step * 0.75)
+                // In device pixels, on the screen (what is drawn, after the snapping of the icon to whole pixels, which the layout does not
+                // show): the icon is moved when its middle is a pixel or more off the middle of the frame.
+                Point frameTopLeft = frame.PointToScreen(new Point(0, 0));
+                Point frameBottomRight = frame.PointToScreen(new Point(frame.ActualWidth, frame.ActualHeight));
+                Point iconTopLeft = IconOnlyImage.PointToScreen(new Point(0, 0));
+                Point iconBottomRight = IconOnlyImage.PointToScreen(new Point(IconOnlyImage.ActualWidth, IconOnlyImage.ActualHeight));
+                double dpi = VisualTreeHelper.GetDpi(this).DpiScaleX;
+                double dxPixels = ((frameTopLeft.X + frameBottomRight.X) - (iconTopLeft.X + iconBottomRight.X)) / 2;
+                double dyPixels = ((frameTopLeft.Y + frameBottomRight.Y) - (iconTopLeft.Y + iconBottomRight.Y)) / 2;
+                if (Math.Abs(dxPixels) >= 0.99 || Math.Abs(dyPixels) >= 0.99)
                 {
-                    _iconFixX += Math.Round(dx / step) * step;
-                    _iconFixY += Math.Round(dy / step) * step;
-                    PlaceIcon();
+                    // Only when it is off by the same amount twice running, a render apart: the icon takes a layout pass or two to get where a
+                    // margin put it (the snapping works on the layout), and a correction made on what the last one had not reached yet went on
+                    // adding up, a pixel a time, until the icon was out of its frame.
+                    if (_pendingFix is (double px, double py) && px == dxPixels && py == dyPixels)
+                    {
+                        _pendingFix = null;
+                        _iconFixX = Math.Clamp(_iconFixX + Math.Round(dxPixels) / dpi, -4 / dpi, 4 / dpi);
+                        _iconFixY = Math.Clamp(_iconFixY + Math.Round(dyPixels) / dpi, -4 / dpi, 4 / dpi);
+                        PlaceIcon();
+                    }
+                    else
+                    {
+                        _pendingFix = (dxPixels, dyPixels);
+                        Dispatcher.BeginInvoke(new Action(CenterIconInFrame), DispatcherPriority.ApplicationIdle);
+                    }
+                }
+                else
+                {
+                    _pendingFix = null;
                 }
             }
             catch (InvalidOperationException)
@@ -349,7 +381,7 @@ namespace RetroBar.Controls
 
                 // Where the icon ends up is measured, and what it is off the middle of the frame (the snapped transform of the monitor's
                 // adjustment rounds its own way) taken up, a few times at most.
-                if (_fixPasses < 3)
+                if (_fixPasses < 6)
                 {
                     _fixPasses++;
                     Dispatcher.BeginInvoke(new Action(CenterIconInFrame), DispatcherPriority.Loaded);
