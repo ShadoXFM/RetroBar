@@ -192,20 +192,17 @@ namespace RetroBar.Controls
                 ToolbarIcon.Source = program;
                 if (_programExe != null && LastNudges.TryGetValue(_programExe, out Vector known))
                 {
-                    // Where it was last time: seen at once (the pins after a tab that closed are made anew, and were blank for a moment).
+                    // Starts where it was last time, which is mostly right.
                     MonitorOffset.SetNudge(ToolbarIcon, known);
-                    ToolbarIcon.ClearValue(OpacityProperty);
                 }
-                else
-                {
-                    // Not seen until it is where it is to be (a pixel or two off, for a moment, at its first place).
-                    ToolbarIcon.Opacity = 0;
-                    _revealTimer ??= new DispatcherTimer { Interval = TimeSpan.FromMilliseconds(700) };
-                    _revealTimer.Stop();
-                    _revealTimer.Tick -= RevealTimer_Tick;
-                    _revealTimer.Tick += RevealTimer_Tick;
-                    _revealTimer.Start();
-                }
+
+                // Not seen until it is where it is to be (a pixel or two off, for a moment, while the tabs slide).
+                ToolbarIcon.Opacity = 0;
+                _revealTimer ??= new DispatcherTimer { Interval = TimeSpan.FromMilliseconds(700) };
+                _revealTimer.Stop();
+                _revealTimer.Tick -= RevealTimer_Tick;
+                _revealTimer.Tick += RevealTimer_Tick;
+                _revealTimer.Start();
             }
             else
             {

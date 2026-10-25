@@ -506,11 +506,15 @@ namespace RetroBar.Controls
             return FrameCenterInTab();
         }
 
-        private void CenterIconInFrame()
+        /// <summary>How far (device pixels) the middle of the icon's picture is off where it goes, in the frame of the tab or where a tab at rest has it;
+        /// false if there is nothing to go by yet (no frame, nothing from a tab at rest) or the tab is not laid out.</summary>
+        private bool MeasureCentering(out double dxPixels, out double dyPixels, out bool hasFrame)
         {
-            if (_iconOnlyHost?.IconOnly != true || !IsLoaded || AppButton.IsPressed || IconOnlyImage.ActualWidth <= 0)
+            dxPixels = dyPixels = 0;
+            hasFrame = false;
+            if (_iconOnlyHost?.IconOnly != true || !IsLoaded || IconOnlyImage.ActualWidth <= 0)
             {
-                return;
+                return false;
             }
 
             try
@@ -518,7 +522,7 @@ namespace RetroBar.Controls
                 // Where the middle of the icon's picture goes, from the top left of the tab (device pixels, on the screen: what is drawn, after
                 // the snapping of the icon to whole pixels, which the layout does not show).
                 var frameCenter = FrameCenterInTab();
-                bool hasFrame = frameCenter != null;
+                hasFrame = frameCenter != null;
                 (double X, double Y)? center = null;
                 if (frameCenter is (double fx, double fy, double _, double _))
                 {
@@ -531,15 +535,8 @@ namespace RetroBar.Controls
 
                 if (center is not (double centerX, double centerY))
                 {
-                    // A tab that has just opened has no frame yet (the theme's template is not applied, or it is not laid out): its icon was placed by
-                    // its button's box and left there - a pixel one way or the other, from one start to the next - and not centered. It is placed
-                    // again, and centered, when there is something to center it by (see IconOnly_OnLayoutUpdated).
-                    _frameWaiting = true;
-                    return;
+                    return false;
                 }
-
-                _frameWaiting = false;
-                _hadFrame = hasFrame;
 
                 Point origin = PointToScreen(new Point(0, 0));
                 Point iconTopLeft = IconOnlyImage.PointToScreen(new Point(0, 0));
@@ -547,36 +544,94 @@ namespace RetroBar.Controls
                 // The middle of the picture, not of the image: an icon with more empty space at one side (foobar2000's, Opera's) is not
                 // in the middle of its frame by its box, and is by what is seen.
                 (double artX, double artY) = ArtCenterOffset(iconBottomRight.X - iconTopLeft.X, iconBottomRight.Y - iconTopLeft.Y);
-                double dxPixels = centerX - ((iconTopLeft.X + iconBottomRight.X) / 2 - origin.X + artX);
-                double dyPixels = centerY - ((iconTopLeft.Y + iconBottomRight.Y) / 2 - origin.Y + artY);
-                if (WholePixels(dxPixels) != 0 || WholePixels(dyPixels) != 0)
+                dxPixels = centerX - ((iconTopLeft.X + iconBottomRight.X) / 2 - origin.X + artX);
+                dyPixels = centerY - ((iconTopLeft.Y + iconBottomRight.Y) / 2 - origin.Y + artY);
+                return true;
+            }
+            catch (InvalidOperationException)
+            {
+                return false;
+            }
+        }
+
+        // Centered here and now, in the pass that places the icon (a few times at most, the layout brought up to date each time): the pass
+        // that comes later can be a while after (a window that has just opened keeps the thread busy), and the icon was seen where it was
+        // first put, a pixel or two off, until then. False if it could not be (nothing to go by, not laid out yet).
+        private bool CenterIconNow()
+        {
+            try
+            {
+                for (int pass = 0; pass < 4; pass++)
                 {
-                    // Only when it is off by the same amount twice running, a render apart: the icon takes a layout pass or two to get where a
-                    // margin put it (the snapping works on the layout), and a correction made on what the last one had not reached yet went on
-                    // adding up, a pixel a time, until the icon was out of its frame.
-                    if (_pendingFix is (double px, double py) && px == dxPixels && py == dyPixels)
+                    UpdateLayout();
+                    if (!MeasureCentering(out double dx, out double dy, out bool hasFrame))
+                    {
+                        return false;
+                    }
+
+                    _hadFrame = hasFrame;
+                    _frameWaiting = false;
+                    if (WholePixels(dx) == 0 && WholePixels(dy) == 0)
                     {
                         _pendingFix = null;
-                        // Whole device pixels added after the snapping (MonitorOffset.Nudge): a margin of one pixel moved some icons by two (the
-                        // rounding of a half pixel), and the correction went back and forth over the middle.
-                        _iconFixX = Math.Clamp(_iconFixX + WholePixels(dxPixels), -4, 4);
-                        _iconFixY = Math.Clamp(_iconFixY + WholePixels(dyPixels), -4, 4);
-                        UpdatePressShift();
+                        return true;
                     }
-                    else
-                    {
-                        _pendingFix = (dxPixels, dyPixels);
-                        Dispatcher.BeginInvoke(new Action(CenterIconInFrame), DispatcherPriority.ApplicationIdle);
-                    }
-                }
-                else
-                {
-                    _pendingFix = null;
-                    RevealIcon();
+
+                    _iconFixX = Math.Clamp(_iconFixX + WholePixels(dx), -4, 4);
+                    _iconFixY = Math.Clamp(_iconFixY + WholePixels(dy), -4, 4);
+                    UpdatePressShift();
                 }
             }
             catch (InvalidOperationException)
             {
+            }
+
+            return false;
+        }
+
+        private void CenterIconInFrame()
+        {
+            if (_iconOnlyHost?.IconOnly != true || !IsLoaded || AppButton.IsPressed || IconOnlyImage.ActualWidth <= 0)
+            {
+                return;
+            }
+
+            if (!MeasureCentering(out double dxPixels, out double dyPixels, out bool hasFrame))
+            {
+                // A tab that has just opened has no frame yet (the theme's template is not applied, or it is not laid out): its icon was placed by
+                // its button's box and left there - a pixel one way or the other, from one start to the next - and not centered. It is placed
+                // again, and centered, when there is something to center it by (see IconOnly_OnLayoutUpdated).
+                _frameWaiting = true;
+                return;
+            }
+
+            _frameWaiting = false;
+            _hadFrame = hasFrame;
+
+            if (WholePixels(dxPixels) != 0 || WholePixels(dyPixels) != 0)
+            {
+                // Only when it is off by the same amount twice running, a render apart: the icon takes a layout pass or two to get where a
+                // margin put it (the snapping works on the layout), and a correction made on what the last one had not reached yet went on
+                // adding up, a pixel a time, until the icon was out of its frame.
+                if (_pendingFix is (double px, double py) && px == dxPixels && py == dyPixels)
+                {
+                    _pendingFix = null;
+                    // Whole device pixels added after the snapping (MonitorOffset.Nudge): a margin of one pixel moved some icons by two (the
+                    // rounding of a half pixel), and the correction went back and forth over the middle.
+                    _iconFixX = Math.Clamp(_iconFixX + WholePixels(dxPixels), -4, 4);
+                    _iconFixY = Math.Clamp(_iconFixY + WholePixels(dyPixels), -4, 4);
+                    UpdatePressShift();
+                }
+                else
+                {
+                    _pendingFix = (dxPixels, dyPixels);
+                    Dispatcher.BeginInvoke(new Action(CenterIconInFrame), DispatcherPriority.ApplicationIdle);
+                }
+            }
+            else
+            {
+                _pendingFix = null;
+                RevealIcon();
             }
         }
 
@@ -645,8 +700,18 @@ namespace RetroBar.Controls
                 // The badge at the lower right of the icon, as the classic tab has it.
                 IconOnlyBadge.Margin = new Thickness(Math.Round((iconLeft + IconOnlyImage.Width - IconOnlyBadge.Width + 2) / step) * step,
                     Math.Round((iconTop + IconOnlyImage.Height - IconOnlyBadge.Height + 1) / step) * step, 0, 0);
-                // Not seen until it has been centered (a moment after it is placed, which can be a while when the thread is busy with the
-                // window that has just opened): the place it is put at first is a pixel or so off, and it was seen going to the right one.
+                // Centered at once if it can be; if not (nothing to go by yet) it is not seen until it has been, a moment later: the place it is
+                // put at first is a pixel or so off, and it was seen going to the right one.
+                if (!_iconCentered)
+                {
+                    IconOnlyImage.Opacity = 0;
+                    UpdatePressShift();
+                    if (CenterIconNow())
+                    {
+                        _iconCentered = true;
+                    }
+                }
+
                 IconOnlyImage.Opacity = _iconCentered ? 1 : 0;
                 IconOnlyBadge.Opacity = _iconCentered ? 1 : 0;
                 _iconPlaced = true;
