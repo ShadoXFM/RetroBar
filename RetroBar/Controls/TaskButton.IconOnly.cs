@@ -180,22 +180,10 @@ namespace RetroBar.Controls
             TaskOverlayIconImage.Opacity = only ? 0 : 1;
             IconOnlyBadge.Opacity = 0;
             IconOnlyImage.Opacity = 0;
-            _iconCentered = false;
-            // A tab made anew (the ones after a tab that closed are, with the list merged again) starts with the correction its program's icon
-            // got last time, and is shown at once; only a program not seen yet waits to be centered.
-            string exe = Window?.WinFileName;
-            if (only && !string.IsNullOrEmpty(exe))
-            {
-                lock (IconFixes)
-                {
-                    if (IconFixes.TryGetValue(exe, out (double X, double Y) known))
-                    {
-                        _iconFixX = known.X;
-                        _iconFixY = known.Y;
-                        _iconCentered = true;
-                    }
-                }
-            }
+            // Only the icon of a window that has just opened waits to be centered before it is seen (where it is put first is a pixel or so
+            // off, and it was seen going to the right place); a tab made anew for a window that was there (the ones after a tab that closed
+            // are) is shown at once, as it is not a stranger to its place.
+            _iconCentered = !(only && Host?.JustOpened(Window) == true);
 
             IconOnlyImage.Visibility = only ? Visibility.Visible : Visibility.Collapsed;
 
@@ -307,10 +295,6 @@ namespace RetroBar.Controls
         {
             _iconFixX = 0;
             _iconFixY = 0;
-            lock (IconFixes)
-            {
-                IconFixes.Clear();
-            }
 
             if (_iconOnlyHost?.IconOnly == true)
             {
@@ -454,8 +438,6 @@ namespace RetroBar.Controls
         private bool _frameWaiting;
         private bool _iconCentered;
 
-        // The correction (device pixels) the icon of each program was last given to be centered.
-        private static readonly System.Collections.Generic.Dictionary<string, (double X, double Y)> IconFixes = new(StringComparer.OrdinalIgnoreCase);
         private DispatcherTimer _iconRevealTimer;
 
         private void RevealIcon()
@@ -590,14 +572,6 @@ namespace RetroBar.Controls
                 else
                 {
                     _pendingFix = null;
-                    if (!string.IsNullOrEmpty(Window?.WinFileName))
-                    {
-                        lock (IconFixes)
-                        {
-                            IconFixes[Window.WinFileName] = (_iconFixX, _iconFixY);
-                        }
-                    }
-
                     RevealIcon();
                 }
             }
