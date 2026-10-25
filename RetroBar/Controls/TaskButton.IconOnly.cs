@@ -262,13 +262,20 @@ namespace RetroBar.Controls
                     _fixPasses = 0;
                     // At once, before it is drawn where it is now (a pixel off, when the row has moved by a whole slot or less), and again when
                     // things have settled.
-                    Dispatcher.BeginInvoke(new Action(() =>
+                    // Not while it slides (the origin is not on a whole pixel, and it changes every frame): centering is not cheap, it reads the
+                    // pixels of the tab, and the slides were jerky with a pass for every tab in every frame.
+                    bool whole = Math.Abs(origin.X - Math.Round(origin.X)) < 0.01 && Math.Abs(origin.Y - Math.Round(origin.Y)) < 0.01;
+                    if (whole && DateTime.UtcNow - _lastSyncCenter > TimeSpan.FromMilliseconds(120))
                     {
-                        if (_iconPlaced && _iconOnlyHost?.IconOnly == true && !AppButton.IsPressed)
+                        _lastSyncCenter = DateTime.UtcNow;
+                        Dispatcher.BeginInvoke(new Action(() =>
                         {
-                            CenterIconNow();
-                        }
-                    }), DispatcherPriority.Render);
+                            if (_iconPlaced && _iconOnlyHost?.IconOnly == true && !AppButton.IsPressed)
+                            {
+                                CenterIconNow();
+                            }
+                        }), DispatcherPriority.Render);
+                    }
                     Dispatcher.BeginInvoke(new Action(CenterIconInFrame), DispatcherPriority.ApplicationIdle);
                 }
             }
@@ -448,6 +455,7 @@ namespace RetroBar.Controls
         private bool _frameWaiting;
         private bool _iconCentered;
         private bool _syncCentered;
+        private DateTime _lastSyncCenter = DateTime.MinValue;
 
         private DispatcherTimer _iconRevealTimer;
 
