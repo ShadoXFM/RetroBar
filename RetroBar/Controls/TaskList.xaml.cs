@@ -89,6 +89,13 @@ namespace RetroBar.Controls
                     var frame = tab.AppButton.Template?.FindName("ButtonOuterBottomBorder", tab.AppButton) as FrameworkElement;
                     if (frame == null || frame.ActualHeight <= 0 || frame.ActualWidth <= 0)
                     {
+                        // A tab that has just been made has no frame yet (its template is not in): its whole button is bigger, and was taken for the
+                        // frame, which made every pin that size for a moment. Once there is a frame measured, that stands until a tab has one.
+                        if (_frameWidth > 0 && _frameHeight > 0)
+                        {
+                            continue;
+                        }
+
                         frame = tab.AppButton;
                     }
 
@@ -96,11 +103,21 @@ namespace RetroBar.Controls
                     {
                         // Where the frame is in its slot: the room it leaves at the left less the room at the right (the theme's margins are not even).
                         Rect bounds = frame.TransformToAncestor(tab).TransformBounds(new Rect(0, 0, frame.ActualWidth, frame.ActualHeight));
+                        // A frame measured while the tab is still being laid out (a tab just made) is a little off, and the pins were made its
+                        // size: when it comes to be another size the pins are lined up with it again.
+                        bool changed = _frameWidth > 0 && _frameHeight > 0 &&
+                            (Math.Abs(bounds.Width - _frameWidth) >= PixelStep * 0.5 || Math.Abs(bounds.Height - _frameHeight) >= PixelStep * 0.5);
                         _frameShift = bounds.Left - (tab.ActualWidth - bounds.Right);
                         _frameLeft = bounds.Left;
                         _frameTop = bounds.Top;
                         _frameWidth = bounds.Width;
                         _frameHeight = bounds.Height;
+                        if (changed)
+                        {
+                            _launchersAligned = false;
+                            _alignChecks = 0;
+                            ApplyLauncherMargin();
+                        }
                     }
                     catch (InvalidOperationException)
                     {
@@ -156,8 +173,12 @@ namespace RetroBar.Controls
             else
             {
                 _squareChecks = 0;
-                _measureLocked = true;
-                _measureKey = (ActualHeight, PixelStep);
+                // Kept as it is only once the tabs have had a moment to settle: a measure of tabs just made was kept, a pixel short.
+                if (DateTime.UtcNow - _iconOnlySince > TimeSpan.FromMilliseconds(800))
+                {
+                    _measureLocked = true;
+                    _measureKey = (ActualHeight, PixelStep);
+                }
             }
         }
 
@@ -438,8 +459,11 @@ namespace RetroBar.Controls
         // How many of the items are launchers (and not tabs).
         private int LauncherCount => _mergedItems?.Count(item => item is ManagedShell.ShellFolders.ShellFile) ?? 0;
 
+        private DateTime _iconOnlySince = DateTime.UtcNow;
+
         private void IconOnlyChanged()
         {
+            _iconOnlySince = DateTime.UtcNow;
             // The grip along the tabs, which the taskbar shows when it is unlocked, has nothing to move in the Windows 11 style.
             TasksGrip.Visibility = IconOnly ? Visibility.Collapsed : Visibility.Visible;
             _squareChecks = 0;
@@ -449,7 +473,8 @@ namespace RetroBar.Controls
             _slideSlack = 0;
             _alignChecks = 0;
             _launcherLift = 0;
-            _boxDx = _boxDy = _boxDw = _boxDh = _iconDx = _iconDy = 0;
+            // What was worked out of the pins' boxes (kept: it is the same until the theme changes, see ThemeChanged) is what they are
+            // made with when the style comes back, so they are not seen moving to it a moment after.
             TasksList.LayoutUpdated -= TasksList_LayoutUpdatedForSquare;
             if (IconOnly)
             {
@@ -464,6 +489,13 @@ namespace RetroBar.Controls
             ScheduleGroupSync();
             ApplyPinnedMerge();
             SetTaskButtonWidth();
+
+            // The pins' boxes as they were worked out (the size of a tab's frame), at once: the pins were made with the size their buttons have
+            // by themselves, and took the right one a moment after, with their icons a pixel or two higher.
+            if (IconOnly && _frameWidth > 0 && _frameHeight > 0 && _pitch > 0)
+            {
+                ApplyLauncherMargin();
+            }
         }
 
         public static DependencyProperty ButtonsPerRowProperty = DependencyProperty.Register(nameof(ButtonsPerRow), typeof(int), typeof(TaskList), new PropertyMetadata(0));
@@ -597,8 +629,6 @@ namespace RetroBar.Controls
         {
             _lastTabMeasure = null;
             _measureLocked = false;
-            IconTabTarget = new Vector(double.NaN, double.NaN);
-            LauncherIconTarget = new Vector(double.NaN, double.NaN);
             _frameShift = _frameLeft = _frameTop = _frameWidth = _frameHeight = 0;
             _boxDx = _boxDy = _boxDw = _boxDh = _iconDx = _iconDy = 0;
             _launcherLift = 0;

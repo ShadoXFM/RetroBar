@@ -148,6 +148,12 @@ namespace RetroBar.Controls
                         LastNudges[_programExe] = MonitorOffset.GetNudge(ToolbarIcon);
                     }
 
+                    // Seen once the button has its size (see ApplyProgramIcon).
+                    if (!double.IsNaN(Height))
+                    {
+                        ToolbarIcon.ClearValue(OpacityProperty);
+                    }
+
                     return;
                 }
 
@@ -228,6 +234,18 @@ namespace RetroBar.Controls
                 {
                     // Starts where it was last time, which is mostly right.
                     MonitorOffset.SetNudge(ToolbarIcon, known);
+                }
+
+                // The button has its size from the task list a moment after it is made, and its icon moves by a pixel or two with it: not seen
+                // until it has it (and been centered for it, before it is drawn), or for a moment at most.
+                if (double.IsNaN(Height))
+                {
+                    ToolbarIcon.Opacity = 0;
+                    _revealTimer ??= new DispatcherTimer { Interval = TimeSpan.FromMilliseconds(300) };
+                    _revealTimer.Stop();
+                    _revealTimer.Tick -= RevealTimer_Tick;
+                    _revealTimer.Tick += RevealTimer_Tick;
+                    _revealTimer.Start();
                 }
             }
             else
@@ -323,6 +341,16 @@ namespace RetroBar.Controls
                 LayoutUpdated -= ToolbarButton_OnLayoutUpdated;
             };
             ToolbarIcon.SizeChanged += (s, e) => QueueCenterIcon(true);
+
+            // The button gets its size from the task list a moment after it is made (a binding), and its icon, in the middle of it, moves by
+            // a pixel or two with it: centered again as soon as it has the size, before it is drawn.
+            SizeChanged += (s, e) =>
+            {
+                if (Stretched && IsLoaded && (e.HeightChanged || e.WidthChanged))
+                {
+                    Dispatcher.BeginInvoke(new Action(CenterIconNow), DispatcherPriority.Render);
+                }
+            };
         }
 
         private void setIconBinding(string forcedPath = null)
