@@ -332,7 +332,12 @@ namespace RetroBar.Controls
                 // The middle of the picture, not of the image: an icon with more empty space at one side (foobar2000's, Opera's) is not
                 // in the middle of its frame by its box, and is by what is seen.
                 (double artX, double artY) = ArtCenterOffset(iconBottomRight.X - iconTopLeft.X, iconBottomRight.Y - iconTopLeft.Y);
-                double dxPixels = ((frameTopLeft.X + frameBottomRight.X) - (iconTopLeft.X + iconBottomRight.X)) / 2 - artX;
+                // The frame is seen from its bright line at the left to the end of its top line at the right (its dark right border is not
+                // seen on the bar): the middle of that, a pixel to the right of the middle of the frame with its borders.
+                // The frame is seen from its bright line at the left to the end of its top line at the right (its two borders at the right
+                // are almost the colour of the bar, and not seen): the middle of that is a pixel to the right of the middle of the frame
+                // with all its borders, which is where the icon was, and looked a pixel too far left.
+                double dxPixels = ((frameTopLeft.X + frameBottomRight.X) - (iconTopLeft.X + iconBottomRight.X)) / 2 - artX + 1;
                 double dyPixels = ((frameTopLeft.Y + frameBottomRight.Y) - (iconTopLeft.Y + iconBottomRight.Y)) / 2 - artY;
                 if (Math.Abs(dxPixels) >= 0.99 || Math.Abs(dyPixels) >= 0.99)
                 {
