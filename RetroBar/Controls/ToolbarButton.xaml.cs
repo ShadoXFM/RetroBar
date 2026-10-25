@@ -64,11 +64,15 @@ namespace RetroBar.Controls
         private static readonly System.Collections.Generic.Dictionary<string, Vector> LastNudges = new(StringComparer.OrdinalIgnoreCase);
         private string _programExe;
         private DispatcherTimer _revealTimer;
+        private bool _revealed = true;
 
         // If it has not come to rest by now (the pointer is over it, or the layout does not stop), it is shown where it is.
         private void RevealTimer_Tick(object sender, EventArgs e)
         {
             _revealTimer.Stop();
+            _revealed = true;
+            // Centered for the size it has now, then seen: the first frame it is seen in was a pixel or two off.
+            CenterIconNow();
             ToolbarIcon.ClearValue(OpacityProperty);
         }
         private bool _centerQueued;
@@ -149,7 +153,7 @@ namespace RetroBar.Controls
                     }
 
                     // Seen once the button has its size (see ApplyProgramIcon).
-                    if (!double.IsNaN(Height))
+                    if (_revealed && !double.IsNaN(Height))
                     {
                         ToolbarIcon.ClearValue(OpacityProperty);
                     }
@@ -230,18 +234,14 @@ namespace RetroBar.Controls
             {
                 BindingOperations.ClearBinding(ToolbarIcon, Image.SourceProperty);
                 ToolbarIcon.Source = program;
-                if (_programExe != null && LastNudges.TryGetValue(_programExe, out Vector known))
-                {
-                    // Starts where it was last time, which is mostly right.
-                    MonitorOffset.SetNudge(ToolbarIcon, known);
-                }
-
                 // The button has its size from the task list a moment after it is made, and its icon moves by a pixel or two with it: not seen
                 // until it has it (and been centered for it, before it is drawn), or for a moment at most.
-                if (double.IsNaN(Height))
+                // Hidden for a few frames, which is not seen: the first frame it is in is a pixel or so off, and it was seen going to its place.
+                _revealed = false;
                 {
                     ToolbarIcon.Opacity = 0;
-                    _revealTimer ??= new DispatcherTimer { Interval = TimeSpan.FromMilliseconds(300) };
+                    _revealTimer ??= new DispatcherTimer(DispatcherPriority.Render);
+                    _revealTimer.Interval = TimeSpan.FromMilliseconds(30);
                     _revealTimer.Stop();
                     _revealTimer.Tick -= RevealTimer_Tick;
                     _revealTimer.Tick += RevealTimer_Tick;
@@ -270,6 +270,13 @@ namespace RetroBar.Controls
                 if (origin != _lastBoxOrigin)
                 {
                     _lastBoxOrigin = origin;
+                    // Where the button is on the screen decides how its icon falls on the pixels: centered again at once, before it is drawn,
+                    // and then again when things have settled.
+                    if (IsLoaded)
+                    {
+                        Dispatcher.BeginInvoke(new Action(CenterIconNow), DispatcherPriority.Render);
+                    }
+
                     QueueCenterIcon(true);
                 }
             }
@@ -293,6 +300,11 @@ namespace RetroBar.Controls
                 ToolbarIcon.Margin = IconMargin;
                 // Drawn as the icon of a tab is (its size, and the pixels it snaps to), so the two are the same when a program opens and closes.
                 MonitorOffset.SetTag(ToolbarIcon, "TaskIconBar");
+                // From the top left of the button, not its middle: the size the task list gives the button changes a moment after it is made
+                // (by a pixel), and an icon in the middle of it moved by a pixel or two with it, for a frame. The whole pixels that put it in
+                // the middle of the frame are added to that place (CenterIcon).
+                ToolbarIcon.HorizontalAlignment = HorizontalAlignment.Left;
+                ToolbarIcon.VerticalAlignment = VerticalAlignment.Top;
                 // The shell's large icon, made to the size of the tab's icon the same way (a tab makes its icon from the large one, and the small
                 // one made bigger or smaller by a fraction of a pixel looked soft).
                 RenderOptions.SetBitmapScalingMode(ToolbarIcon, BitmapScalingMode.HighQuality);
@@ -304,6 +316,8 @@ namespace RetroBar.Controls
             else
             {
                 MonitorOffset.SetTag(ToolbarIcon, "ToolbarIcon");
+                ToolbarIcon.ClearValue(HorizontalAlignmentProperty);
+                ToolbarIcon.ClearValue(VerticalAlignmentProperty);
                 MonitorOffset.SetNudge(ToolbarIcon, new Vector(0, 0));
                 ToolbarIcon.ClearValue(RenderOptions.BitmapScalingModeProperty);
                 ToolbarIcon.ClearValue(UseLayoutRoundingProperty);
