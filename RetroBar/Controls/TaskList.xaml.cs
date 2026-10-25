@@ -1028,9 +1028,17 @@ namespace RetroBar.Controls
                 }
 
                 TabMargin = new Thickness(0, 0, -PixelStep, 0);
+                // The pins are lined up with the tabs again only when the size of the tabs has changed: after every opening or closing they were,
+                // from whichever pin was first at that moment (one that had just been made, with its layout half done), which moved the box of all
+                // of them by a pixel and back, and their icons with it.
+                bool pitchChanged = Math.Abs(_pitch - pitch) > 0.01;
                 _pitch = pitch;
-                _launchersAligned = false;
-                _alignChecks = 0;
+                if (pitchChanged)
+                {
+                    _launchersAligned = false;
+                    _alignChecks = 0;
+                }
+
                 // What the list has beside its tabs is measured with the margin they had (the slack of the slide that is ending is still in the
                 // list's size until the next layout), not the one they are given now.
                 double slackBefore = TasksList.Margin.Left + TasksList.Margin.Right;
