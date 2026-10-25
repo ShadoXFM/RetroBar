@@ -211,15 +211,37 @@ namespace RetroBar.Controls
 
         // Each layout pass until the icon has a place: a tab that has just opened has no size yet when it is loaded, and the icon is
         // hidden until it has one (see PlaceIcon).
+        private Point _lastOrigin = new(double.NaN, double.NaN);
+
         private void IconOnly_OnLayoutUpdated(object sender, EventArgs e)
         {
-            if (_iconPlaced || _iconOnlyHost?.IconOnly != true)
+            if (_iconOnlyHost?.IconOnly != true)
             {
                 LayoutUpdated -= IconOnly_OnLayoutUpdated;
                 return;
             }
 
-            PlaceIcon();
+            if (!_iconPlaced)
+            {
+                PlaceIcon();
+                return;
+            }
+
+            // The tab has come to be somewhere else on the screen (the others slid, or a window opened or closed): where the borders and the
+            // icon fall on the pixels depends on it, a pixel one way or the other, so how the icon sits in its frame is looked at again.
+            try
+            {
+                Point origin = PointToScreen(new Point(0, 0));
+                if (origin != _lastOrigin)
+                {
+                    _lastOrigin = origin;
+                    _fixPasses = 0;
+                    Dispatcher.BeginInvoke(new Action(CenterIconInFrame), DispatcherPriority.ApplicationIdle);
+                }
+            }
+            catch (InvalidOperationException)
+            {
+            }
         }
 
         private void QueuePlaceIcon()
@@ -261,6 +283,81 @@ namespace RetroBar.Controls
         }
 
         private (double X, double Y)? _pendingFix;
+
+        // The bright line at the left of the frame and the end of its top line, in device pixels from the left of the tab, read from the
+        // tab as it is drawn (the icon's layer left out); null if they cannot be told (a theme with no such lines).
+        private (double Left, double Right)? DrawnFrameEdges()
+        {
+            try
+            {
+                double dpi = VisualTreeHelper.GetDpi(this).DpiScaleX;
+                int width = (int)Math.Ceiling(ActualWidth * dpi);
+                int height = (int)Math.Ceiling(ActualHeight * dpi);
+                if (width < 8 || height < 8)
+                {
+                    return null;
+                }
+
+                var target = new System.Windows.Media.Imaging.RenderTargetBitmap(width, height, 96 * dpi, 96 * dpi, PixelFormats.Pbgra32);
+                Visibility layer = IconOnlyLayer.Visibility;
+                IconOnlyLayer.Visibility = Visibility.Hidden;
+                try
+                {
+                    target.Render(this);
+                }
+                finally
+                {
+                    IconOnlyLayer.Visibility = layer;
+                }
+
+                int stride = width * 4;
+                byte[] pixels = new byte[stride * height];
+                target.CopyPixels(pixels, stride, 0);
+
+                int Luma(int x, int y)
+                {
+                    int i = y * stride + x * 4;
+                    return (pixels[i] + pixels[i + 1] + pixels[i + 2]) / 3;
+                }
+
+                // The bar's own colour: a pixel of the margin of the tab, at its left edge.
+                int bar = Luma(0, height / 2);
+
+                // The top line: the first row, from the top, with a long run of pixels that are not the bar's colour.
+                for (int y = 0; y < height / 2; y++)
+                {
+                    int bestStart = -1, bestEnd = -1, start = -1;
+                    for (int x = 0; x <= width; x++)
+                    {
+                        bool lit = x < width && Math.Abs(Luma(x, y) - bar) >= 40;
+                        if (lit && start < 0)
+                        {
+                            start = x;
+                        }
+                        else if (!lit && start >= 0)
+                        {
+                            if (x - start > bestEnd - bestStart)
+                            {
+                                bestStart = start;
+                                bestEnd = x;
+                            }
+
+                            start = -1;
+                        }
+                    }
+
+                    if (bestEnd - bestStart >= 16)
+                    {
+                        return (bestStart, bestEnd);
+                    }
+                }
+            }
+            catch (Exception)
+            {
+            }
+
+            return null;
+        }
 
         // How far (device pixels, for an icon drawn shownWidth by shownHeight) the middle of the icon's picture - the pixels that are seen
         // (opaque, and not dark) - is from the middle of its image. (0, 0) when it cannot be told.
@@ -334,10 +431,20 @@ namespace RetroBar.Controls
                 (double artX, double artY) = ArtCenterOffset(iconBottomRight.X - iconTopLeft.X, iconBottomRight.Y - iconTopLeft.Y);
                 // The frame is seen from its bright line at the left to the end of its top line at the right (its dark right border is not
                 // seen on the bar): the middle of that, a pixel to the right of the middle of the frame with its borders.
-                // The frame is seen from its bright line at the left to the end of its top line at the right (its two borders at the right
-                // are almost the colour of the bar, and not seen): the middle of that is a pixel to the right of the middle of the frame
-                // with all its borders, which is where the icon was, and looked a pixel too far left.
-                double dxPixels = ((frameTopLeft.X + frameBottomRight.X) - (iconTopLeft.X + iconBottomRight.X)) / 2 - artX + 1;
+                // The frame as it is drawn: from its bright line at the left to the end of its top line (the borders at its right are
+                // nearly the colour of the bar and are not seen), read from the pixels of the tab - where the borders come to be depends on
+                // the position of the tab, a pixel one way or the other, so the geometry does not tell. The icon goes in the middle of that.
+                double dxPixels;
+                Point origin = PointToScreen(new Point(0, 0));
+                if (DrawnFrameEdges() is (double left, double right))
+                {
+                    double iconCenter = (iconTopLeft.X + iconBottomRight.X) / 2 - origin.X + artX;
+                    dxPixels = (left + 1 + right) / 2 - iconCenter;
+                }
+                else
+                {
+                    dxPixels = ((frameTopLeft.X + frameBottomRight.X) - (iconTopLeft.X + iconBottomRight.X)) / 2 - artX;
+                }
                 double dyPixels = ((frameTopLeft.Y + frameBottomRight.Y) - (iconTopLeft.Y + iconBottomRight.Y)) / 2 - artY;
                 if (Math.Abs(dxPixels) >= 0.99 || Math.Abs(dyPixels) >= 0.99)
                 {
