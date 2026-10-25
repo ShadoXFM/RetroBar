@@ -18,7 +18,7 @@ namespace RetroBar
 
         private void StartButton_IsVisibleChangedForWeather(object sender, DependencyPropertyChangedEventArgs e) => UpdateWeatherMargin();
 
-        // With no Start button before it (the option is off, or this is a taskbar that has none) the weather is 2 pixels further from the edge.
+        // With no Start button before it (the option is off, or this is a taskbar that has none) the weather is further from the edge.
         private void UpdateWeatherMargin()
         {
             if (!_windows11Applied)
@@ -27,7 +27,8 @@ namespace RetroBar
             }
 
             double dpi = System.Windows.Media.VisualTreeHelper.GetDpi(this).DpiScaleX;
-            double extra = StartButton.Visibility == Visibility.Visible ? 0 : 2 / (dpi > 0 ? dpi : 1);
+            // 2 pixels more on the main taskbar, 1 on another one (which has no Start button as a rule).
+            double extra = StartButton.Visibility == Visibility.Visible ? 0 : (Screen.Primary ? 2 : 1) / (dpi > 0 ? dpi : 1);
             WeatherGroup.Margin = new Thickness(_weatherBaseMargin.Left + extra, _weatherBaseMargin.Top, _weatherBaseMargin.Right, _weatherBaseMargin.Bottom);
         }
         private BindingBase _weatherTag;
