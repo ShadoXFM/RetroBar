@@ -184,6 +184,7 @@ namespace RetroBar.Controls
             // off, and it was seen going to the right place); a tab made anew for a window that was there (the ones after a tab that closed
             // are) is shown at once, as it is not a stranger to its place.
             _iconCentered = !(only && Host?.JustOpened(Window) == true);
+            _syncCentered = false;
 
             IconOnlyImage.Visibility = only ? Visibility.Visible : Visibility.Collapsed;
 
@@ -259,6 +260,15 @@ namespace RetroBar.Controls
                 {
                     _lastOrigin = origin;
                     _fixPasses = 0;
+                    // At once, before it is drawn where it is now (a pixel off, when the row has moved by a whole slot or less), and again when
+                    // things have settled.
+                    Dispatcher.BeginInvoke(new Action(() =>
+                    {
+                        if (_iconPlaced && _iconOnlyHost?.IconOnly == true && !AppButton.IsPressed)
+                        {
+                            CenterIconNow();
+                        }
+                    }), DispatcherPriority.Render);
                     Dispatcher.BeginInvoke(new Action(CenterIconInFrame), DispatcherPriority.ApplicationIdle);
                 }
             }
@@ -437,6 +447,7 @@ namespace RetroBar.Controls
         private int _fixPasses;
         private bool _frameWaiting;
         private bool _iconCentered;
+        private bool _syncCentered;
 
         private DispatcherTimer _iconRevealTimer;
 
@@ -710,6 +721,13 @@ namespace RetroBar.Controls
                     {
                         _iconCentered = true;
                     }
+                }
+                else if (!_syncCentered)
+                {
+                    // A tab made anew for a window that was there (the style came back, a tab closed) is centered in this pass too, not a
+                    // moment later: it was drawn a pixel off, and went to its place a quarter of a second after.
+                    _syncCentered = true;
+                    CenterIconNow();
                 }
 
                 IconOnlyImage.Opacity = _iconCentered ? 1 : 0;
