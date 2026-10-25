@@ -91,11 +91,12 @@ namespace RetroBar.Controls
         private void UpdatePressShift()
         {
             bool pressed = _iconOnlyHost?.IconOnly == true && (AppButton.IsPressed || _mouseDownOnTab);
+            bool iconOnly = _iconOnlyHost?.IconOnly == true;
 
             // One device pixel down and to the right. The icon is placed by the monitor tag's snapping (whole pixels), which takes the move
             // as an addition to what it works out (a move of the layout or of a parent was rounded away by it, on one axis or both, for some
             // tabs); the badge is not snapped, so its own transform does.
-            Vector nudge = pressed ? new Vector(1, 1) : new Vector(0, 0);
+            Vector nudge = iconOnly ? new Vector(_iconFixX + (pressed ? 1 : 0), _iconFixY + (pressed ? 1 : 0)) : new Vector(0, 0);
             if (MonitorOffset.GetNudge(IconOnlyImage) != nudge)
             {
                 MonitorOffset.SetNudge(IconOnlyImage, nudge);
@@ -260,6 +261,53 @@ namespace RetroBar.Controls
         }
 
         private (double X, double Y)? _pendingFix;
+
+        // How far (device pixels, for an icon drawn shownWidth by shownHeight) the middle of the icon's picture - the pixels that are seen
+        // (opaque, and not dark) - is from the middle of its image. (0, 0) when it cannot be told.
+        private (double X, double Y) ArtCenterOffset(double shownWidth, double shownHeight)
+        {
+            if (IconOnlyImage.Source is not System.Windows.Media.Imaging.BitmapSource source || source.PixelWidth <= 0 || source.PixelHeight <= 0)
+            {
+                return (0, 0);
+            }
+
+            try
+            {
+                var converted = new System.Windows.Media.Imaging.FormatConvertedBitmap(source, PixelFormats.Bgra32, null, 0);
+                int stride = converted.PixelWidth * 4;
+                byte[] data = new byte[stride * converted.PixelHeight];
+                converted.CopyPixels(data, stride, 0);
+                int minX = int.MaxValue, minY = int.MaxValue, maxX = -1, maxY = -1;
+                for (int y = 0; y < converted.PixelHeight; y++)
+                {
+                    for (int x = 0; x < converted.PixelWidth; x++)
+                    {
+                        // Seen on the taskbar: opaque, and not as dark as the bar itself (the black outline of foobar2000's icon is not seen).
+                        int i = y * stride + x * 4;
+                        if (data[i + 3] >= 110 && Math.Max(data[i], Math.Max(data[i + 1], data[i + 2])) >= 60)
+                        {
+                            minX = Math.Min(minX, x);
+                            maxX = Math.Max(maxX, x);
+                            minY = Math.Min(minY, y);
+                            maxY = Math.Max(maxY, y);
+                        }
+                    }
+                }
+
+                if (maxX < 0)
+                {
+                    return (0, 0);
+                }
+
+                // Drawn as large as fits (Uniform) and in the middle of the image's place.
+                double scale = Math.Min(shownWidth / converted.PixelWidth, shownHeight / converted.PixelHeight);
+                return (((minX + maxX + 1) / 2.0 - converted.PixelWidth / 2.0) * scale, ((minY + maxY + 1) / 2.0 - converted.PixelHeight / 2.0) * scale);
+            }
+            catch (Exception)
+            {
+                return (0, 0);
+            }
+        }
         private double _iconFixX;
         private double _iconFixY;
         private int _fixPasses;
@@ -281,8 +329,11 @@ namespace RetroBar.Controls
                 Point iconTopLeft = IconOnlyImage.PointToScreen(new Point(0, 0));
                 Point iconBottomRight = IconOnlyImage.PointToScreen(new Point(IconOnlyImage.ActualWidth, IconOnlyImage.ActualHeight));
                 double dpi = VisualTreeHelper.GetDpi(this).DpiScaleX;
-                double dxPixels = ((frameTopLeft.X + frameBottomRight.X) - (iconTopLeft.X + iconBottomRight.X)) / 2;
-                double dyPixels = ((frameTopLeft.Y + frameBottomRight.Y) - (iconTopLeft.Y + iconBottomRight.Y)) / 2;
+                // The middle of the picture, not of the image: an icon with more empty space at one side (foobar2000's, Opera's) is not
+                // in the middle of its frame by its box, and is by what is seen.
+                (double artX, double artY) = ArtCenterOffset(iconBottomRight.X - iconTopLeft.X, iconBottomRight.Y - iconTopLeft.Y);
+                double dxPixels = ((frameTopLeft.X + frameBottomRight.X) - (iconTopLeft.X + iconBottomRight.X)) / 2 - artX;
+                double dyPixels = ((frameTopLeft.Y + frameBottomRight.Y) - (iconTopLeft.Y + iconBottomRight.Y)) / 2 - artY;
                 if (Math.Abs(dxPixels) >= 0.99 || Math.Abs(dyPixels) >= 0.99)
                 {
                     // Only when it is off by the same amount twice running, a render apart: the icon takes a layout pass or two to get where a
@@ -291,9 +342,11 @@ namespace RetroBar.Controls
                     if (_pendingFix is (double px, double py) && px == dxPixels && py == dyPixels)
                     {
                         _pendingFix = null;
-                        _iconFixX = Math.Clamp(_iconFixX + Math.Round(dxPixels) / dpi, -4 / dpi, 4 / dpi);
-                        _iconFixY = Math.Clamp(_iconFixY + Math.Round(dyPixels) / dpi, -4 / dpi, 4 / dpi);
-                        PlaceIcon();
+                        // Whole device pixels added after the snapping (MonitorOffset.Nudge): a margin of one pixel moved some icons by two (the
+                        // rounding of a half pixel), and the correction went back and forth over the middle.
+                        _iconFixX = Math.Clamp(_iconFixX + Math.Round(dxPixels), -4, 4);
+                        _iconFixY = Math.Clamp(_iconFixY + Math.Round(dyPixels), -4, 4);
+                        UpdatePressShift();
                     }
                     else
                     {
@@ -366,8 +419,8 @@ namespace RetroBar.Controls
                     MonitorOffset.SetTag(IconOnlyImage, "TaskIconBar");
                 }
 
-                double left = bounds.Left + (bounds.Width - IconOnlyImage.Width) / 2 - shiftX + _iconFixX;
-                double top = bounds.Top + (bounds.Height - IconOnlyImage.Height) / 2 - shiftY + _iconFixY;
+                double left = bounds.Left + (bounds.Width - IconOnlyImage.Width) / 2 - shiftX;
+                double top = bounds.Top + (bounds.Height - IconOnlyImage.Height) / 2 - shiftY;
                 double iconLeft = Math.Round(left / step) * step;
                 double iconTop = Math.Round(top / step) * step;
                 IconOnlyImage.Margin = new Thickness(iconLeft, iconTop, 0, 0);
