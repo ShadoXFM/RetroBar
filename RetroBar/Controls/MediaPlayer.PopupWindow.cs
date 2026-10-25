@@ -83,6 +83,26 @@ namespace RetroBar.Controls
                 }
             }
 
+            // A popup that gets taller or shorter (the lyrics of a song after one with none) keeps its bottom, at the taskbar, and grows up:
+            // WPF resizes its window from the top, which sent it down over the taskbar for a moment before it was placed again.
+            if (msg == WM_WINDOWPOSCHANGING && movedTo == null && !_seekPopupPinned && Settings.Instance.Edge != ManagedShell.AppBar.AppBarEdge.Top &&
+                SeekPopup.IsOpen && IsWindowVisible(hwnd) && GetWindowRect(hwnd, out RECT current))
+            {
+                WINDOWPOS resized = Marshal.PtrToStructure<WINDOWPOS>(lParam);
+                int currentHeight = current.Bottom - current.Top;
+                if ((resized.Flags & SWP_NOSIZE) == 0 && currentHeight > 0 && resized.Height > 0 && resized.Height != currentHeight)
+                {
+                    if ((resized.Flags & SWP_NOMOVE) != 0)
+                    {
+                        resized.X = current.Left;
+                        resized.Flags &= ~SWP_NOMOVE;
+                    }
+
+                    resized.Y = current.Bottom - resized.Height;
+                    Marshal.StructureToPtr(resized, lParam, false);
+                }
+            }
+
             if (msg == WM_WINDOWPOSCHANGING && (movedTo != null || _seekPopupPinned))
             {
                 WINDOWPOS position = Marshal.PtrToStructure<WINDOWPOS>(lParam);
@@ -140,6 +160,9 @@ namespace RetroBar.Controls
 
         [DllImport("user32.dll")]
         private static extern bool GetWindowRect(IntPtr hWnd, out RECT rect);
+
+        [DllImport("user32.dll")]
+        private static extern bool IsWindowVisible(IntPtr hWnd);
 
         [DllImport("user32.dll")]
         private static extern bool SetWindowPos(IntPtr hWnd, IntPtr hWndInsertAfter, int x, int y, int cx, int cy, uint flags);
