@@ -105,6 +105,13 @@ namespace RetroBar.Controls
                         Rect bounds = frame.TransformToAncestor(tab).TransformBounds(new Rect(0, 0, frame.ActualWidth, frame.ActualHeight));
                         // A frame measured while the tab is still being laid out (a tab just made) is a little off, and the pins were made its
                         // size: when it comes to be another size the pins are lined up with it again.
+                        // Right after the style comes back what was measured before stands: the tabs are being made, and what they measure
+                        // for a moment is not what they come to (their pins were made that size, and moved their icons when it changed).
+                        if (_frameWidth > 0 && _frameHeight > 0 && DateTime.UtcNow - _iconOnlySince < TimeSpan.FromMilliseconds(700))
+                        {
+                            continue;
+                        }
+
                         bool changed = _frameWidth > 0 && _frameHeight > 0 &&
                             (Math.Abs(bounds.Width - _frameWidth) >= PixelStep * 0.5 || Math.Abs(bounds.Height - _frameHeight) >= PixelStep * 0.5);
                         _frameShift = bounds.Left - (tab.ActualWidth - bounds.Right);
