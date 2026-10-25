@@ -442,6 +442,15 @@ namespace RetroBar.Utilities
             set => Set(ref _taskbarWidthLimit, value);
         }
 
+        // The order of the tabs of the Windows 11 style, pins and the tabs of the programs that are not pinned among them: "pin|<shortcut>"
+        // for a pin and "app|<program>" for a program that is not pinned (see TaskList.Pinned.cs). Empty: the pins first, then the other tabs.
+        private List<string> _taskOrder = [];
+        public List<string> TaskOrder
+        {
+            get => _taskOrder;
+            set => Set(ref _taskOrder, value);
+        }
+
         private List<string> _quickLaunchOrder = [];
         public List<string> QuickLaunchOrder
         {

@@ -624,7 +624,7 @@ namespace RetroBar.Controls
             {
                 ScheduleGroupSync();
             }
-            else if (e.PropertyName == nameof(Settings.QuickLaunchOrder) || e.PropertyName == nameof(Settings.QuickLaunchPath))
+            else if (e.PropertyName == nameof(Settings.QuickLaunchOrder) || e.PropertyName == nameof(Settings.TaskOrder) || e.PropertyName == nameof(Settings.QuickLaunchPath))
             {
                 if (_mergedItems != null)
                 {
