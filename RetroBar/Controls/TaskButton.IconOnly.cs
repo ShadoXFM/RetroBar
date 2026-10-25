@@ -181,6 +181,22 @@ namespace RetroBar.Controls
             IconOnlyBadge.Opacity = 0;
             IconOnlyImage.Opacity = 0;
             _iconCentered = false;
+            // A tab made anew (the ones after a tab that closed are, with the list merged again) starts with the correction its program's icon
+            // got last time, and is shown at once; only a program not seen yet waits to be centered.
+            string exe = Window?.WinFileName;
+            if (only && !string.IsNullOrEmpty(exe))
+            {
+                lock (IconFixes)
+                {
+                    if (IconFixes.TryGetValue(exe, out (double X, double Y) known))
+                    {
+                        _iconFixX = known.X;
+                        _iconFixY = known.Y;
+                        _iconCentered = true;
+                    }
+                }
+            }
+
             IconOnlyImage.Visibility = only ? Visibility.Visible : Visibility.Collapsed;
 
             if (only)
@@ -291,6 +307,11 @@ namespace RetroBar.Controls
         {
             _iconFixX = 0;
             _iconFixY = 0;
+            lock (IconFixes)
+            {
+                IconFixes.Clear();
+            }
+
             if (_iconOnlyHost?.IconOnly == true)
             {
                 Dispatcher.BeginInvoke(new Action(() =>
@@ -432,6 +453,9 @@ namespace RetroBar.Controls
         private int _fixPasses;
         private bool _frameWaiting;
         private bool _iconCentered;
+
+        // The correction (device pixels) the icon of each program was last given to be centered.
+        private static readonly System.Collections.Generic.Dictionary<string, (double X, double Y)> IconFixes = new(StringComparer.OrdinalIgnoreCase);
         private DispatcherTimer _iconRevealTimer;
 
         private void RevealIcon()
@@ -566,6 +590,14 @@ namespace RetroBar.Controls
                 else
                 {
                     _pendingFix = null;
+                    if (!string.IsNullOrEmpty(Window?.WinFileName))
+                    {
+                        lock (IconFixes)
+                        {
+                            IconFixes[Window.WinFileName] = (_iconFixX, _iconFixY);
+                        }
+                    }
+
                     RevealIcon();
                 }
             }

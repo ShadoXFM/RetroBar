@@ -76,6 +76,11 @@ namespace RetroBar.Controls
 
         private void QueueCenterIcon(bool reset)
         {
+            QueueCenterIcon(reset, DispatcherPriority.ApplicationIdle);
+        }
+
+        private void QueueCenterIcon(bool reset, DispatcherPriority priority)
+        {
             if (reset)
             {
                 _pendingMove = null;
@@ -91,7 +96,7 @@ namespace RetroBar.Controls
             {
                 _centerQueued = false;
                 CenterIcon();
-            }), DispatcherPriority.ApplicationIdle);
+            }), priority);
         }
 
         private void CenterIcon()
@@ -109,18 +114,16 @@ namespace RetroBar.Controls
                     return;
                 }
 
-                if (LauncherButton.IsPressed || LauncherButton.IsMouseOver)
-                {
-                    ToolbarIcon.ClearValue(OpacityProperty);
-                    return;
-                }
+                // The theme moves what is in a pressed button down and to the right by a DIP, which the snapping of the icon rounds as it
+                // likes (a pixel down and nothing to the right, for one): it is put a pixel down and to the right of where it is at rest.
+                int press = LauncherButton.IsPressed ? 1 : 0;
 
                 Point boxTopLeft = box.PointToScreen(new Point(0, 0));
                 Point iconTopLeft = ToolbarIcon.PointToScreen(new Point(0, 0));
                 Point iconBottomRight = ToolbarIcon.PointToScreen(new Point(ToolbarIcon.ActualWidth, ToolbarIcon.ActualHeight));
                 (double artX, double artY) = TaskButton.ArtCenterOffset(ToolbarIcon.Source, iconBottomRight.X - iconTopLeft.X, iconBottomRight.Y - iconTopLeft.Y);
-                double dx = IconTarget.X - ((iconTopLeft.X + iconBottomRight.X) / 2 + artX - boxTopLeft.X);
-                double dy = IconTarget.Y - ((iconTopLeft.Y + iconBottomRight.Y) / 2 + artY - boxTopLeft.Y);
+                double dx = IconTarget.X + press - ((iconTopLeft.X + iconBottomRight.X) / 2 + artX - boxTopLeft.X);
+                double dy = IconTarget.Y + press - ((iconTopLeft.Y + iconBottomRight.Y) / 2 + artY - boxTopLeft.Y);
                 if (TaskButton.WholePixels(dx) == 0 && TaskButton.WholePixels(dy) == 0)
                 {
                     _pendingMove = null;
@@ -146,12 +149,14 @@ namespace RetroBar.Controls
                     _pendingMove = (dx, dy);
                 }
 
-                QueueCenterIcon(false);
+                QueueCenterIcon(false, press == 1 ? DispatcherPriority.Render : DispatcherPriority.ApplicationIdle);
             }
             catch (InvalidOperationException)
             {
             }
         }
+
+        private void LauncherButton_OnPressedChanged(object sender, EventArgs e) => QueueCenterIcon(true, DispatcherPriority.Render);
 
         private void ToolbarIcon_OnSourceChanged(object sender, EventArgs e) => QueueCenterIcon(true);
 
@@ -187,16 +192,20 @@ namespace RetroBar.Controls
                 ToolbarIcon.Source = program;
                 if (_programExe != null && LastNudges.TryGetValue(_programExe, out Vector known))
                 {
+                    // Where it was last time: seen at once (the pins after a tab that closed are made anew, and were blank for a moment).
                     MonitorOffset.SetNudge(ToolbarIcon, known);
+                    ToolbarIcon.ClearValue(OpacityProperty);
                 }
-
-                // Not seen until it is where it is to be (a pixel or two off, for a moment, at its first place, while the tabs slide).
-                ToolbarIcon.Opacity = 0;
-                _revealTimer ??= new DispatcherTimer { Interval = TimeSpan.FromMilliseconds(700) };
-                _revealTimer.Stop();
-                _revealTimer.Tick -= RevealTimer_Tick;
-                _revealTimer.Tick += RevealTimer_Tick;
-                _revealTimer.Start();
+                else
+                {
+                    // Not seen until it is where it is to be (a pixel or two off, for a moment, at its first place).
+                    ToolbarIcon.Opacity = 0;
+                    _revealTimer ??= new DispatcherTimer { Interval = TimeSpan.FromMilliseconds(700) };
+                    _revealTimer.Stop();
+                    _revealTimer.Tick -= RevealTimer_Tick;
+                    _revealTimer.Tick += RevealTimer_Tick;
+                    _revealTimer.Start();
+                }
             }
             else
             {
@@ -275,15 +284,18 @@ namespace RetroBar.Controls
 
             // The source comes after the icon is laid out, and the place of the picture in it is only known then.
             DependencyPropertyDescriptor sourceDescriptor = DependencyPropertyDescriptor.FromProperty(Image.SourceProperty, typeof(Image));
+            DependencyPropertyDescriptor pressedDescriptor = DependencyPropertyDescriptor.FromProperty(System.Windows.Controls.Primitives.ButtonBase.IsPressedProperty, typeof(Button));
             Loaded += (s, e) =>
             {
                 sourceDescriptor.AddValueChanged(ToolbarIcon, ToolbarIcon_OnSourceChanged);
+                pressedDescriptor.AddValueChanged(LauncherButton, LauncherButton_OnPressedChanged);
                 LayoutUpdated += ToolbarButton_OnLayoutUpdated;
                 QueueCenterIcon(true);
             };
             Unloaded += (s, e) =>
             {
                 sourceDescriptor.RemoveValueChanged(ToolbarIcon, ToolbarIcon_OnSourceChanged);
+                pressedDescriptor.RemoveValueChanged(LauncherButton, LauncherButton_OnPressedChanged);
                 LayoutUpdated -= ToolbarButton_OnLayoutUpdated;
             };
             ToolbarIcon.SizeChanged += (s, e) => QueueCenterIcon(true);
