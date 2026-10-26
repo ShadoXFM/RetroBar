@@ -255,6 +255,17 @@
                                           SelectedIndex="{Binding Source={x:Static Settings:Settings.Instance}, Path=TaskbarStyle, UpdateSourceTrigger=PropertyChanged, Converter={StaticResource enumConverter}}"
                                           SelectionChanged="CboTaskbarStyle_SelectionChanged" />
                             </DockPanel>
+                            <DockPanel>
+                                <Label VerticalAlignment="Center"
+                                       Target="{Binding ElementName=cboStartButtonLook}">
+                                    <AccessText Text="{DynamicResource start_button_look_text}"
+                                                ToolTip="{DynamicResource start_button_look_tip}" />
+                                </Label>
+                                <ComboBox x:Name="cboStartButtonLook"
+                                          ItemsSource="{DynamicResource start_button_look_values}"
+                                          SelectedIndex="{Binding Source={x:Static Settings:Settings.Instance}, Path=StartButtonLook, UpdateSourceTrigger=PropertyChanged, Converter={StaticResource enumConverter}}"
+                                          SelectionChanged="CboStartButtonLook_SelectionChanged" />
+                            </DockPanel>
                             <CheckBox x:Name="cbShowStartButton"
                                       IsChecked="{Binding Source={x:Static Settings:Settings.Instance}, Path=ShowStartButton, UpdateSourceTrigger=PropertyChanged}">
                                 <Label Content="{DynamicResource show_start_button}" />

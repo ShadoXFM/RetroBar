@@ -44,6 +44,7 @@ namespace RetroBar
         {
             Settings.Instance.PropertyChanged += TaskbarStyle_SettingChanged;
             ApplyTaskbarStyle();
+            UpdateStartButtonLook();
         }
 
         // A taskbar that is closed (the theme can make the taskbars again) no longer follows the style; left listening, it moved the controls of a
@@ -59,11 +60,26 @@ namespace RetroBar
             {
                 Dispatcher.BeginInvoke(new System.Action(ApplyTaskbarStyle));
             }
+            else if (e.PropertyName == nameof(Settings.StartButtonLook))
+            {
+                Dispatcher.BeginInvoke(new System.Action(UpdateStartButtonLook));
+            }
             else if (e.PropertyName == nameof(Settings.ShowQuickLaunch) && _windows11Applied)
             {
                 // The pinned programs are among the tabs; the toolbar of them stays away.
                 Dispatcher.BeginInvoke(new System.Action(() => QuickLaunchToolbar.Visibility = Visibility.Collapsed));
             }
+        }
+
+        // The Start button with its text or only its logo: what the setting says, or by the style (the text in the classic one).
+        private void UpdateStartButtonLook()
+        {
+            StartButton.IconOnly = Settings.Instance.StartButtonLook switch
+            {
+                StartButtonLookOption.WithText => false,
+                StartButtonLookOption.LogoOnly => true,
+                _ => _windows11Applied,
+            };
         }
 
         private void ApplyTaskbarStyle()
@@ -121,12 +137,12 @@ namespace RetroBar
 
                 QuickLaunchToolbar.Visibility = Visibility.Collapsed;
                 TaskListControl.IconOnly = true;
-                StartButton.IconOnly = true;
+                UpdateStartButtonLook();
             }
             else
             {
                 TaskListControl.IconOnly = false;
-                StartButton.IconOnly = false;
+                UpdateStartButtonLook();
 
                 _centerRow.Children.Remove(TaskListControl);
                 TaskbarDock.Children.Remove(_centerStrip);

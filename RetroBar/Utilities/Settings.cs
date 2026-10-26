@@ -559,6 +559,15 @@ namespace RetroBar.Utilities
             set => SetEnum(ref _taskbarStyle, value);
         }
 
+        // How the Start button looks, in either style of the taskbar: with its text (the classic button) or only its logo (on a square button, as
+        // the Windows 11 style has it). Automatic: the text in the classic style, only the logo in the Windows 11 style.
+        private StartButtonLookOption _startButtonLook = StartButtonLookOption.Automatic;
+        public StartButtonLookOption StartButtonLook
+        {
+            get => _startButtonLook;
+            set => SetEnum(ref _startButtonLook, value);
+        }
+
         private bool _showTaskBadges = true;
         public bool ShowTaskBadges
         {
@@ -714,6 +723,13 @@ namespace RetroBar.Utilities
     {
         Classic,
         Windows11
+    }
+
+    public enum StartButtonLookOption
+    {
+        Automatic,
+        WithText,
+        LogoOnly
     }
 
     public enum InvertIconsOption
