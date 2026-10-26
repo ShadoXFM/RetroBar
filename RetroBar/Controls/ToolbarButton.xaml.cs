@@ -67,37 +67,26 @@ namespace RetroBar.Controls
 
                 double dpi = VisualTreeHelper.GetDpi(this).DpiScaleX;
                 double step = 1 / (dpi > 0 ? dpi : 1);
-                MonitorOffsetValue adjust = MonitorAdjustments.Get(MonitorOffset.FindDeviceName(this), "TaskIconBar");
-                // Scaled the way the monitor's tag scales the icon of a tab: to a whole number of DIP (16 * 0.9 = 14.4 is 14), not of pixels.
-                double scaleOfTab = Math.Max(1, Math.Round(16 * (adjust.Scale ?? 1))) / 16;
-                double sidePixels = 16 * dpi * scaleOfTab;
-                // Made at the size of the icon of a tab at 100% scale (16 DIP) and scaled down by a fixed transform: the way a tab's icon is
-                // made, and crisp (made straight to its size, it was soft). The transform is never worked out again: only this size and the
-                // margin decide where it is.
-                double nativePixels = 16 * dpi;
+
+                // Drawn by the monitor's TaskIconBar tag, as the icon of a tab is (its size, scale and the pixels it is drawn on: the same
+                // icon at the same pixels whether the program is open or not, on every monitor); the tag clears the scaling it was given,
+                // and the icon of a pin has always had the theme's HighQuality, which is softer.
                 if (ToolbarIcon.Width != 16 || ToolbarIcon.Height != 16)
                 {
                     ToolbarIcon.Width = 16;
                     ToolbarIcon.Height = 16;
-                    ToolbarIcon.RenderTransformOrigin = new Point(0.5, 0.5);
                 }
 
-                // The scaled image is in the middle of its 16 DIP, which is a fraction of a pixel off the pixels when its size is not whole in pixels:
-                // moved by the difference (as the tag does), so its top left is on a pixel.
-                double offsetPixels = (nativePixels - sidePixels) / 2;
-                double fix = (Math.Floor(offsetPixels + 0.5 + 1e-6) - offsetPixels) * step;
-                if (ToolbarIcon.RenderTransform is not TransformGroup current || Math.Abs(((ScaleTransform)current.Children[0]).ScaleX - scaleOfTab) > 0.0001 ||
-                    Math.Abs(((TranslateTransform)current.Children[1]).X - fix) > 0.0001)
+                if (RenderOptions.GetBitmapScalingMode(ToolbarIcon) != BitmapScalingMode.HighQuality)
                 {
-                    var group = new TransformGroup();
-                    group.Children.Add(new ScaleTransform(scaleOfTab, scaleOfTab));
-                    group.Children.Add(new TranslateTransform(fix, fix));
-                    ToolbarIcon.RenderTransform = group;
+                    RenderOptions.SetBitmapScalingMode(ToolbarIcon, BitmapScalingMode.HighQuality);
                 }
 
                 // Where the icon is in the button for the margin it has, to take that margin off for what the button gives it.
                 Point boxTopLeft = box.PointToScreen(new Point(0, 0));
                 Point iconTopLeft = ToolbarIcon.PointToScreen(new Point(0, 0));
+                Point iconBottomRight = ToolbarIcon.PointToScreen(new Point(ToolbarIcon.ActualWidth, ToolbarIcon.ActualHeight));
+                double sidePixels = iconBottomRight.X - iconTopLeft.X;
                 Thickness margin = ToolbarIcon.Margin;
                 double baseX = iconTopLeft.X - boxTopLeft.X - Math.Round(margin.Left * dpi);
                 double baseY = iconTopLeft.Y - boxTopLeft.Y - Math.Round(margin.Top * dpi);
@@ -181,9 +170,8 @@ namespace RetroBar.Controls
                     LauncherButton.Content = _iconCanvas;
                 }
 
-                // No per-monitor transform on the icon (its size and place are worked out in whole pixels, see PlaceIcon).
-                MonitorOffset.SetTag(ToolbarIcon, null);
-                ToolbarIcon.ClearValue(RenderTransformProperty);
+                // The tag of the icons of the tabs (see PlaceIcon); the place of the icon is its margin, in whole pixels.
+                MonitorOffset.SetTag(ToolbarIcon, "TaskIconBar");
                 ToolbarIcon.HorizontalAlignment = HorizontalAlignment.Left;
                 ToolbarIcon.VerticalAlignment = VerticalAlignment.Top;
                 ToolbarIcon.Margin = new Thickness(0);
