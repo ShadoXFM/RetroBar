@@ -304,10 +304,11 @@ namespace RetroBar.Controls
                 var scale = new ScaleTransform(0, 1);
                 RenderTransformOrigin = new Point(0, 0.5);
                 RenderTransform = scale;
-                var grow = new DoubleAnimation(0, 1, new Duration(TimeSpan.FromMilliseconds(250))) { EasingFunction = ease };
+                // As long as the others take to slide (ItemSlideAnimation), which it makes room for.
+                var grow = new DoubleAnimation(0, 1, new Duration(TimeSpan.FromMilliseconds(150))) { EasingFunction = ease };
                 grow.Completed += (s, e) => RenderTransform = null;
                 scale.BeginAnimation(ScaleTransform.ScaleXProperty, grow);
-                BeginAnimation(OpacityProperty, new DoubleAnimation(0, 1, new Duration(TimeSpan.FromMilliseconds(250))) { EasingFunction = ease, FillBehavior = FillBehavior.Stop });
+                BeginAnimation(OpacityProperty, new DoubleAnimation(0, 1, new Duration(TimeSpan.FromMilliseconds(150))) { EasingFunction = ease, FillBehavior = FillBehavior.Stop });
                 return;
             }
 

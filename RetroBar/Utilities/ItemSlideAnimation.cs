@@ -16,7 +16,7 @@ namespace RetroBar.Utilities
     /// </summary>
     public static class ItemSlideAnimation
     {
-        private static readonly Duration SlideDuration = new(TimeSpan.FromMilliseconds(180));
+        private static readonly Duration SlideDuration = new(TimeSpan.FromMilliseconds(150));
 
         // A From -> To animation whose value is always a whole number of device pixels.
         private sealed class PixelSnappedAnimation : DoubleAnimationBase
@@ -128,12 +128,16 @@ namespace RetroBar.Utilities
                 }
 
                 moved = true;
-                var transform = new TranslateTransform(dx, dy);
-                container.RenderTransform = transform;
-
                 // Whole device pixels at every step: an icon drawn between two pixels is blurred by the
                 // resampling, which made the toolbar's icons smear while they slid into place.
                 double dpi = VisualTreeHelper.GetDpi(container).DpiScaleX;
+
+                // And in the frame before the first step of the animation too (the place the transform starts at is drawn until the clock
+                // ticks): the icons of the tabs, which are not snapped as the frames are, moved by a pixel against them for that frame.
+                dx = Math.Round(dx * dpi) / dpi;
+                dy = Math.Round(dy * dpi) / dpi;
+                var transform = new TranslateTransform(dx, dy);
+                container.RenderTransform = transform;
                 var ease = new QuadraticEase { EasingMode = EasingMode.EaseOut };
                 transform.BeginAnimation(TranslateTransform.XProperty, new PixelSnappedAnimation(dx, 0, dpi, SlideDuration, ease));
                 transform.BeginAnimation(TranslateTransform.YProperty, new PixelSnappedAnimation(dy, 0, dpi, SlideDuration, ease));
