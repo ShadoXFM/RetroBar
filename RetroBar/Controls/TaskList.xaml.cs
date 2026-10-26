@@ -156,9 +156,29 @@ namespace RetroBar.Controls
         private int _squareChecks;
 
         // Once the tabs have their size, the button is measured and the width set again if it is not a square (a few times at most).
+        private DateTime _lastTargetUpdate = DateTime.MinValue;
+        private bool _targetUpdateQueued;
+
         private void CheckSquare()
         {
-            UpdateLauncherIconTarget();
+            // Reading the pixels of a tab is not cheap, and this is called in every frame of a slide: at most every 250 ms, and once more when
+            // things have come to rest.
+            if (DateTime.UtcNow - _lastTargetUpdate > TimeSpan.FromMilliseconds(250))
+            {
+                _lastTargetUpdate = DateTime.UtcNow;
+                UpdateLauncherIconTarget();
+            }
+            else if (!_targetUpdateQueued)
+            {
+                _targetUpdateQueued = true;
+                Dispatcher.BeginInvoke(new Action(() =>
+                {
+                    _targetUpdateQueued = false;
+                    _lastTargetUpdate = DateTime.UtcNow;
+                    UpdateLauncherIconTarget();
+                }), DispatcherPriority.ApplicationIdle);
+            }
+
             AlignLauncherIcons();
             if (!IconOnly || _squareChecks > 6 || MeasureTabButton() is not (double w, double h, double _))
             {
@@ -926,7 +946,11 @@ namespace RetroBar.Controls
         // For a while after RetroBar starts (at the logon, with the windows of what starts with the PC coming up one after the other, on a
         // machine that is busy) every window is new: none of them comes in with the opening animation, which then showed the tabs half
         // grown for seconds.
-        private static bool InStartup => DateTime.Now - System.Diagnostics.Process.GetCurrentProcess().StartTime < TimeSpan.FromSeconds(60);
+        // Nothing slides or grows while the windows of a log-on are coming in (they take the first minute, and every tab would have moved in
+        // front of the user): only then. RetroBar started again by hand on a computer that has been on for a while has its animations after a
+        // few seconds, not after a minute.
+        private static bool InStartup =>
+            DateTime.Now - System.Diagnostics.Process.GetCurrentProcess().StartTime < (TimeSpan.FromMilliseconds(Environment.TickCount64) < TimeSpan.FromMinutes(10) ? TimeSpan.FromSeconds(60) : TimeSpan.FromSeconds(8));
 
         public bool JustOpened(ApplicationWindow window) =>
             window != null && !InStartup && _openedAt.TryGetValue(window, out DateTime at) && DateTime.UtcNow - at < TimeSpan.FromSeconds(2);

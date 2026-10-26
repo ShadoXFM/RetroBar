@@ -69,11 +69,21 @@ namespace RetroBar.Controls
                 double step = 1 / (dpi > 0 ? dpi : 1);
                 MonitorOffsetValue adjust = MonitorAdjustments.Get(MonitorOffset.FindDeviceName(this), "TaskIconBar");
                 double sidePixels = Math.Max(1, Math.Round(16 * (adjust.Scale ?? 1) * dpi));
-                double side = sidePixels * step;
-                if (ToolbarIcon.Width != side || ToolbarIcon.Height != side)
+                // Made at the size of the icon of a tab at 100% scale (16 DIP) and scaled down by a fixed transform: the way a tab's icon is
+                // made, and crisp (made straight to its size, it was soft). The transform is never worked out again: only this size and the
+                // margin decide where it is.
+                double nativePixels = 16 * dpi;
+                if (ToolbarIcon.Width != 16 || ToolbarIcon.Height != 16)
                 {
-                    ToolbarIcon.Width = side;
-                    ToolbarIcon.Height = side;
+                    ToolbarIcon.Width = 16;
+                    ToolbarIcon.Height = 16;
+                    ToolbarIcon.RenderTransformOrigin = new Point(0.5, 0.5);
+                }
+
+                double shrink = sidePixels / nativePixels;
+                if (ToolbarIcon.RenderTransform is not ScaleTransform current || Math.Abs(current.ScaleX - shrink) > 0.0001)
+                {
+                    ToolbarIcon.RenderTransform = new ScaleTransform(shrink, shrink);
                 }
 
                 // Where the icon is in the button for the margin it has, to take that margin off for what the button gives it.
@@ -154,9 +164,9 @@ namespace RetroBar.Controls
                 ToolbarIcon.HorizontalAlignment = HorizontalAlignment.Left;
                 ToolbarIcon.VerticalAlignment = VerticalAlignment.Top;
                 ToolbarIcon.Margin = new Thickness(0);
-                // The shell's large icon, made to the size of the tab's icon the same way (a tab makes its icon from the large one, and the small
-                // one made bigger or smaller by a fraction of a pixel looked soft).
-                RenderOptions.SetBitmapScalingMode(ToolbarIcon, BitmapScalingMode.HighQuality);
+                // The shell's large icon, drawn the way the icon of a tab is (its scaling is the default one, not the theme's HighQuality, which
+                // was softer than the tab's: the icon looked different when its program opened).
+                RenderOptions.SetBitmapScalingMode(ToolbarIcon, BitmapScalingMode.Unspecified);
                 ToolbarIcon.UseLayoutRounding = true;
                 ToolbarIcon.SnapsToDevicePixels = true;
                 ApplyProgramIcon();
