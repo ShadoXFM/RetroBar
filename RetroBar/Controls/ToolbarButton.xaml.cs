@@ -68,7 +68,9 @@ namespace RetroBar.Controls
                 double dpi = VisualTreeHelper.GetDpi(this).DpiScaleX;
                 double step = 1 / (dpi > 0 ? dpi : 1);
                 MonitorOffsetValue adjust = MonitorAdjustments.Get(MonitorOffset.FindDeviceName(this), "TaskIconBar");
-                double sidePixels = Math.Max(1, Math.Round(16 * (adjust.Scale ?? 1) * dpi));
+                // Scaled the way the monitor's tag scales the icon of a tab: to a whole number of DIP (16 * 0.9 = 14.4 is 14), not of pixels.
+                double scaleOfTab = Math.Max(1, Math.Round(16 * (adjust.Scale ?? 1))) / 16;
+                double sidePixels = 16 * dpi * scaleOfTab;
                 // Made at the size of the icon of a tab at 100% scale (16 DIP) and scaled down by a fixed transform: the way a tab's icon is
                 // made, and crisp (made straight to its size, it was soft). The transform is never worked out again: only this size and the
                 // margin decide where it is.
@@ -80,10 +82,17 @@ namespace RetroBar.Controls
                     ToolbarIcon.RenderTransformOrigin = new Point(0.5, 0.5);
                 }
 
-                double shrink = sidePixels / nativePixels;
-                if (ToolbarIcon.RenderTransform is not ScaleTransform current || Math.Abs(current.ScaleX - shrink) > 0.0001)
+                // The scaled image is in the middle of its 16 DIP, which is a fraction of a pixel off the pixels when its size is not whole in pixels:
+                // moved by the difference (as the tag does), so its top left is on a pixel.
+                double offsetPixels = (nativePixels - sidePixels) / 2;
+                double fix = (Math.Floor(offsetPixels + 0.5 + 1e-6) - offsetPixels) * step;
+                if (ToolbarIcon.RenderTransform is not TransformGroup current || Math.Abs(((ScaleTransform)current.Children[0]).ScaleX - scaleOfTab) > 0.0001 ||
+                    Math.Abs(((TranslateTransform)current.Children[1]).X - fix) > 0.0001)
                 {
-                    ToolbarIcon.RenderTransform = new ScaleTransform(shrink, shrink);
+                    var group = new TransformGroup();
+                    group.Children.Add(new ScaleTransform(scaleOfTab, scaleOfTab));
+                    group.Children.Add(new TranslateTransform(fix, fix));
+                    ToolbarIcon.RenderTransform = group;
                 }
 
                 // Where the icon is in the button for the margin it has, to take that margin off for what the button gives it.
@@ -95,8 +104,9 @@ namespace RetroBar.Controls
 
                 // The middle of the picture, not of the image, goes to the place the tab's icon has it.
                 (double artX, double artY) = TaskButton.ArtCenterOffset(ToolbarIcon.Source, sidePixels, sidePixels);
-                double wantX = Math.Round(IconTarget.X - sidePixels / 2 - artX - baseX);
-                double wantY = Math.Round(IconTarget.Y - sidePixels / 2 - artY - baseY);
+                // (A half goes to the right and down, as it does for a tab: see TaskButton.WholePixels.)
+                double wantX = TaskButton.WholePixels(IconTarget.X - sidePixels / 2 - artX - baseX);
+                double wantY = TaskButton.WholePixels(IconTarget.Y - sidePixels / 2 - artY - baseY);
                 var wanted = new Thickness(wantX * step, wantY * step, 0, 0);
                 if (Math.Abs(margin.Left - wanted.Left) > step / 4 || Math.Abs(margin.Top - wanted.Top) > step / 4)
                 {
@@ -146,6 +156,8 @@ namespace RetroBar.Controls
             PlaceIcon();
         }
 
+        private Canvas _iconCanvas;
+
         private void ApplyStretched()
         {
             if (Stretched)
@@ -157,6 +169,17 @@ namespace RetroBar.Controls
                 LauncherButton.ClearValue(RenderTransformProperty);
                 LauncherButton.HorizontalAlignment = HorizontalAlignment.Stretch;
                 LauncherButton.VerticalAlignment = VerticalAlignment.Stretch;
+
+                // In a canvas, which has no room of its own to cut its child to: the icon is made 16 DIP and shrunk by a transform, and in the
+                // room the button gives it (smaller than that, with its margin) the layout cut it at the slot, a pixel or two of its bottom and right.
+                if (!ReferenceEquals(LauncherButton.Content, _iconCanvas))
+                {
+                    LauncherButton.Content = null;
+                    _iconCanvas ??= new Canvas();
+                    _iconCanvas.Children.Clear();
+                    _iconCanvas.Children.Add(ToolbarIcon);
+                    LauncherButton.Content = _iconCanvas;
+                }
 
                 // No per-monitor transform on the icon (its size and place are worked out in whole pixels, see PlaceIcon).
                 MonitorOffset.SetTag(ToolbarIcon, null);
@@ -173,6 +196,15 @@ namespace RetroBar.Controls
             }
             else
             {
+                if (_iconCanvas != null && ReferenceEquals(LauncherButton.Content, _iconCanvas))
+                {
+                    LauncherButton.Content = null;
+                    _iconCanvas.Children.Clear();
+                    LauncherButton.Content = ToolbarIcon;
+                }
+
+                ToolbarIcon.ClearValue(RenderTransformProperty);
+                ToolbarIcon.ClearValue(RenderTransformOriginProperty);
                 MonitorOffset.SetTag(ToolbarIcon, "ToolbarIcon");
                 ToolbarIcon.ClearValue(HorizontalAlignmentProperty);
                 ToolbarIcon.ClearValue(VerticalAlignmentProperty);
