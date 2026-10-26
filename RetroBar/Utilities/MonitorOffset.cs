@@ -433,10 +433,11 @@ namespace RetroBar.Utilities
             // the snapped position, so that it is not rounded away with the rest - a position on a half pixel loses a one pixel move to the
             // rounding, on one axis or both, a tab at a time, when it is the layout that moves.
             Vector nudge = GetNudge(element);
-            // The icon of a pin that is placed by its margin (see ToolbarButton.PlaceIcon): a half pixel goes the same way whatever the place,
-            // as it did for the icons of the tabs. With round-half-to-even a pixel's move of the margin moved the icon by two or by none,
-            // by the parity of its place, and the margin could never find a place for it.
-            MidpointRounding rounding = element.Name == "ToolbarIcon" && GetTag(element) == "TaskIconBar" ? MidpointRounding.AwayFromZero : MidpointRounding.ToEven;
+            // The icon of a tab, and of a pin that is placed by its margin (see ToolbarButton.PlaceIcon): a half pixel goes the same way
+            // whatever the place. With round-half-to-even the icon went a pixel one way or the other against its frame as the tab slid
+            // over places of odd and even pixels (the icons of all the tabs shifted while they recentered), and a pixel's move of a pin's
+            // margin moved its icon by two or by none.
+            MidpointRounding rounding = (element.Name == "IconOnlyImage" || (element.Name == "ToolbarIcon" && GetTag(element) == "TaskIconBar")) ? MidpointRounding.AwayFromZero : MidpointRounding.ToEven;
             double translateX = (Math.Round(baseLeft + offset.X * dpi.DpiScaleX, rounding) - baseLeft + nudge.X) / dpi.DpiScaleX;
             double translateY = (Math.Round(baseTop + offset.Y * dpi.DpiScaleY, rounding) - baseTop + nudge.Y) / dpi.DpiScaleY;
 
