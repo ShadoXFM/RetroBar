@@ -488,7 +488,10 @@ namespace RetroBar.Controls
             TasksGrip.Visibility = IconOnly ? Visibility.Collapsed : Visibility.Visible;
             _squareChecks = 0;
             _measureLocked = false;
-            TabMargin = new Thickness();
+            // The overlap of the tabs is theirs from the first layout: without it the row was a pixel a tab wider than it comes to be, and
+            // was centered so, and the tabs moved to the right a moment after (by half of the sum of the pixels).
+            double dpiStep = 1 / Math.Max(0.5, System.Windows.Media.VisualTreeHelper.GetDpi(this).DpiScaleX);
+            TabMargin = IconOnly ? new Thickness(0, 0, -dpiStep, 0) : new Thickness();
             TasksList.Margin = new Thickness();
             _slideSlack = 0;
             _alignChecks = 0;

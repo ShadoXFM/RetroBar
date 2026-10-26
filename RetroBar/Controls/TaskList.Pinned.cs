@@ -19,6 +19,9 @@ namespace RetroBar.Controls
     {
         private ObservableCollection<object> _mergedItems;
         private ShellFolder _pinFolder;
+        private static readonly Dictionary<string, ShellFolder> PinFolders = new(StringComparer.OrdinalIgnoreCase);
+
+        private void PinFilesChanged(object sender, System.Collections.Specialized.NotifyCollectionChangedEventArgs e) => RebuildMerged();
 
         private void ApplyPinnedMerge()
         {
@@ -35,8 +38,19 @@ namespace RetroBar.Controls
                     string folder = Environment.ExpandEnvironmentVariables(Settings.Instance.QuickLaunchPath ?? "");
                     if (Directory.Exists(folder))
                     {
-                        _pinFolder = new ShellFolder(folder, IntPtr.Zero, true);
-                        _pinFolder.Files.CollectionChanged += (s, e) => RebuildMerged();
+                        // The folder of the pins is kept from one time to the next: made anew when the style came back, it had no files for a
+                        // moment (they are read in the background), the pins that are not running were not there, and came a second later, when
+                        // all the tabs moved to make room for them.
+                        lock (PinFolders)
+                        {
+                            if (!PinFolders.TryGetValue(folder, out _pinFolder))
+                            {
+                                _pinFolder = new ShellFolder(folder, IntPtr.Zero, true);
+                                PinFolders[folder] = _pinFolder;
+                            }
+                        }
+
+                        _pinFolder.Files.CollectionChanged += PinFilesChanged;
                     }
 
                     taskbarItems.CollectionChanged += TasksChangedForMerge;
@@ -65,7 +79,7 @@ namespace RetroBar.Controls
 
             if (_pinFolder != null)
             {
-                _pinFolder.Dispose();
+                _pinFolder.Files.CollectionChanged -= PinFilesChanged;
                 _pinFolder = null;
             }
 
