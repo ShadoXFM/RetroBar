@@ -189,7 +189,7 @@ namespace RetroBar.Controls
                 ToolbarIcon.Margin = new Thickness(0);
                 // The shell's large icon, drawn the way the icon of a tab is (its scaling is the default one, not the theme's HighQuality, which
                 // was softer than the tab's: the icon looked different when its program opened).
-                RenderOptions.SetBitmapScalingMode(ToolbarIcon, BitmapScalingMode.Unspecified);
+                RenderOptions.SetBitmapScalingMode(ToolbarIcon, BitmapScalingMode.HighQuality);
                 ToolbarIcon.UseLayoutRounding = true;
                 ToolbarIcon.SnapsToDevicePixels = true;
                 ApplyProgramIcon();
