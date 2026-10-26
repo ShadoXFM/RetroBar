@@ -1,5 +1,6 @@
 ﻿using RetroBar.Utilities;
 using System;
+using System.ComponentModel;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Data;
@@ -93,9 +94,14 @@ namespace RetroBar.Controls
 
                 // The middle of the picture, not of the image, goes to the place the tab's icon has it.
                 (double artX, double artY) = TaskButton.ArtCenterOffset(ToolbarIcon.Source, sidePixels, sidePixels);
+                // The theme moves what is in a pressed button down and to the right by a DIP (the 3D effect): the place is taken from where the
+                // icon is now, which has that move in it, so it was taken off again by the margin and the icon did not move; it is a pixel
+                // down and to the right of where it is at rest instead.
+                int press = LauncherButton.IsPressed ? 1 : 0;
+
                 // (A half goes to the right and down, as it does for a tab: see TaskButton.WholePixels.)
-                double wantX = TaskButton.WholePixels(IconTarget.X - sidePixels / 2 - artX - baseX);
-                double wantY = TaskButton.WholePixels(IconTarget.Y - sidePixels / 2 - artY - baseY);
+                double wantX = TaskButton.WholePixels(IconTarget.X + press - sidePixels / 2 - artX - baseX);
+                double wantY = TaskButton.WholePixels(IconTarget.Y + press - sidePixels / 2 - artY - baseY);
                 var wanted = new Thickness(wantX * step, wantY * step, 0, 0);
                 if (Math.Abs(margin.Left - wanted.Left) > step / 4 || Math.Abs(margin.Top - wanted.Top) > step / 4)
                 {
@@ -218,15 +224,23 @@ namespace RetroBar.Controls
 
             // After every layout: cheap (it only sets a margin when the place has changed), and a margin set here is laid out before the
             // frame is drawn.
+            DependencyPropertyDescriptor pressedDescriptor = DependencyPropertyDescriptor.FromProperty(System.Windows.Controls.Primitives.ButtonBase.IsPressedProperty, typeof(Button));
             Loaded += (s, e) =>
             {
                 LayoutUpdated += ToolbarButton_OnLayoutUpdated;
+                pressedDescriptor.AddValueChanged(LauncherButton, ToolbarButton_OnPressedChanged);
                 PlaceIcon();
             };
-            Unloaded += (s, e) => LayoutUpdated -= ToolbarButton_OnLayoutUpdated;
+            Unloaded += (s, e) =>
+            {
+                LayoutUpdated -= ToolbarButton_OnLayoutUpdated;
+                pressedDescriptor.RemoveValueChanged(LauncherButton, ToolbarButton_OnPressedChanged);
+            };
         }
 
         private void ToolbarButton_OnLayoutUpdated(object sender, EventArgs e) => PlaceIcon();
+
+        private void ToolbarButton_OnPressedChanged(object sender, EventArgs e) => PlaceIcon();
 
         private void setIconBinding(string forcedPath = null)
         {
