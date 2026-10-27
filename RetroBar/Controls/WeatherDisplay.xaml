@@ -36,21 +36,14 @@
            Style="{DynamicResource WeatherTempStyle}"
            Foreground="{DynamicResource ClockForeground}"
            utilities:MonitorOffset.Tag="{Binding Path=IsCpuTempShown, RelativeSource={RelativeSource Mode=FindAncestor, AncestorType={x:Type Window}}, Converter={StaticResource cpuTempShownToMonitorTagConverter}, ConverterParameter=WeatherTemp}" />
-        <!-- The Windows 11 style's option (Settings.WidgetDetails): the weather in words, as in the forecast's headline, and a small graph of the
-             temperature of the next day. -->
+        <!-- The Windows 11 style's option (Settings.WidgetDetails): the weather in words after the temperature, with the dot the forecast's
+             headline has between them. It has the temperature's own tag, so it is level with it on every monitor. -->
         <TextBlock x:Name="WeatherDescriptionText"
                    Text="{Binding WeatherDescription}"
                    Style="{DynamicResource WeatherTempStyle}"
                    Foreground="{DynamicResource ClockForeground}"
-                   Margin="0,-1,2,0"
-                   Visibility="Collapsed" />
-        <controls:Sparkline x:Name="WeatherGraphLine"
-                            Width="24"
-                            Height="10"
-                            Margin="3,0,0,4"
-                            VerticalAlignment="Center"
-                            Visibility="Collapsed"
-                            utilities:MonitorOffset.Tag="WidgetSparkline" />
+                   Visibility="Collapsed"
+                   utilities:MonitorOffset.Tag="{Binding Path=IsCpuTempShown, RelativeSource={RelativeSource Mode=FindAncestor, AncestorType={x:Type Window}}, Converter={StaticResource cpuTempShownToMonitorTagConverter}, ConverterParameter=WeatherTemp}" />
     </StackPanel>
     <!-- The forecast: opens when the pointer rests on the widget and closes shortly after it leaves both
          the widget and the popup (see WeatherPanel_OnMouseEnter / ScheduleForecastClose). Uses the
