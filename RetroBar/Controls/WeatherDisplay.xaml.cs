@@ -29,8 +29,8 @@ namespace RetroBar.Controls
         // The Windows 11 style's option (Settings.WidgetDetails): the weather in words after the temperature.
         public bool Details
         {
-            get => WeatherDescriptionText.Visibility == Visibility.Visible;
-            set => WeatherDescriptionText.Visibility = value ? Visibility.Visible : Visibility.Collapsed;
+            get => WeatherDescriptionRow.Visibility == Visibility.Visible;
+            set => WeatherDescriptionRow.Visibility = value ? Visibility.Visible : Visibility.Collapsed;
         }
 
         public WeatherDisplay()
@@ -973,7 +973,7 @@ namespace RetroBar.Controls
                 WeatherTemp = FormatTemperature(_cachedCelsius.Value);
                 WeatherHeadline = FormatHeadline(_cachedCelsius.Value, _cachedWeatherCode);
                 WeatherBarTemp = FormatBarTemperature(_cachedCelsius.Value);
-                WeatherDescription = _cachedWeatherCode is int described && DescribeWeather(described) is string words ? "\u00B7 " + words : null;
+                WeatherDescription = _cachedWeatherCode is int described && DescribeWeather(described) is string words ? words : null;
                 FillDetails();
                 WeatherIconPath = _cachedIconPath;
 

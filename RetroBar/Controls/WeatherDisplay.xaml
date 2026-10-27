@@ -37,13 +37,24 @@
            Foreground="{DynamicResource ClockForeground}"
            utilities:MonitorOffset.Tag="{Binding Path=IsCpuTempShown, RelativeSource={RelativeSource Mode=FindAncestor, AncestorType={x:Type Window}}, Converter={StaticResource cpuTempShownToMonitorTagConverter}, ConverterParameter=WeatherTemp}" />
         <!-- The Windows 11 style's option (Settings.WidgetDetails): the weather in words after the temperature, with the dot the forecast's
-             headline has between them. It has the temperature's own tag, so it is level with it on every monitor. -->
-        <TextBlock x:Name="WeatherDescriptionText"
-                   Text="{Binding WeatherDescription}"
-                   Style="{DynamicResource WeatherTempStyle}"
-                   Foreground="{DynamicResource ClockForeground}"
-                   Visibility="Collapsed"
-                   utilities:MonitorOffset.Tag="{Binding Path=IsCpuTempShown, RelativeSource={RelativeSource Mode=FindAncestor, AncestorType={x:Type Window}}, Converter={StaticResource cpuTempShownToMonitorTagConverter}, ConverterParameter=WeatherTemp}" />
+             headline has between them (a square of two pixels, drawn, so that it is in the middle of the digits' height and between the
+             two texts; a dot of the font sat high and to the left). The words have the temperature's own tag, so they are level with it on
+             every monitor; the dot has its own (WeatherDot). -->
+        <StackPanel x:Name="WeatherDescriptionRow" Orientation="Horizontal" VerticalAlignment="Center" Visibility="Collapsed">
+            <Rectangle Width="2"
+                       Height="2"
+                       Margin="4,0,3,0"
+                       VerticalAlignment="Center"
+                       SnapsToDevicePixels="True"
+                       UseLayoutRounding="True"
+                       Fill="{DynamicResource ClockForeground}"
+                       utilities:MonitorOffset.Tag="WeatherDot" />
+            <TextBlock x:Name="WeatherDescriptionText"
+                       Text="{Binding WeatherDescription}"
+                       Style="{DynamicResource WeatherTempStyle}"
+                       Foreground="{DynamicResource ClockForeground}"
+                       utilities:MonitorOffset.Tag="{Binding Path=IsCpuTempShown, RelativeSource={RelativeSource Mode=FindAncestor, AncestorType={x:Type Window}}, Converter={StaticResource cpuTempShownToMonitorTagConverter}, ConverterParameter=WeatherTemp}" />
+        </StackPanel>
     </StackPanel>
     <!-- The forecast: opens when the pointer rests on the widget and closes shortly after it leaves both
          the widget and the popup (see WeatherPanel_OnMouseEnter / ScheduleForecastClose). Uses the

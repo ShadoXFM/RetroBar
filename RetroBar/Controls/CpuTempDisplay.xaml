@@ -39,7 +39,7 @@
         <controls:Sparkline x:Name="CpuGraphLine"
                             Width="24"
                             Height="10"
-                            Margin="3,0,0,2"
+                            Margin="3,0,2,2"
                             VerticalAlignment="Center"
                             Visibility="Collapsed"
                             utilities:MonitorOffset.Tag="WidgetSparkline" />
