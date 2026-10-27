@@ -87,6 +87,7 @@ namespace RetroBar.Utilities
             "VuMeterContainer",
             "WidgetSparkline",
             "VuMeterContainerNoArt",
+            "WeatherDescription",
             "WeatherDot",
             "WeatherGroup",
             "WeatherGroupBar",
