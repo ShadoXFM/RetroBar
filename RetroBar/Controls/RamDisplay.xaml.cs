@@ -24,6 +24,7 @@ namespace RetroBar.Controls
         // which the CPU temperature's degree sign has room for and the percent sign has not (it was cut by the hide button): the widget
         // has that much more room at its right there.
         private const double TrayRoom = 3;
+        internal const double TrayRoomSize = TrayRoom;
 
         private bool _inTray = true;
         public bool InTray

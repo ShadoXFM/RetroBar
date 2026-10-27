@@ -89,6 +89,9 @@ namespace RetroBar
             {
                 RamDisplayControl.InTray = !_windows11Applied;
 
+                // Whichever of them is the last in the tray box has room at its right.
+                CpuTempDisplayControl.TrayRoom = !_windows11Applied && !RamDisplayControl.IsVisible ? Controls.RamDisplay.TrayRoomSize : 0;
+
                 // The graphs and the weather in words are the Windows 11 style's.
                 bool details = _windows11Applied && Settings.Instance.WidgetDetails;
                 WeatherDisplayControl.Details = details;
@@ -147,6 +150,7 @@ namespace RetroBar
             this.hotkeyManager = hotkeyManager;
 
             InitializeComponent();
+            RamDisplayControl.IsVisibleChanged += (s, e) => UpdateTrayContentFlags();
             DataContext = _shellManager;
             StartButton.StartMenuMonitor = startMenuMonitor;
 

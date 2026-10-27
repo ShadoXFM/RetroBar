@@ -48,6 +48,19 @@ namespace RetroBar.Controls
             }
         }
 
+        // The notification area's negative margin is laid over what is before it in the tray box (the classic style), so the last widget
+        // there has this much more room at its right (see RamDisplay.InTray): the CPU temperature, when the memory is not shown after it.
+        private double _trayRoom;
+        public double TrayRoom
+        {
+            get => _trayRoom;
+            set
+            {
+                _trayRoom = value;
+                CpuTempPanel.Margin = new Thickness(4, 0, 4 + value, 0);
+            }
+        }
+
         public CpuTempDisplay()
         {
             InitializeComponent();
