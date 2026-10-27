@@ -196,6 +196,15 @@ namespace RetroBar.Utilities
             set => Set(ref _showCpuTemp, value);
         }
 
+        // The Windows 11 style: a small graph to the right of each temperature (the weather's, the CPU's) and of the memory in use, and the weather
+        // in words after the weather's temperature.
+        private bool _widgetDetails;
+        public bool WidgetDetails
+        {
+            get => _widgetDetails;
+            set => Set(ref _widgetDetails, value);
+        }
+
         // The memory in use, after the CPU temperature (see RamDisplay).
         private bool _showRam = true;
         public bool ShowRam

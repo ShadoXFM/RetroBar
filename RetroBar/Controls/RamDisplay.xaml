@@ -35,6 +35,13 @@
                    Style="{DynamicResource CpuTempStyle}"
                    Foreground="{DynamicResource ClockForeground}"
                    utilities:MonitorOffset.Tag="RamText" />
+        <controls:Sparkline x:Name="RamGraphLine"
+                            Width="24"
+                            Height="10"
+                            Margin="3,0,0,4"
+                            VerticalAlignment="Center"
+                            Visibility="Collapsed"
+                            utilities:MonitorOffset.Tag="WidgetSparkline" />
     </StackPanel>
     <!-- The graph of the memory in use over the last five minutes: opens and closes as the weather's forecast does (the same frame, the same
          slide; see RamDisplay.xaml.cs). -->

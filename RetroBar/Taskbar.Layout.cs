@@ -60,6 +60,10 @@ namespace RetroBar
             {
                 Dispatcher.BeginInvoke(new System.Action(ApplyTaskbarStyle));
             }
+            else if (e.PropertyName == nameof(Settings.WidgetDetails))
+            {
+                Dispatcher.BeginInvoke(new System.Action(UpdateTrayContentFlags));
+            }
             else if (e.PropertyName == nameof(Settings.StartButtonLook))
             {
                 Dispatcher.BeginInvoke(new System.Action(UpdateStartButtonLook));

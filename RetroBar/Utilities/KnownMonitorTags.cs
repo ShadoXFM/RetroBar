@@ -85,6 +85,7 @@ namespace RetroBar.Utilities
             "TrayToggleGlyph",
             "TrayToggleHoverFill",
             "VuMeterContainer",
+            "WidgetSparkline",
             "VuMeterContainerNoArt",
             "WeatherGroup",
             "WeatherGroupBar",

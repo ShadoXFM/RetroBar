@@ -88,6 +88,12 @@ namespace RetroBar
             if (RamDisplayControl != null)
             {
                 RamDisplayControl.InTray = !_windows11Applied;
+
+                // The graphs and the weather in words are the Windows 11 style's.
+                bool details = _windows11Applied && Settings.Instance.WidgetDetails;
+                WeatherDisplayControl.Details = details;
+                CpuTempDisplayControl.Details = details;
+                RamDisplayControl.Details = details;
             }
         }
 

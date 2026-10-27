@@ -26,6 +26,30 @@ namespace RetroBar.Controls
         private DispatcherTimer _timer;
         private WeatherViewModel _viewModel;
 
+        // The Windows 11 style's option (Settings.WidgetDetails): the weather in words and a small graph of the next day's temperature, after
+        // the temperature.
+        private bool _details;
+        public bool Details
+        {
+            get => _details;
+            set
+            {
+                _details = value;
+                WeatherDescriptionText.Visibility = value ? Visibility.Visible : Visibility.Collapsed;
+                WeatherGraphLine.Visibility = value ? Visibility.Visible : Visibility.Collapsed;
+                UpdateGraphLine();
+            }
+        }
+
+        private void UpdateGraphLine()
+        {
+            if (_details && _viewModel != null)
+            {
+                WeatherGraphLine.MinSpan = 6;
+                WeatherGraphLine.SetValues(_viewModel.HourlyTrend);
+            }
+        }
+
         public WeatherDisplay()
         {
             InitializeComponent();
@@ -49,6 +73,13 @@ namespace RetroBar.Controls
 
             _viewModel = new WeatherViewModel();
             DataContext = _viewModel;
+            _viewModel.PropertyChanged += (s, args) =>
+            {
+                if (args.PropertyName == nameof(WeatherViewModel.HourlyTrend))
+                {
+                    UpdateGraphLine();
+                }
+            };
 
             // Set up the timer
             _timer = new DispatcherTimer();
@@ -646,6 +677,32 @@ namespace RetroBar.Controls
             }
         }
 
+        // The weather in words (the forecast's headline has it after the temperature), and the temperatures of the next day, for the small graph.
+        private string _weatherDescription;
+        public string WeatherDescription
+        {
+            get => _weatherDescription;
+            set
+            {
+                if (_weatherDescription != value)
+                {
+                    _weatherDescription = value;
+                    OnPropertyChanged();
+                }
+            }
+        }
+
+        private double[] _hourlyTrend = Array.Empty<double>();
+        public double[] HourlyTrend
+        {
+            get => _hourlyTrend;
+            set
+            {
+                _hourlyTrend = value;
+                OnPropertyChanged();
+            }
+        }
+
         private static string FormatBarTemperature(double celsius)
         {
             double value = Settings.Instance.WeatherUseFahrenheit ? celsius * 9 / 5 + 32 : celsius;
@@ -951,6 +1008,8 @@ namespace RetroBar.Controls
                 WeatherTemp = FormatTemperature(_cachedCelsius.Value);
                 WeatherHeadline = FormatHeadline(_cachedCelsius.Value, _cachedWeatherCode);
                 WeatherBarTemp = FormatBarTemperature(_cachedCelsius.Value);
+                WeatherDescription = _cachedWeatherCode is int described ? DescribeWeather(described) : null;
+                HourlyTrend = _cachedHourly.Take(24).Select(h => h.Celsius).ToArray();
                 FillDetails();
                 WeatherIconPath = _cachedIconPath;
 
@@ -988,6 +1047,8 @@ namespace RetroBar.Controls
                 WeatherTemp = "N/A";
                 WeatherHeadline = "N/A";
                 WeatherBarTemp = "N/A";
+                WeatherDescription = null;
+                HourlyTrend = Array.Empty<double>();
                 DetailItems.Clear();
                 Hourly.Clear();
                 HasHourly = false;

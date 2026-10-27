@@ -585,6 +585,11 @@
                                       IsChecked="{Binding Source={x:Static Settings:Settings.Instance}, Path=ShowRam, UpdateSourceTrigger=PropertyChanged}">
                                 <Label Content="{DynamicResource show_ram}" />
                             </CheckBox>
+                            <CheckBox x:Name="cbWidgetDetails"
+                                      IsChecked="{Binding Source={x:Static Settings:Settings.Instance}, Path=WidgetDetails, UpdateSourceTrigger=PropertyChanged}">
+                                <Label Content="{DynamicResource widget_details}"
+                                       ToolTip="{DynamicResource widget_details_tip}" />
+                            </CheckBox>
                             <CheckBox x:Name="cbWeatherUseFahrenheit"
                                       IsChecked="{Binding Source={x:Static Settings:Settings.Instance}, Path=WeatherUseFahrenheit, UpdateSourceTrigger=PropertyChanged}">
                                 <Label Content="{DynamicResource weather_use_fahrenheit}" />

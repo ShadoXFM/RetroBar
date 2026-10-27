@@ -36,6 +36,28 @@ namespace RetroBar.Controls
             }
         }
 
+        // The Windows 11 style's option (Settings.WidgetDetails): a small graph of the last five minutes at the right of the percentage.
+        private bool _details;
+        public bool Details
+        {
+            get => _details;
+            set
+            {
+                _details = value;
+                RamGraphLine.Visibility = value ? Visibility.Visible : Visibility.Collapsed;
+                UpdateGraphLine();
+            }
+        }
+
+        private void UpdateGraphLine()
+        {
+            if (_details)
+            {
+                RamGraphLine.MinSpan = 10;
+                RamGraphLine.SetValues(RamHistory.Last().Select(s => s.Percent).ToArray());
+            }
+        }
+
         public RamDisplay()
         {
             InitializeComponent();
@@ -112,6 +134,7 @@ namespace RetroBar.Controls
             }
 
             ShowPercent();
+            UpdateGraphLine();
             if (GraphPopup.IsOpen)
             {
                 RefreshGraph();

@@ -159,8 +159,8 @@
                                 VerticalAlignment="Center"
                                 Margin="5,0,0,0"
                                 utilities:MonitorOffset.Tag="{Binding Path=(utilities:TrayBoxState.MediaPlaying), RelativeSource={RelativeSource Self}, Converter={StaticResource mediaPlayingToMonitorTagConverter}, ConverterParameter=WeatherGroup}">
-                        <controls:WeatherDisplay VerticalAlignment="Center" />
-                        <controls:CpuTempDisplay VerticalAlignment="Center" />
+                        <controls:WeatherDisplay x:Name="WeatherDisplayControl" VerticalAlignment="Center" />
+                        <controls:CpuTempDisplay x:Name="CpuTempDisplayControl" VerticalAlignment="Center" />
                         <controls:RamDisplay x:Name="RamDisplayControl" VerticalAlignment="Center" />
                     </StackPanel>
                     <!-- TrayNotifyListAlone (a Margin, say) is for the tray box with no media, weather or CPU temperature in it: the gap

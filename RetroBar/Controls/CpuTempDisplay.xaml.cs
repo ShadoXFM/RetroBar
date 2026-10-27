@@ -26,6 +26,28 @@ namespace RetroBar.Controls
         private DispatcherTimer _timer;
         private double? _celsius;
 
+        // The Windows 11 style's option (Settings.WidgetDetails): a small graph of the last five minutes at the right of the temperature.
+        private bool _details;
+        public bool Details
+        {
+            get => _details;
+            set
+            {
+                _details = value;
+                CpuGraphLine.Visibility = value ? Visibility.Visible : Visibility.Collapsed;
+                UpdateGraphLine();
+            }
+        }
+
+        private void UpdateGraphLine()
+        {
+            if (_details)
+            {
+                CpuGraphLine.MinSpan = 10;
+                CpuGraphLine.SetValues(CpuTemperatureHistory.Last().Select(s => s.Celsius).ToArray());
+            }
+        }
+
         public CpuTempDisplay()
         {
             InitializeComponent();
@@ -107,6 +129,7 @@ namespace RetroBar.Controls
         {
             _celsius = _monitor.ReadTemperature();
             ShowTemperature();
+            UpdateGraphLine();
             if (GraphPopup.IsOpen)
             {
                 RefreshGraph();
