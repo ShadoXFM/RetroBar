@@ -48,9 +48,7 @@
     <s:String x:Key="media_source_browser">Navigateur</s:String>
     <s:String x:Key="media_source_none">Aucun média en cours</s:String>
     <s:String x:Key="show_cpu_temp">Afficher la température du _CPU</s:String>
-    <s:String x:Key="show_stats_cpu">Afficher la _charge du CPU</s:String>
-    <s:String x:Key="show_stats_ram">Afficher la _mémoire utilisée</s:String>
-    <s:String x:Key="show_stats_network">Afficher le débit _réseau</s:String>
+    <s:String x:Key="show_ram">Afficher la _mémoire utilisée</s:String>
     <s:String x:Key="media_previous">Précédent</s:String>
     <s:String x:Key="media_play_pause">Lecture/Pause</s:String>
     <s:String x:Key="media_next">Suivant</s:String>

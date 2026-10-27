@@ -161,7 +161,7 @@
                                 utilities:MonitorOffset.Tag="{Binding Path=(utilities:TrayBoxState.MediaPlaying), RelativeSource={RelativeSource Self}, Converter={StaticResource mediaPlayingToMonitorTagConverter}, ConverterParameter=WeatherGroup}">
                         <controls:WeatherDisplay VerticalAlignment="Center" />
                         <controls:CpuTempDisplay VerticalAlignment="Center" />
-                        <controls:SystemStats VerticalAlignment="Center" />
+                        <controls:RamDisplay VerticalAlignment="Center" />
                     </StackPanel>
                     <!-- TrayNotifyListAlone (a Margin, say) is for the tray box with no media, weather or CPU temperature in it: the gap
                          between the tray box's left side and the hide button, which does not touch the others' layouts. -->

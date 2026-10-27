@@ -581,17 +581,9 @@
                                       IsChecked="{Binding Source={x:Static Settings:Settings.Instance}, Path=ShowCpuTemp, UpdateSourceTrigger=PropertyChanged}">
                                 <Label Content="{DynamicResource show_cpu_temp}" />
                             </CheckBox>
-                            <CheckBox x:Name="cbShowStatsCpu"
-                                      IsChecked="{Binding Source={x:Static Settings:Settings.Instance}, Path=ShowStatsCpu, UpdateSourceTrigger=PropertyChanged}">
-                                <Label Content="{DynamicResource show_stats_cpu}" />
-                            </CheckBox>
-                            <CheckBox x:Name="cbShowStatsRam"
-                                      IsChecked="{Binding Source={x:Static Settings:Settings.Instance}, Path=ShowStatsRam, UpdateSourceTrigger=PropertyChanged}">
-                                <Label Content="{DynamicResource show_stats_ram}" />
-                            </CheckBox>
-                            <CheckBox x:Name="cbShowStatsNetwork"
-                                      IsChecked="{Binding Source={x:Static Settings:Settings.Instance}, Path=ShowStatsNetwork, UpdateSourceTrigger=PropertyChanged}">
-                                <Label Content="{DynamicResource show_stats_network}" />
+                            <CheckBox x:Name="cbShowRam"
+                                      IsChecked="{Binding Source={x:Static Settings:Settings.Instance}, Path=ShowRam, UpdateSourceTrigger=PropertyChanged}">
+                                <Label Content="{DynamicResource show_ram}" />
                             </CheckBox>
                             <CheckBox x:Name="cbWeatherUseFahrenheit"
                                       IsChecked="{Binding Source={x:Static Settings:Settings.Instance}, Path=WeatherUseFahrenheit, UpdateSourceTrigger=PropertyChanged}">

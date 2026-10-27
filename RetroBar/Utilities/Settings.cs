@@ -196,26 +196,12 @@ namespace RetroBar.Utilities
             set => Set(ref _showCpuTemp, value);
         }
 
-        // The small widgets in the tray box after the CPU temperature (see SystemStats): off until they are turned on.
-        private bool _showStatsCpu;
-        public bool ShowStatsCpu
+        // The memory in use, after the CPU temperature (see RamDisplay).
+        private bool _showRam = true;
+        public bool ShowRam
         {
-            get => _showStatsCpu;
-            set => Set(ref _showStatsCpu, value);
-        }
-
-        private bool _showStatsRam;
-        public bool ShowStatsRam
-        {
-            get => _showStatsRam;
-            set => Set(ref _showStatsRam, value);
-        }
-
-        private bool _showStatsNetwork;
-        public bool ShowStatsNetwork
-        {
-            get => _showStatsNetwork;
-            set => Set(ref _showStatsNetwork, value);
+            get => _showRam;
+            set => Set(ref _showRam, value);
         }
 
         // Which audio device the media player's VU meter listens to, matched against device names
