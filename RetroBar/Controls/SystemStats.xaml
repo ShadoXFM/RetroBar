@@ -1,0 +1,27 @@
+<UserControl x:Class="RetroBar.Controls.SystemStats"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:utilities="clr-namespace:RetroBar.Utilities"
+             xmlns:controls="clr-namespace:RetroBar.Controls"
+             Loaded="SystemStats_OnLoaded"
+             Unloaded="SystemStats_OnUnloaded"
+             Visibility="Collapsed">
+    <!-- The small widgets of the taskbar (CPU load, memory, network speed), each shown by its own setting. They sit in the tray box after
+         the CPU temperature, in the same bold Tahoma; each has its own hover text and a little graph of the last half minute. -->
+    <StackPanel Orientation="Horizontal"
+                VerticalAlignment="Center"
+                utilities:MonitorOffset.Tag="StatsGroup">
+        <StackPanel x:Name="CpuItem" Orientation="Horizontal" Background="Transparent" Margin="4,0" Visibility="Collapsed">
+            <TextBlock x:Name="CpuText" Style="{DynamicResource CpuTempStyle}" Foreground="{DynamicResource ClockForeground}" />
+            <controls:Sparkline x:Name="CpuGraph" Width="24" Height="10" Margin="2,0,0,0" VerticalAlignment="Center" />
+        </StackPanel>
+        <StackPanel x:Name="RamItem" Orientation="Horizontal" Background="Transparent" Margin="4,0" Visibility="Collapsed">
+            <TextBlock x:Name="RamText" Style="{DynamicResource CpuTempStyle}" Foreground="{DynamicResource ClockForeground}" />
+            <controls:Sparkline x:Name="RamGraph" Width="24" Height="10" Margin="2,0,0,0" VerticalAlignment="Center" />
+        </StackPanel>
+        <StackPanel x:Name="NetItem" Orientation="Horizontal" Background="Transparent" Margin="4,0" Visibility="Collapsed">
+            <TextBlock x:Name="NetText" Style="{DynamicResource CpuTempStyle}" Foreground="{DynamicResource ClockForeground}" />
+            <controls:Sparkline x:Name="NetGraph" Width="24" Height="10" Margin="2,0,0,0" VerticalAlignment="Center" />
+        </StackPanel>
+    </StackPanel>
+</UserControl>

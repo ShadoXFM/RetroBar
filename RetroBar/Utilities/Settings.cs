@@ -196,6 +196,28 @@ namespace RetroBar.Utilities
             set => Set(ref _showCpuTemp, value);
         }
 
+        // The small widgets in the tray box after the CPU temperature (see SystemStats): off until they are turned on.
+        private bool _showStatsCpu;
+        public bool ShowStatsCpu
+        {
+            get => _showStatsCpu;
+            set => Set(ref _showStatsCpu, value);
+        }
+
+        private bool _showStatsRam;
+        public bool ShowStatsRam
+        {
+            get => _showStatsRam;
+            set => Set(ref _showStatsRam, value);
+        }
+
+        private bool _showStatsNetwork;
+        public bool ShowStatsNetwork
+        {
+            get => _showStatsNetwork;
+            set => Set(ref _showStatsNetwork, value);
+        }
+
         // Which audio device the media player's VU meter listens to, matched against device names
         // (case-insensitive substring), searching recording devices first and then playback devices
         // (loopback). Empty = the Windows default playback device. Needed when the default output

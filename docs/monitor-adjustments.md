@@ -85,6 +85,7 @@ A tag that is chosen by a state has variants: `Playing` (media is playing), `NoC
 | `PreviewTitleText` | `Controls/TaskButton.xaml` |  |
 | `QuickLaunchToolbar` | `Taskbar.xaml` |  |
 | `StartButtonBox` | `Controls/StartButton.xaml` |  |
+| `StatsGroup` | `Controls/SystemStats.xaml` |  |
 | `StartIcon` | `Controls/StartButton.xaml` |  |
 | `StartLabel` | `Controls/StartButton.xaml` |  |
 | `TaskButton` | `Controls/TaskButton.xaml.cs` | `TaskButtonActive` |

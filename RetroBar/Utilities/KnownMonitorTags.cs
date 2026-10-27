@@ -48,6 +48,7 @@ namespace RetroBar.Utilities
             "PreviewTitleText",
             "QuickLaunchToolbar",
             "StartButtonBox",
+            "StatsGroup",
             "StartIcon",
             "StartLabel",
             "TaskButton",

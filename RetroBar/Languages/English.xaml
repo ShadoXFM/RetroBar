@@ -56,6 +56,9 @@
     <s:String x:Key="media_popup_lyrics_now">Global: {0} s ahead</s:String>
     <s:String x:Key="media_popup_lyrics_now_song">This song: {0} s ahead</s:String>
     <s:String x:Key="show_cpu_temp">Show _CPU temperature</s:String>
+    <s:String x:Key="show_stats_cpu">Show the CPU _load</s:String>
+    <s:String x:Key="show_stats_ram">Show the _memory in use</s:String>
+    <s:String x:Key="show_stats_network">Show the _network speed</s:String>
     <s:String x:Key="media_previous">Previous</s:String>
     <s:String x:Key="media_play_pause">Play/Pause</s:String>
     <s:String x:Key="media_next">Next</s:String>
