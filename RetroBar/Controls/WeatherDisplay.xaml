@@ -36,19 +36,9 @@
            Style="{DynamicResource WeatherTempStyle}"
            Foreground="{DynamicResource ClockForeground}"
            utilities:MonitorOffset.Tag="{Binding Path=IsCpuTempShown, RelativeSource={RelativeSource Mode=FindAncestor, AncestorType={x:Type Window}}, Converter={StaticResource cpuTempShownToMonitorTagConverter}, ConverterParameter=WeatherTemp}" />
-        <!-- The Windows 11 style's option (Settings.WidgetDetails): the weather in words after the temperature, with the dot the forecast's
-             headline has between them (a square of two pixels, drawn, so that it is in the middle of the digits' height and between the
-             two texts; a dot of the font sat high and to the left). The words have a tag of their own (WeatherDescription, which has
-             the temperature's values to begin with), and so has the dot (WeatherDot). -->
+        <!-- The Windows 11 style's option (Settings.WidgetDetails): the weather in words after the temperature. It has a tag of its own
+             (WeatherDescription, which has the temperature's values to begin with), so it can be placed apart from the temperature. -->
         <StackPanel x:Name="WeatherDescriptionRow" Orientation="Horizontal" VerticalAlignment="Center" Visibility="Collapsed">
-            <Rectangle Width="2"
-                       Height="2"
-                       Margin="4,0,3,0"
-                       VerticalAlignment="Center"
-                       SnapsToDevicePixels="True"
-                       UseLayoutRounding="True"
-                       Fill="{DynamicResource ClockForeground}"
-                       utilities:MonitorOffset.Tag="WeatherDot" />
             <TextBlock x:Name="WeatherDescriptionText"
                        Text="{Binding WeatherDescription}"
                        Style="{DynamicResource WeatherTempStyle}"

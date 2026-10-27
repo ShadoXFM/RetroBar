@@ -125,7 +125,6 @@ A tag that is chosen by a state has variants: `Playing` (media is playing), `NoC
 | `VuMeterContainerNoArt` | `Controls/MediaPlayer.xaml.cs` |  |
 | `WidgetSparkline` | `Controls/CpuTempDisplay.xaml`, `Controls/RamDisplay.xaml`, `Controls/WeatherDisplay.xaml` |  |
 | `WeatherDescription` | `Controls/WeatherDisplay.xaml` |  |
-| `WeatherDot` | `Controls/WeatherDisplay.xaml` |  |
 | `WeatherGroup` | `Taskbar.xaml` | `WeatherGroupPlaying` |
 | `WeatherGroupBar` | `Taskbar.Layout.cs` |  |
 | `WeatherGroupPlaying` | `Taskbar.xaml` |  |
