@@ -20,9 +20,26 @@ namespace RetroBar.Controls
         private double? _percent;
         private double _totalGb, _usedGb;
 
+        // In the tray box (the classic style) the notification area's own margin (TrayNotifyList, negative) is laid over what is before it,
+        // which the CPU temperature's degree sign has room for and the percent sign has not (it was cut by the hide button): the widget
+        // has that much more room at its right there.
+        private const double TrayRoom = 3;
+
+        private bool _inTray = true;
+        public bool InTray
+        {
+            get => _inTray;
+            set
+            {
+                _inTray = value;
+                RamPanel.Margin = new Thickness(4, 0, 4 + (value ? TrayRoom : 0), 0);
+            }
+        }
+
         public RamDisplay()
         {
             InitializeComponent();
+            RamPanel.Margin = new Thickness(4, 0, 4 + TrayRoom, 0);
             InitializeGraphSlide();
 
             // A right click inside the popup does nothing: it went on to the taskbar's own menu, opened over the popup.

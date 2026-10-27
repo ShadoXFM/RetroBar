@@ -85,6 +85,10 @@ namespace RetroBar
         {
             IsWeatherInTray = IsWeatherShown && !_windows11Applied;
             IsCpuTempInTray = IsCpuTempShown && !_windows11Applied;
+            if (RamDisplayControl != null)
+            {
+                RamDisplayControl.InTray = !_windows11Applied;
+            }
         }
 
         /// <summary>
