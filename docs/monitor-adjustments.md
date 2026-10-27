@@ -91,6 +91,7 @@ A tag that is chosen by a state has variants: `Playing` (media is playing), `NoC
 | `TaskButtonActive` | `Controls/TaskButton.xaml.cs` |  |
 | `TaskIcon` | `Controls/TaskButton.xaml.cs`, `Utilities/MonitorOffset.cs` | `TaskIconActive` |
 | `TaskIconActive` | `Controls/TaskButton.xaml.cs` |  |
+| `TaskBadgeBar` | `Controls/TaskButton.IconOnly.cs` |  |
 | `TaskIconBar` | `Controls/TaskButton.IconOnly.cs` |  |
 | `TaskLabel` | `Controls/TaskButton.xaml.cs` | `TaskLabelActive` |
 | `TaskLabelActive` | `Controls/TaskButton.xaml.cs` |  |

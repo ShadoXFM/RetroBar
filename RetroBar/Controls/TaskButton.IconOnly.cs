@@ -716,9 +716,11 @@ namespace RetroBar.Controls
                 double iconTop = Math.Round(top / step) * step;
                 IconOnlyImage.Margin = new Thickness(iconLeft, iconTop, 0, 0);
 
-                // The badge at the lower right of the icon, as the classic tab has it.
-                IconOnlyBadge.Margin = new Thickness(Math.Round((iconLeft + IconOnlyImage.Width - IconOnlyBadge.Width + 2) / step) * step,
-                    Math.Round((iconTop + IconOnlyImage.Height - IconOnlyBadge.Height + 1) / step) * step, 0, 0);
+                // The badge at the lower right of the icon, as the classic tab has it, moved by its monitor's TaskBadgeBar adjustment
+                // (X and Y, in whole pixels).
+                MonitorOffsetValue badge = MonitorAdjustments.Get(MonitorOffset.FindDeviceName(this), "TaskBadgeBar");
+                IconOnlyBadge.Margin = new Thickness(Math.Round((iconLeft + IconOnlyImage.Width - IconOnlyBadge.Width + 2 + badge.X) / step) * step,
+                    Math.Round((iconTop + IconOnlyImage.Height - IconOnlyBadge.Height + 1 + badge.Y) / step) * step, 0, 0);
                 // Centered at once if it can be; if not (nothing to go by yet) it is not seen until it has been, a moment later: the place it is
                 // put at first is a pixel or so off, and it was seen going to the right one.
                 if (!_iconCentered)
