@@ -50,6 +50,7 @@
     <s:String x:Key="show_cpu_temp">Afficher la température du _CPU</s:String>
     <s:String x:Key="widget_details">Style Windows 11 : _graphiques et météo en toutes lettres</s:String>
     <s:String x:Key="widget_details_tip">Dans le style Windows 11, un petit graphique à droite des températures et de la mémoire utilisée, et la météo en toutes lettres après la température.</s:String>
+    <s:String x:Key="snap_layouts">Dispositions d'ancrage : faire glisser un onglet hors de la barre vers une disposition</s:String>
     <s:String x:Key="show_ram">Afficher la _mémoire utilisée</s:String>
     <s:String x:Key="media_previous">Précédent</s:String>
     <s:String x:Key="media_play_pause">Lecture/Pause</s:String>

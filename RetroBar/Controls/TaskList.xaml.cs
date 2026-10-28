@@ -631,6 +631,9 @@ namespace RetroBar.Controls
                 GongSolutions.Wpf.DragDrop.DragDrop.SetDropHandler(TasksList, new TaskListDropHandler(TasksList));
                 ApplyPinnedMerge();
 
+                // Dragged up out of the taskbar, a tab shows the snap layouts (see SnapLayoutDrag).
+                SnapLayoutDrag.Attach(TasksList, Host);
+
                 Settings.Instance.PropertyChanged += Settings_PropertyChanged;
                 Host.hotkeyManager.TaskbarHotkeyPressed += TaskList_TaskbarHotkeyPressed;
 

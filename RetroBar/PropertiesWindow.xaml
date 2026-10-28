@@ -585,6 +585,10 @@
                                       IsChecked="{Binding Source={x:Static Settings:Settings.Instance}, Path=ShowRam, UpdateSourceTrigger=PropertyChanged}">
                                 <Label Content="{DynamicResource show_ram}" />
                             </CheckBox>
+                            <CheckBox x:Name="cbSnapLayouts"
+                                      IsChecked="{Binding Source={x:Static Settings:Settings.Instance}, Path=SnapLayouts, UpdateSourceTrigger=PropertyChanged}">
+                                <Label Content="{DynamicResource snap_layouts}" />
+                            </CheckBox>
                             <CheckBox x:Name="cbWidgetDetails"
                                       IsChecked="{Binding Source={x:Static Settings:Settings.Instance}, Path=WidgetDetails, UpdateSourceTrigger=PropertyChanged}">
                                 <Label Content="{DynamicResource widget_details}"
