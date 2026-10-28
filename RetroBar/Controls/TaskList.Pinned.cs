@@ -373,9 +373,82 @@ namespace RetroBar.Controls
 
         private void Launcher_OnPreviewMouseRightButtonUp(object sender, MouseButtonEventArgs e)
         {
-            if (sender is ToolbarButton button && button.DataContext is ShellFile file && InvokePinMenu(file, true))
+            if (sender is ToolbarButton button && button.DataContext is ShellFile file && (ShowPinMenu(button, file) || InvokePinMenu(file, true)))
             {
                 e.Handled = true;
+            }
+        }
+
+        // The right-click menu of a pin that is not running: the one a tab has (see TaskButton.AppButton_OnContextMenuOpening), without what
+        // is for a window - the program's jump list, the program (a click starts it), and taking the pin off. False when there is no
+        // shortcut to make it from (the shell's own menu is shown then).
+        private bool ShowPinMenu(ToolbarButton button, ShellFile file)
+        {
+            string link = file?.Path;
+            if (string.IsNullOrWhiteSpace(link) || !File.Exists(link))
+            {
+                return false;
+            }
+
+            try
+            {
+                string exe = PinnedApps.TargetPath(link);
+                bool explorer = string.Equals(PinnedApps.TargetExe(link), "explorer.exe", StringComparison.OrdinalIgnoreCase);
+
+                var menu = new System.Windows.Controls.ContextMenu { PlacementTarget = button, Placement = System.Windows.Controls.Primitives.PlacementMode.MousePoint };
+                menu.SetBinding(System.Windows.Media.TextOptions.TextRenderingModeProperty, new System.Windows.Data.Binding("AllowFontSmoothingMenu")
+                {
+                    Source = Settings.Instance,
+                    Converter = (System.Windows.Data.IValueConverter)FindResource("menuTextRenderingModeConverter"),
+                });
+
+                foreach (object entry in TaskButton.JumpListMenuEntries(this, string.IsNullOrEmpty(exe) ? null : exe, null, link, explorer))
+                {
+                    menu.Items.Add(entry);
+                }
+
+                // The program's name and icon (made as the tab's menu makes them): a click starts it.
+                System.Windows.Media.ImageSource icon = TaskButton.ProgramIconOf(string.IsNullOrEmpty(exe) ? link : exe, null);
+                System.Windows.Controls.Image image = null;
+                if (icon != null)
+                {
+                    image = new System.Windows.Controls.Image { Source = icon, Width = 16, Height = 16, UseLayoutRounding = true, SnapsToDevicePixels = true };
+                    System.Windows.Media.RenderOptions.SetBitmapScalingMode(image, System.Windows.Media.BitmapScalingMode.HighQuality);
+                    MonitorOffset.SetTag(image, "PreviewTitleIcon");
+                }
+
+                var start = new System.Windows.Controls.MenuItem
+                {
+                    Header = Path.GetFileNameWithoutExtension(link).Replace("_", "__"),
+                    Icon = image,
+                    FontWeight = System.Windows.FontWeights.Bold,
+                    Style = MenuItemStyle.Style,
+                };
+                start.Click += (s, args) => InvokePinMenu(file, false);
+                menu.Items.Add(start);
+
+                var unpin = new System.Windows.Controls.MenuItem { Header = FindResource("unpin_from_taskbar"), Style = MenuItemStyle.Style };
+                unpin.Click += (s, args) =>
+                {
+                    try
+                    {
+                        File.Delete(link);
+                    }
+                    catch (Exception ex)
+                    {
+                        ShellLogger.Error("TaskList: Unable to unpin the program", ex);
+                    }
+                };
+                menu.Items.Add(unpin);
+
+                Mouse.Capture(null);
+                menu.IsOpen = true;
+                return true;
+            }
+            catch (Exception ex)
+            {
+                ShellLogger.Error($"TaskList: Unable to show the menu of the pin {link}", ex);
+                return false;
             }
         }
 
