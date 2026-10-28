@@ -150,8 +150,8 @@ namespace RetroBar.Controls
             return null;
         }
 
-        // The tab's button is this much wider than it is tall.
-        private const double TabExtraWidth = 2;
+        // The tab's button is this much wider than it is tall: 2 DIPs and 2 device pixels more.
+        private double TabExtraWidth => 2 + 2 * PixelStep;
 
         private int _squareChecks;
 
