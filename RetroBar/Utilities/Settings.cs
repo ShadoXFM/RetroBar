@@ -205,14 +205,6 @@ namespace RetroBar.Utilities
             set => Set(ref _widgetDetails, value);
         }
 
-        // A tab dragged up out of the taskbar shows the snap layouts, and dropped on one it puts its window there (see SnapLayoutDrag).
-        private bool _snapLayouts = true;
-        public bool SnapLayouts
-        {
-            get => _snapLayouts;
-            set => Set(ref _snapLayouts, value);
-        }
-
         // The memory in use, after the CPU temperature (see RamDisplay).
         private bool _showRam = true;
         public bool ShowRam

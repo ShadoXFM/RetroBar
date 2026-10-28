@@ -58,7 +58,6 @@
     <s:String x:Key="show_cpu_temp">Show _CPU temperature</s:String>
     <s:String x:Key="widget_details">Windows 11 style: _graphs and the weather in words</s:String>
     <s:String x:Key="widget_details_tip">In the Windows 11 style, a small graph at the right of the temperatures and of the memory in use, and the weather in words after the temperature.</s:String>
-    <s:String x:Key="snap_layouts">Snap _layouts: drag a tab up out of the taskbar and drop it on a layout</s:String>
     <s:String x:Key="show_ram">Show the _memory in use</s:String>
     <s:String x:Key="media_previous">Previous</s:String>
     <s:String x:Key="media_play_pause">Play/Pause</s:String>
