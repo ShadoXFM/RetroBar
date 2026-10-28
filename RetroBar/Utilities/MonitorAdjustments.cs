@@ -47,6 +47,10 @@ namespace RetroBar.Utilities
     /// mechanism (unlike RowCount, an unrelated per-monitor concern above, there wasn't already
     /// one for this).
     ///
+    /// "TabWidthAdjustment" is optional and adds this many DIPs (can be negative) to how much wider a
+    /// tab's button is than it is tall in the Windows 11 style (see TaskList.TabExtraWidth), on just
+    /// this one monitor.
+    ///
     /// Every other key is whatever string an element's utilities:MonitorOffset.Tag="..."
     /// attribute uses in the app's XAML (TaskButton, TaskButtonActive - the whole tab itself,
     /// not just its content, e.g. "TaskButton": { "Width": 150 } - TaskIcon, TaskIconActive,
@@ -130,6 +134,7 @@ namespace RetroBar.Utilities
         {
             public int? RowCount { get; set; }
             public double? HeightAdjustment { get; set; }
+            public double? TabWidthAdjustment { get; set; }
 
             [JsonExtensionData]
             public Dictionary<string, JsonElement> Tags { get; set; }
@@ -190,6 +195,17 @@ namespace RetroBar.Utilities
             if (!string.IsNullOrEmpty(deviceName) && _monitors.TryGetValue(deviceName, out MonitorEntry entry))
             {
                 return entry.HeightAdjustment ?? 0;
+            }
+
+            return 0;
+        }
+
+        /// <summary>DIPs (can be negative) to add to how much wider a tab is than it is tall in the Windows 11 style on this monitor, or 0.</summary>
+        public static double GetTabWidthAdjustment(string deviceName)
+        {
+            if (!string.IsNullOrEmpty(deviceName) && _monitors.TryGetValue(deviceName, out MonitorEntry entry))
+            {
+                return entry.TabWidthAdjustment ?? 0;
             }
 
             return 0;

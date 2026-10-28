@@ -150,8 +150,8 @@ namespace RetroBar.Controls
             return null;
         }
 
-        // The tab's button is this much wider than it is tall: 2 DIPs and 2 device pixels more.
-        private double TabExtraWidth => 2 + 2 * PixelStep;
+        // The tab's button is this much wider than it is tall (and what the monitor's TabWidthAdjustment adds).
+        private double TabExtraWidth => 2 + MonitorAdjustments.GetTabWidthAdjustment(Host?.Screen?.DeviceName);
 
         private int _squareChecks;
 
@@ -632,6 +632,7 @@ namespace RetroBar.Controls
                 ApplyPinnedMerge();
 
                 Settings.Instance.PropertyChanged += Settings_PropertyChanged;
+                MonitorAdjustments.Changed += MonitorAdjustments_Changed;
                 Host.hotkeyManager.TaskbarHotkeyPressed += TaskList_TaskbarHotkeyPressed;
 
                 isLoaded = true;
@@ -936,6 +937,7 @@ namespace RetroBar.Controls
                 Host.hotkeyManager.TaskbarHotkeyPressed -= TaskList_TaskbarHotkeyPressed;
             }
 
+            MonitorAdjustments.Changed -= MonitorAdjustments_Changed;
             Settings.Instance.PropertyChanged -= Settings_PropertyChanged;
 
             isLoaded = false;
@@ -1034,6 +1036,17 @@ namespace RetroBar.Controls
         private void TaskList_OnSizeChanged(object sender, SizeChangedEventArgs e)
         {
             SetTaskButtonWidth();
+        }
+
+        // The monitor's TabWidthAdjustment is part of the tabs' width (this is on the file watcher's thread).
+        private void MonitorAdjustments_Changed(object sender, EventArgs e)
+        {
+            Dispatcher.BeginInvoke(new Action(() =>
+            {
+                _measureLocked = false;
+                _squareChecks = 0;
+                SetTaskButtonWidth();
+            }));
         }
 
         private void SetTaskButtonWidth()

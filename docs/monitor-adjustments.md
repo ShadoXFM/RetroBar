@@ -16,7 +16,7 @@ It is keyed by the monitor's device name (`\\.\DISPLAY1`), then by a tag; a tag 
 ```
 
 Values are in DIPs (1 DIP is 1.25 pixels at 125% scale), so `0.8` is one pixel there.
-A monitor can also have `RowCount` (the number of taskbar rows) and `HeightAdjustment` (DIPs added to the taskbar's height).
+A monitor can also have `RowCount` (the number of taskbar rows), `HeightAdjustment` (DIPs added to the taskbar's height) and `TabWidthAdjustment` (DIPs added to how much wider a tab is than it is tall, in the Windows 11 style).
 
 ## Fields of a tag
 
