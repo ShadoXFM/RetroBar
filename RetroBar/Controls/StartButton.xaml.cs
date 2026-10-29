@@ -284,20 +284,33 @@ namespace RetroBar.Controls
 
         private void Start_OnMouseRightButtonUp(object sender, MouseButtonEventArgs e)
         {
+            if (ShowStartContextMenu(null))
+            {
+                e.Handled = true;
+            }
+        }
+
+        /// <summary>
+        /// The right-click menu of the Start button. With no button (the option is off) the edge of the taskbar where it was has it too,
+        /// the menu then opening over that edge (<paramref name="placementTarget"/>). Whether there was a menu to show.
+        /// </summary>
+        internal bool ShowStartContextMenu(UIElement? placementTarget)
+        {
             // Open Shell adds its own right-click menu to the Windows Start button, which doesn't exist here.
             // Like Open Shell, show its menu on a plain right-click and the Windows menu on Shift+right-click
             ShellLogger.Info($"StartButton: right-click, shift held = {(Keyboard.Modifiers & ModifierKeys.Shift) != 0}");
-            if ((Keyboard.Modifiers & ModifierKeys.Shift) == 0 && TryShowOpenShellMenu())
+            if ((Keyboard.Modifiers & ModifierKeys.Shift) == 0 && TryShowOpenShellMenu(placementTarget))
             {
-                e.Handled = true;
-                return;
+                return true;
             }
 
             if (EnvironmentHelper.IsWindows10OrBetter)
             {
                 ShellHelper.ShowStartContextMenu();
-                e.Handled = true;
+                return true;
             }
+
+            return false;
         }
 
         [DllImport("kernel32.dll", SetLastError = true)]
@@ -330,7 +343,7 @@ namespace RetroBar.Controls
             }
         }
 
-        private bool TryShowOpenShellMenu()
+        private bool TryShowOpenShellMenu(UIElement? placementTarget)
         {
             string? openShellPath;
             try
@@ -396,7 +409,7 @@ namespace RetroBar.Controls
             exit.Click += (s, args) => Run("-exit");
             menu.Items.Add(exit);
 
-            menu.PlacementTarget = Start;
+            menu.PlacementTarget = placementTarget ?? Start;
             menu.Placement = System.Windows.Controls.Primitives.PlacementMode.Top;
             menu.IsOpen = true;
             return true;

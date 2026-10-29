@@ -83,7 +83,8 @@
                     Margin="0,0,-6,0"
                     Background="Transparent"
                     Visibility="Collapsed"
-                    PreviewMouseLeftButtonUp="StartEdge_OnPreviewMouseLeftButtonUp">
+                    PreviewMouseLeftButtonUp="StartEdge_OnPreviewMouseLeftButtonUp"
+                    PreviewMouseRightButtonUp="StartEdge_OnPreviewMouseRightButtonUp">
                 <DockPanel.Dock>
                     <Binding Converter="{StaticResource dockOrientationConverter}"
                              ConverterParameter="leading"

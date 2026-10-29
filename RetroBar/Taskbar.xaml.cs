@@ -889,6 +889,15 @@ namespace RetroBar
             e.Handled = true;
         }
 
+        // The Start button's own right-click menu, from the edge where it was.
+        private void StartEdge_OnPreviewMouseRightButtonUp(object sender, System.Windows.Input.MouseButtonEventArgs e)
+        {
+            if (StartButton.ShowStartContextMenu(StartEdge))
+            {
+                e.Handled = true;
+            }
+        }
+
         private bool HasFullScreenApp()
         {
             bool hasFullScreenApp = false;
