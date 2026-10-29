@@ -195,6 +195,9 @@ namespace RetroBar
         {
             Settings.Instance.PropertyChanged -= Settings_PropertyChanged;
 
+            // The Open Shell menu is no longer told it is in the Windows 11 style.
+            OpenShellHint.SetWindows11Style(false);
+
             _explorerMonitor.Dispose();
             _windowManager.Dispose();
             _dictionaryManager.Dispose();

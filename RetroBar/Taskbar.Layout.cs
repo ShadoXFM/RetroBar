@@ -88,6 +88,7 @@ namespace RetroBar
 
         private void ApplyTaskbarStyle()
         {
+            OpenShellHint.Update();
             bool windows11 = WantsWindows11Style;
             if (windows11 == _windows11Applied)
             {

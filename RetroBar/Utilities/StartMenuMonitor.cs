@@ -304,6 +304,9 @@ namespace RetroBar.Utilities
         {
             _taskbarHwndActivated = taskbarHwnd;
 
+            // The Open Shell menu puts itself at the left edge for the Start button, in the middle for the keyboard (see OpenShellHint).
+            OpenShellHint.StartButtonPressed();
+
             if (!EnvironmentHelper.IsWindows10OrBetter ||
                 FindWindowEx(IntPtr.Zero, IntPtr.Zero, "OpenShell.COwnerWindow", IntPtr.Zero) != IntPtr.Zero ||
                 FindWindowEx(IntPtr.Zero, IntPtr.Zero, "DV2ControlHost", IntPtr.Zero) != IntPtr.Zero)
