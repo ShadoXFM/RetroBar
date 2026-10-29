@@ -6,16 +6,17 @@
              Loaded="RamDisplay_OnLoaded"
              Unloaded="RamDisplay_OnUnloaded"
              Visibility="Collapsed">
-    <Grid>
+    <Grid MouseEnter="RamPanel_OnMouseEnter" MouseLeave="RamPanel_OnMouseLeave">
+        <!-- The pointer's area: the widget's own width and the bar's height (reaching past the widget's box, top and bottom, which takes
+             no room), so it is easy to hover. The mouse handlers are on the grid, so the area and the widget are one for them. -->
+        <Border Background="Transparent" Margin="0,-12" />
     <!-- Transparent background so the whole widget takes the pointer that opens the graph. -->
     <StackPanel x:Name="RamPanel"
                 Orientation="Horizontal"
                 VerticalAlignment="Center"
                 HorizontalAlignment="Center"
                 Margin="4,0"
-                Background="Transparent"
-                MouseEnter="RamPanel_OnMouseEnter"
-                MouseLeave="RamPanel_OnMouseLeave">
+                Background="Transparent">
         <!-- A square memory chip (a body with a die in the middle and pins on the top and the bottom), so the number reads as the
              memory's. It sits inside this same UserControl so it only ever appears alongside RamText. This is the 100% drawing, 9 by
              9 pixels, each rectangle on a whole pixel. At 125% a DIP is 1.25 pixels, so there the RamChip tag in

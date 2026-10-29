@@ -8,13 +8,14 @@
         <converters:CpuTempShownToMonitorTagConverter x:Key="cpuTempShownToMonitorTagConverter" />
         <converters:BoolToVisibilityConverter x:Key="boolToVisibilityConverter" />
     </UserControl.Resources>
-    <Grid>
+    <Grid MouseEnter="WeatherPanel_OnMouseEnter" MouseLeave="WeatherPanel_OnMouseLeave">
+        <!-- The pointer's area: the widget's own width and the bar's height (reaching past the widget's box, top and bottom, which takes
+             no room), so it is easy to hover. The mouse handlers are on the grid, so the area and the widget are one for them. -->
+        <Border Background="Transparent" Margin="0,-12" />
     <!-- Transparent background so the whole widget (not just its icon and text) takes the click that
          opens the forecast. -->
     <StackPanel x:Name="WeatherPanel" Orientation="Horizontal" VerticalAlignment="Center" HorizontalAlignment="Center" Margin="4,0"
                 Background="Transparent"
-                MouseEnter="WeatherPanel_OnMouseEnter"
-                MouseLeave="WeatherPanel_OnMouseLeave"
                 utilities:MonitorOffset.Tag="WeatherPanel">
         <!-- Weather Icon (sizes itself using the theme style). A Rectangle masked to the icon's
              own shape via OpacityMask, rather than a plain Image - lets the icon be tinted to

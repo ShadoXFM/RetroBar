@@ -6,16 +6,17 @@
              Loaded="CpuTempDisplay_OnLoaded"
              Unloaded="CpuTempDisplay_OnUnloaded"
              Visibility="Collapsed">
-    <Grid>
+    <Grid MouseEnter="CpuTempPanel_OnMouseEnter" MouseLeave="CpuTempPanel_OnMouseLeave">
+        <!-- The pointer's area: the widget's own width and the bar's height (reaching past the widget's box, top and bottom, which takes
+             no room), so it is easy to hover. The mouse handlers are on the grid, so the area and the widget are one for them. -->
+        <Border Background="Transparent" Margin="0,-12" />
     <!-- Transparent background so the whole widget takes the pointer that opens the graph. -->
     <StackPanel x:Name="CpuTempPanel"
                 Orientation="Horizontal"
                 VerticalAlignment="Center"
                 HorizontalAlignment="Center"
                 Margin="4,0"
-                Background="Transparent"
-                MouseEnter="CpuTempPanel_OnMouseEnter"
-                MouseLeave="CpuTempPanel_OnMouseLeave">
+                Background="Transparent">
         <!-- A small chip socket (a hollow body with a pin on each side, twice), in place of the "/" that used to sit here: with
              it the number reads as the processor's, not as the other half of the weather's. It sits inside this same UserControl
              (rather than as a separate element in Taskbar.xaml) so it only ever appears alongside CpuTempText - collapsing this
