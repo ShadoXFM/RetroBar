@@ -223,6 +223,9 @@ namespace RetroBar
             base.OnFullScreenLeave();
         }
 
+        /// <summary>The height the taskbar is meant to have, in DIPs (its window is taller than that for a moment when it starts).</summary>
+        public double BarHeight => DesiredHeight;
+
         private void MonitorAdjustments_Changed(object sender, EventArgs e)
         {
             // Fires on a background (file-watcher) thread; RowCount and HeightAdjustment are the

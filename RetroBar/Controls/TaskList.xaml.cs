@@ -154,6 +154,7 @@ namespace RetroBar.Controls
         private double TabExtraWidth => 2 + MonitorAdjustments.GetTabWidthAdjustment(Host?.Screen?.DeviceName);
 
         private int _squareChecks;
+        private double _loggedTabWidth;
 
         // Once the tabs have their size, the button is measured and the width set again if it is not a square (a few times at most).
         private DateTime _lastTargetUpdate = DateTime.MinValue;
@@ -1078,15 +1079,24 @@ namespace RetroBar.Controls
                 ExtraWidthCount = 0;
                 // The button itself (inside the margins the theme gives it) is a square: as wide as it is tall. What a tab's button measures
                 // is the truth (its style may have margins and borders of its own), so it is measured; before there is a tab, from the margins.
-                double side = Math.Max(16, ActualHeight - TaskButtonTopMargin - TaskButtonBottomMargin);
+                // When the taskbar starts its window is as tall as the screen for a moment, and so is this list: never a tab taller than the bar
+                // is (they came out as wide as the screen was tall, until the bar was placed, and some stayed so).
+                double barHeight = Host.BarHeight > 0 ? Math.Min(ActualHeight, Host.BarHeight) : ActualHeight;
+                double side = Math.Max(16, barHeight - TaskButtonTopMargin - TaskButtonBottomMargin);
                 double overhead = TaskButtonLeftMargin + TaskButtonRightMargin;
-                if (MeasureTabButton() is (double buttonWidth, double buttonHeight, double slotWidth) && buttonHeight > 8)
+                if (MeasureTabButton() is (double buttonWidth, double buttonHeight, double slotWidth) && buttonHeight > 8 && buttonHeight <= barHeight + PixelStep)
                 {
                     side = buttonHeight;
                     overhead = slotWidth - buttonWidth;
                 }
 
                 double iconWidth = Math.Round((side + overhead + TabExtraWidth) / PixelStep) * PixelStep;
+                if (Math.Abs(iconWidth - _loggedTabWidth) > PixelStep)
+                {
+                    _loggedTabWidth = iconWidth;
+                    ManagedShell.Common.Logging.ShellLogger.Info($"TaskList: tabs {iconWidth:F1} wide (side {side:F1}, overhead {overhead:F1}, list {ActualWidth:F0}x{ActualHeight:F1}, {taskCount} tabs, room {AvailableWidth:F0})");
+                }
+
                 // What a tab takes in the row: its width less the pixel it overlaps the next by.
                 double pitch = iconWidth - PixelStep;
                 double room = AvailableWidth > 0 ? AvailableWidth : pitch * ButtonsPerRow;

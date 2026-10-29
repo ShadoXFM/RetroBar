@@ -43,6 +43,7 @@
                        Text="{Binding WeatherDescription}"
                        Style="{DynamicResource WeatherTempStyle}"
                        Foreground="{DynamicResource ClockForeground}"
+                       Opacity="0.7"
                        utilities:MonitorOffset.Tag="WeatherDescription" />
         </StackPanel>
     </StackPanel>

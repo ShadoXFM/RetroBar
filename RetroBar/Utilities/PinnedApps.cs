@@ -27,14 +27,12 @@ namespace RetroBar.Utilities
         public static string FindLink(ApplicationWindow window)
         {
             string exe = window.IsUWP ? null : Path.GetFileName(window.WinFileName);
-            string folder = Environment.ExpandEnvironmentVariables(Settings.Instance.QuickLaunchPath ?? "");
-
-            if (string.IsNullOrEmpty(exe) || !Directory.Exists(folder))
+            if (string.IsNullOrEmpty(exe))
             {
                 return null;
             }
 
-            return Directory.GetFiles(folder, "*.lnk").FirstOrDefault(link => GetTargetExe(link).Equals(exe, StringComparison.OrdinalIgnoreCase));
+            return GetLinks().FirstOrDefault(link => GetTargetExe(link).Equals(exe, StringComparison.OrdinalIgnoreCase));
         }
 
         /// <summary>Pins the window's program: a shortcut to it in the quick launch folder.</summary>
@@ -118,10 +116,19 @@ namespace RetroBar.Utilities
                 }
 
                 List<string> order = Settings.Instance.QuickLaunchOrder ?? new List<string>();
-                List<string> files = Directory.GetFiles(folder, "*.lnk")
+                List<string> found = Directory.GetFiles(folder, "*.lnk").ToList();
+                found.AddRange(ImplicitLinks(folder).Where(implicitLink =>
+                    !found.Any(f => string.Equals(Path.GetFileName(f), Path.GetFileName(implicitLink), StringComparison.OrdinalIgnoreCase))));
+                List<string> files = found
                     .OrderBy(file =>
                     {
+                        // A pin that is in another folder now (see ImplicitLinks) keeps the place it had.
                         int index = order.FindIndex(o => o.Equals(file, StringComparison.OrdinalIgnoreCase));
+                        if (index < 0)
+                        {
+                            index = order.FindIndex(o => string.Equals(Path.GetFileName(o), Path.GetFileName(file), StringComparison.OrdinalIgnoreCase));
+                        }
+
                         return index >= 0 ? index : int.MaxValue;
                     })
                     .ThenBy(file => file, StringComparer.OrdinalIgnoreCase)
@@ -136,6 +143,64 @@ namespace RetroBar.Utilities
 
             return result;
         }
+
+        private static readonly object ImplicitLock = new();
+        private static (DateTime At, string Folder, List<string> Links) _implicitCache = (DateTime.MinValue, null, new List<string>());
+
+        /// <summary>
+        /// The pins that Windows keeps beside the ones in its taskbar's folder: a program pinned from its entry in the Start menu (Helium, a
+        /// program that has its own application id) has its shortcut in ImplicitAppShortcuts, in a folder of its own, and only the taskbar's
+        /// own list (the Favorites value of the Taskband key) says it is pinned - the other shortcuts there are the ones Windows made for
+        /// every program that was started from the Start menu. Only when the pins are the Windows taskbar's (the folder is the default).
+        /// </summary>
+        public static List<string> ImplicitLinks(string folder)
+        {
+            lock (ImplicitLock)
+            {
+                if (_implicitCache.Folder == folder && DateTime.UtcNow - _implicitCache.At < TimeSpan.FromSeconds(1))
+                {
+                    return _implicitCache.Links;
+                }
+            }
+
+            var result = new List<string>();
+            try
+            {
+                string windows = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), @"Microsoft\Internet Explorer\Quick Launch\User Pinned\TaskBar");
+                if (string.Equals(Path.GetFullPath(folder).TrimEnd('\\'), windows, StringComparison.OrdinalIgnoreCase))
+                {
+                    string root = Path.Combine(Path.GetDirectoryName(windows), "ImplicitAppShortcuts");
+                    using Microsoft.Win32.RegistryKey key = Microsoft.Win32.Registry.CurrentUser.OpenSubKey(@"Software\Microsoft\Windows\CurrentVersion\Explorer\Taskband");
+                    if (Directory.Exists(root) && key?.GetValue("Favorites") is byte[] favorites)
+                    {
+                        foreach (string directory in Directory.GetDirectories(root))
+                        {
+                            foreach (string link in Directory.GetFiles(directory, "*.lnk"))
+                            {
+                                string name = Path.GetFileName(link);
+                                if (Contains(favorites, System.Text.Encoding.Unicode.GetBytes(name)) || Contains(favorites, System.Text.Encoding.Latin1.GetBytes(name)))
+                                {
+                                    result.Add(link);
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+            catch (Exception ex)
+            {
+                ShellLogger.Error("PinnedApps: Unable to read the pins Windows keeps in ImplicitAppShortcuts", ex);
+            }
+
+            lock (ImplicitLock)
+            {
+                _implicitCache = (DateTime.UtcNow, folder, result);
+            }
+
+            return result;
+        }
+
+        private static bool Contains(byte[] data, byte[] pattern) => data.AsSpan().IndexOf(pattern) >= 0;
 
         private static readonly Dictionary<string, (DateTime Written, string Path)> TargetPathCache = new(StringComparer.OrdinalIgnoreCase);
 

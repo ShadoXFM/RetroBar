@@ -19,9 +19,52 @@ namespace RetroBar.Controls
     {
         private ObservableCollection<object> _mergedItems;
         private ShellFolder _pinFolder;
+        // The folders of the pins Windows keeps in other places than the taskbar's folder (see PinnedApps.ImplicitLinks), by folder.
+        private readonly Dictionary<string, ShellFolder> _extraPinFolders = new(StringComparer.OrdinalIgnoreCase);
         private static readonly Dictionary<string, ShellFolder> PinFolders = new(StringComparer.OrdinalIgnoreCase);
 
         private void PinFilesChanged(object sender, System.Collections.Specialized.NotifyCollectionChangedEventArgs e) => RebuildMerged();
+
+        // The folders of the pins that are not in the pins' folder, read the way it is (and kept from one time to the next).
+        private void EnsureExtraPinFolders()
+        {
+            if (_mergedItems == null)
+            {
+                return;
+            }
+
+            string main = Environment.ExpandEnvironmentVariables(Settings.Instance.QuickLaunchPath ?? "").TrimEnd(System.IO.Path.DirectorySeparatorChar);
+            foreach (string folder in PinnedApps.GetLinks().Select(Path.GetDirectoryName).Distinct(StringComparer.OrdinalIgnoreCase))
+            {
+                if (string.IsNullOrEmpty(folder) || string.Equals(folder.TrimEnd(System.IO.Path.DirectorySeparatorChar), main, StringComparison.OrdinalIgnoreCase) || _extraPinFolders.ContainsKey(folder))
+                {
+                    continue;
+                }
+
+                ShellFolder extra;
+                lock (PinFolders)
+                {
+                    if (!PinFolders.TryGetValue(folder, out extra))
+                    {
+                        extra = new ShellFolder(folder, IntPtr.Zero, true);
+                        PinFolders[folder] = extra;
+                    }
+                }
+
+                extra.Files.CollectionChanged += PinFilesChanged;
+                _extraPinFolders[folder] = extra;
+            }
+        }
+
+        // The file of a pin, from whichever folder it is in.
+        private ShellFile FindPinFile(string link)
+        {
+            ShellFile file = _pinFolder?.Files.FirstOrDefault(f => string.Equals(f.Path, link, StringComparison.OrdinalIgnoreCase));
+            return file ?? _extraPinFolders.Values.SelectMany(folder => folder.Files.ToList()).FirstOrDefault(f => string.Equals(f.Path, link, StringComparison.OrdinalIgnoreCase));
+        }
+
+        private ShellFolder FolderOf(ShellFile file) =>
+            _extraPinFolders.Values.FirstOrDefault(folder => folder.Files.Contains(file)) ?? _pinFolder;
 
         private void ApplyPinnedMerge()
         {
@@ -83,6 +126,13 @@ namespace RetroBar.Controls
                 _pinFolder = null;
             }
 
+            foreach (ShellFolder extra in _extraPinFolders.Values)
+            {
+                extra.Files.CollectionChanged -= PinFilesChanged;
+            }
+
+            _extraPinFolders.Clear();
+
             _mergedItems = null;
         }
 
@@ -123,7 +173,7 @@ namespace RetroBar.Controls
                 }
                 else
                 {
-                    item = _pinFolder?.Files.FirstOrDefault(f => string.Equals(f.Path, links[pin], StringComparison.OrdinalIgnoreCase));
+                    item = FindPinFile(links[pin]);
                 }
 
                 if (item != null)
@@ -156,6 +206,13 @@ namespace RetroBar.Controls
             int IndexOf(TabUnit unit)
             {
                 int at = order.FindIndex(k => string.Equals(k, unit.Key, StringComparison.OrdinalIgnoreCase));
+                if (at < 0 && unit.IsPin)
+                {
+                    // A pin that is in another folder now (see PinnedApps.ImplicitLinks) keeps the place it had.
+                    string name = Path.GetFileName(unit.Key.Substring(4));
+                    at = order.FindIndex(k => k.StartsWith("pin|", StringComparison.Ordinal) && string.Equals(Path.GetFileName(k.Substring(4)), name, StringComparison.OrdinalIgnoreCase));
+                }
+
                 if (at < 0 && unit.IsPin && !string.IsNullOrEmpty(unit.ProgramFile))
                 {
                     at = order.FindIndex(k => k.StartsWith("app|", StringComparison.Ordinal) &&
@@ -181,6 +238,7 @@ namespace RetroBar.Controls
                 return;
             }
 
+            EnsureExtraPinFolders();
             var desired = new List<object>();
             foreach (TabUnit unit in BuildUnits())
             {
@@ -463,7 +521,7 @@ namespace RetroBar.Controls
             Mouse.Capture(null);
             try
             {
-                var _ = new ShellItemContextMenu(new ShellItem[] { file }, _pinFolder, IntPtr.Zero, (action, items, allFolders) => false, interactive, false, new ShellMenuCommandBuilder(), new ShellMenuCommandBuilder());
+                var _ = new ShellItemContextMenu(new ShellItem[] { file }, FolderOf(file), IntPtr.Zero, (action, items, allFolders) => false, interactive, false, new ShellMenuCommandBuilder(), new ShellMenuCommandBuilder());
                 return true;
             }
             catch (Exception ex)
