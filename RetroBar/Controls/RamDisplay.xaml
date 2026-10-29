@@ -60,7 +60,7 @@
               RenderOptions.ClearTypeHint="Enabled">
             <Grid x:Name="GraphSlideHost">
                 <controls:PopupShadow />
-                <ContentControl Margin="6"
+                <ContentControl x:Name="GraphContent" Margin="6"
                                 Style="{DynamicResource TaskButtonThumbnail}"
                                 MouseEnter="GraphPopup_OnMouseEnter"
                                 MouseLeave="GraphPopup_OnMouseLeave">

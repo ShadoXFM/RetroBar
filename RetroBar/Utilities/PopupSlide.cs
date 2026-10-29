@@ -69,6 +69,74 @@ namespace RetroBar.Utilities
         [DllImport("user32.dll")]
         private static extern bool GetWindowRect(IntPtr hWnd, out RECT rect);
 
+        [StructLayout(LayoutKind.Sequential)]
+        private struct MONITORINFO
+        {
+            public int Size;
+            public RECT Monitor;
+            public RECT Work;
+            public int Flags;
+        }
+
+        [DllImport("user32.dll")]
+        private static extern IntPtr MonitorFromWindow(IntPtr hWnd, uint flags);
+
+        [DllImport("user32.dll")]
+        private static extern bool GetMonitorInfo(IntPtr hMonitor, ref MONITORINFO info);
+
+        private FrameworkElement _edgeFrame;
+        private double _edgeRoom;
+        private Func<double?> _edgeGap;
+
+        /// <summary>
+        /// A popup next to the edge of the screen is kept inside it (its window is moved in), which leaves the shadow's room between its
+        /// frame and the edge: more than the gap the frame has to the taskbar. When the window is against the edge of the monitor, the
+        /// frame's margin on that side is made the gap (the window is that much narrower), so the frame is as near the edge as it is to
+        /// the taskbar.
+        /// </summary>
+        /// <param name="frame">The frame inside the window, with the room for the shadow as its margin.</param>
+        /// <param name="room">That margin (DIPs).</param>
+        /// <param name="gap">The gap the frame has to the taskbar (DIPs), or null when it is not known.</param>
+        public void KeepFrameNearEdges(FrameworkElement frame, double room, Func<double?> gap)
+        {
+            _edgeFrame = frame;
+            _edgeRoom = room;
+            _edgeGap = gap;
+            _popup.Opened += (s, e) => FitEdges();
+        }
+
+        private void FitEdges()
+        {
+            // The room it has on both sides until the window is seen against an edge.
+            Thickness margin = _edgeFrame.Margin;
+            _edgeFrame.Margin = new Thickness(_edgeRoom, margin.Top, _edgeRoom, margin.Bottom);
+
+            _edgeFrame.Dispatcher.BeginInvoke(new Action(() =>
+            {
+                double? gap = _edgeGap();
+                if (gap == null || gap.Value < 0 || gap.Value >= _edgeRoom ||
+                    PresentationSource.FromVisual(_clipRoot) is not HwndSource source ||
+                    !GetWindowRect(source.Handle, out RECT window))
+                {
+                    return;
+                }
+
+                var info = new MONITORINFO { Size = Marshal.SizeOf<MONITORINFO>() };
+                if (!GetMonitorInfo(MonitorFromWindow(source.Handle, 2), ref info))
+                {
+                    return;
+                }
+
+                bool atLeft = window.Left <= info.Monitor.Left + 1;
+                bool atRight = window.Right >= info.Monitor.Right - 1;
+                if (atLeft || atRight)
+                {
+                    Thickness m = _edgeFrame.Margin;
+                    _edgeFrame.Margin = new Thickness(atLeft ? gap.Value : m.Left, m.Top, atRight ? gap.Value : m.Right, m.Bottom);
+                }
+            }), System.Windows.Threading.DispatcherPriority.Loaded);
+        }
+
         /// <summary>
         /// How many DIPs the open popup's window reaches below the top of the taskbar's window, from where the two windows are on the screen
         /// (null if either is not there yet): the popup is placed in whole pixels, so a number worked out from the layout can be a pixel out,
