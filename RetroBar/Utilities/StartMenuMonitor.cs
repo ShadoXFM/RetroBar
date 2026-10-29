@@ -21,37 +21,6 @@ namespace RetroBar.Utilities
 
         public event EventHandler<StartMenuMonitorEventArgs> StartMenuVisibilityChanged;
 
-        // Where the Open Shell menu goes (see PlaceOpenShellMenu): the menu is moved when it is shown, not after the poller has seen it
-        // (it was seen to appear where Open Shell puts it and jump a moment later), and once for each time it opens.
-        private DateTime _activatedAt = DateTime.MinValue;
-        private bool _menuPlaced;
-        private IntPtr _showHook;
-        private WinEventDelegate _showHookProc;
-
-        private delegate void WinEventDelegate(IntPtr hook, uint eventType, IntPtr hwnd, int idObject, int idChild, uint eventThread, uint eventTime);
-
-        [DllImport("user32.dll")]
-        private static extern IntPtr SetWinEventHook(uint eventMin, uint eventMax, IntPtr module, WinEventDelegate callback, uint processId, uint threadId, uint flags);
-
-        [DllImport("user32.dll")]
-        private static extern bool UnhookWinEvent(IntPtr hook);
-
-        [StructLayout(LayoutKind.Sequential)]
-        private struct MenuMonitorInfo
-        {
-            public int Size;
-            public ManagedShell.Interop.NativeMethods.Rect Monitor;
-            public ManagedShell.Interop.NativeMethods.Rect Work;
-            public int Flags;
-        }
-
-        [DllImport("user32.dll", EntryPoint = "GetMonitorInfoW")]
-        private static extern bool GetMenuMonitorInfo(IntPtr monitor, ref MenuMonitorInfo info);
-
-        private const uint EVENT_OBJECT_SHOW = 0x8002;
-        private const uint WINEVENT_OUTOFCONTEXT = 0;
-        private const string OpenShellMenuClass = "OpenShell.CMenuContainer";
-
         /// <summary>Whether the Start menu is open now (as of the last time it was looked at, every 100 ms).</summary>
         public static bool IsStartMenuVisible { get; private set; }
 
@@ -59,22 +28,6 @@ namespace RetroBar.Utilities
         {
             _appVisibilityHelper = appVisibilityHelper;
             setupPoller();
-
-            // Told when a window is shown, on this thread: the Open Shell menu is moved at once.
-            _showHookProc = (hook, eventType, hwnd, idObject, idChild, eventThread, eventTime) =>
-            {
-                if (idObject != 0 || hwnd == IntPtr.Zero)
-                {
-                    return;
-                }
-
-                var name = new StringBuilder(64);
-                if (GetClassName(hwnd, name, name.Capacity) > 0 && name.ToString() == OpenShellMenuClass)
-                {
-                    relocateStartMenuByClass(OpenShellMenuClass, hwnd);
-                }
-            };
-            _showHook = SetWinEventHook(EVENT_OBJECT_SHOW, EVENT_OBJECT_SHOW, IntPtr.Zero, _showHookProc, 0, 0, WINEVENT_OUTOFCONTEXT);
         }
 
         private void setupPoller()
@@ -131,11 +84,6 @@ namespace RetroBar.Utilities
 
             _isVisible = isVisible;
             IsStartMenuVisible = isVisible;
-            if (!isVisible)
-            {
-                _menuPlaced = false;
-            }
-
             if (isVisible)
             {
                 // The widgets' popups do not stay over the Start menu (and do not open while it is there, see HoverPopups.Open).
@@ -227,40 +175,19 @@ namespace RetroBar.Utilities
             return MonitorFromWindow(hStartMenu, MONITOR_DEFAULTTONEAREST);
         }
 
-        private void relocateStartMenuByClass(string className, IntPtr hStartMenu = default)
+        private void relocateStartMenuByClass(string className)
         {
-            if (_menuPlaced)
-            {
-                return;
-            }
-
-            // From the Start button: at the taskbar's edge, where the button is. From the keyboard, in the Windows 11 style: in the middle of
-            // the screen, as the Windows 11 menu is. Otherwise where Open Shell puts it.
-            bool fromButton = _taskbarHwndActivated != IntPtr.Zero && DateTime.UtcNow - _activatedAt < TimeSpan.FromSeconds(2);
-            bool inMiddle = !fromButton && Settings.Instance.TaskbarStyle == TaskbarStyleOption.Windows11 &&
-                            Settings.Instance.Edge is AppBarEdge.Bottom or AppBarEdge.Top;
-            if (!fromButton && !inMiddle)
+            if (_taskbarHwndActivated == IntPtr.Zero)
             {
                 return;
             }
 
             // Get current window rects
+            IntPtr hStartMenu = FindWindowEx(IntPtr.Zero, IntPtr.Zero, className, IntPtr.Zero);
             if (hStartMenu == IntPtr.Zero)
             {
-                hStartMenu = FindWindowEx(IntPtr.Zero, IntPtr.Zero, className, IntPtr.Zero);
-            }
-
-            if (hStartMenu == IntPtr.Zero || !IsWindowVisible(hStartMenu))
-            {
                 return;
             }
-
-            if (inMiddle)
-            {
-                PlaceInMiddle(hStartMenu);
-                return;
-            }
-
             FlowDirection flowDirection = Application.Current.FindResource("flow_direction") as FlowDirection? ?? FlowDirection.LeftToRight;
             GetWindowRect(hStartMenu, out ManagedShell.Interop.NativeMethods.Rect startMenuRect);
             GetWindowRect(_taskbarHwndActivated, out ManagedShell.Interop.NativeMethods.Rect taskbarRect);
@@ -306,7 +233,6 @@ namespace RetroBar.Utilities
                     break;
             }
 
-            _menuPlaced = true;
             if (y == startMenuRect.Top && x == startMenuRect.Left)
             {
                 // Start menu is already in the correct position
@@ -314,25 +240,6 @@ namespace RetroBar.Utilities
             }
 
             SetWindowPos(hStartMenu, IntPtr.Zero, x, y, 0, 0, (int)(SetWindowPosFlags.SWP_NOSIZE | SetWindowPosFlags.SWP_NOZORDER));
-        }
-
-        // The menu in the middle of the monitor it is on (of the work area, so not under the taskbar), against the taskbar's edge.
-        private void PlaceInMiddle(IntPtr hStartMenu)
-        {
-            var info = new MenuMonitorInfo { Size = Marshal.SizeOf<MenuMonitorInfo>() };
-            if (!GetWindowRect(hStartMenu, out ManagedShell.Interop.NativeMethods.Rect menu) ||
-                !GetMenuMonitorInfo(MonitorFromWindow(hStartMenu, MONITOR_DEFAULTTONEAREST), ref info))
-            {
-                return;
-            }
-
-            int x = info.Work.Left + (info.Work.Width - menu.Width) / 2;
-            int y = Settings.Instance.Edge == AppBarEdge.Top ? info.Work.Top : info.Work.Bottom - menu.Height;
-            _menuPlaced = true;
-            if (x != menu.Left || y != menu.Top)
-            {
-                SetWindowPos(hStartMenu, IntPtr.Zero, x, y, 0, 0, (int)(SetWindowPosFlags.SWP_NOSIZE | SetWindowPosFlags.SWP_NOZORDER | SetWindowPosFlags.SWP_NOACTIVATE));
-            }
         }
 
         private IImmersiveMonitor GetImmersiveMonitor(ManagedShell.UWPInterop.Interfaces.IServiceProvider shell, IntPtr hWnd)
@@ -396,7 +303,6 @@ namespace RetroBar.Utilities
         internal void ShowStartMenu(IntPtr taskbarHwnd)
         {
             _taskbarHwndActivated = taskbarHwnd;
-            _activatedAt = DateTime.UtcNow;
 
             if (!EnvironmentHelper.IsWindows10OrBetter ||
                 FindWindowEx(IntPtr.Zero, IntPtr.Zero, "OpenShell.COwnerWindow", IntPtr.Zero) != IntPtr.Zero ||
@@ -445,11 +351,6 @@ namespace RetroBar.Utilities
         public void Dispose()
         {
             _poller?.Stop();
-            if (_showHook != IntPtr.Zero)
-            {
-                UnhookWinEvent(_showHook);
-                _showHook = IntPtr.Zero;
-            }
         }
 
         #region Immersive launcher interfaces
