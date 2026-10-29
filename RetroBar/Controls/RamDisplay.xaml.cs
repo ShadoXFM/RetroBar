@@ -260,7 +260,7 @@ namespace RetroBar.Controls
 
         private void OpenGraph()
         {
-            if ((GraphPopup.IsOpen && !_slide.Closing) || !RamPanel.IsMouseOver || !_percent.HasValue)
+            if ((GraphPopup.IsOpen && !_slide.Closing) || !IsMouseOver || !_percent.HasValue)
             {
                 return;
             }
@@ -268,7 +268,7 @@ namespace RetroBar.Controls
             // One at a time with the weather's forecast: if that is open it slides away first (see HoverPopups).
             HoverPopups.Open(_slide, () =>
             {
-                if (!RamPanel.IsMouseOver)
+                if (!IsMouseOver)
                 {
                     return;
                 }

@@ -182,7 +182,7 @@ namespace RetroBar.Controls
 
         private void OpenForecast()
         {
-            if ((ForecastPopup.IsOpen && !_forecastClosing) || WeatherPanel == null || !WeatherPanel.IsMouseOver)
+            if ((ForecastPopup.IsOpen && !_forecastClosing) || WeatherPanel == null || !IsMouseOver)
             {
                 return;
             }
@@ -190,7 +190,7 @@ namespace RetroBar.Controls
             // One at a time with the CPU temperature's graph: if that is open it slides away first (see HoverPopups).
             HoverPopups.Open(_slide, () =>
             {
-                if (!WeatherPanel.IsMouseOver)
+                if (!IsMouseOver)
                 {
                     return;
                 }
