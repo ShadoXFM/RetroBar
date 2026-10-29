@@ -24,6 +24,12 @@ namespace RetroBar.Utilities
         /// <summary>Opens the popup of a slide (show does it: places it and calls Show), after the one that is open has slid away.</summary>
         public static void Open(PopupSlide slide, Action show)
         {
+            // Not while the Start menu is open: they are not over it.
+            if (StartMenuMonitor.IsStartMenuVisible)
+            {
+                return;
+            }
+
             if (Known.Add(slide))
             {
                 slide.Closed += () => OnClosed(slide);
@@ -41,6 +47,17 @@ namespace RetroBar.Utilities
             _waiting = null;
             _open = slide;
             show();
+        }
+
+        /// <summary>Slides away the popup that is open, if any, and forgets the one that was waiting to open.</summary>
+        public static void HideOpen()
+        {
+            _waiting = null;
+            _waitingFor = null;
+            if (_open != null && _open.IsOpen)
+            {
+                _open.Hide();
+            }
         }
 
         /// <summary>
