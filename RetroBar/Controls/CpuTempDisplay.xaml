@@ -9,7 +9,7 @@
     <Grid MouseEnter="CpuTempPanel_OnMouseEnter" MouseLeave="CpuTempPanel_OnMouseLeave">
         <!-- The pointer's area: the widget's own width and the bar's height (reaching past the widget's box, top and bottom, which takes
              no room), so it is easy to hover. The mouse handlers are on the grid, so the area and the widget are one for them. -->
-        <Border Background="Transparent" Margin="0,-12" />
+        <Border Background="Transparent" Margin="0,-24" />
     <!-- Transparent background so the whole widget takes the pointer that opens the graph. -->
     <StackPanel x:Name="CpuTempPanel"
                 Orientation="Horizontal"
