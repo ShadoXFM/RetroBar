@@ -2,6 +2,7 @@ using System;
 using System.Runtime.InteropServices;
 using System.Windows;
 using System.Windows.Interop;
+using System.Windows.Controls;
 using System.Windows.Controls.Primitives;
 using System.Windows.Media;
 using System.Windows.Media.Animation;
@@ -86,22 +87,19 @@ namespace RetroBar.Utilities
 
         private FrameworkElement _edgeFrame;
         private double _edgeRoom;
-        private Func<double?> _edgeGap;
 
         /// <summary>
-        /// A popup next to the edge of the screen is kept inside it (its window is moved in), which leaves the shadow's room between its
+        /// A popup next to the edge of the screen is kept inside it (its window is moved in), which left the shadow's whole room between its
         /// frame and the edge: more than the gap the frame has to the taskbar. When the window is against the edge of the monitor, the
-        /// frame's margin on that side is made the gap (the window is that much narrower), so the frame is as near the edge as it is to
-        /// the taskbar.
+        /// frame's margin on that side is made what it takes for the drawn frame to be as far from the edge as it is from the taskbar (the
+        /// two are measured from where the windows are on the screen, in whole pixels), so the gaps are the same all round.
         /// </summary>
         /// <param name="frame">The frame inside the window, with the room for the shadow as its margin.</param>
         /// <param name="room">That margin (DIPs).</param>
-        /// <param name="gap">The gap the frame has to the taskbar (DIPs), or null when it is not known.</param>
-        public void KeepFrameNearEdges(FrameworkElement frame, double room, Func<double?> gap)
+        public void KeepFrameNearEdges(FrameworkElement frame, double room)
         {
             _edgeFrame = frame;
             _edgeRoom = room;
-            _edgeGap = gap;
             _popup.Opened += (s, e) => FitEdges();
         }
 
@@ -113,13 +111,19 @@ namespace RetroBar.Utilities
 
             _edgeFrame.Dispatcher.BeginInvoke(new Action(() =>
             {
-                double? gap = _edgeGap();
-                if (gap == null || gap.Value < 0 || gap.Value >= _edgeRoom ||
+                if (Window.GetWindow(_popup) is not Window taskbar ||
+                    PresentationSource.FromVisual(taskbar) is not HwndSource barSource ||
                     PresentationSource.FromVisual(_clipRoot) is not HwndSource source ||
+                    !GetWindowRect(barSource.Handle, out RECT bar) ||
                     !GetWindowRect(source.Handle, out RECT window))
                 {
                     return;
                 }
+
+                // A frame that is a control (a thumbnail's) has its own margin round what is drawn; one that is a border is what is drawn.
+                Thickness chrome = _edgeFrame is Control && VisualTreeHelper.GetChildrenCount(_edgeFrame) > 0 && VisualTreeHelper.GetChild(_edgeFrame, 0) is Border border
+                    ? border.Margin
+                    : default;
 
                 var info = new MONITORINFO { Size = Marshal.SizeOf<MONITORINFO>() };
                 if (!GetMonitorInfo(MonitorFromWindow(source.Handle, 2), ref info))
@@ -129,11 +133,31 @@ namespace RetroBar.Utilities
 
                 bool atLeft = window.Left <= info.Monitor.Left + 1;
                 bool atRight = window.Right >= info.Monitor.Right - 1;
-                if (atLeft || atRight)
+                if (!atLeft && !atRight)
                 {
-                    Thickness m = _edgeFrame.Margin;
-                    _edgeFrame.Margin = new Thickness(atLeft ? gap.Value : m.Left, m.Top, atRight ? gap.Value : m.Right, m.Bottom);
+                    return;
                 }
+
+                // The gap the drawn frame has above the taskbar: from the frame's bottom (the window's bottom less the room and the style's
+                // own margin round the drawn frame) to the taskbar's top.
+                DpiScale dpi = VisualTreeHelper.GetDpi(_clipRoot);
+                Thickness m = _edgeFrame.Margin;
+                double frameBottom = window.Bottom - (m.Bottom + chrome.Bottom) * dpi.DpiScaleY;
+                // (The frame is drawn on whole pixels: the half a pixel the layout can have is not part of the gap.)
+                double gapPixels = Math.Floor(bar.Top - frameBottom + 0.01);
+                if (gapPixels <= 0)
+                {
+                    return;
+                }
+
+                // So much margin on the side at the edge, for that gap from the edge to the drawn frame (the style's margin is part of it).
+                double fit = gapPixels / dpi.DpiScaleX - chrome.Left;
+                if (fit < 0 || fit >= _edgeRoom)
+                {
+                    return;
+                }
+
+                _edgeFrame.Margin = new Thickness(atLeft ? fit : m.Left, m.Top, atRight ? fit : m.Right, m.Bottom);
             }), System.Windows.Threading.DispatcherPriority.Loaded);
         }
 

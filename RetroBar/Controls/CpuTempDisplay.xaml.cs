@@ -189,14 +189,9 @@ namespace RetroBar.Controls
                     _ => SlideDirection.Down,
                 },
                 GraphWindowOverlap);
-            _slide.KeepFrameNearEdges(GraphContent, ShadowRoom, EdgeGap);
+            _slide.KeepFrameNearEdges(GraphContent, ShadowRoom);
         }
 
-        // The gap the popup's frame has to the taskbar (the same as the media popup's), which it has to the edges of the screen too.
-        private double? EdgeGap()
-        {
-            return Window.GetWindow(this) is Taskbar taskbar && taskbar.MediaPlayerControl.GetSeekFrameBottom(taskbar) is double bottom ? -bottom : null;
-        }
 
         private static DispatcherTimer MakeTimer(TimeSpan interval, Action tick)
         {

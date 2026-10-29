@@ -400,6 +400,9 @@ namespace RetroBar.Controls
                 // placed in whole pixels, so the layout can be a pixel out), or else from the layout (the shadow's room under the frame).
                 return PopupSlide.MeasureOverlap(SeekPopupRoot, taskbar) ?? Math.Max(0, (GetSeekFrameBottom(taskbar) ?? 0) + SeekFrameShadowRoom);
             });
+
+            // Against the edge of the screen its frame is as near it as it is to the taskbar (see PopupSlide.KeepFrameNearEdges).
+            _seekSlide.KeepFrameNearEdges(SeekFrame, SeekFrameShadowRoom);
         }
 
         private bool _seekPopupReplaceFlip;

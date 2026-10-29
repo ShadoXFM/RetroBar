@@ -221,14 +221,9 @@ namespace RetroBar.Controls
                     _ => SlideDirection.Down,
                 },
                 ForecastWindowOverlap);
-            _slide.KeepFrameNearEdges(ForecastContent, ShadowRoom, EdgeGap);
+            _slide.KeepFrameNearEdges(ForecastContent, ShadowRoom);
         }
 
-        // The gap the popup's frame has to the taskbar (the same as the media popup's), which it has to the edges of the screen too.
-        private double? EdgeGap()
-        {
-            return Window.GetWindow(this) is Taskbar taskbar && taskbar.MediaPlayerControl.GetSeekFrameBottom(taskbar) is double bottom ? -bottom : null;
-        }
 
         // On a taskbar at the bottom: how far the popup's window reaches below the taskbar's top (the shadow's room under the frame); the
         // forecast shows only what is above the taskbar while it slides.
