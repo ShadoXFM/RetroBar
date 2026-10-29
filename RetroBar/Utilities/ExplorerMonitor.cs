@@ -51,6 +51,21 @@ namespace RetroBar.Utilities
                                 // Trigger the hide taskbar logic again in case shell status has changed
                                 _shellManager.ExplorerHelper.HideExplorerTaskbar = true;
                             }
+                            else
+                            {
+                                // The Explorer that has started again has a taskbar of its own, which is not hidden (and reserves its strip of the
+                                // screen, so RetroBar's bar was put above it, with a gap under it): hidden again, as it was at the start, and the
+                                // bars opened when it has let go of the strip.
+                                _shellManager.ExplorerHelper.HideExplorerTaskbar = false;
+                                _shellManager.ExplorerHelper.HideExplorerTaskbar = true;
+                                var reopen = new DispatcherTimer { Interval = System.TimeSpan.FromSeconds(2) };
+                                reopen.Tick += (s, e) =>
+                                {
+                                    reopen.Stop();
+                                    _windowManagerRef.ReopenTaskbars();
+                                };
+                                reopen.Start();
+                            }
                             // Reopen taskbars if explorer.exe is restarted.
                             _windowManagerRef.ReopenTaskbars();
                             // Re-initialize the tasks service to prevent leftover File Explorer windows.
