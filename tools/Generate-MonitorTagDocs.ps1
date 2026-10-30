@@ -90,7 +90,7 @@ $md = New-Object System.Text.StringBuilder
 [void]$md.AppendLine('```')
 [void]$md.AppendLine()
 [void]$md.AppendLine('Values are in DIPs (1 DIP is 1.25 pixels at 125% scale), so `0.8` is one pixel there.')
-[void]$md.AppendLine('A monitor can also have `RowCount` (the number of taskbar rows), `HeightAdjustment` (DIPs added to the taskbar''s height) and `TabWidthAdjustment` (DIPs added to how much wider a tab is than it is tall, in the Windows 11 style).')
+[void]$md.AppendLine('A monitor can also have `RowCount` (the number of taskbar rows), `HeightAdjustment` (DIPs added to the taskbar''s height) and `TabWidthAdjustment` (DIPs added to how much wider a tab is than it is tall, in the Windows 11 style). A monitor can also have `MonitorId` (the hardware id of the monitor it is for, such as `DEL4239`: Windows numbers the connections by which have a monitor on, so with one of two monitors off the one that is on can be `DISPLAY2`; an entry with a `MonitorId` is for that monitor wherever it is connected).')
 [void]$md.AppendLine()
 [void]$md.AppendLine('## Fields of a tag')
 [void]$md.AppendLine()

@@ -47,6 +47,12 @@ namespace RetroBar.Utilities
     /// mechanism (unlike RowCount, an unrelated per-monitor concern above, there wasn't already
     /// one for this).
     ///
+    /// "MonitorId" is optional: the hardware id of the monitor the entry is for (the second part of its device id, such as "DEL4239" for a
+    /// Dell S2722DGM). Windows numbers the connections (DISPLAY1, DISPLAY2) by which of them have a monitor on, so with one of two monitors
+    /// off the one that is on can be DISPLAY2 and everything tuned for another monitor was applied to it. An entry with a MonitorId is for
+    /// that monitor wherever it is connected (and for no other); one without is for whatever monitor is on that connection, unless another
+    /// entry has that monitor's id.
+    ///
     /// "TabWidthAdjustment" is optional and adds this many DIPs (can be negative) to how much wider a
     /// tab's button is than it is tall in the Windows 11 style (see TaskList.TabExtraWidth), on just
     /// this one monitor.
@@ -132,6 +138,7 @@ namespace RetroBar.Utilities
         /// properties.</summary>
         private class MonitorEntry
         {
+            public string MonitorId { get; set; }
             public int? RowCount { get; set; }
             public double? HeightAdjustment { get; set; }
             public double? TabWidthAdjustment { get; set; }
@@ -155,12 +162,120 @@ namespace RetroBar.Utilities
             EnsureFileExists();
             _monitors = Load();
             _watcher = CreateWatcher();
+            Microsoft.Win32.SystemEvents.DisplaySettingsChanged += (s, e) =>
+            {
+                lock (_ids)
+                {
+                    _ids.Clear();
+                }
+            };
+        }
+
+        // The hardware ids of the monitors that are on, by connection (kept until the displays change).
+        private static readonly Dictionary<string, string> _ids = new(StringComparer.OrdinalIgnoreCase);
+
+        [System.Runtime.InteropServices.StructLayout(System.Runtime.InteropServices.LayoutKind.Sequential, CharSet = System.Runtime.InteropServices.CharSet.Unicode)]
+        private struct DisplayDevice
+        {
+            public int Size;
+            [System.Runtime.InteropServices.MarshalAs(System.Runtime.InteropServices.UnmanagedType.ByValTStr, SizeConst = 32)]
+            public string DeviceName;
+            [System.Runtime.InteropServices.MarshalAs(System.Runtime.InteropServices.UnmanagedType.ByValTStr, SizeConst = 128)]
+            public string DeviceString;
+            public int StateFlags;
+            [System.Runtime.InteropServices.MarshalAs(System.Runtime.InteropServices.UnmanagedType.ByValTStr, SizeConst = 128)]
+            public string DeviceId;
+            [System.Runtime.InteropServices.MarshalAs(System.Runtime.InteropServices.UnmanagedType.ByValTStr, SizeConst = 128)]
+            public string DeviceKey;
+        }
+
+        [System.Runtime.InteropServices.DllImport("user32.dll", CharSet = System.Runtime.InteropServices.CharSet.Unicode)]
+        private static extern bool EnumDisplayDevices(string device, uint index, ref DisplayDevice displayDevice, uint flags);
+
+        // The hardware id of the monitor on a connection ("DEL4239" of "MONITOR\DEL4239\{...}\0002"), or null when it is not known.
+        private static string IdOf(string deviceName)
+        {
+            lock (_ids)
+            {
+                if (_ids.TryGetValue(deviceName, out string known))
+                {
+                    return known;
+                }
+
+                string id = null;
+                try
+                {
+                    var device = new DisplayDevice { Size = System.Runtime.InteropServices.Marshal.SizeOf<DisplayDevice>() };
+                    if (EnumDisplayDevices(deviceName, 0, ref device, 0))
+                    {
+                        string[] parts = (device.DeviceId ?? "").Split('\\');
+                        id = parts.Length > 1 && parts[0].Equals("MONITOR", StringComparison.OrdinalIgnoreCase) ? parts[1] : null;
+                    }
+                }
+                catch (Exception ex) when (ex is System.Runtime.InteropServices.COMException or System.ComponentModel.Win32Exception)
+                {
+                }
+
+                _ids[deviceName] = id;
+                return id;
+            }
+        }
+
+        // The entry for the monitor on a connection: the one that has the monitor's own id, else the one of the connection when it has no id
+        // of another monitor (and no other entry has this monitor's id).
+        private static MonitorEntry EntryFor(string deviceName)
+        {
+            if (string.IsNullOrEmpty(deviceName))
+            {
+                return null;
+            }
+
+            string id = IdOf(deviceName);
+            if (id != null)
+            {
+                foreach (MonitorEntry other in _monitors.Values)
+                {
+                    if (other != null && string.Equals(other.MonitorId, id, StringComparison.OrdinalIgnoreCase))
+                    {
+                        return other;
+                    }
+                }
+            }
+
+            if (_monitors.TryGetValue(deviceName, out MonitorEntry entry) && entry != null &&
+                (string.IsNullOrEmpty(entry.MonitorId) || id == null))
+            {
+                return entry;
+            }
+
+            // A monitor that no entry names, on a connection whose entry is for another monitor: the one entry that is for no monitor in
+            // particular is its (the two monitors can be on the connections the other way round).
+            if (id != null)
+            {
+                MonitorEntry unclaimed = null;
+                foreach (MonitorEntry other in _monitors.Values)
+                {
+                    if (other != null && string.IsNullOrEmpty(other.MonitorId))
+                    {
+                        if (unclaimed != null)
+                        {
+                            return null;
+                        }
+
+                        unclaimed = other;
+                    }
+                }
+
+                return unclaimed;
+            }
+
+            return null;
         }
 
         public static MonitorOffsetValue Get(string deviceName, string tag)
         {
             if (!string.IsNullOrEmpty(deviceName) && !string.IsNullOrEmpty(tag)
-                && _monitors.TryGetValue(deviceName, out MonitorEntry entry)
+                && EntryFor(deviceName) is MonitorEntry entry
                 && entry.Tags != null && entry.Tags.TryGetValue(tag, out JsonElement element))
             {
                 try
@@ -180,7 +295,7 @@ namespace RetroBar.Utilities
         /// the global Settings.RowCount instead, same as before this override existed).</summary>
         public static int? GetRowCount(string deviceName)
         {
-            if (!string.IsNullOrEmpty(deviceName) && _monitors.TryGetValue(deviceName, out MonitorEntry entry))
+            if (EntryFor(deviceName) is MonitorEntry entry)
             {
                 return entry.RowCount;
             }
@@ -192,7 +307,7 @@ namespace RetroBar.Utilities
         /// height, or 0 if it has none.</summary>
         public static double GetHeightAdjustment(string deviceName)
         {
-            if (!string.IsNullOrEmpty(deviceName) && _monitors.TryGetValue(deviceName, out MonitorEntry entry))
+            if (EntryFor(deviceName) is MonitorEntry entry)
             {
                 return entry.HeightAdjustment ?? 0;
             }
@@ -203,7 +318,7 @@ namespace RetroBar.Utilities
         /// <summary>DIPs (can be negative) to add to how much wider a tab is than it is tall in the Windows 11 style on this monitor, or 0.</summary>
         public static double GetTabWidthAdjustment(string deviceName)
         {
-            if (!string.IsNullOrEmpty(deviceName) && _monitors.TryGetValue(deviceName, out MonitorEntry entry))
+            if (EntryFor(deviceName) is MonitorEntry entry)
             {
                 return entry.TabWidthAdjustment ?? 0;
             }
