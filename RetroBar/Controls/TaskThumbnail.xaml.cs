@@ -257,7 +257,9 @@ namespace RetroBar.Controls
                 }
 
                 Width = _fitWidth;
-                Height = BoxHeight;
+                // At 125% the frame has a pixel more under the picture than it has at its sides: the picture's box is a pixel less tall (the
+                // picture is drawn over that pixel of the frame's padding, see Rect), so the frame is a pixel less tall.
+                Height = Math.Abs(DpiScale - 1.25) < 0.001 ? BoxHeight - 1 / DpiScale : BoxHeight;
                 props.rcDestination = Rect;
 
                 if (this != null)
