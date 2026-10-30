@@ -53,6 +53,15 @@ namespace RetroBar.Utilities
     /// that monitor wherever it is connected (and for no other); one without is for whatever monitor is on that connection, unless another
     /// entry has that monitor's id.
     ///
+    /// "Theme" is optional: the theme (Settings.Theme, such as "Windows XFM") that everything else at the top of the entry was tuned for. A
+    /// monitor's adjustments are positions and sizes measured against one theme's own buttons, so on another theme they land on elements of a
+    /// different size (a Start button of a fixed height squashed to another's) and make it look wrong: with a "Theme", the top of the entry
+    /// applies to that theme only, and the others are left as their own design. Without one it applies to every theme, as it always did.
+    ///
+    /// "Themes" is optional: tuning for other themes, as {"<theme name>": { ...the same fields and tags as an entry... }}. For the theme in use
+    /// its section is laid over the top of the entry (where that applies, see "Theme"): a tag or a field the section has wins, the rest comes
+    /// from the top.
+    ///
     /// "TabWidthAdjustment" is optional and adds this many DIPs (can be negative) to how much wider a
     /// tab's button is than it is tall in the Windows 11 style (see TaskList.TabExtraWidth), on just
     /// this one monitor.
@@ -131,6 +140,15 @@ namespace RetroBar.Utilities
             "  //   \"TaskIcon\": { \"Y\": 1 },\n" +
             "  //   \"MediaGlyphPrevious\": { \"Scale\": 1.1, \"TextRendering\": \"ClearType\" }\n" +
             "  // }\n" +
+            "  //\n" +
+            "  // Adjustments are measured against one theme's buttons: \"Theme\" says which theme the\n" +
+            "  // top of an entry is for, and \"Themes\" holds the tuning of the others:\n" +
+            "  //\n" +
+            "  // \"\\\\.\\DISPLAY1\": {\n" +
+            "  //   \"Theme\": \"Windows XFM\",\n" +
+            "  //   \"TaskIcon\": { \"Y\": 1 },\n" +
+            "  //   \"Themes\": { \"Windows Vista Aero\": { \"StartButtonBox\": { \"Y\": -1 } } }\n" +
+            "  // }\n" +
             "}\n";
 
         /// <summary>One monitor's entry: an optional RowCount and HeightAdjustment, plus every
@@ -139,6 +157,8 @@ namespace RetroBar.Utilities
         private class MonitorEntry
         {
             public string MonitorId { get; set; }
+            public string Theme { get; set; }
+            public Dictionary<string, MonitorEntry> Themes { get; set; }
             public int? RowCount { get; set; }
             public double? HeightAdjustment { get; set; }
             public double? TabWidthAdjustment { get; set; }
@@ -162,6 +182,14 @@ namespace RetroBar.Utilities
             EnsureFileExists();
             _monitors = Load();
             _watcher = CreateWatcher();
+            Settings.Instance.PropertyChanged += (s, e) =>
+            {
+                // What applies depends on the theme: every element that is adjusted reads its value again, once the theme's own resources are in.
+                if (e.PropertyName == nameof(Settings.Theme) && System.Windows.Application.Current is System.Windows.Application app)
+                {
+                    app.Dispatcher.BeginInvoke(new Action(() => Changed?.Invoke(null, EventArgs.Empty)), System.Windows.Threading.DispatcherPriority.Loaded);
+                }
+            };
             Microsoft.Win32.SystemEvents.DisplaySettingsChanged += (s, e) =>
             {
                 lock (_ids)
@@ -272,11 +300,46 @@ namespace RetroBar.Utilities
             return null;
         }
 
+        // What applies to a monitor for the theme in use: the entry itself (unless it is for another theme) and the theme's own section of it, which
+        // wins over the entry for whatever it has.
+        private static (MonitorEntry Entry, MonitorEntry Section) ResolveFor(string deviceName)
+        {
+            MonitorEntry entry = EntryFor(deviceName);
+            if (entry == null)
+            {
+                return (null, null);
+            }
+
+            string theme = Settings.Instance.Theme;
+            MonitorEntry section = null;
+            if (entry.Themes != null && !string.IsNullOrEmpty(theme))
+            {
+                foreach ((string name, MonitorEntry candidate) in entry.Themes)
+                {
+                    if (candidate != null && string.Equals(name, theme, StringComparison.OrdinalIgnoreCase))
+                    {
+                        section = candidate;
+                        break;
+                    }
+                }
+            }
+
+            bool entryApplies = string.IsNullOrEmpty(entry.Theme) || string.Equals(entry.Theme, theme, StringComparison.OrdinalIgnoreCase);
+            return (entryApplies ? entry : null, section);
+        }
+
+        private static T? Pick<T>(string deviceName, Func<MonitorEntry, T?> field) where T : struct
+        {
+            (MonitorEntry entry, MonitorEntry section) = ResolveFor(deviceName);
+            return (section != null ? field(section) : null) ?? (entry != null ? field(entry) : null);
+        }
+
         public static MonitorOffsetValue Get(string deviceName, string tag)
         {
-            if (!string.IsNullOrEmpty(deviceName) && !string.IsNullOrEmpty(tag)
-                && EntryFor(deviceName) is MonitorEntry entry
-                && entry.Tags != null && entry.Tags.TryGetValue(tag, out JsonElement element))
+            JsonElement element = default;
+            (MonitorEntry entry, MonitorEntry section) = string.IsNullOrEmpty(deviceName) || string.IsNullOrEmpty(tag) ? (null, null) : ResolveFor(deviceName);
+            if ((section?.Tags != null && section.Tags.TryGetValue(tag, out element))
+                || (entry?.Tags != null && entry.Tags.TryGetValue(tag, out element)))
             {
                 try
                 {
@@ -295,35 +358,20 @@ namespace RetroBar.Utilities
         /// the global Settings.RowCount instead, same as before this override existed).</summary>
         public static int? GetRowCount(string deviceName)
         {
-            if (EntryFor(deviceName) is MonitorEntry entry)
-            {
-                return entry.RowCount;
-            }
-
-            return null;
+            return Pick(deviceName, entry => entry.RowCount);
         }
 
         /// <summary>DIPs (can be negative) to add to this monitor's own computed taskbar AppBar
         /// height, or 0 if it has none.</summary>
         public static double GetHeightAdjustment(string deviceName)
         {
-            if (EntryFor(deviceName) is MonitorEntry entry)
-            {
-                return entry.HeightAdjustment ?? 0;
-            }
-
-            return 0;
+            return Pick(deviceName, entry => entry.HeightAdjustment) ?? 0;
         }
 
         /// <summary>DIPs (can be negative) to add to how much wider a tab is than it is tall in the Windows 11 style on this monitor, or 0.</summary>
         public static double GetTabWidthAdjustment(string deviceName)
         {
-            if (EntryFor(deviceName) is MonitorEntry entry)
-            {
-                return entry.TabWidthAdjustment ?? 0;
-            }
-
-            return 0;
+            return Pick(deviceName, entry => entry.TabWidthAdjustment) ?? 0;
         }
 
         private static void EnsureFileExists()
@@ -393,47 +441,59 @@ namespace RetroBar.Utilities
                 return problems;
             }
 
-            foreach ((string device, MonitorEntry entry) in monitors)
+            foreach ((string device, MonitorEntry monitor) in monitors)
             {
-                if (entry?.Tags == null)
+                ValidateEntry(device, monitor, problems);
+                if (monitor?.Themes != null)
                 {
-                    continue;
-                }
-
-                foreach ((string tag, JsonElement value) in entry.Tags)
-                {
-                    if (!KnownMonitorTags.Names.Contains(tag) && Closest(tag, KnownMonitorTags.Names) is string near)
+                    foreach ((string theme, MonitorEntry section) in monitor.Themes)
                     {
-                        problems.Add($"{device}: no element has the tag '{tag}' (did you mean '{near}'?)");
-                    }
-
-                    if (value.ValueKind != JsonValueKind.Object)
-                    {
-                        problems.Add($"{device}/{tag}: expected an object of fields, like {{ \"X\": 1 }}");
-                        continue;
-                    }
-
-                    foreach (JsonProperty field in value.EnumerateObject())
-                    {
-                        if (!ValidFields.Contains(field.Name))
-                        {
-                            string hint = Closest(field.Name, ValidFields) is string like ? $" (did you mean '{like}'?)" : string.Empty;
-                            problems.Add($"{device}/{tag}: unknown field '{field.Name}'{hint}");
-                        }
-                    }
-
-                    try
-                    {
-                        value.Deserialize<MonitorOffsetValue>(ReadOptions);
-                    }
-                    catch (JsonException ex)
-                    {
-                        problems.Add($"{device}/{tag}: {ex.Message}");
+                        ValidateEntry($"{device}/{theme}", section, problems);
                     }
                 }
             }
 
             return problems;
+        }
+
+        private static void ValidateEntry(string device, MonitorEntry entry, List<string> problems)
+        {
+            if (entry?.Tags == null)
+            {
+                return;
+            }
+
+            foreach ((string tag, JsonElement value) in entry.Tags)
+            {
+                if (!KnownMonitorTags.Names.Contains(tag) && Closest(tag, KnownMonitorTags.Names) is string near)
+                {
+                    problems.Add($"{device}: no element has the tag '{tag}' (did you mean '{near}'?)");
+                }
+
+                if (value.ValueKind != JsonValueKind.Object)
+                {
+                    problems.Add($"{device}/{tag}: expected an object of fields, like {{ \"X\": 1 }}");
+                    continue;
+                }
+
+                foreach (JsonProperty field in value.EnumerateObject())
+                {
+                    if (!ValidFields.Contains(field.Name))
+                    {
+                        string hint = Closest(field.Name, ValidFields) is string like ? $" (did you mean '{like}'?)" : string.Empty;
+                        problems.Add($"{device}/{tag}: unknown field '{field.Name}'{hint}");
+                    }
+                }
+
+                try
+                {
+                    value.Deserialize<MonitorOffsetValue>(ReadOptions);
+                }
+                catch (JsonException ex)
+                {
+                    problems.Add($"{device}/{tag}: {ex.Message}");
+                }
+            }
         }
 
         // The known name that is a letter or two off (or only in its case), if any.

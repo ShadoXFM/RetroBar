@@ -52,11 +52,11 @@ namespace RetroBar.Utilities
             "StartButtonBox",
             "StartIcon",
             "StartLabel",
+            "TaskBadgeBar",
             "TaskButton",
             "TaskButtonActive",
             "TaskIcon",
             "TaskIconActive",
-            "TaskBadgeBar",
             "TaskIconBar",
             "TaskLabel",
             "TaskLabelActive",
@@ -85,7 +85,6 @@ namespace RetroBar.Utilities
             "TrayToggleGlyph",
             "TrayToggleHoverFill",
             "VuMeterContainer",
-            "WidgetSparkline",
             "VuMeterContainerNoArt",
             "WeatherDescription",
             "WeatherGroup",
@@ -98,6 +97,7 @@ namespace RetroBar.Utilities
             "WeatherTaskGapNoCpuTemp",
             "WeatherTemp",
             "WeatherTempNoCpuTemp",
+            "WidgetSparkline",
         };
     }
 }
