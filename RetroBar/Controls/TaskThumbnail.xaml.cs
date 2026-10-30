@@ -146,7 +146,10 @@ namespace RetroBar.Controls
                     // (borders, margins and padding are snapped to the pixel grid), so a tiny floating
                     // point shortfall like 10.9999 must land on 11, not 10 - which shifted the picture
                     // a pixel off-center within its frame.
-                    int left = (int)Math.Round(leftTopPoint.X * DpiScale);
+                    // (The left edge is rounded up: the frame round the picture puts a quarter or a half of a pixel more on its left, which it
+                    // takes as a whole pixel, and the picture was drawn a pixel to the left of its place, with a pixel less between it and
+                    // the frame's left edge than between it and the right one.)
+                    int left = (int)Math.Ceiling(leftTopPoint.X * DpiScale - 0.01);
                     int top = (int)Math.Round(leftTopPoint.Y * DpiScale);
                     return new NativeMethods.Rect(
                           left,
@@ -236,6 +239,13 @@ namespace RetroBar.Controls
                     if (Math.Abs(height - boxHeight) <= 1)
                     {
                         height = boxHeight;
+                    }
+
+                    // At 125% the frame round the picture is 7.5 pixels wider than it (3 DIPs of padding each side) and takes whole pixels:
+                    // with a picture of an even width it had 4 pixels on its left and 3 on its right, with an odd one 4 on both.
+                    if (Math.Abs(DpiScale - 1.25) < 0.001 && width % 2 == 0)
+                    {
+                        width += 1;
                     }
 
                     _fitWidth = width / DpiScale;
