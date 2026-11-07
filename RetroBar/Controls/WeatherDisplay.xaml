@@ -9,13 +9,15 @@
         <converters:BoolToVisibilityConverter x:Key="boolToVisibilityConverter" />
     </UserControl.Resources>
     <Grid MouseEnter="WeatherPanel_OnMouseEnter" MouseLeave="WeatherPanel_OnMouseLeave">
-        <!-- The pointer's area: the widget's own width and the bar's height (reaching past the widget's box, top and bottom, which takes
-             no room), so it is easy to hover. The mouse handlers are on the grid, so the area and the widget are one for them. -->
-        <Border Background="Transparent" Margin="0,-24" />
+        <!-- The pointer's area: the widget's own width and a little more at each side, and the bar's height (reaching past the widget's box, top
+             and bottom, which takes no room), so it is easy to hover (the Windows XFM Aero theme has the widgets close together and tight). The mouse handlers are on the grid, so the area and the widget are one for them. -->
+        <Border Background="Transparent" Margin="-3,-24" />
     <!-- Transparent background so the whole widget (not just its icon and text) takes the click that
          opens the forecast. -->
     <StackPanel x:Name="WeatherPanel" Orientation="Horizontal" VerticalAlignment="Center" HorizontalAlignment="Center" Margin="4,0"
                 Background="Transparent"
+                UseLayoutRounding="True"
+                SnapsToDevicePixels="True"
                 utilities:MonitorOffset.Tag="WeatherPanel">
         <!-- Weather Icon (sizes itself using the theme style). A Rectangle masked to the icon's
              own shape via OpacityMask, rather than a plain Image - lets the icon be tinted to
@@ -26,12 +28,11 @@
              position be tuned differently for when there's no CPU temp display next to it (see
              CpuTempDisplay.xaml.cs, which sets IsCpuTempShown). Same pattern TrayBoxBevel uses
              for its own media-playing-state tag. -->
-        <Rectangle Fill="{DynamicResource ClockForeground}"
+        <Rectangle x:Name="WeatherBarIcon"
+                   Fill="{DynamicResource ClockForeground}"
                    Style="{DynamicResource WeatherIconStyle}"
                    utilities:MonitorOffset.Tag="{Binding Path=IsCpuTempShown, RelativeSource={RelativeSource Mode=FindAncestor, AncestorType={x:Type Window}}, Converter={StaticResource cpuTempShownToMonitorTagConverter}, ConverterParameter=WeatherIcon}">
-            <Rectangle.OpacityMask>
-                <ImageBrush ImageSource="{Binding WeatherIconPath}" Stretch="Uniform" />
-            </Rectangle.OpacityMask>
+            <!-- Its mask is set in code (UpdateBarIcon), from the picture decoded at the size it is drawn at. -->
         </Rectangle>
         <TextBlock Text="{Binding WeatherBarTemp}"
            Style="{DynamicResource WeatherTempStyle}"
@@ -44,7 +45,6 @@
                        Text="{Binding WeatherDescription}"
                        Style="{DynamicResource WeatherTempStyle}"
                        Foreground="{DynamicResource ClockForeground}"
-                       Opacity="0.7"
                        utilities:MonitorOffset.Tag="WeatherDescription" />
         </StackPanel>
     </StackPanel>
@@ -66,7 +66,7 @@
                  rest, not of it and the distance it has slid. -->
             <Grid x:Name="ForecastSlideHost">
             <controls:PopupShadow />
-            <ContentControl x:Name="ForecastContent" Margin="6"
+            <ContentControl x:Name="ForecastContent" Margin="6" Tag="WidgetPopup"
                             Style="{DynamicResource TaskButtonThumbnail}"
                             MouseEnter="ForecastPopup_OnMouseEnter"
                             MouseLeave="ForecastPopup_OnMouseLeave">
@@ -97,9 +97,9 @@
                             <TextBlock Text="{Binding WeatherHeadline}"
                                        Style="{DynamicResource GlobalFonts}"
                                        Foreground="{DynamicResource ButtonForeground}"
-                                       FontFamily="Tahoma"
+                                       FontFamily="{DynamicResource WidgetBoldFontFamily}"
                                        FontSize="12"
-                                       FontWeight="Bold"
+                                       FontWeight="{DynamicResource WidgetFontWeight}"
                                        Margin="0,4.5,0,0" />
                         </StackPanel>
                         <!-- The drawing only, at the top right: no room round it but the widget's own. -->
@@ -147,7 +147,7 @@
                                         <TextBlock Text="{Binding Value}"
                                                    Style="{DynamicResource GlobalFonts}"
                                                    Foreground="{DynamicResource ButtonForeground}"
-                                                   FontWeight="Bold" />
+                                                   FontWeight="{DynamicResource WidgetFontWeight}" />
                                         <TextBlock Text="{Binding Suffix}"
                                                    Style="{DynamicResource GlobalFonts}"
                                                    Foreground="{DynamicResource ButtonForeground}" />
@@ -158,16 +158,8 @@
                     </ItemsControl>
                     <!-- Etched separator between the current conditions and the forecast: a shadow line over a
                          highlight line, in the theme's own colors. -->
-                    <StackPanel Margin="0,0,0,6"
-                                UseLayoutRounding="True"
-                                SnapsToDevicePixels="True">
-                        <Rectangle Height="1"
-                                   Fill="{DynamicResource ButtonShadow}" />
-                        <!-- The highlight line is a darker shade of it (the same as the menus' separators, see MenuSeparatorLine). -->
-                        <Rectangle Height="1"
-                                   Opacity="0.5"
-                                   Fill="{DynamicResource ButtonHighlight}" />
-                    </StackPanel>
+                    <!-- The menus' separator (see MenuSeparatorLine): the theme's own line, fading out at its ends. -->
+                    <utilities:MenuSeparatorLine Margin="0,0,0,3" />
                     <!-- The next hours: the time, the weather and the temperature of each, in equal columns. -->
                     <ItemsControl ItemsSource="{Binding Hourly}"
                                   Margin="0,0,0,2.4"
@@ -197,24 +189,15 @@
                                     <TextBlock Text="{Binding Temp}"
                                                Style="{DynamicResource GlobalFonts}"
                                                Foreground="{DynamicResource ButtonForeground}"
-                                               FontFamily="Tahoma"
-                                               FontWeight="Bold"
+                                               FontFamily="{DynamicResource WidgetBoldFontFamily}"
+                                               FontWeight="{DynamicResource WidgetFontWeight}"
                                                HorizontalAlignment="Center" />
                                 </StackPanel>
                             </DataTemplate>
                         </ItemsControl.ItemTemplate>
                     </ItemsControl>
-                    <StackPanel Margin="0,4,0,6"
-                                UseLayoutRounding="True"
-                                SnapsToDevicePixels="True"
-                                Visibility="{Binding HasHourly, Converter={StaticResource boolToVisibilityConverter}}">
-                        <Rectangle Height="1"
-                                   Fill="{DynamicResource ButtonShadow}" />
-                        <!-- The highlight line is a darker shade of it (the same as the menus' separators, see MenuSeparatorLine). -->
-                        <Rectangle Height="1"
-                                   Opacity="0.5"
-                                   Fill="{DynamicResource ButtonHighlight}" />
-                    </StackPanel>
+                    <utilities:MenuSeparatorLine Margin="0,1,0,3"
+                                                 Visibility="{Binding HasHourly, Converter={StaticResource boolToVisibilityConverter}}" />
                     <ItemsControl ItemsSource="{Binding Forecast}"
                                   Grid.IsSharedSizeScope="True">
                         <ItemsControl.ItemTemplate>
@@ -247,8 +230,8 @@
                                                Text="{Binding Range}"
                                                Style="{DynamicResource GlobalFonts}"
                                                Foreground="{DynamicResource ButtonForeground}"
-                                               FontFamily="Tahoma"
-                                               FontWeight="Bold"
+                                               FontFamily="{DynamicResource WidgetBoldFontFamily}"
+                                               FontWeight="{DynamicResource WidgetFontWeight}"
                                                TextAlignment="Left"
                                                VerticalAlignment="Center" />
                                 </Grid>

@@ -68,12 +68,83 @@
     <system:Boolean x:Key="UseLargeIcons">False</system:Boolean>
     <system:Boolean x:Key="UseFloatingStartButton">False</system:Boolean>
 
+    <!-- The fonts of the widgets' own text: the bold one of the figures and headings, the plain one of the small labels. A theme can set them. -->
+    <FontFamily x:Key="WidgetBoldFontFamily">Tahoma</FontFamily>
+    <FontFamily x:Key="WidgetLabelFontFamily">Microsoft Sans Serif</FontFamily>
+    <FontWeight x:Key="WidgetFontWeight">Bold</FontWeight>
+    <!-- How strong the shadow behind the media popup is (the widgets' popups have the shadow's own 0.75). -->
+    <system:Double x:Key="MediaPopupShadowStrength">0.5</system:Double>
+
     <Style x:Key="GlobalFonts">
         <Setter Property="Control.FontFamily"
                 Value="{DynamicResource GlobalFontFamily}" />
         <Setter Property="Control.FontSize"
                 Value="{DynamicResource GlobalFontSize}" />
     </Style>
+
+    <!-- The widgets' (weather, processor temperature, memory) own styles. A theme can define them again to give the
+         widgets its own look (Windows XFM does: Tahoma bold); without them a theme would leave the icon with no size (a dot)
+         and the text with the default font. -->
+    <Style TargetType="Rectangle" x:Key="WeatherIconStyle">
+        <Setter Property="Width"
+                Value="20" />
+        <Setter Property="Height"
+                Value="20" />
+        <Setter Property="RenderOptions.BitmapScalingMode"
+                Value="HighQuality" />
+        <Setter Property="Margin"
+                Value="-2,0,0,0" />
+    </Style>
+
+    <Style TargetType="TextBlock" x:Key="WeatherTempStyle"
+           BasedOn="{StaticResource GlobalFonts}">
+        <Setter Property="VerticalAlignment"
+                Value="Center" />
+        <Setter Property="Margin"
+                Value="2,-1,2,0" />
+    </Style>
+
+    <Style TargetType="TextBlock" x:Key="CpuTempStyle"
+           BasedOn="{StaticResource GlobalFonts}">
+        <Setter Property="VerticalAlignment"
+                Value="Center" />
+        <Setter Property="Margin"
+                Value="2,-1,2,0" />
+    </Style>
+
+    <!-- The frame of a menu (the context menus and the menus that open from their items): by default the raised bevel of a tab. A theme can give it
+         another look, and the look of the highlighted item (MenuHighlight*), the item's border and its corners. -->
+    <Style TargetType="ContentControl"
+           x:Key="MenuFrame">
+        <Setter Property="Template">
+            <Setter.Value>
+                <ControlTemplate TargetType="ContentControl">
+                    <Border BorderThickness="0,0,1,1"
+                            BorderBrush="{DynamicResource ButtonDarkShadow}"
+                            SnapsToDevicePixels="True">
+                        <Border BorderThickness="1,1,0,0"
+                                BorderBrush="{DynamicResource ButtonHighlight}">
+                            <Border BorderThickness="0,0,1,1"
+                                    BorderBrush="{DynamicResource ButtonShadow}">
+                                <Border BorderThickness="1,1,0,0"
+                                        BorderBrush="{DynamicResource ButtonLight}"
+                                        Background="{DynamicResource ButtonFace}">
+                                    <ContentPresenter />
+                                </Border>
+                            </Border>
+                        </Border>
+                    </Border>
+                </ControlTemplate>
+            </Setter.Value>
+        </Setter>
+    </Style>
+    <SolidColorBrush x:Key="MenuHighlightBrush" Color="{x:Static SystemColors.HighlightColor}" />
+    <SolidColorBrush x:Key="MenuHighlightForeground" Color="{x:Static SystemColors.HighlightTextColor}" />
+    <SolidColorBrush x:Key="MenuHighlightBorder" Color="Transparent" />
+    <Thickness x:Key="MenuItemBorderThickness">0</Thickness>
+    <CornerRadius x:Key="MenuHighlightCornerRadius">0</CornerRadius>
+    <Thickness x:Key="MenuItemTextMargin">0,2,10,2</Thickness>
+    <Thickness x:Key="MenuSeparatorMargin">4,0,2.5,0</Thickness>
 
     <Style TargetType="ContextMenu"
            x:Key="{x:Type ContextMenu}"
@@ -100,34 +171,23 @@
                         <controls:PopupShadow Margin="0,0,-10,-10"
                                               Room="0,0,10,10"
                                               Strength="0.67" />
-                        <!-- The same raised 4-line bevel as a tab: an outer DarkShadow/Highlight pair around an
-                             inner Shadow/Light pair. -->
-                        <Border BorderThickness="0,0,1,1"
-                                BorderBrush="{DynamicResource ButtonDarkShadow}"
-                                SnapsToDevicePixels="True">
-                            <Border BorderThickness="1,1,0,0"
-                                    BorderBrush="{DynamicResource ButtonHighlight}">
-                                <Border BorderThickness="0,0,1,1"
-                                        BorderBrush="{DynamicResource ButtonShadow}">
-                                    <Border BorderThickness="1,1,0,0"
-                                            BorderBrush="{DynamicResource ButtonLight}"
-                                            Background="{DynamicResource ButtonFace}">
-                                        <ScrollViewer Margin="1,0"
-                                                      CanContentScroll="True"
-                                                      Style="{DynamicResource {ComponentResourceKey TypeInTargetAssembly={x:Type FrameworkElement}, ResourceId=MenuScrollViewer}}">
-                                            <!-- As in WPF's own menu template: without the hint the text is smoothed in
-                                                 grayscale rather than ClearType, which made menus look blurry. -->
-                                            <Grid RenderOptions.ClearTypeHint="Enabled">
-                                                <ItemsPresenter Margin="{TemplateBinding Padding}"
-                                                                Grid.IsSharedSizeScope="True"
-                                                                KeyboardNavigation.DirectionalNavigation="Cycle"
-                                                                SnapsToDevicePixels="{TemplateBinding SnapsToDevicePixels}" />
-                                            </Grid>
-                                        </ScrollViewer>
-                                    </Border>
-                                </Border>
-                            </Border>
-                        </Border>
+                        <!-- The frame is the theme's (MenuFrame: the same raised 4-line bevel as a tab in the classic themes). -->
+                        <ContentControl Style="{DynamicResource MenuFrame}"
+                                        Focusable="False"
+                                        IsTabStop="False">
+                            <ScrollViewer Margin="1,0"
+                                          CanContentScroll="True"
+                                          Style="{DynamicResource {ComponentResourceKey TypeInTargetAssembly={x:Type FrameworkElement}, ResourceId=MenuScrollViewer}}">
+                                <!-- As in WPF's own menu template: without the hint the text is smoothed in
+                                     grayscale rather than ClearType, which made menus look blurry. -->
+                                <Grid RenderOptions.ClearTypeHint="Enabled">
+                                    <ItemsPresenter Margin="{TemplateBinding Padding}"
+                                                    Grid.IsSharedSizeScope="True"
+                                                    KeyboardNavigation.DirectionalNavigation="Cycle"
+                                                    SnapsToDevicePixels="{TemplateBinding SnapsToDevicePixels}" />
+                                </Grid>
+                            </ScrollViewer>
+                        </ContentControl>
                     </Grid>
                 </ControlTemplate>
             </Setter.Value>
@@ -575,6 +635,33 @@
                 Value="{DynamicResource ButtonFlashingFace}" />
         <Setter Property="Foreground"
                 Value="{DynamicResource ButtonFlashingForeground}" />
+    </Style>
+
+    <!-- The frame of the media player's popup: the same four-line raised bevel as a resting tab, round its content. A theme can give it
+         another look (Windows XFM Aero's is glass). -->
+    <Style TargetType="ContentControl"
+           x:Key="MediaPopupFrame">
+        <Setter Property="Template">
+            <Setter.Value>
+                <ControlTemplate TargetType="ContentControl">
+                    <Border BorderThickness="0,0,1,1"
+                            BorderBrush="{DynamicResource ButtonDarkShadow}">
+                        <Border BorderThickness="1,1,0,0"
+                                BorderBrush="{DynamicResource ButtonHighlight}">
+                            <Border BorderThickness="0,0,1,1"
+                                    BorderBrush="{DynamicResource ButtonShadow}">
+                                <Border BorderThickness="1,1,0,0"
+                                        BorderBrush="{DynamicResource ButtonLight}"
+                                        Background="{DynamicResource ButtonFace}"
+                                        Padding="2,3">
+                                    <ContentPresenter />
+                                </Border>
+                            </Border>
+                        </Border>
+                    </Border>
+                </ControlTemplate>
+            </Setter.Value>
+        </Setter>
     </Style>
 
     <Style TargetType="ContentControl"

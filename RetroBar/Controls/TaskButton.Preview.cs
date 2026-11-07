@@ -889,6 +889,12 @@ namespace RetroBar.Controls
         {
             foreach (PreviewItem item in GetPreviewItems(tip))
             {
+                if (item.CloseButton is Button win7Button && win7Button.Template?.FindName("Win7Glyph", win7Button) is NineSlice win7Glyph)
+                {
+                    FitWin7CloseButton(win7Button, win7Glyph, source);
+                    continue;
+                }
+
                 if (item.CloseButton is not Button button ||
                     button.Template?.FindName("Glyph", button) is not System.Windows.Shapes.Path glyph ||
                     glyph.Data == null || glyph.Data.Transform is ScaleTransform)
@@ -905,6 +911,28 @@ namespace RetroBar.Controls
                 data.Transform = new ScaleTransform(fromDevice.M11, fromDevice.M22);
                 glyph.Data = data;
             }
+        }
+
+        // The Windows 7 style's close button (see TaskPreviewCloseButton in its theme): its X is the picture Windows 7 has for the monitor's
+        // scale (8, 10, 12 or 16 pixels square), and the button is a square of 14 DIPs as whole device pixels (14, 18, 21 ... as Windows 7 draws it).
+        private static void FitWin7CloseButton(Button button, NineSlice glyph, HwndSource source)
+        {
+            double scale = 1 / source.CompositionTarget.TransformFromDevice.M11;
+            string key = scale >= 2 ? "Win7ThumbCloseGlyph192" : scale >= 1.5 ? "Win7ThumbCloseGlyph144" : scale >= 1.25 ? "Win7ThumbCloseGlyph120" : "Win7ThumbCloseGlyph";
+            if (button.TryFindResource(key) is not System.Windows.Media.Imaging.BitmapSource picture)
+            {
+                return;
+            }
+
+            int size = picture.PixelWidth;
+            glyph.Source = picture;
+            glyph.Width = size / scale;
+            glyph.Height = size / scale;
+            button.Width = Math.Round(14 * scale, MidpointRounding.AwayFromZero) / scale;
+            button.Height = Math.Round(14 * scale, MidpointRounding.AwayFromZero) / scale;
+
+            // One device pixel in from the right edge of the title row, which would cut off the button's last column.
+            button.Margin = new Thickness(0, 0, 1 / scale, 0);
         }
 
         // The X for a monitor scale (1 = 100%): about 8.8 x 7.2 DIPs, its strokes about 2.4 DIPs across - 9x7 pixels with 2-pixel
@@ -1018,12 +1046,15 @@ namespace RetroBar.Controls
 
                     // The theme moves the X when pressed with a margin of 1 on a centered element, which is half a DIP: a whole
                     // pixel at 125%, nothing at 100%. It is moved here by exactly one device pixel (right and down) instead.
-                    if (item.CloseButton.Template?.FindName("Glyph", item.CloseButton) is System.Windows.Shapes.Path pressedGlyph &&
-                        (pressedGlyph.RenderTransform is TranslateTransform) != closePressed)
+                    foreach (string glyphName in new[] { "Glyph", "GlyphShadow" })
                     {
-                        DpiScale dpi = VisualTreeHelper.GetDpi(pressedGlyph);
-                        pressedGlyph.Margin = new Thickness(0);
-                        pressedGlyph.RenderTransform = closePressed ? new TranslateTransform(1 / dpi.DpiScaleX, 1 / dpi.DpiScaleY) : null;
+                        if (item.CloseButton.Template?.FindName(glyphName, item.CloseButton) is System.Windows.Shapes.Path pressedGlyph &&
+                            (pressedGlyph.RenderTransform is TranslateTransform) != closePressed)
+                        {
+                            DpiScale dpi = VisualTreeHelper.GetDpi(pressedGlyph);
+                            pressedGlyph.Margin = new Thickness(0);
+                            pressedGlyph.RenderTransform = closePressed ? new TranslateTransform(1 / dpi.DpiScaleX, 1 / dpi.DpiScaleY) : null;
+                        }
                     }
                 }
 

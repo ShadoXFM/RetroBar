@@ -14,6 +14,15 @@ namespace RetroBar.Controls
     /// </summary>
     public class RamGraph : FrameworkElement
     {
+        private readonly SoftLineLayer _softLine = new();
+
+        public RamGraph()
+        {
+            AddVisualChild(_softLine);
+            // Anti-aliased: the borders around it (the popup\'s frame) are drawn aliased, and that is passed on to what is inside them.
+            RenderOptions.SetEdgeMode(this, EdgeMode.Unspecified);
+        }
+
         // The temperatures at the left start this far from the edge (the header's text is as far), and have this much room before the graph.
         private const double LabelMargin = 2;
         private const double LabelGap = 4;
@@ -43,6 +52,22 @@ namespace RetroBar.Controls
             return local.ToString(pattern, CultureInfo.CurrentCulture);
         }
 
+        protected override int VisualChildrenCount => 1;
+
+        protected override Visual GetVisualChild(int index) => _softLine;
+
+        protected override Size MeasureOverride(Size availableSize)
+        {
+            _softLine.Measure(availableSize);
+            return base.MeasureOverride(availableSize);
+        }
+
+        protected override Size ArrangeOverride(Size finalSize)
+        {
+            _softLine.Arrange(new Rect(finalSize));
+            return finalSize;
+        }
+
         protected override void OnRender(DrawingContext dc)
         {
             double width = ActualWidth;
@@ -56,7 +81,7 @@ namespace RetroBar.Controls
             double Snap(double value) => Math.Round(value * dpi) / dpi;
 
             Brush foreground = TryFindResource("ButtonForeground") as Brush ?? Brushes.Black;
-            var typeface = new Typeface(new FontFamily("Tahoma"), FontStyles.Normal, FontWeights.Bold, FontStretches.Normal);
+            var typeface = new Typeface(TryFindResource("WidgetBoldFontFamily") as FontFamily ?? new FontFamily("Tahoma"), FontStyles.Normal, TryFindResource("WidgetFontWeight") is FontWeight weight ? weight : FontWeights.Bold, FontStretches.Normal);
 
             FormattedText Text(string text) => new(text, CultureInfo.CurrentCulture, FlowDirection.LeftToRight, typeface, FontSize, foreground,
                 new NumberSubstitution(), TextFormattingMode.Display, dpi);
@@ -73,6 +98,7 @@ namespace RetroBar.Controls
 
             if (_samples.Length < 2)
             {
+                _softLine.Set(null, null, null, null);
                 FormattedText waiting = Text(CollectingText);
                 dc.DrawText(waiting, new Point(Snap((width - waiting.Width) / 2), Snap((height - waiting.Height) / 2)));
                 return;
@@ -167,8 +193,8 @@ namespace RetroBar.Controls
             area.Freeze();
             Brush fill = foreground.Clone();
             fill.Opacity = 0.15;
-            dc.DrawGeometry(fill, null, area);
-            dc.DrawGeometry(null, new Pen(foreground, 1.5) { LineJoin = PenLineJoin.Round }, line);
+            var pen = new Pen(foreground, 1.5) { LineJoin = PenLineJoin.Round };
+            _softLine.Set(area, fill, line, pen);
         }
     }
 }

@@ -19,6 +19,23 @@ namespace RetroBar.Controls
         private DependencyPropertyDescriptor _iconOnlyDescriptor;
         private bool _placeIconQueued;
 
+        // The tab's list is found by a binding, which after a change of theme (the tabs are made again) can be later than the tab's loading: it
+        // was then loaded with no list, and was never set up for the icon-only style (its label showed as a dot, its icon was not centered). Set
+        // up when the list is there.
+        private void Host_OnChanged()
+        {
+            if (Host == null || !IsLoaded || _iconOnlyHost != null)
+            {
+                return;
+            }
+
+            _groupHost = Host;
+            _groupHost.GroupsChanged -= Host_GroupsChanged;
+            _groupHost.GroupsChanged += Host_GroupsChanged;
+            InitIconOnly();
+            RefreshGroup();
+        }
+
         private void InitIconOnly()
         {
             ReleaseIconOnly();
@@ -88,6 +105,9 @@ namespace RetroBar.Controls
 
         private void IconOnly_OnPressedChanged(object sender, EventArgs e) => UpdatePressShift();
 
+        /// <summary>Whether the tab is being pressed (the button's own state, or the mouse button held on it).</summary>
+        internal bool IsBeingPressed => AppButton.IsPressed || _mouseDownOnTab;
+
         private void UpdatePressShift()
         {
             bool pressed = _iconOnlyHost?.IconOnly == true && (AppButton.IsPressed || _mouseDownOnTab);
@@ -123,7 +143,43 @@ namespace RetroBar.Controls
             }
         }
 
-        private void IconOnly_OnChanged(object sender, EventArgs e) => ApplyIconOnly();
+        private void IconOnly_OnChanged(object sender, EventArgs e)
+        {
+            ApplyIconOnly();
+            UpdateStack();
+        }
+
+        // A tab for several windows of one program has the strips of a stack to the right of its face (see TaskStack): one for two windows, two
+        // for more.
+        private void UpdateStack()
+        {
+            int layers = _iconOnlyHost?.IconOnly == true && GroupWindows.Count > 1 ? Math.Min(2, GroupWindows.Count - 1) : 0;
+            if (TaskStack.GetLayers(AppButton) == layers)
+            {
+                TaskStack.Refresh(AppButton);
+                return;
+            }
+
+            // The icon goes with the middle of the face as it narrows, and is put where it goes when that is done (it is seen all the while).
+            TaskStack.Set(AppButton, layers, delta =>
+            {
+                var move = new TranslateTransform();
+                IconOnlyLayer.RenderTransform = move;
+                move.BeginAnimation(TranslateTransform.XProperty, new System.Windows.Media.Animation.DoubleAnimation(0, delta, TaskStack.Time)
+                {
+                    EasingFunction = TaskStack.Ease,
+                });
+            }, () =>
+            {
+                IconOnlyLayer.ClearValue(RenderTransformProperty);
+                _syncCentered = false;
+                if (_iconOnlyHost?.IconOnly == true)
+                {
+                    QueuePlaceIcon();
+                    PlaceIcon();
+                }
+            });
+        }
 
         // Raised on the thread of the file watcher: nothing of the tab is touched until it is on the UI thread.
         private void IconOnly_OnAdjustmentsChanged(object sender, EventArgs e)
@@ -141,6 +197,7 @@ namespace RetroBar.Controls
         {
             if (_iconOnlyHost?.IconOnly == true)
             {
+                UpdateStack();
                 QueuePlaceIcon();
             }
         }
@@ -180,10 +237,10 @@ namespace RetroBar.Controls
             TaskOverlayIconImage.Opacity = only ? 0 : 1;
             IconOnlyBadge.Opacity = 0;
             IconOnlyImage.Opacity = 0;
-            // Only the icon of a window that has just opened waits to be centered before it is seen (where it is put first is a pixel or so
-            // off, and it was seen going to the right place); a tab made anew for a window that was there (the ones after a tab that closed
-            // are) is shown at once, as it is not a stranger to its place.
-            _iconCentered = !(only && Host?.JustOpened(Window) == true);
+            // The icon is seen at once, also for a window that has just opened: it used to wait to be centered (where it is put first is a pixel
+            // or so off), and while a program was starting, and the machine busy with it, that took a second or two, with the pin's icon gone
+            // and the new tab's not there. It is centered a moment after, as it is for every tab, and may move by a pixel.
+            _iconCentered = true;
             _syncCentered = false;
 
             IconOnlyImage.Visibility = only ? Visibility.Visible : Visibility.Collapsed;
@@ -226,6 +283,8 @@ namespace RetroBar.Controls
                 LayoutUpdated -= IconOnly_OnLayoutUpdated;
                 return;
             }
+
+            _iconOnlyHost.RememberFrame(Window, AppButton.Template?.FindName("ButtonOuterBottomBorder", AppButton) as NineSlice);
 
             if (!_iconPlaced)
             {
@@ -517,7 +576,8 @@ namespace RetroBar.Controls
         /// <summary>The same for a tab that is at rest (not active, pressed or pending a correction), which the task list takes the place of the icons from.</summary>
         internal (double X, double Y, double FrameLeft, double FrameTop)? FrameCenterAtRest()
         {
-            if (_iconOnlyHost?.IconOnly != true || !_iconPlaced || _pendingFix != null || IsInUse || !IsLoaded)
+            // (A tab with a stack has a narrower face: the middle of that is not where the other tabs have their icons.)
+            if (_iconOnlyHost?.IconOnly != true || !_iconPlaced || _pendingFix != null || IsInUse || !IsLoaded || TaskStack.GetLayers(AppButton) > 0 || TaskStack.IsAnimating(AppButton))
             {
                 return null;
             }
@@ -578,6 +638,11 @@ namespace RetroBar.Controls
         // first put, a pixel or two off, until then. False if it could not be (nothing to go by, not laid out yet).
         private bool CenterIconNow()
         {
+            if (TaskStack.IsAnimating(AppButton))
+            {
+                return false;
+            }
+
             try
             {
                 for (int pass = 0; pass < 4; pass++)
@@ -610,7 +675,7 @@ namespace RetroBar.Controls
 
         private void CenterIconInFrame()
         {
-            if (_iconOnlyHost?.IconOnly != true || !IsLoaded || AppButton.IsPressed || IconOnlyImage.ActualWidth <= 0)
+            if (_iconOnlyHost?.IconOnly != true || !IsLoaded || AppButton.IsPressed || IconOnlyImage.ActualWidth <= 0 || TaskStack.IsAnimating(AppButton))
             {
                 return;
             }
@@ -657,7 +722,7 @@ namespace RetroBar.Controls
         // In the middle of the frame the theme draws (its outer border, which is smaller than the button's box), in whole device pixels.
         private void PlaceIcon()
         {
-            if (_iconOnlyHost?.IconOnly != true || !IsLoaded || AppButton.IsPressed)
+            if (_iconOnlyHost?.IconOnly != true || !IsLoaded || AppButton.IsPressed || TaskStack.IsAnimating(AppButton))
             {
                 return;
             }

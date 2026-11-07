@@ -1,4 +1,5 @@
-﻿using ManagedShell;
+﻿using System.Collections.Generic;
+using ManagedShell;
 using ManagedShell.AppBar;
 using ManagedShell.Common.Helpers;
 using ManagedShell.Common.Logging;
@@ -329,7 +330,7 @@ namespace RetroBar
                     return;
                 }
 
-                SetBlur(AllowsBlur());
+                UpdateBlur();
                 PeekDuringAutoHide();
                 RecalculateSize();
             }
@@ -413,7 +414,124 @@ namespace RetroBar
             }
             else if (e.PropertyName == nameof(Settings.AllowBlurBehind))
             {
-                SetBlur(AllowsBlur());
+                UpdateBlur();
+            }
+        }
+
+        // ManagedShell asks Windows for the acrylic kind of blur-behind. A theme with a BlurBehindKind of 3 (the plain kind, the one the
+        // glass of Windows 7 was) gets that one instead, alone: not asked for together with the acrylic.
+        private void UpdateBlur()
+        {
+            bool allows = AllowsBlur();
+            if (allows && Handle != IntPtr.Zero && Application.Current.TryFindResource("BlurBehindKind") is int kind && kind != 4)
+            {
+                var accent = new AccentPolicy { AccentState = kind };
+                int size = System.Runtime.InteropServices.Marshal.SizeOf(accent);
+                IntPtr buffer = System.Runtime.InteropServices.Marshal.AllocHGlobal(size);
+                try
+                {
+                    System.Runtime.InteropServices.Marshal.StructureToPtr(accent, buffer, false);
+                    var data = new WindowCompositionAttributeData { Attribute = 19 /* WCA_ACCENT_POLICY */, SizeOfData = size, Data = buffer };
+                    SetWindowCompositionAttribute(Handle, ref data);
+                }
+                finally
+                {
+                    System.Runtime.InteropServices.Marshal.FreeHGlobal(buffer);
+                }
+
+                return;
+            }
+
+            SetBlur(allows);
+        }
+
+        [System.Runtime.InteropServices.StructLayout(System.Runtime.InteropServices.LayoutKind.Sequential)]
+        private struct AccentPolicy
+        {
+            public int AccentState;
+            public int AccentFlags;
+            public int GradientColor;
+            public int AnimationId;
+        }
+
+        [System.Runtime.InteropServices.StructLayout(System.Runtime.InteropServices.LayoutKind.Sequential)]
+        private struct WindowCompositionAttributeData
+        {
+            public int Attribute;
+            public IntPtr Data;
+            public int SizeOfData;
+        }
+
+        [System.Runtime.InteropServices.DllImport("user32.dll")]
+        private static extern int SetWindowCompositionAttribute(IntPtr hwnd, ref WindowCompositionAttributeData data);
+
+        // ---- the system's blur is a few frames behind, and a window that goes from under the bar fast can leave its blur there until something makes
+        // the compositor draw the bar again (taking a screenshot did): when a window that is over the bar changes place, shows or hides, the bar's
+        // blur is asked for again once things have settled.
+        private System.Windows.Threading.DispatcherTimer _blurRefresh;
+        private static IntPtr _blurHook;
+        private static readonly WinEventProc BlurHookProc = OnBlurWinEvent;
+        private static readonly List<Taskbar> BlurBars = new();
+
+        private delegate void WinEventProc(IntPtr hook, uint eventType, IntPtr hwnd, int idObject, int idChild, uint thread, uint time);
+
+        [System.Runtime.InteropServices.DllImport("user32.dll")]
+        private static extern IntPtr SetWinEventHook(uint min, uint max, IntPtr module, WinEventProc proc, uint pid, uint thread, uint flags);
+
+        [System.Runtime.InteropServices.DllImport("user32.dll")]
+        private static extern bool GetWindowRect(IntPtr hwnd, out NativeMethods.Rect rect);
+
+        private void WatchBlur()
+        {
+            if (_blurRefresh != null || !(Application.Current.TryFindResource("BlurBehindKind") is int))
+            {
+                return;
+            }
+
+            _blurRefresh = new System.Windows.Threading.DispatcherTimer { Interval = TimeSpan.FromMilliseconds(120) };
+            _blurRefresh.Tick += (s, e) =>
+            {
+                _blurRefresh.Stop();
+                UpdateBlur();
+            };
+            lock (BlurBars)
+            {
+                BlurBars.Add(this);
+            }
+
+            if (_blurHook == IntPtr.Zero)
+            {
+                // EVENT_OBJECT_DESTROY .. EVENT_OBJECT_LOCATIONCHANGE (0x8001 - 0x800B), called back on this thread.
+                _blurHook = SetWinEventHook(0x8001, 0x800B, IntPtr.Zero, BlurHookProc, 0, 0, 0);
+            }
+        }
+
+        private static void OnBlurWinEvent(IntPtr hook, uint eventType, IntPtr hwnd, int idObject, int idChild, uint thread, uint time)
+        {
+            if (idObject != 0 || hwnd == IntPtr.Zero || !GetWindowRect(hwnd, out NativeMethods.Rect moved))
+            {
+                return;
+            }
+
+            Taskbar[] bars;
+            lock (BlurBars)
+            {
+                bars = BlurBars.ToArray();
+            }
+
+            foreach (Taskbar bar in bars)
+            {
+                if (!bar.Dispatcher.CheckAccess() || bar.Handle == IntPtr.Zero || hwnd == bar.Handle || bar._blurRefresh == null)
+                {
+                    continue;
+                }
+
+                if (GetWindowRect(bar.Handle, out NativeMethods.Rect mine) && moved.Left < mine.Right && moved.Right > mine.Left && moved.Top < mine.Bottom && moved.Bottom > mine.Top)
+                {
+                    // (Again from now: it is the last change that counts.)
+                    bar._blurRefresh.Stop();
+                    bar._blurRefresh.Start();
+                }
             }
         }
 
@@ -423,7 +541,8 @@ namespace RetroBar
             base.OnSourceInitialized(sender, e);
 
             SetLayoutRounding();
-            SetBlur(AllowsBlur());
+            UpdateBlur();
+            WatchBlur();
             UpdateTrayPosition();
         }
         
@@ -916,13 +1035,24 @@ namespace RetroBar
 
         private bool AllowsBlur()
         {
+            // A theme can say it does not want the blur (AllowsBlurBehind = False), for a glass that is only see-through (Windows XFM Aero).
             return Settings.Instance.AllowBlurBehind &&
-                   (Application.Current.FindResource("AllowsTransparency") as bool? ?? false);
+                   (Application.Current.FindResource("AllowsTransparency") as bool? ?? false) &&
+                   (Application.Current.TryFindResource("AllowsBlurBehind") as bool? ?? true);
         }
 
         #region Unlocked taskbar drag hook
         private void Taskbar_OnMouseLeftButtonDown(object sender, MouseButtonEventArgs e)
         {
+            // A press in a popup (the media player's, the weather's, a menu...) reaches this handler too, as the popup's events bubble up to
+            // the window it belongs to: it is not a press on the taskbar, and must not start dragging or resizing it (the popup being dragged
+            // made the taskbar grow row by row, or go to another edge).
+            if (e.OriginalSource is Visual source && PresentationSource.FromVisual(source) is System.Windows.Interop.HwndSource hwndSource &&
+                hwndSource.Handle != new System.Windows.Interop.WindowInteropHelper(this).Handle)
+            {
+                return;
+            }
+
             if (!IsLocked)
             {
                 // Start low-level mouse hook to receive current drag position

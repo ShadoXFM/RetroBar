@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.ComponentModel;
 using System.Collections.Generic;
 using System.Collections.ObjectModel;
@@ -25,7 +25,7 @@ namespace RetroBar.Controls
     /// </summary>
     public partial class TaskButton : UserControl
     {
-        public static DependencyProperty HostProperty = DependencyProperty.Register(nameof(Host), typeof(TaskList), typeof(TaskButton));
+        public static DependencyProperty HostProperty = DependencyProperty.Register(nameof(Host), typeof(TaskList), typeof(TaskButton), new PropertyMetadata(null, (d, e) => ((TaskButton)d).Host_OnChanged()));
 
         public TaskList Host
         {
@@ -134,6 +134,7 @@ namespace RetroBar.Controls
 
             UpdateGroupActive();
             UpdateProgressBar();
+            UpdateStack();
         }
 
         private void ReleaseGroup()
@@ -161,6 +162,11 @@ namespace RetroBar.Controls
         {
             if (e.PropertyName == "ProgressState" || e.PropertyName == "ProgressValue")
             {
+                if (sender is ApplicationWindow progressWindow)
+                {
+                    NoteProgressEvent(progressWindow, e.PropertyName);
+                }
+
                 Dispatcher.BeginInvoke(new Action(UpdateProgressBar));
             }
 
@@ -305,7 +311,8 @@ namespace RetroBar.Controls
                 RenderTransformOrigin = new Point(0, 0.5);
                 RenderTransform = scale;
                 // As long as the others take to slide (ItemSlideAnimation), which it makes room for.
-                var grow = new DoubleAnimation(0, 1, new Duration(TimeSpan.FromMilliseconds(150))) { EasingFunction = ease };
+                // (Not shortened by a stall of the thread, as the slide is not: the two go together.)
+                var grow = Utilities.ItemSlideAnimation.StallProof(0, 1, new Duration(TimeSpan.FromMilliseconds(150)), ease);
                 grow.Completed += (s, e) => RenderTransform = null;
                 scale.BeginAnimation(ScaleTransform.ScaleXProperty, grow);
                 BeginAnimation(OpacityProperty, new DoubleAnimation(0, 1, new Duration(TimeSpan.FromMilliseconds(150))) { EasingFunction = ease, FillBehavior = FillBehavior.Stop });
@@ -359,6 +366,7 @@ namespace RetroBar.Controls
 
             InitIconOnly();
             RefreshGroup();
+            UpdateBadge(false);
 
             // A button recreated because the user just dragged it somewhere else isn't a new window
             // appearing - growing it in from zero width would push every tab to its right along with it
@@ -369,9 +377,77 @@ namespace RetroBar.Controls
                 Animate();
             }
 
+            // The glass of a tab that has just opened comes up in the colour of its icon and settles (as in Windows 7). It is started here,
+            // not later: what is queued for later runs half a second after the tab is seen, and the plain glass shows till then.
+            bool justOpened = Host?.IconOnly == true && Host.JustOpenedForGlass(Window);
+            if (justOpened && DateTime.UtcNow > SuppressSlideInUntilUtc)
+            {
+                _comeUpAt = DateTime.UtcNow;
+                Action comeUp = () => ComeUp(_comeUpAt, _comeUpAt);
+                if (AppButton.Template?.FindName("ButtonOuterBottomBorder", AppButton) != null)
+                {
+                    comeUp();
+                }
+                else
+                {
+                    Dispatcher.BeginInvoke(comeUp, System.Windows.Threading.DispatcherPriority.Loaded);
+                }
+
+                // The tab of a window that becomes the active one changes its template (for the one of an active tab), which has a glass
+                // frame and a light of its own: the coming up goes on in it from where it was, not at full strength.
+                _templateDescriptor ??= DependencyPropertyDescriptor.FromProperty(System.Windows.Controls.Control.TemplateProperty, typeof(System.Windows.Controls.Control));
+                _templateDescriptor.RemoveValueChanged(AppButton, ComeUpTemplateChanged);
+                _templateDescriptor.AddValueChanged(AppButton, ComeUpTemplateChanged);
+            }
+
             _isLoaded = true;
 
             ReopenPreviewAfterClose();
+        }
+
+        private DateTime _comeUpAt = DateTime.MinValue;
+        private DependencyPropertyDescriptor _templateDescriptor;
+
+        private static readonly TimeSpan GlassFadeIn = TimeSpan.FromMilliseconds(150);
+
+        // The glass of the tab comes up fast and the colour slower. The glass starts at <glassStart>, the colour at <started> (a template that
+        // comes later goes on with the colour from where it was).
+        private void ComeUp(DateTime glassStart, DateTime started)
+        {
+            TimeSpan elapsed = DateTime.UtcNow - glassStart;
+            if (AppButton.Template?.FindName("ButtonOuterBottomBorder", AppButton) is UIElement frame && elapsed < GlassFadeIn)
+            {
+                double from = Math.Max(0, elapsed.TotalMilliseconds / GlassFadeIn.TotalMilliseconds);
+                // (Counts only the time that is drawn: a program that is starting keeps the thread busy, and the 150 ms of the fade were over before
+                // a frame was drawn - see StallProofAnimation.)
+                frame.BeginAnimation(OpacityProperty, new Utilities.StallProofAnimation(new (double, double, System.Windows.Media.Animation.IEasingFunction)[]
+                {
+                    (0, from, null),
+                    (GlassFadeIn.TotalMilliseconds - elapsed.TotalMilliseconds, 1, null),
+                })
+                {
+                    FillBehavior = System.Windows.Media.Animation.FillBehavior.Stop,
+                });
+            }
+
+            // (If the light is not made yet it comes up as soon as it is.)
+            Utilities.HotTrackGlow.Launch(AppButton.Template?.FindName("HotGlow", AppButton) as Border, started);
+        }
+
+        private void ComeUpTemplateChanged(object sender, EventArgs e)
+        {
+            TimeSpan since = DateTime.UtcNow - _comeUpAt;
+            if (since > TimeSpan.FromMilliseconds(1800))
+            {
+                _templateDescriptor?.RemoveValueChanged(AppButton, ComeUpTemplateChanged);
+                return;
+            }
+
+            // At once, in the same turn (a later one has the new glass drawn at full strength first). The tab that has just come up and is
+            // made the active one at the same time has not shown its glass yet: it comes up now; one that has had its glass for a while
+            // keeps it.
+            AppButton.ApplyTemplate();
+            ComeUp(since < TimeSpan.FromMilliseconds(700) ? DateTime.UtcNow : DateTime.MinValue, _comeUpAt);
         }
 
         private void Window_GetButtonRect(ref NativeMethods.ShortRect rect)
@@ -395,6 +471,11 @@ namespace RetroBar.Controls
             if (e.PropertyName == "State")
             {
                 ScrollIntoView();
+            }
+
+            if (e.PropertyName == "OverlayIcon")
+            {
+                Dispatcher.BeginInvoke(new Action(() => UpdateBadge(true)));
             }
         }
 
@@ -480,8 +561,9 @@ namespace RetroBar.Controls
             ImageSource icon = null;
             try
             {
-                // The shell's large icon (the most there is of the picture; the tab makes it to its own size, see TaskButton.IconOnly.cs).
-                IntPtr handle = ManagedShell.Common.Helpers.IconHelper.GetIconByFilename(path, ManagedShell.Common.Enums.IconSize.Large);
+                // The shell's small icon, the one the classic style's toolbar shows: made at the size the screen draws it at (20 pixels at 125%), so it is
+                // drawn as it is, not shrunk from the large one (which was softer).
+                IntPtr handle = ManagedShell.Common.Helpers.IconHelper.GetIconByFilename(path, ManagedShell.Common.Enums.IconSize.Small);
                 if (handle != IntPtr.Zero)
                 {
                     try

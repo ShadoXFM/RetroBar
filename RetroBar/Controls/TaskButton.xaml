@@ -1,4 +1,4 @@
-﻿<UserControl x:Class="RetroBar.Controls.TaskButton"
+<UserControl x:Class="RetroBar.Controls.TaskButton"
              xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
              xmlns:converters="clr-namespace:RetroBar.Converters"
@@ -352,9 +352,12 @@
                    SnapsToDevicePixels="True"
                    RenderOptions.BitmapScalingMode="HighQuality"
                    Visibility="Collapsed" />
-            <!-- The badge (the app's overlay icon) of the tab, over that icon: the one in the button is under it. -->
+            <!-- The badge (the app's overlay icon) of the tab, over that icon: the one in the button is under it. Its picture is set from code, and
+                 fades in and out (see TaskButton.Badge.cs): IconOnlyBadgeFade is what fades. -->
+            <Grid x:Name="IconOnlyBadgeFade"
+                  Opacity="0"
+                  IsHitTestVisible="False">
             <Image x:Name="IconOnlyBadge"
-                   Source="{Binding Path=OverlayIcon, Mode=OneWay}"
                    Width="11"
                    Height="11"
                    HorizontalAlignment="Left"
@@ -365,6 +368,7 @@
                    SnapsToDevicePixels="True"
                    RenderOptions.BitmapScalingMode="HighQuality"
                    Visibility="{Binding Source={x:Static utilities:Settings.Instance}, Path=ShowTaskBadges, UpdateSourceTrigger=PropertyChanged, Converter={StaticResource boolToVisibilityConverter}}" />
+            </Grid>
         </Grid>
     </Grid>
 </UserControl>

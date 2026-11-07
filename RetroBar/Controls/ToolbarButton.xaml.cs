@@ -1,4 +1,4 @@
-﻿using RetroBar.Utilities;
+using RetroBar.Utilities;
 using System;
 using System.ComponentModel;
 using System.Windows;
@@ -51,6 +51,17 @@ namespace RetroBar.Controls
         // when the layout changes, which moved it by a pixel for a moment (the size the task list gives the button changes just after it is
         // made, the tabs slide, a window opens or closes). It is the same when the button is pressed: the theme moves what is in it by a DIP,
         // which rounds to a pixel down and to the right.
+        // Device pixels this pin's icon is sent off the place worked out from a tab's frame (found by the task list, which looks at where it lands).
+        private Vector _iconNudge;
+        private bool _placedOnce;
+        private int _lastPress;
+
+        internal void NudgeIcon(double dx, double dy)
+        {
+            _iconNudge = new Vector(_iconNudge.X + dx, _iconNudge.Y + dy);
+            PlaceIcon();
+        }
+
         private void PlaceIcon()
         {
             if (!Stretched || !IsLoaded || ToolbarIcon.Source == null || double.IsNaN(IconTarget.X))
@@ -100,8 +111,24 @@ namespace RetroBar.Controls
                 int press = LauncherButton.IsPressed ? 1 : 0;
 
                 // (A half goes to the right and down, as it does for a tab: see TaskButton.WholePixels.)
-                double wantX = TaskButton.WholePixels(IconTarget.X + press - sidePixels / 2 - artX - baseX);
-                double wantY = TaskButton.WholePixels(IconTarget.Y + press - sidePixels / 2 - artY - baseY);
+                double rawX = IconTarget.X + _iconNudge.X + press - sidePixels / 2 - artX - baseX;
+                double rawY = IconTarget.Y + _iconNudge.Y + press - sidePixels / 2 - artY - baseY;
+                double wantX = TaskButton.WholePixels(rawX);
+                double wantY = TaskButton.WholePixels(rawY);
+
+                // An icon whose middle is a half pixel off (a ring such as Opera's) is rounded one way or the other by the noise in the
+                // positions it is worked out from (they move a hair as the bar's text scrolls or its layout updates), and it shivered by a
+                // pixel. Once it is somewhere that is within a bit more than a half of where it is worked out to be, it stays.
+                double nowX = margin.Left * dpi, nowY = margin.Top * dpi;
+                // (Not for the pixel a press moves it by, which is only a half pixel from where it is when the middle of its picture is on a half:
+                // it did not move on a display where it is, and moved on the other.)
+                if (_placedOnce && press == _lastPress && Math.Abs(rawX - nowX) <= 0.62 && Math.Abs(rawY - nowY) <= 0.62)
+                {
+                    return;
+                }
+
+                _lastPress = press;
+                _placedOnce = true;
                 var wanted = new Thickness(wantX * step, wantY * step, 0, 0);
                 if (Math.Abs(margin.Left - wanted.Left) > step / 4 || Math.Abs(margin.Top - wanted.Top) > step / 4)
                 {
@@ -230,12 +257,32 @@ namespace RetroBar.Controls
                 LayoutUpdated += ToolbarButton_OnLayoutUpdated;
                 pressedDescriptor.AddValueChanged(LauncherButton, ToolbarButton_OnPressedChanged);
                 PlaceIcon();
+                TrimHoverGlass();
             };
             Unloaded += (s, e) =>
             {
                 LayoutUpdated -= ToolbarButton_OnLayoutUpdated;
                 pressedDescriptor.RemoveValueChanged(LauncherButton, ToolbarButton_OnPressedChanged);
             };
+        }
+
+        // The hover glass of Windows 7 (the picture's state 8) is not drawn as the frame of a tab is: the frame has a dark pixel and a bright one at
+        // each side (two lines in from the edge), the glass a dark and a bright one at the left and a dark and a bright one at the right, so it
+        // came out a pixel wider than the frame beside it (an odd width between its bright lines, 29 where the tab has 28). Its right side
+        // is taken in by a device pixel, which puts its lines where the frame's are.
+        private void TrimHoverGlass()
+        {
+            if (!Stretched || LauncherButton.Template == null)
+            {
+                return;
+            }
+
+            LauncherButton.ApplyTemplate();
+            if (LauncherButton.Template.FindName("HoverGlass", LauncherButton) is Utilities.NineSlice glass && glass.State == 8)
+            {
+                double dpi = VisualTreeHelper.GetDpi(this).DpiScaleX;
+                glass.Margin = new Thickness(0, 0, 1 / (dpi > 0 ? dpi : 1), 0);
+            }
         }
 
         private void ToolbarButton_OnLayoutUpdated(object sender, EventArgs e) => PlaceIcon();

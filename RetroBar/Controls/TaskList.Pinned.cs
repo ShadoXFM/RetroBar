@@ -101,6 +101,14 @@ namespace RetroBar.Controls
 
                 // The pins can be dragged to another place (see MergedDropHandler); the other tabs stay after them.
                 GongSolutions.Wpf.DragDrop.DragDrop.SetDropHandler(TasksList, new MergedDropHandler(this));
+                // A row of tabs is rearranged as Windows 7 does it: the tab follows the pointer and the others make room (LiveTabDrag), not
+                // with the library's mark at the place it would go. (A column keeps the library's.)
+                bool horizontal = Host?.Orientation != System.Windows.Controls.Orientation.Vertical;
+                GongSolutions.Wpf.DragDrop.DragDrop.SetIsDragSource(TasksList, !horizontal);
+                _liveDrag ??= new LiveTabDrag(TasksList,
+                    () => IconOnly && _mergedItems != null && Host?.Orientation != System.Windows.Controls.Orientation.Vertical,
+                    (data, index, positions) => new MergedDropHandler(this).MoveToPlace(data, index, positions),
+                    on => SetDragRoom(on));
                 TasksList.ItemsSource = _mergedItems;
                 RebuildMerged();
             }
@@ -109,8 +117,11 @@ namespace RetroBar.Controls
                 ReleasePinnedMerge();
                 TasksList.ItemsSource = taskbarItems;
                 GongSolutions.Wpf.DragDrop.DragDrop.SetDropHandler(TasksList, new RetroBar.Utilities.TaskListDropHandler(TasksList));
+                GongSolutions.Wpf.DragDrop.DragDrop.SetIsDragSource(TasksList, true);
             }
         }
+
+        private LiveTabDrag _liveDrag;
 
         // Lets go of the merged list (and of the folder of the pins it reads); the next ApplyPinnedMerge in the Windows 11 style makes it again.
         private void ReleasePinnedMerge()
@@ -335,11 +346,11 @@ namespace RetroBar.Controls
             }
 
             /// <summary>Puts the tab (or pin) before the item that is at this index of the list, among the others, and saves the order.</summary>
-            public void MoveToPlace(object data, int insertIndex)
+            public void MoveToPlace(object data, int insertIndex, Dictionary<object, System.Windows.Point> positions = null)
             {
                 // The tabs are made again for the new order; they are not new windows coming in (see TaskButton.Animate).
                 TaskButton.SuppressSlideInUntilUtc = DateTime.UtcNow + TimeSpan.FromMilliseconds(600);
-                Dictionary<object, System.Windows.Point> before = ItemSlideAnimation.Capture(_owner.TasksList);
+                Dictionary<object, System.Windows.Point> before = positions ?? ItemSlideAnimation.Capture(_owner.TasksList);
 
                 List<TabUnit> units = _owner.BuildUnits();
                 int moved = units.FindIndex(unit => unit.Items.Any(item => ReferenceEquals(item, data)));
@@ -423,6 +434,7 @@ namespace RetroBar.Controls
         #region Pinned programs that are not running
         private void Launcher_OnPreviewMouseLeftButtonUp(object sender, MouseButtonEventArgs e)
         {
+            UserLaunchedUtc = DateTime.UtcNow;
             if (sender is ToolbarButton button && button.DataContext is ShellFile file && InvokePinMenu(file, false))
             {
                 e.Handled = true;

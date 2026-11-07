@@ -50,6 +50,8 @@ namespace RetroBar.Controls
         private ImageBrush _albumArtBrush;
 
         private double _vuMeterMaxWidth;
+        private readonly ScaleTransform _vuLeftScale = new(0, 1);
+        private readonly ScaleTransform _vuRightScale = new(0, 1);
 
         private UIElementAdorner _previousButtonAdorner;
 
@@ -108,6 +110,11 @@ namespace RetroBar.Controls
         public MediaPlayer()
         {
             InitializeComponent();
+
+            // The bars of the VU meter are as wide as the meter all the time and show a part of it by their scale (their width changed in every
+            // frame, which laid the taskbar out sixty times a second: every handler of every button's layout ran in each, and the bar lagged).
+            VuMeterFillLeft.RenderTransform = _vuLeftScale;
+            VuMeterFillRight.RenderTransform = _vuRightScale;
             InitializeSpotifyLinks();
             SeekSlider.MouseMove += SeekSlider_OnMouseMove;
             SeekSlider.MouseLeave += SeekSlider_OnMouseLeave;
@@ -136,6 +143,8 @@ namespace RetroBar.Controls
             {
                 Players.Add(this);
             }
+
+            AttachBarWheel();
 
             InitializeVuMeterAccentBrush();
 
@@ -261,8 +270,15 @@ namespace RetroBar.Controls
             bool show = isPlaying && Settings.Instance.ShowVuMeter;
             if (show)
             {
+                // Coming back from nothing (not from a fade that was not done): the bars grow in, as they slid to nothing (see VisualizerFrame).
+                bool fromNothing = VuMeterContainer.Visibility != Visibility.Visible && !_vuMeterFading;
                 CancelVuMeterFade();
                 VuMeterContainer.Visibility = Visibility.Visible;
+                if (fromNothing)
+                {
+                    StartVuMeterRise();
+                }
+
                 return;
             }
 
@@ -272,7 +288,7 @@ namespace RetroBar.Controls
                 return;
             }
 
-            if (VuMeterContainer.Visibility == Visibility.Visible && IsVisible && (VuMeterFillLeft.ActualWidth > 0 || VuMeterFillRight.ActualWidth > 0))
+            if (VuMeterContainer.Visibility == Visibility.Visible && IsVisible && (_vuLeftScale.ScaleX > 0 || _vuRightScale.ScaleX > 0))
             {
                 FadeOutVuMeter();
                 return;
@@ -288,13 +304,13 @@ namespace RetroBar.Controls
         private void FadeOutVuMeter()
         {
             _vuMeterFading = true;
-            foreach (System.Windows.Shapes.Rectangle bar in new[] { VuMeterFillLeft, VuMeterFillRight })
+            foreach (ScaleTransform bar in new[] { _vuLeftScale, _vuRightScale })
             {
-                var slide = new System.Windows.Media.Animation.DoubleAnimation(bar.ActualWidth, 0, VuMeterFadeTime)
+                var slide = new System.Windows.Media.Animation.DoubleAnimation(bar.ScaleX, 0, VuMeterFadeTime)
                 {
                     EasingFunction = new System.Windows.Media.Animation.QuadraticEase { EasingMode = System.Windows.Media.Animation.EasingMode.EaseOut },
                 };
-                if (bar == VuMeterFillLeft)
+                if (bar == _vuLeftScale)
                 {
                     slide.Completed += (s, e) =>
                     {
@@ -306,15 +322,15 @@ namespace RetroBar.Controls
                     };
                 }
 
-                bar.BeginAnimation(WidthProperty, slide);
+                bar.BeginAnimation(ScaleTransform.ScaleXProperty, slide);
             }
         }
 
         private void CancelVuMeterFade()
         {
             _vuMeterFading = false;
-            VuMeterFillLeft.BeginAnimation(WidthProperty, null);
-            VuMeterFillRight.BeginAnimation(WidthProperty, null);
+            _vuLeftScale.BeginAnimation(ScaleTransform.ScaleXProperty, null);
+            _vuRightScale.BeginAnimation(ScaleTransform.ScaleXProperty, null);
         }
 
         private void HideVuMeter()
@@ -323,8 +339,8 @@ namespace RetroBar.Controls
 
             // So the next time it reappears, it doesn't flash whatever width either bar last
             // had before VisualizerCapture_OnLevelUpdated's own next update arrives.
-            VuMeterFillLeft.Width = 0;
-            VuMeterFillRight.Width = 0;
+            _vuLeftScale.ScaleX = 0;
+            _vuRightScale.ScaleX = 0;
         }
 
         private void Settings_PropertyChanged(object sender, System.ComponentModel.PropertyChangedEventArgs e)
@@ -831,6 +847,8 @@ namespace RetroBar.Controls
             _vuMeterMaxWidth = offset.Width ?? Math.Max(0, naturalWidth - nudgeX);
 
             VuMeterContainer.Width = _vuMeterMaxWidth;
+            VuMeterFillLeft.Width = _vuMeterMaxWidth;
+            VuMeterFillRight.Width = _vuMeterMaxWidth;
 
             // Centered vertically in the row (what a Grid cell did before the meter moved into a Canvas -
             // see its remarks in MediaPlayer.xaml), at whatever height was asked for.
@@ -992,6 +1010,12 @@ namespace RetroBar.Controls
             var clipHeightBinding = new MultiBinding { Converter = new SumWidthsConverter(), ConverterParameter = clipBottomSlack.ToString(System.Globalization.CultureInfo.InvariantCulture) };
             clipHeightBinding.Bindings.Add(new Binding(nameof(ActualHeight)) { Source = button });
             clipContainer.SetBinding(FrameworkElement.HeightProperty, clipHeightBinding);
+            // A few DIPs wider than the button as well: the nudge of the monitor's tag moves the button right inside this box, and its right edge
+            // (the line of the glass under the pointer) was cut by it.
+            var clipWidthBinding = new MultiBinding { Converter = new SumWidthsConverter(), ConverterParameter = "4" };
+            clipWidthBinding.Bindings.Add(new Binding(nameof(ActualWidth)) { Source = button });
+            clipContainer.SetBinding(FrameworkElement.WidthProperty, clipWidthBinding);
+            wrapper.HorizontalAlignment = HorizontalAlignment.Left;
             clipContainer.Children.Add(wrapper);
 
             adorner = new UIElementAdorner(spacer, clipContainer, isHitTestVisible: true);
@@ -1220,6 +1244,7 @@ namespace RetroBar.Controls
         {
             Settings.Instance.PropertyChanged -= Settings_PropertyChanged;
             MonitorAdjustments.Changed -= MonitorAdjustments_Changed;
+            DetachBarWheel();
             Stop();
             _isLoaded = false;
             Players.Remove(this);

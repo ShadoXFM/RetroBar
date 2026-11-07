@@ -47,6 +47,7 @@ namespace RetroBar.Controls
             this.Unloaded += WeatherDisplay_Unloaded;
         }
 
+
         private void WeatherDisplay_Loaded(object sender, System.Windows.RoutedEventArgs e)
         {
             if (_viewModel != null)
@@ -56,6 +57,18 @@ namespace RetroBar.Controls
 
             _viewModel = new WeatherViewModel();
             DataContext = _viewModel;
+
+            // The icon on the bar is drawn from the picture decoded at the size it is shown at, whole pixels, not the 64 pixel picture scaled
+            // down on the screen (that came out soft: the other widgets are drawn on pixels).
+            _viewModel.PropertyChanged += (sender, args) =>
+            {
+                if (args.PropertyName == nameof(WeatherViewModel.WeatherIconPath))
+                {
+                    UpdateBarIcon();
+                }
+            };
+            MonitorAdjustments.Changed += (sender, args) => Dispatcher.BeginInvoke(new Action(UpdateBarIcon));
+            UpdateBarIcon();
 
             // Set up the timer
             _timer = new DispatcherTimer();
@@ -68,6 +81,145 @@ namespace RetroBar.Controls
             // Fetch immediately on load (or, if another monitor's display already has the reading,
             // show it right away - see WeatherViewModel) and start the timer - unless the weather is turned off
             ApplyShowWeather();
+        }
+
+        protected override void OnDpiChanged(DpiScale oldDpi, DpiScale newDpi)
+        {
+            base.OnDpiChanged(oldDpi, newDpi);
+            Dispatcher.BeginInvoke(new Action(UpdateBarIcon), DispatcherPriority.Loaded);
+        }
+
+        private string _barIconKey;
+
+        private static BitmapSource Lanczos(BitmapSource source, int size)
+        {
+            var converted = new FormatConvertedBitmap(source, PixelFormats.Pbgra32, null, 0);
+            int sw = converted.PixelWidth, sh = converted.PixelHeight;
+            var src = new byte[sw * sh * 4];
+            converted.CopyPixels(src, sw * 4, 0);
+
+            double ratio = Math.Min((double)size / sw, (double)size / sh);
+            int dw = Math.Max(1, (int)Math.Round(sw * ratio)), dh = Math.Max(1, (int)Math.Round(sh * ratio));
+
+            float[] horizontal = ResampleAxis(src, sw, sh, dw, true);
+            float[] result = ResampleAxis(horizontal, dw, sh, dh, false);
+
+            var dst = new byte[dw * dh * 4];
+            for (int i = 0; i < dw * dh; i++)
+            {
+                float a = Math.Min(255f, Math.Max(0f, result[i * 4 + 3]));
+                dst[i * 4 + 3] = (byte)Math.Round(a);
+                for (int c = 0; c < 3; c++)
+                {
+                    dst[i * 4 + c] = (byte)Math.Round(Math.Min(a, Math.Max(0f, result[i * 4 + c])));
+                }
+            }
+
+            BitmapSource output = BitmapSource.Create(dw, dh, 96, 96, PixelFormats.Pbgra32, null, dst, dw * 4);
+            output.Freeze();
+            return output;
+        }
+
+        private static float[] ResampleAxis(byte[] input, int width, int height, int newSize, bool alongX)
+        {
+            var floats = new float[input.Length];
+            for (int i = 0; i < input.Length; i++)
+            {
+                floats[i] = input[i];
+            }
+
+            return ResampleAxis(floats, width, height, newSize, alongX);
+        }
+
+        // One pass of a Lanczos 3 resample, along x (the width becomes newSize) or along y (the height does).
+        private static float[] ResampleAxis(float[] input, int width, int height, int newSize, bool alongX)
+        {
+            int oldSize = alongX ? width : height;
+            double scale = (double)newSize / oldSize;
+            double support = 3 * Math.Max(1, 1 / scale);
+            double filterScale = Math.Min(1, scale);
+            int outWidth = alongX ? newSize : width, outHeight = alongX ? height : newSize;
+            var output = new float[outWidth * outHeight * 4];
+
+            for (int o = 0; o < newSize; o++)
+            {
+                double center = (o + 0.5) / scale - 0.5;
+                int first = (int)Math.Floor(center - support + 0.5), last = (int)Math.Floor(center + support + 0.5);
+                var weights = new double[last - first + 1];
+                double sum = 0;
+                for (int k = first; k <= last; k++)
+                {
+                    double x = (k - center) * filterScale;
+                    double w = Math.Abs(x) < 1e-9 ? 1 : (Math.Abs(x) >= 3 ? 0 : Math.Sin(Math.PI * x) / (Math.PI * x) * Math.Sin(Math.PI * x / 3) / (Math.PI * x / 3));
+                    weights[k - first] = w;
+                    sum += w;
+                }
+
+                for (int line = 0; line < (alongX ? height : width); line++)
+                {
+                    double r0 = 0, r1 = 0, r2 = 0, r3 = 0;
+                    for (int k = first; k <= last; k++)
+                    {
+                        int clamped = Math.Max(0, Math.Min(oldSize - 1, k));
+                        int index = (alongX ? (line * width + clamped) : (clamped * width + line)) * 4;
+                        double w = weights[k - first] / sum;
+                        r0 += input[index] * w;
+                        r1 += input[index + 1] * w;
+                        r2 += input[index + 2] * w;
+                        r3 += input[index + 3] * w;
+                    }
+
+                    int target = (alongX ? (line * outWidth + o) : (o * outWidth + line)) * 4;
+                    output[target] = (float)r0;
+                    output[target + 1] = (float)r1;
+                    output[target + 2] = (float)r2;
+                    output[target + 3] = (float)r3;
+                }
+            }
+
+            return output;
+        }
+
+        private void UpdateBarIcon()
+        {
+            string path = _viewModel?.WeatherIconPath;
+            if (string.IsNullOrEmpty(path) || !IsLoaded)
+            {
+                return;
+            }
+
+            double dpi = VisualTreeHelper.GetDpi(this).DpiScaleX;
+            string deviceName = (Window.GetWindow(this) as Taskbar)?.Screen.DeviceName;
+            double scale = MonitorAdjustments.Get(deviceName, "WeatherIcon").Scale ?? 1;
+            double side = (double.IsNaN(WeatherBarIcon.Width) || WeatherBarIcon.Width <= 0 ? 20 : WeatherBarIcon.Width) * scale;
+            int pixels = Math.Max(8, (int)Math.Round(side * dpi));
+
+            string key = path + "|" + pixels;
+            if (key == _barIconKey && WeatherBarIcon.OpacityMask != null)
+            {
+                return;
+            }
+
+            try
+            {
+                var full = new BitmapImage();
+                full.BeginInit();
+                full.UriSource = new Uri(path);
+                full.CacheOption = BitmapCacheOption.OnLoad;
+                full.EndInit();
+                full.Freeze();
+
+                // Resampled with a Lanczos filter to the pixels it is drawn on: sharper than what the framework's own scaling gives.
+                BitmapSource image = Lanczos(full, pixels);
+
+                var brush = new ImageBrush(image) { Stretch = Stretch.Uniform };
+                brush.Freeze();
+                WeatherBarIcon.OpacityMask = brush;
+                _barIconKey = key;
+            }
+            catch (Exception)
+            {
+            }
         }
 
         private void Settings_OnPropertyChanged(object sender, PropertyChangedEventArgs e)
@@ -124,7 +276,7 @@ namespace RetroBar.Controls
 
         private static DispatcherTimer MakeTimer(TimeSpan interval, Action tick)
         {
-            var timer = new DispatcherTimer { Interval = interval };
+            var timer = new DispatcherTimer(DispatcherPriority.Normal) { Interval = interval };
             timer.Tick += (s, e) =>
             {
                 timer.Stop();
@@ -212,6 +364,8 @@ namespace RetroBar.Controls
 
         private void InitializeForecastSlide()
         {
+            // (No blur window under the widgets' popups: their glass is the darker tint.)
+            PopupBlur.SetGate(ForecastFrame, () => false);
             _slide = new PopupSlide(ForecastPopup, ForecastFrame, ForecastSlideHost,
                 () => Settings.Instance.Edge switch
                 {
@@ -1036,8 +1190,8 @@ namespace RetroBar.Controls
             double wind = imperial ? details.WindKmh * 0.621371 : details.WindKmh;
 
             DetailItems.Add(Detail("weather_feels_like", "Feels like {0}", FormatBarTemperature(details.FeelsLikeCelsius)));
-            DetailItems.Add(Detail("weather_humidity", "Humidity {0}", details.Humidity + "%"));
             DetailItems.Add(Detail("weather_wind", "Wind {0}", Math.Round(wind) + (imperial ? " mph" : " km/h")));
+            DetailItems.Add(Detail("weather_humidity", "Humidity {0}", details.Humidity + "%"));
             DetailItems.Add(details.RainChance is int rain
                 ? Detail("weather_rain_chance", "Rain {0}", rain + "%")
                 : new DetailItem("", "", ""));

@@ -150,6 +150,7 @@
                     </StackPanel.Orientation>
                     <controls:MediaPlayer x:Name="MediaPlayerControl"
                                           VerticalAlignment="Center"
+                                          utilities:MonitorOffset.Tag="MediaPlayerGroup"
                                           ShellManager="{Binding}" />
                     <!-- Weather and the CPU temperature sit right after the media buttons, inside the tray box (they were in front of the
                          media player). The tray box moves what is in it by a pixel or two (its padding and offsets), so this group has its

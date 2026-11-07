@@ -199,6 +199,8 @@ namespace RetroBar.Controls
 
         private void InitializeGraphSlide()
         {
+            // (No blur window under the widgets' popups: their glass is the darker tint.)
+            PopupBlur.SetGate(GraphFrame, () => false);
             _slide = new PopupSlide(GraphPopup, GraphFrame, GraphSlideHost,
                 () => Settings.Instance.Edge switch
                 {
@@ -214,7 +216,7 @@ namespace RetroBar.Controls
 
         private static DispatcherTimer MakeTimer(TimeSpan interval, Action tick)
         {
-            var timer = new DispatcherTimer { Interval = interval };
+            var timer = new DispatcherTimer(DispatcherPriority.Normal) { Interval = interval };
             timer.Tick += (s, e) =>
             {
                 timer.Stop();
@@ -313,7 +315,7 @@ namespace RetroBar.Controls
 
                 string[] parts = (TryFindResource(key) as string ?? fallback).Split("{0}");
                 block.Inlines.Add(new System.Windows.Documents.Run(parts[0]));
-                block.Inlines.Add(new System.Windows.Documents.Run(Percent(value.Value)) { FontFamily = new System.Windows.Media.FontFamily("Tahoma"), FontWeight = FontWeights.Bold });
+                block.Inlines.Add(new System.Windows.Documents.Run(Percent(value.Value)) { FontFamily = (TryFindResource("WidgetBoldFontFamily") as System.Windows.Media.FontFamily ?? new System.Windows.Media.FontFamily("Tahoma")), FontWeight = TryFindResource("WidgetFontWeight") is FontWeight weight ? weight : FontWeights.Bold });
                 if (parts.Length > 1 && parts[1].Length > 0)
                 {
                     block.Inlines.Add(new System.Windows.Documents.Run(parts[1]));

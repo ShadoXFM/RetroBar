@@ -2,6 +2,7 @@ using System;
 using System.Linq;
 using System.Windows;
 using System.Windows.Media;
+using System.Windows.Media.Imaging;
 
 namespace RetroBar.Controls
 {
@@ -13,6 +14,12 @@ namespace RetroBar.Controls
     /// </summary>
     public class Sparkline : FrameworkElement
     {
+        public Sparkline()
+        {
+            // Anti-aliased: the borders around it are drawn aliased (see App.xaml), and that is passed on to what is inside them.
+            RenderOptions.SetEdgeMode(this, EdgeMode.Unspecified);
+        }
+
         private double[] _values = Array.Empty<double>();
 
         /// <summary>The least range the graph is drawn over, in the unit of the readings.</summary>
@@ -72,7 +79,17 @@ namespace RetroBar.Controls
                 return;
             }
 
+            // Drawn to a picture (anti-aliased as it is made) and the picture shown pixel for pixel: see SoftLineLayer.
             double dpi = VisualTreeHelper.GetDpi(this).PixelsPerDip;
+            int pixelWidth = (int)Math.Ceiling(width * dpi);
+            int pixelHeight = (int)Math.Ceiling(height * dpi);
+            BitmapSource picture = SoftLineLayer.Picture(context => Draw(context, width, height, dpi), pixelWidth, pixelHeight, dpi);
+            RenderOptions.SetBitmapScalingMode(this, BitmapScalingMode.NearestNeighbor);
+            dc.DrawImage(picture, new Rect(0, 0, pixelWidth / dpi, pixelHeight / dpi));
+        }
+
+        private void Draw(DrawingContext dc, double width, double height, double dpi)
+        {
             double pixel = 1 / dpi;
 
             Brush brush = TryFindResource("ClockForeground") as Brush ?? Brushes.Black;

@@ -121,6 +121,13 @@ namespace RetroBar.Utilities
         /// <summary>Raised (on a background thread) whenever the file is reloaded after changing on disk.</summary>
         public static event EventHandler Changed;
 
+        /// <summary>Reads the file again and makes everything that is adjusted read its adjustments again, as it does when the file changes (on the thread it is called on).</summary>
+        public static void Refresh()
+        {
+            _monitors = Load();
+            Changed?.Invoke(null, EventArgs.Empty);
+        }
+
         private static readonly string FilePath = "monitor-adjustments.json".InLocalAppData();
 
         private static readonly JsonSerializerOptions ReadOptions = new()
