@@ -2,7 +2,9 @@
              xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
              Focusable="False"
-             IsHitTestVisible="False">
+             IsHitTestVisible="False"
+             UseLayoutRounding="True"
+             SnapsToDevicePixels="True">
     <!-- The one shadow all of the popups share (tab previews, the weather and media popups, right-click menus).
          It is its own element behind the frame, not an Effect on the frame (an Effect redraws everything inside it into
          an offscreen bitmap, which blurs text and icons). The black rectangle is a few DIP inside the frame's top-left,

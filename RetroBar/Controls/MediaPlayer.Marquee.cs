@@ -1,4 +1,4 @@
-﻿using ManagedShell;
+using ManagedShell;
 using ManagedShell.Common.Logging;
 using ManagedShell.WindowsTasks;
 using RetroBar.Converters;
@@ -139,16 +139,56 @@ namespace RetroBar.Controls
             }
         }
 
+        // The fade at the ends of a line of the popup that slides: an opacity mask on its clip (as the taskbar's own text has), so that the
+        // popup's own background shows through it, whatever that is (a translucent popup showed a box in the colour of a solid fade).
+        private sealed class SeekFadeMask
+        {
+            public GradientStop Left;
+            public GradientStop Right;
+        }
+
+        private readonly System.Collections.Generic.Dictionary<TextBlock, SeekFadeMask> _seekFadeMasks = new();
+
         private void UpdateSeekFade(TextBlock text, Rectangle fadeLeft, Rectangle fadeRight)
         {
-            if (!_seekMarqueeOverflow.TryGetValue(text, out double overflow) || overflow <= 0)
+            if (!_seekMarqueeOverflow.TryGetValue(text, out double overflow) || overflow <= 0 || !_seekFadeMasks.TryGetValue(text, out SeekFadeMask mask))
             {
                 return;
             }
 
             double x = Canvas.GetLeft(text);
-            fadeLeft.Opacity = Clamp01(-x / MarqueeFadeWidth);
-            fadeRight.Opacity = Clamp01((overflow + x) / MarqueeFadeWidth);
+            mask.Left.Color = Color.FromArgb((byte)Math.Round(255 * (1 - Clamp01(-x / MarqueeFadeWidth))), 0, 0, 0);
+            mask.Right.Color = Color.FromArgb((byte)Math.Round(255 * (1 - Clamp01((overflow + x) / MarqueeFadeWidth))), 0, 0, 0);
+        }
+
+        private void SetSeekFadeMask(TextBlock text, Border clip, bool on)
+        {
+            if (!on || clip.ActualWidth <= MarqueeFadeWidth * 2)
+            {
+                clip.OpacityMask = null;
+                _seekFadeMasks.Remove(text);
+                return;
+            }
+
+            double width = clip.ActualWidth;
+            var left = new GradientStop(Colors.Black, 0);
+            var right = new GradientStop(Colors.Black, 1);
+            var brush = new LinearGradientBrush(new GradientStopCollection
+            {
+                left,
+                new GradientStop(Colors.Black, MarqueeFadeWidth / width),
+                new GradientStop(Colors.Black, 1 - MarqueeFadeWidth / width),
+                right,
+            })
+            {
+                // In DIPs of the clip: the bounds of what it holds include the whole text, much wider than the clip (see StartTrackTextFade).
+                MappingMode = BrushMappingMode.Absolute,
+                StartPoint = new Point(0, 0),
+                EndPoint = new Point(width, 0),
+            };
+            clip.OpacityMask = brush;
+            _seekFadeMasks[text] = new SeekFadeMask { Left = left, Right = right };
+            UpdateSeekFade(text, null, null);
         }
 
         private void StartTrackTextFade()
@@ -372,16 +412,10 @@ namespace RetroBar.Controls
 
             Rectangle fadeRight = text == SeekTitleText ? SeekTitleFade : SeekArtistFade;
             Rectangle fadeLeft = text == SeekTitleText ? SeekTitleFadeLeft : SeekArtistFadeLeft;
-            Visibility fadeVisibility = overflow > 0 && Settings.Instance.FadeLongMediaText ? Visibility.Visible : Visibility.Collapsed;
-            fadeRight.Visibility = fadeVisibility;
-            fadeLeft.Visibility = fadeVisibility;
-            if (overflow > 0 && TryFindResource("ButtonFace") is SolidColorBrush face)
-            {
-                Color color = face.Color;
-                Color clear = Color.FromArgb(0, color.R, color.G, color.B);
-                fadeRight.Fill = new LinearGradientBrush(clear, color, new Point(0, 0), new Point(1, 0));
-                fadeLeft.Fill = new LinearGradientBrush(color, clear, new Point(0, 0), new Point(1, 0));
-            }
+            // (The rectangles are not used any more: the fade is an opacity mask on the clip.)
+            fadeRight.Visibility = Visibility.Collapsed;
+            fadeLeft.Visibility = Visibility.Collapsed;
+            SetSeekFadeMask(text, clip, overflow > 0 && Settings.Instance.FadeLongMediaText);
 
             _seekMarqueeOverflow.TryGetValue(text, out double running);
             if (!restart && Math.Abs(running - overflow) < 0.5)
@@ -394,6 +428,7 @@ namespace RetroBar.Controls
             Canvas.SetLeft(text, 0);
             fadeLeft.Opacity = 0;
             fadeRight.Opacity = 1;
+            UpdateSeekFade(text, fadeLeft, fadeRight);
 
             if (overflow > 0)
             {

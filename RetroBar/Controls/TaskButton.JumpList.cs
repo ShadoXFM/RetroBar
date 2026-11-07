@@ -26,15 +26,15 @@ namespace RetroBar.Controls
         // What was put in the menu the last time it opened, to be taken out the next time.
         private readonly List<object> _jumpListMenuItems = new();
 
-        private string JumpListString(string key, string fallback) => TryFindResource(key) as string ?? fallback;
+        private static string JumpListString(FrameworkElement res, string key, string fallback) => res.TryFindResource(key) as string ?? fallback;
 
         // A text a program put in its jump list, in the language RetroBar is set to when it is one of the known ones (see JumpLists.TextKey);
         // a folder's name is the one the shell shows for it (Bureau, Téléchargements) when RetroBar is not in English, the folder's own name
         // (Desktop, Downloads) when it is.
-        private string JumpListText(string text, JumpListItem item = null)
+        private static string JumpListText(FrameworkElement res, string text, JumpListItem item = null)
         {
             string key = JumpLists.TextKey(text);
-            if (key != null && TryFindResource(key) is string known)
+            if (key != null && res.TryFindResource(key) is string known)
             {
                 return known;
             }
@@ -68,18 +68,36 @@ namespace RetroBar.Controls
                 return;
             }
 
-            var sections = new List<(string Heading, List<JumpListItem> Items)>();
             string exe = Window.IsUWP ? null : Window.WinFileName;
+            string pin = Window.IsUWP ? null : PinnedApps.FindLink(Window);
+            int index = 0;
+            foreach (object entry in JumpListMenuEntries(this, exe, Window.AppUserModelID, pin, TaskIconConverter.IsFileExplorerWindow(Window)))
+            {
+                AddJumpListMenuItem(menu, ref index, entry);
+            }
+        }
+
+        /// <summary>
+        /// The entries of a program's jump list (headings, items, and a separator after them), for the menu of a tab or of a pin that is not
+        /// running (see TaskList.Pinned.cs).
+        /// </summary>
+        /// <param name="res">The element the texts and styles are found from.</param>
+        /// <param name="exe">The full path of the program, or null (a packaged app).</param>
+        /// <param name="explicitAppId">The application id the window has given itself, if any.</param>
+        /// <param name="pin">The pin (shortcut file) of the program, or null.</param>
+        /// <param name="isExplorer">Whether it is File Explorer (its list is of the folders used most).</param>
+        internal static List<object> JumpListMenuEntries(FrameworkElement res, string exe, string explicitAppId, string pin, bool isExplorer)
+        {
+            var entries = new List<object>();
+            var sections = new List<(string Heading, List<JumpListItem> Items)>();
             try
             {
                 var ids = new List<string>();
-                string explicitId = Window.AppUserModelID;
-                if (!string.IsNullOrEmpty(explicitId) && !(exe != null && explicitId.Equals(Path.GetFileName(exe), StringComparison.OrdinalIgnoreCase)))
+                if (!string.IsNullOrEmpty(explicitAppId) && !(exe != null && explicitAppId.Equals(Path.GetFileName(exe), StringComparison.OrdinalIgnoreCase)))
                 {
-                    ids.Add(explicitId);
+                    ids.Add(explicitAppId);
                 }
 
-                string pin = Window.IsUWP ? null : PinnedApps.FindLink(Window);
                 if (pin != null)
                 {
                     ids.AddRange(JumpLists.AppIdCandidates(pin));
@@ -88,36 +106,35 @@ namespace RetroBar.Controls
                 ids.AddRange(JumpLists.AppIdCandidates(exe, null, null));
                 List<JumpListItem> items = JumpLists.ForApp(ids, 200);
 
-                sections.Add((JumpListString("jump_list_pinned", "Pinned"), items.Where(i => i.Pinned).ToList()));
+                sections.Add((JumpListString(res, "jump_list_pinned", "Pinned"), items.Where(i => i.Pinned).ToList()));
 
                 // File Explorer lists the folders used most; every other program the documents used last.
                 IEnumerable<JumpListItem> documents = items.Where(i => !i.Pinned && !i.FromProgram);
-                if (TaskIconConverter.IsFileExplorerWindow(Window))
+                if (isExplorer)
                 {
-                    sections.Add((JumpListString("jump_list_frequent", "Frequent"), documents.OrderByDescending(i => i.AccessCount).ThenByDescending(i => i.Time).ToList()));
+                    sections.Add((JumpListString(res, "jump_list_frequent", "Frequent"), documents.OrderByDescending(i => i.AccessCount).ThenByDescending(i => i.Time).ToList()));
                 }
                 else
                 {
-                    sections.Add((JumpListString("jump_list_recent", "Recent"), documents.ToList()));
+                    sections.Add((JumpListString(res, "jump_list_recent", "Recent"), documents.ToList()));
                 }
 
                 foreach (IGrouping<string, JumpListItem> category in items.Where(i => i.FromProgram && !string.IsNullOrEmpty(i.Group)).GroupBy(i => i.Group))
                 {
-                    sections.Add((JumpListText(category.Key), category.ToList()));
+                    sections.Add((JumpListText(res, category.Key), category.ToList()));
                 }
 
                 // The program's tasks, then its links to web pages (a browser's most visited sites, or some promoted ones) last.
                 static bool IsLink(JumpListItem i) => i.Arguments != null && i.Arguments.TrimStart().StartsWith("http", StringComparison.OrdinalIgnoreCase);
-                sections.Add((JumpListString("jump_list_tasks", "Tasks"), items.Where(i => i.FromProgram && string.IsNullOrEmpty(i.Group) && !IsLink(i)).ToList()));
-                sections.Add((JumpListString("jump_list_links", "Links"), items.Where(i => i.FromProgram && string.IsNullOrEmpty(i.Group) && IsLink(i)).ToList()));
+                sections.Add((JumpListString(res, "jump_list_tasks", "Tasks"), items.Where(i => i.FromProgram && string.IsNullOrEmpty(i.Group) && !IsLink(i)).ToList()));
+                sections.Add((JumpListString(res, "jump_list_links", "Links"), items.Where(i => i.FromProgram && string.IsNullOrEmpty(i.Group) && IsLink(i)).ToList()));
             }
             catch (Exception ex)
             {
                 ManagedShell.Common.Logging.ShellLogger.Error("TaskButton: Unable to read the jump list", ex);
-                return;
+                return entries;
             }
 
-            int index = 0;
             int total = 0;
             foreach ((string heading, List<JumpListItem> section) in sections)
             {
@@ -126,21 +143,23 @@ namespace RetroBar.Controls
                     continue;
                 }
 
-                AddJumpListMenuItem(menu, ref index, new MenuItem { Header = MenuText(heading), IsEnabled = false, FontWeight = FontWeights.Bold, Style = MenuItemStyle.Style });
+                entries.Add(new MenuItem { Header = MenuText(heading), IsEnabled = false, FontWeight = FontWeights.Bold, Style = MenuItemStyle.Style });
                 foreach (JumpListItem item in section.Take(Math.Min(JumpListSectionMax, JumpListMax - total)))
                 {
                     JumpListItem chosen = item;
-                    var entry = new MenuItem { Header = MenuText(JumpListText(item.Title, item)), Icon = JumpListIconImage(item, exe), Style = MenuItemStyle.Style };
+                    var entry = new MenuItem { Header = MenuText(JumpListText(res, item.Title, item)), Icon = JumpListIconImage(item, exe), Style = MenuItemStyle.Style };
                     entry.Click += (s, args) => StartJumpListItem(chosen);
-                    AddJumpListMenuItem(menu, ref index, entry);
+                    entries.Add(entry);
                     total++;
                 }
             }
 
             if (total > 0)
             {
-                AddJumpListMenuItem(menu, ref index, new Separator());
+                entries.Add(new Separator());
             }
+
+            return entries;
         }
 
         private void AddJumpListMenuItem(ContextMenu menu, ref int index, object item)

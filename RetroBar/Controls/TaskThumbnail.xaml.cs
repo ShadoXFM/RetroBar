@@ -15,8 +15,8 @@ namespace RetroBar.Controls
     {
         const double DEFAULT_WIDTH = 180;
 
-        // The thumbnail area is a bit wider than the tab it belongs to.
-        const double SIZE_FACTOR = 1.2;
+        // The thumbnail area is a bit narrower than the tab it belongs to (it was a fifth wider, and the previews were big).
+        const double SIZE_FACTOR = 0.9;
 
         // Width of the preview's thumbnail area, in DIPs - bound to the tab's own width by the
         // preview template (TaskButton.xaml), so every preview is as wide as its tab. The height
@@ -35,8 +35,14 @@ namespace RetroBar.Controls
         // window's shape only up to MAX_HEIGHT_RATIO of the width (about 4:3), and a taller window gets
         // its picture fitted into that box instead of a preview that keeps growing taller. The thumbnail
         // is then exactly as big as the picture (narrower than the tab, for a tall window): there are
-        // no bars round it, so the shadow behind it falls along the picture's own edges.
+        // no bars round it.
         private const double MAX_HEIGHT_RATIO = 0.75;
+
+        // Every preview has the same height (a tall window made a preview as tall as the box could be, whatever its size): the picture is as
+        // tall as this share of the area's width, and as wide as the window's shape gives it, up to MAX_WIDTH_RATIO of the area's width (a
+        // window wider than that has its picture fitted into the width, and is not as tall).
+        private const double FIXED_HEIGHT_RATIO = 0.6;
+        private const double MAX_WIDTH_RATIO = 1.5;
 
         // Size of the thumbnail (the picture) for the window currently being shown, in DIPs (set by Refresh).
         private double _boxHeight = Math.Round(DEFAULT_WIDTH * 2.0 / 3.0);
@@ -146,7 +152,10 @@ namespace RetroBar.Controls
                     // (borders, margins and padding are snapped to the pixel grid), so a tiny floating
                     // point shortfall like 10.9999 must land on 11, not 10 - which shifted the picture
                     // a pixel off-center within its frame.
-                    int left = (int)Math.Round(leftTopPoint.X * DpiScale);
+                    // (The left edge is rounded up: the frame round the picture puts a quarter or a half of a pixel more on its left, which it
+                    // takes as a whole pixel, and the picture was drawn a pixel to the left of its place, with a pixel less between it and
+                    // the frame's left edge than between it and the right one.)
+                    int left = (int)Math.Ceiling(leftTopPoint.X * DpiScale - 0.01);
                     int top = (int)Math.Round(leftTopPoint.Y * DpiScale);
                     return new NativeMethods.Rect(
                           left,
@@ -215,10 +224,8 @@ namespace RetroBar.Controls
                 double areaWidth = AreaWidth;
                 if (size.x > 0 && size.y > 0)
                 {
-                    double ratio = Math.Min(MAX_HEIGHT_RATIO, (double)size.y / size.x);
-                    double maxHeight = Math.Round(areaWidth * ratio * DpiScale) / DpiScale;
-                    double boxWidthPx = areaWidth * DpiScale;
-                    double boxHeightPx = maxHeight * DpiScale;
+                    double boxWidthPx = areaWidth * MAX_WIDTH_RATIO * DpiScale;
+                    double boxHeightPx = Math.Round(areaWidth * FIXED_HEIGHT_RATIO * DpiScale);
                     double scale = Math.Min(boxWidthPx / size.x, boxHeightPx / size.y);
                     int boxWidth = (int)Math.Round(boxWidthPx);
                     int boxHeight = (int)Math.Round(boxHeightPx);
@@ -238,6 +245,13 @@ namespace RetroBar.Controls
                         height = boxHeight;
                     }
 
+                    // At 125% the frame round the picture is 7.5 pixels wider than it (3 DIPs of padding each side) and takes whole pixels:
+                    // with a picture of an even width it had 4 pixels on its left and 3 on its right, with an odd one 4 on both.
+                    if (Math.Abs(DpiScale - 1.25) < 0.001 && width % 2 == 0)
+                    {
+                        width += 1;
+                    }
+
                     _fitWidth = width / DpiScale;
                     _boxHeight = height / DpiScale;
                 }
@@ -247,7 +261,9 @@ namespace RetroBar.Controls
                 }
 
                 Width = _fitWidth;
-                Height = BoxHeight;
+                // At 125% the frame has a pixel more under the picture than it has at its sides: the picture's box is a pixel less tall (the
+                // picture is drawn over that pixel of the frame's padding, see Rect), so the frame is a pixel less tall.
+                Height = Math.Abs(DpiScale - 1.25) < 0.001 ? BoxHeight - 1 / DpiScale : BoxHeight;
                 props.rcDestination = Rect;
 
                 if (this != null)

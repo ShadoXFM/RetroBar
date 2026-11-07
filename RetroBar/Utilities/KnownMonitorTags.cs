@@ -25,6 +25,7 @@ namespace RetroBar.Utilities
             "MediaGlyphPlay",
             "MediaGlyphPlayPause",
             "MediaGlyphPrevious",
+            "MediaPlayerGroup",
             "MediaSeekAlbumArt",
             "MediaSeekArtistText",
             "MediaSeekButtonNext",
@@ -47,9 +48,13 @@ namespace RetroBar.Utilities
             "PreviewTitleRow",
             "PreviewTitleText",
             "QuickLaunchToolbar",
+            "RamChip",
+            "RamText",
             "StartButtonBox",
             "StartIcon",
             "StartLabel",
+            "TaskBadgeBar",
+            "TaskFrame",
             "TaskButton",
             "TaskButtonActive",
             "TaskIcon",
@@ -83,6 +88,7 @@ namespace RetroBar.Utilities
             "TrayToggleHoverFill",
             "VuMeterContainer",
             "VuMeterContainerNoArt",
+            "WeatherDescription",
             "WeatherGroup",
             "WeatherGroupBar",
             "WeatherGroupPlaying",
@@ -93,6 +99,7 @@ namespace RetroBar.Utilities
             "WeatherTaskGapNoCpuTemp",
             "WeatherTemp",
             "WeatherTempNoCpuTemp",
+            "WidgetSparkline",
         };
     }
 }

@@ -155,6 +155,9 @@ namespace RetroBar.Controls
                 capture.LevelUpdated += VisualizerCapture_OnLevelUpdated;
                 capture.SpectrumUpdated += VisualizerCapture_OnSpectrumUpdated;
                 _visualizerCapture = capture;
+                // The meters are drawn in every frame, from the last two readings (the audio is analysed every 40 ms).
+                CompositionTarget.Rendering -= VisualizerFrame;
+                CompositionTarget.Rendering += VisualizerFrame;
                 System.Threading.Tasks.Task.Run(() =>
                 {
                     try
@@ -207,6 +210,14 @@ namespace RetroBar.Controls
             capture.LevelUpdated -= VisualizerCapture_OnLevelUpdated;
             capture.SpectrumUpdated -= VisualizerCapture_OnSpectrumUpdated;
             _visualizerCapture = null;
+            CompositionTarget.Rendering -= VisualizerFrame;
+            lock (_vizLock)
+            {
+                _vuStamp = 0;
+                _spectrumStamp = 0;
+                _spectrumTo = null;
+            }
+
             System.Threading.Tasks.Task.Run(capture.Dispose);
         }
 
@@ -217,19 +228,142 @@ namespace RetroBar.Controls
         // either bar holding whatever width it last had once playback resumes and they reappear.
         private void VisualizerCapture_OnLevelUpdated(float left, float right)
         {
-            Dispatcher.BeginInvoke(new Action(() =>
+            // Only notes the reading: what is drawn goes from the last one to this one over the time between them, in every frame (VisualizerFrame).
+            lock (_vizLock)
             {
-                if (_visualizerCapture == null || VuMeterContainer.Visibility != Visibility.Visible || _vuMeterFading)
+                long now = System.Diagnostics.Stopwatch.GetTimestamp();
+                if (_vuStamp != 0)
                 {
-                    return;
+                    _vuIntervalMs = Math.Clamp((now - _vuStamp) * 1000.0 / System.Diagnostics.Stopwatch.Frequency, 4, 100);
                 }
 
-                // _vuMeterMaxWidth (kept up to date by UpdateVuMeterOffset) already reproduces
-                // the old TrackText/TrackTextHost cap, just measured from the tray box's own left
-                // edge instead of from TrackTextHost's - see that method's own remarks.
-                VuMeterFillLeft.Width = Math.Clamp(left, 0, 1) * _vuMeterMaxWidth;
-                VuMeterFillRight.Width = Math.Clamp(right, 0, 1) * _vuMeterMaxWidth;
-            }));
+                _vuLeftFrom = _vuLeftShown;
+                _vuRightFrom = _vuRightShown;
+                _vuLeftTo = left;
+                _vuRightTo = right;
+                _vuStamp = now;
+            }
+        }
+
+        // A bar rises towards the reading with this time constant (it is 63% of the way there after this long, 90% after twice that), and falls
+        // as the reading does (those fall smoothly already).
+        private const double VisualizerAttackMs = 4;
+
+        private long _vizFrameStamp;
+
+        // When the sound starts the bars glide up to the level, as they glide down to nothing when it stops: for a while they rise towards the
+        // reading with a long time constant (63% of the way after VuMeterRiseTauMs), not at once, and then as they always do. What is drawn is
+        // still the reading, not the reading scaled, so the bars move as they do in play.
+        private const double VuMeterRiseMs = 300;
+        private const double VuMeterRiseTauMs = 55;
+        private long _vuRiseStamp;
+
+        private void StartVuMeterRise()
+        {
+            lock (_vizLock)
+            {
+                // (What the bars showed before it stopped is not what the first frames are to start from.)
+                _vuLeftShown = _vuRightShown = _vuLeftTo = _vuRightTo = _vuLeftFrom = _vuRightFrom = 0;
+            }
+
+            _vuLeftScale.ScaleX = 0;
+            _vuRightScale.ScaleX = 0;
+            _vuRiseStamp = System.Diagnostics.Stopwatch.GetTimestamp();
+        }
+
+        private bool VuMeterRising(long now)
+        {
+            if (_vuRiseStamp == 0)
+            {
+                return false;
+            }
+
+            if ((now - _vuRiseStamp) * 1000.0 / System.Diagnostics.Stopwatch.Frequency >= VuMeterRiseMs)
+            {
+                _vuRiseStamp = 0;
+                return false;
+            }
+
+            return true;
+        }
+
+        // A rise goes towards the reading by the time constant; a fall goes on in every frame, reaching the reading when the next is due (readings
+        // can come as seldom as every 50 ms, and a bar that waited for each to step down moved at their rate, not the screen's).
+        private static float Smooth(float shown, float target, float attack, double frameMs, double remainingMs)
+        {
+            if (target > shown)
+            {
+                return shown + (target - shown) * attack;
+            }
+
+            return shown + (target - shown) * (float)Math.Min(1, frameMs / Math.Max(frameMs, remainingMs));
+        }
+
+        private readonly object _vizLock = new();
+        private float _vuLeftFrom, _vuRightFrom, _vuLeftTo, _vuRightTo, _vuLeftShown, _vuRightShown;
+        private long _vuStamp;
+        private double _vuIntervalMs = 40;
+        private float[] _spectrumTo;
+        private readonly float[] _spectrumFrom = new float[AudioSpectrumCapture.SpectrumBands];
+        private readonly float[] _spectrumShown = new float[AudioSpectrumCapture.SpectrumBands];
+        private long _spectrumStamp;
+        private double _spectrumIntervalMs = 40;
+
+        // Every frame: the bars of the VU meter and of the popup's spectrum are where they are between the last two readings, so they move as
+        // smoothly as the screen can show, not in steps of the 40 ms the audio is analysed at (a reading is shown one interval after it is taken).
+        private void VisualizerFrame(object sender, EventArgs e)
+        {
+            if (_visualizerCapture == null)
+            {
+                return;
+            }
+
+            long now = System.Diagnostics.Stopwatch.GetTimestamp();
+            // How much of the way to the reading a rise goes in this frame: the same whatever the frame rate (a short time constant), so the
+            // bars rise quickly and without the jitter of jumping to every reading, which now come every 8 and 20 ms.
+            double frameMs = _vizFrameStamp == 0 ? 8 : Math.Min(50, (now - _vizFrameStamp) * 1000.0 / System.Diagnostics.Stopwatch.Frequency);
+            _vizFrameStamp = now;
+            float attack = (float)(1 - Math.Exp(-frameMs / VisualizerAttackMs));
+
+            if (VuMeterContainer.Visibility == Visibility.Visible && !_vuMeterFading)
+            {
+                float left, right;
+                lock (_vizLock)
+                {
+                    if (_vuStamp == 0)
+                    {
+                        return;
+                    }
+
+                    double remaining = _vuIntervalMs - (now - _vuStamp) * 1000.0 / System.Diagnostics.Stopwatch.Frequency;
+                    float vuAttack = VuMeterRising(now) ? (float)(1 - Math.Exp(-frameMs / VuMeterRiseTauMs)) : attack;
+                    left = _vuLeftShown = Smooth(_vuLeftShown, _vuLeftTo, vuAttack, frameMs, remaining);
+                    right = _vuRightShown = Smooth(_vuRightShown, _vuRightTo, vuAttack, frameMs, remaining);
+                }
+
+                _vuLeftScale.ScaleX = Math.Clamp(left, 0, 1);
+                _vuRightScale.ScaleX = Math.Clamp(right, 0, 1);
+            }
+
+            if (SeekPopup.IsOpen)
+            {
+                float[] bands = null;
+                lock (_vizLock)
+                {
+                    if (_spectrumTo != null && _spectrumStamp != 0)
+                    {
+                        double remaining = _spectrumIntervalMs - (now - _spectrumStamp) * 1000.0 / System.Diagnostics.Stopwatch.Frequency;
+                        for (int i = 0; i < _spectrumShown.Length; i++)
+                        {
+                            _spectrumShown[i] = Smooth(_spectrumShown[i], _spectrumTo[i], attack, frameMs, remaining);
+                        }
+
+                        bands = _spectrumShown;
+                    }
+                }
+
+                UpdateSeekSpectrum(bands);
+            }
         }
 
         // The spectrum in the seek popup: each bar is 3 device pixels wide with 1 between, as tall as the title and artist together plus 4 DIP, a
@@ -267,8 +401,24 @@ namespace RetroBar.Controls
 
         private void VisualizerCapture_OnSpectrumUpdated(float[] bands)
         {
-            // Fires on the capture thread.
-            Dispatcher.BeginInvoke(new Action(() => UpdateSeekSpectrum(bands)), DispatcherPriority.Background);
+            // Fires on the capture thread. Only notes the reading (see VisualizerFrame).
+            lock (_vizLock)
+            {
+                long now = System.Diagnostics.Stopwatch.GetTimestamp();
+                if (_spectrumStamp != 0)
+                {
+                    _spectrumIntervalMs = Math.Clamp((now - _spectrumStamp) * 1000.0 / System.Diagnostics.Stopwatch.Frequency, 4, 100);
+                }
+
+                if (_spectrumTo == null)
+                {
+                    Array.Copy(bands, _spectrumShown, Math.Min(bands.Length, _spectrumShown.Length));
+                }
+
+                Array.Copy(_spectrumShown, _spectrumFrom, _spectrumFrom.Length);
+                _spectrumTo = (float[])bands.Clone();
+                _spectrumStamp = now;
+            }
         }
 
         private DateTime _lastSeekSpectrumUpdate = DateTime.MinValue;
@@ -314,7 +464,8 @@ namespace RetroBar.Controls
                 float level = playing && bands != null ? bands[i] : 0;
                 sound |= level > 0.05f;
                 _seekSpectrumLevels[i] = Math.Max(level, _seekSpectrumLevels[i] - fall);
-                _seekSpectrumPeaks[i] = Math.Max(_seekSpectrumLevels[i], _seekSpectrumPeaks[i] - (sound ? 0.02f : 0.05f));
+                // (By time: a step of 0.02 or 0.05 was for the 40 ms the readings came at.)
+                _seekSpectrumPeaks[i] = Math.Max(_seekSpectrumLevels[i], _seekSpectrumPeaks[i] - (sound ? 0.02f : 0.05f) * (float)(elapsed / 0.04));
             }
 
             double quietMs = 0;

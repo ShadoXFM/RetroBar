@@ -192,10 +192,12 @@
                  inside it into an offscreen bitmap, which blurred the text and buttons. -->
             <!-- Dragging anywhere on it that isn't a control moves the popup (see SeekPopupRoot_OnPreviewMouseLeftButtonDown). -->
             <Grid x:Name="SeekPopupRoot"
+                  Background="Transparent"
                   RenderOptions.ClearTypeHint="Enabled"
                   UseLayoutRounding="True"
                   SnapsToDevicePixels="True"
                   ClipToBounds="True"
+                  SizeChanged="SeekPopupRoot_OnSizeChanged"
                   PreviewMouseWheel="SeekPopupRoot_OnPreviewMouseWheel"
                   PreviewMouseDown="SeekPopupRoot_OnPreviewMouseDown"
                   PreviewMouseLeftButtonDown="SeekPopupRoot_OnPreviewMouseLeftButtonDown"
@@ -203,21 +205,15 @@
                 <!-- What slides (see OpenSeekPopupAnimated): the root clips to its own bounds so that the popup's window is the size of
                      the popup at rest, not of it and the distance it has slid. -->
                 <Grid x:Name="SeekSlideHost">
-                <controls:PopupShadow Strength="0.5" />
+                <controls:PopupShadow Strength="{DynamicResource MediaPopupShadowStrength}" />
                 <!-- The outermost line of the bevel (DarkShadow, right and bottom) is the frame's own outer border, not a border inside
                      another one that has a padding: it was not drawn at all that way at 125% (nothing red where it should be, with it
                      colored), and what showed of the frame's outline there was the black of the shadow's rectangle. -->
-                <Border BorderThickness="0,0,1,1"
-                        BorderBrush="{DynamicResource ButtonDarkShadow}"
-                        Margin="10">
-                    <Border BorderThickness="1,1,0,0"
-                            BorderBrush="{DynamicResource ButtonHighlight}">
-                        <Border BorderThickness="0,0,1,1"
-                                BorderBrush="{DynamicResource ButtonShadow}">
-                            <Border BorderThickness="1,1,0,0"
-                                    BorderBrush="{DynamicResource ButtonLight}"
-                                    Background="{DynamicResource ButtonFace}"
-                                    Padding="2,3">
+                <!-- The frame is the theme's (MediaPopupFrame: the four-line bevel in the classic themes, glass in Windows XFM Aero). -->
+                <ContentControl x:Name="SeekFrame"
+                                Style="{DynamicResource MediaPopupFrame}"
+                                Tag="Attached"
+                                Margin="10">
                               <StackPanel Orientation="Vertical">
                                 <!-- Plain Image with Stretch="Uniform" (fit the whole image, no
                                      cropping) - unlike UniformToFill, Uniform never crops, so it
@@ -509,10 +505,7 @@
                                                utilities:MonitorOffset.Tag="MediaSeekTimeText" />
                                 </StackPanel>
                               </StackPanel>
-                            </Border>
-                        </Border>
-                    </Border>
-                </Border>
+                </ContentControl>
                 </Grid>
             </Grid>
         </Popup>

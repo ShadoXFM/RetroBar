@@ -16,7 +16,7 @@ namespace RetroBar.Utilities
     /// </summary>
     public static class ItemSlideAnimation
     {
-        private static readonly Duration SlideDuration = new(TimeSpan.FromMilliseconds(180));
+        private static readonly Duration SlideDuration = new(TimeSpan.FromMilliseconds(150));
 
         // A From -> To animation whose value is always a whole number of device pixels.
         private sealed class PixelSnappedAnimation : DoubleAnimationBase
@@ -25,25 +25,51 @@ namespace RetroBar.Utilities
             private double _to;
             private double _dpi = 1;
             private IEasingFunction _ease;
+            private bool _stallProof;
+            private double _nominalMs;
+            private double _playedMs;
+            private long _lastTicks;
 
             public PixelSnappedAnimation()
             {
             }
 
-            public PixelSnappedAnimation(double from, double to, double dpi, Duration duration, IEasingFunction ease)
+            // stallProof: the progress is what has been drawn, not the time on the clock - a stretch of more than 60 ms between two evaluations
+            // (the thread was busy, with a window that is opening) is not counted, so the slide is seen from its start whenever it was begun.
+            // The clock then runs longer than the animation, which stays at its end.
+            public PixelSnappedAnimation(double from, double to, double dpi, Duration duration, IEasingFunction ease, bool stallProof = false)
             {
                 _from = from;
                 _to = to;
                 _dpi = dpi > 0 ? dpi : 1;
                 _ease = ease;
-                Duration = duration;
+                _stallProof = stallProof;
+                _nominalMs = duration.HasTimeSpan ? duration.TimeSpan.TotalMilliseconds : 0;
+                Duration = stallProof && duration.HasTimeSpan ? new Duration(duration.TimeSpan + TimeSpan.FromSeconds(3)) : duration;
             }
 
-            protected override Freezable CreateInstanceCore() => new PixelSnappedAnimation(_from, _to, _dpi, Duration, _ease);
+            protected override Freezable CreateInstanceCore() => new PixelSnappedAnimation(_from, _to, _dpi,
+                _stallProof ? new Duration(TimeSpan.FromMilliseconds(_nominalMs)) : Duration, _ease, _stallProof);
 
             protected override double GetCurrentValueCore(double defaultOriginValue, double defaultDestinationValue, AnimationClock animationClock)
             {
                 double progress = animationClock.CurrentProgress ?? 1;
+                if (_stallProof && _nominalMs > 0)
+                {
+                    long now = System.Diagnostics.Stopwatch.GetTimestamp();
+                    if (_lastTicks != 0)
+                    {
+                        double step = (now - _lastTicks) * 1000.0 / System.Diagnostics.Stopwatch.Frequency;
+                        if (step <= 60)
+                        {
+                            _playedMs += step;
+                        }
+                    }
+
+                    _lastTicks = now;
+                    progress = Math.Min(1, _playedMs / _nominalMs);
+                }
+
                 double eased = _ease?.Ease(progress) ?? progress;
                 double value = _from + (_to - _from) * eased;
                 return Math.Round(value * _dpi) / _dpi;
@@ -53,6 +79,88 @@ namespace RetroBar.Utilities
         // Where the places are measured from: the window, so that a list that moves as a whole (the centered tabs of the Windows 11
         // style, when one is added) has its items slide too, not only the ones that moved inside it.
         private static Visual Reference(ItemsControl list) => Window.GetWindow(list) ?? (Visual)list;
+
+        /// <summary>
+        /// Makes something drawn in the list (the ghost of a tab that has closed, in the list's adorner layer) go with the list when it moves as a whole
+        /// (the centered tabs of the Windows 11 style, when one closes), at the pace the tabs slide to their new places, instead of being put
+        /// where the list is now at once.
+        /// </summary>
+        public static void Follow(UIElement list, UIElement element)
+        {
+            Visual reference = Window.GetWindow(list) ?? (Visual)list;
+            Point before;
+            try
+            {
+                before = list.TransformToAncestor(reference).Transform(new Point(0, 0));
+            }
+            catch (InvalidOperationException)
+            {
+                return;
+            }
+
+            bool done = false;
+            int passes = 0;
+            EventHandler handler = null;
+            handler = (s, e) =>
+            {
+                if (done)
+                {
+                    return;
+                }
+
+                passes++;
+                try
+                {
+                    Point now = list.TransformToAncestor(reference).Transform(new Point(0, 0));
+                    double dx = before.X - now.X, dy = before.Y - now.Y;
+                    if (Math.Abs(dx) >= 0.5 || Math.Abs(dy) >= 0.5)
+                    {
+                        double dpi = VisualTreeHelper.GetDpi(list).DpiScaleX;
+                        dx = Math.Round(dx * dpi) / dpi;
+                        dy = Math.Round(dy * dpi) / dpi;
+                        var transform = new TranslateTransform(dx, dy);
+                        element.RenderTransform = transform;
+                        var ease = new QuadraticEase { EasingMode = EasingMode.EaseOut };
+                        transform.BeginAnimation(TranslateTransform.XProperty, new PixelSnappedAnimation(dx, 0, dpi, SlideDuration, ease, stallProof: true));
+                        transform.BeginAnimation(TranslateTransform.YProperty, new PixelSnappedAnimation(dy, 0, dpi, SlideDuration, ease, stallProof: true));
+                        done = true;
+                    }
+                    else if (passes >= 4)
+                    {
+                        done = true;
+                    }
+                }
+                catch (InvalidOperationException)
+                {
+                    done = true;
+                }
+
+                if (done)
+                {
+                    list.LayoutUpdated -= handler;
+                }
+            };
+            list.LayoutUpdated += handler;
+        }
+
+        /// <summary>A From -> To animation that is not shortened by a stall of the thread (see PixelSnappedAnimation: the same progress as the slide's,
+        /// frame by frame, so a tab that grows in goes with the others that slide). Its clock runs a few seconds longer than the animation.</summary>
+        public static DoubleAnimationBase StallProof(double from, double to, Duration duration, IEasingFunction ease) =>
+            new PixelSnappedAnimation(from, to, 1e6, duration, ease, stallProof: true);
+
+        /// <summary>Takes a tab's transform to this offset from where it is, in whole device pixels at every step.</summary>
+        public static void Glide(TranslateTransform transform, double to, double dpi, Action completed = null)
+        {
+            double scale = dpi > 0 ? dpi : 1;
+            var animation = new PixelSnappedAnimation(transform.X, Math.Round(to * scale) / scale, scale, new Duration(TimeSpan.FromMilliseconds(130)),
+                new QuadraticEase { EasingMode = EasingMode.EaseOut });
+            if (completed != null)
+            {
+                animation.Completed += (s, e) => completed();
+            }
+
+            transform.BeginAnimation(TranslateTransform.XProperty, animation);
+        }
 
         public static Dictionary<object, Point> Capture(ItemsControl list)
         {
@@ -128,15 +236,20 @@ namespace RetroBar.Utilities
                 }
 
                 moved = true;
-                var transform = new TranslateTransform(dx, dy);
-                container.RenderTransform = transform;
-
                 // Whole device pixels at every step: an icon drawn between two pixels is blurred by the
                 // resampling, which made the toolbar's icons smear while they slid into place.
                 double dpi = VisualTreeHelper.GetDpi(container).DpiScaleX;
+
+                // And in the frame before the first step of the animation too (the place the transform starts at is drawn until the clock
+                // ticks): the icons of the tabs, which are not snapped as the frames are, moved by a pixel against them for that frame.
+                dx = Math.Round(dx * dpi) / dpi;
+                dy = Math.Round(dy * dpi) / dpi;
+                var transform = new TranslateTransform(dx, dy);
+                container.RenderTransform = transform;
                 var ease = new QuadraticEase { EasingMode = EasingMode.EaseOut };
-                transform.BeginAnimation(TranslateTransform.XProperty, new PixelSnappedAnimation(dx, 0, dpi, SlideDuration, ease));
-                transform.BeginAnimation(TranslateTransform.YProperty, new PixelSnappedAnimation(dy, 0, dpi, SlideDuration, ease));
+                // (Stall-proof: a window that is slow to open keeps the thread busy for a while, and the slide used to begin part of the way.)
+                transform.BeginAnimation(TranslateTransform.XProperty, new PixelSnappedAnimation(dx, 0, dpi, SlideDuration, ease, stallProof: true));
+                transform.BeginAnimation(TranslateTransform.YProperty, new PixelSnappedAnimation(dy, 0, dpi, SlideDuration, ease, stallProof: true));
             }
 
             return moved;

@@ -54,6 +54,19 @@ namespace RetroBar.Utilities
             }
         }
 
+        /// <summary>Device pixels an Image is moved by on top of its snapped position (see TryApplySnappedImageTransform).</summary>
+        public static readonly DependencyProperty NudgeProperty = DependencyProperty.RegisterAttached(
+            "Nudge", typeof(Vector), typeof(MonitorOffset), new PropertyMetadata(new Vector(0, 0), (d, e) =>
+            {
+                if (d is FrameworkElement element)
+                {
+                    Apply(element);
+                }
+            }));
+
+        public static Vector GetNudge(DependencyObject obj) => (Vector)obj.GetValue(NudgeProperty);
+        public static void SetNudge(DependencyObject obj, Vector value) => obj.SetValue(NudgeProperty, value);
+
         public static string GetTag(DependencyObject obj) => (string)obj.GetValue(TagProperty);
         public static void SetTag(DependencyObject obj, string value) => obj.SetValue(TagProperty, value);
 
@@ -416,8 +429,17 @@ namespace RetroBar.Utilities
             // Left/top edge of the scaled image before snapping (scaling is about the element's center).
             double baseLeft = position.X + (size.Width - scaledWidth) / 2;
             double baseTop = position.Y + (size.Height - scaledHeight) / 2;
-            double translateX = (Math.Round(baseLeft + offset.X * dpi.DpiScaleX) - baseLeft) / dpi.DpiScaleX;
-            double translateY = (Math.Round(baseTop + offset.Y * dpi.DpiScaleY) - baseTop) / dpi.DpiScaleY;
+            // A whole number of device pixels the caller moves the image by after it is snapped (the press of a tab moves its icon by one): added to
+            // the snapped position, so that it is not rounded away with the rest - a position on a half pixel loses a one pixel move to the
+            // rounding, on one axis or both, a tab at a time, when it is the layout that moves.
+            Vector nudge = GetNudge(element);
+            // The icon of a tab, and of a pin that is placed by its margin (see ToolbarButton.PlaceIcon): a half pixel goes the same way
+            // whatever the place. With round-half-to-even the icon went a pixel one way or the other against its frame as the tab slid
+            // over places of odd and even pixels (the icons of all the tabs shifted while they recentered), and a pixel's move of a pin's
+            // margin moved its icon by two or by none.
+            MidpointRounding rounding = (element.Name == "IconOnlyImage" || (element.Name == "ToolbarIcon" && GetTag(element) == "TaskIconBar")) ? MidpointRounding.AwayFromZero : MidpointRounding.ToEven;
+            double translateX = (Math.Round(baseLeft + offset.X * dpi.DpiScaleX, rounding) - baseLeft + nudge.X) / dpi.DpiScaleX;
+            double translateY = (Math.Round(baseTop + offset.Y * dpi.DpiScaleY, rounding) - baseTop + nudge.Y) / dpi.DpiScaleY;
 
             var group = new TransformGroup();
             if (scaledWidth != size.Width || scaledHeight != size.Height)

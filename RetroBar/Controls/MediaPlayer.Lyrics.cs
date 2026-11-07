@@ -5,6 +5,7 @@ using System.Diagnostics;
 using System.Threading.Tasks;
 using System.Windows;
 using System.Windows.Controls;
+using System.Windows.Data;
 using System.Windows.Documents;
 using System.Windows.Media;
 using System.Windows.Media.Animation;
@@ -231,10 +232,53 @@ namespace RetroBar.Controls
                 row.MouseLeftButtonUp += (s, e) => LyricRow_OnClick(line, e.GetPosition(row));
                 _lyricRows[i] = row;
                 var host = new Grid();
+                // A faint shadow under the words, in a theme that asks for one: a dark copy of the line behind it, a pixel lower and a little
+                // blurred (an effect on the line itself would soften its text, which the lines in focus avoid).
+                if (TryFindResource("MediaLyricsShadow") is true)
+                {
+                    // Under the words and at both sides of them: a wide soft one under, one at each side, and a tight one under that makes the edge.
+                    host.Children.Add(LyricShadowOf(row, 6.5, 2.4, 0, 0.7));
+                    host.Children.Add(LyricShadowOf(row, 3, 0.8, -2.4, 0.8));
+                    host.Children.Add(LyricShadowOf(row, 3, 0.8, 2.4, 0.8));
+                    host.Children.Add(LyricShadowOf(row, 2.6, 1.8, 0, 1));
+                }
+
                 host.Children.Add(row);
                 _lyricHosts[i] = host;
                 SeekLyricsPanel.Children.Add(host);
             }
+        }
+
+        // A dark copy of a lyric row, which goes behind it as its shadow: the same words, a pixel and a half lower and a half to the right, blurred, as faint as the theme
+        // says (MediaLyricsShadowOpacity), and as visible as the row is.
+        private TextBlock LyricShadowOf(TextBlock row, double blur, double down, double across, double share)
+        {
+            double strength = Math.Min(1, (TryFindResource("MediaLyricsShadowOpacity") is double opacity ? opacity : 0.4) * share);
+            var shadow = new TextBlock
+            {
+                TextAlignment = row.TextAlignment,
+                TextWrapping = row.TextWrapping,
+                HorizontalAlignment = row.HorizontalAlignment,
+                Margin = new Thickness(row.Margin.Left + across, row.Margin.Top + down, row.Margin.Right - across, row.Margin.Bottom - down),
+                IsHitTestVisible = false,
+                Effect = new BlurEffect { Radius = blur, RenderingBias = RenderingBias.Performance },
+            };
+            shadow.SetResourceReference(StyleProperty, "MediaPlayerTrackTextStyle");
+            shadow.Foreground = new SolidColorBrush(Color.FromArgb((byte)Math.Round(255 * strength), 0, 0, 0));
+            if (row.Inlines.OfType<Run>().Any())
+            {
+                foreach (Run run in row.Inlines.OfType<Run>())
+                {
+                    shadow.Inlines.Add(new Run(run.Text) { FontSize = run.FontSize });
+                }
+            }
+            else
+            {
+                shadow.Text = row.Text;
+            }
+
+            BindingOperations.SetBinding(shadow, OpacityProperty, new Binding(nameof(Opacity)) { Source = row, Mode = BindingMode.OneWay });
+            return shadow;
         }
 
         // The cover's colour, a little lighter than the one the meter and the spectrum have, to read on the popup's dark ground at this size.

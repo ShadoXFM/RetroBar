@@ -80,7 +80,7 @@ namespace RetroBar.Utilities
         private static Style Create()
         {
             var line = new FrameworkElementFactory(typeof(MenuSeparatorLine));
-            line.SetValue(FrameworkElement.MarginProperty, new Thickness(4, 0, 2.5, 0));
+            line.SetResourceReference(FrameworkElement.MarginProperty, "MenuSeparatorMargin");
 
             var style = new Style(typeof(Separator));
             style.Setters.Add(new Setter(Control.TemplateProperty, new ControlTemplate(typeof(Separator)) { VisualTree = line }));
@@ -97,9 +97,12 @@ namespace RetroBar.Utilities
     {
         private double PixelSize => 1 / System.Windows.Media.VisualTreeHelper.GetDpi(this).DpiScaleY;
 
+        // How tall the line's room is, in device pixels: a theme can say (MenuSeparatorHeight).
+        private double SeparatorPixels => TryFindResource("MenuSeparatorHeight") is double height ? height : 4;
+
         protected override Size MeasureOverride(Size availableSize)
         {
-            return new Size(0, 4 * PixelSize);
+            return new Size(0, SeparatorPixels * PixelSize);
         }
 
         /// <summary>How much of the highlight line shows: a darker shade of it, over what is behind (the weather forecast's separators, in
@@ -109,6 +112,35 @@ namespace RetroBar.Utilities
         protected override void OnRender(System.Windows.Media.DrawingContext drawingContext)
         {
             double pixel = PixelSize;
+            double above = System.Math.Floor((SeparatorPixels - 2) / 2);
+            // A theme with colors of its own for the line (MenuSeparatorShadow over MenuSeparatorLight) has them as they are.
+            var shadow = TryFindResource("MenuSeparatorShadow") as System.Windows.Media.Brush;
+            var light = TryFindResource("MenuSeparatorLight") as System.Windows.Media.Brush;
+            if (shadow != null && light != null)
+            {
+                // (and the line can fade out at both ends: MenuSeparatorFade, in device pixels)
+                bool fades = TryFindResource("MenuSeparatorFade") is double fadePixels && fadePixels > 0 && ActualWidth > 2 * fadePixels / System.Windows.Media.VisualTreeHelper.GetDpi(this).DpiScaleX;
+                if (fades)
+                {
+                    double fraction = (double)TryFindResource("MenuSeparatorFade") / System.Windows.Media.VisualTreeHelper.GetDpi(this).DpiScaleX / ActualWidth;
+                    var mask = new System.Windows.Media.LinearGradientBrush { StartPoint = new Point(0, 0), EndPoint = new Point(1, 0) };
+                    mask.GradientStops.Add(new System.Windows.Media.GradientStop(System.Windows.Media.Color.FromArgb(0, 0, 0, 0), 0));
+                    mask.GradientStops.Add(new System.Windows.Media.GradientStop(System.Windows.Media.Colors.Black, fraction));
+                    mask.GradientStops.Add(new System.Windows.Media.GradientStop(System.Windows.Media.Colors.Black, 1 - fraction));
+                    mask.GradientStops.Add(new System.Windows.Media.GradientStop(System.Windows.Media.Color.FromArgb(0, 0, 0, 0), 1));
+                    drawingContext.PushOpacityMask(mask);
+                }
+
+                drawingContext.DrawRectangle(shadow, null, new Rect(0, above * pixel, ActualWidth, pixel));
+                drawingContext.DrawRectangle(light, null, new Rect(0, (above + 1) * pixel, ActualWidth, pixel));
+                if (fades)
+                {
+                    drawingContext.Pop();
+                }
+
+                return;
+            }
+
             drawingContext.DrawRectangle(TryFindResource("ButtonShadow") as System.Windows.Media.Brush, null, new Rect(0, pixel, ActualWidth, pixel));
             drawingContext.PushOpacity(HighlightOpacity);
             drawingContext.DrawRectangle(TryFindResource("ButtonHighlight") as System.Windows.Media.Brush, null, new Rect(0, 2 * pixel, ActualWidth, pixel));

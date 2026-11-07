@@ -21,6 +21,9 @@ namespace RetroBar.Utilities
 
         public event EventHandler<StartMenuMonitorEventArgs> StartMenuVisibilityChanged;
 
+        /// <summary>Whether the Start menu is open now (as of the last time it was looked at, every 100 ms).</summary>
+        public static bool IsStartMenuVisible { get; private set; }
+
         public StartMenuMonitor(AppVisibilityHelper appVisibilityHelper)
         {
             _appVisibilityHelper = appVisibilityHelper;
@@ -80,6 +83,12 @@ namespace RetroBar.Utilities
             }
 
             _isVisible = isVisible;
+            IsStartMenuVisible = isVisible;
+            if (isVisible)
+            {
+                // The widgets' popups do not stay over the Start menu (and do not open while it is there, see HoverPopups.Open).
+                HoverPopups.HideOpen();
+            }
 
             StartMenuMonitorEventArgs args = new StartMenuMonitorEventArgs
             {
@@ -294,6 +303,9 @@ namespace RetroBar.Utilities
         internal void ShowStartMenu(IntPtr taskbarHwnd)
         {
             _taskbarHwndActivated = taskbarHwnd;
+
+            // The Open Shell menu puts itself at the left edge for the Start button, in the middle for the keyboard (see OpenShellHint).
+            OpenShellHint.StartButtonPressed();
 
             if (!EnvironmentHelper.IsWindows10OrBetter ||
                 FindWindowEx(IntPtr.Zero, IntPtr.Zero, "OpenShell.COwnerWindow", IntPtr.Zero) != IntPtr.Zero ||

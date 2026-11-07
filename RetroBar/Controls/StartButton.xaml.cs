@@ -220,7 +220,333 @@ namespace RetroBar.Controls
                 Host?.SetStartMenuOpen(opened);
             });
             pendingOpenTimer.Stop();
+
+            if (opened)
+            {
+                RaiseFloatingStartAboveMenu();
+            }
         }
+
+        // The floating orb is over the start menu (as Windows 7's is, over its menu's corner), not behind it. The menu is a topmost window that
+        // appears a moment after it is announced and slides in over the orb, so while the menu is open the orb is kept at the top of the
+        // topmost windows (a cheap look at what is above it every few milliseconds), the whole time the menu slides.
+        private DispatcherTimer? raiseOrbTimer;
+
+        // The orb is kept above the menu while the button is down, and for a moment after the menu is announced (it is seen by a poll every
+        // 100 ms, and by then it was already sliding over the orb): see WatchForStartMenu.
+        private DateTime raiseUntilUtc = DateTime.MinValue;
+
+        // The orb is also kept above the menu from a thread of its own, for as long as that is wanted: the call that asks Open Shell for its menu
+        // does not return until the menu has slid in (the thread was blocked in it for the whole slide, 170 ms, and the menu was over the orb
+        // all that time), and a thread that is waiting for another window's reply can still be sent the order to move.
+        private long raiseUntilTicks;
+        private volatile bool orbRaiserRunning;
+
+        private void StartOrbRaiserThread(IntPtr orb)
+        {
+            if (orbRaiserRunning || orb == IntPtr.Zero)
+            {
+                return;
+            }
+
+            orbRaiserRunning = true;
+            var thread = new System.Threading.Thread(() =>
+            {
+                try
+                {
+                    while (DateTime.UtcNow.Ticks < System.Threading.Interlocked.Read(ref raiseUntilTicks))
+                    {
+                        // Only while the orb is meant to be on top: it is not while a full-screen program is up (UpdateFloatingStartTopmost).
+                        if (OrbIsTopmost(orb) && WindowOverOrb(orb) != IntPtr.Zero)
+                        {
+                            NativeMethods.SetWindowPos(
+                                orb,
+                                new IntPtr(-1),
+                                0, 0, 0, 0,
+                                (int)NativeMethods.SetWindowPosFlags.SWP_NOSIZE | (int)NativeMethods.SetWindowPosFlags.SWP_NOMOVE | (int)NativeMethods.SetWindowPosFlags.SWP_NOACTIVATE);
+                        }
+
+                        System.Threading.Thread.Sleep(1);
+                    }
+                }
+                catch (Exception)
+                {
+                    // nothing to do: the timer and the hooks go on
+                }
+                finally
+                {
+                    orbRaiserRunning = false;
+                }
+            })
+            {
+                IsBackground = true,
+                Name = "StartOrbRaiser",
+            };
+            thread.Start();
+        }
+
+        private void RaiseFloatingStartAboveMenu()
+        {
+            raiseUntilUtc = DateTime.UtcNow + TimeSpan.FromMilliseconds(1500);
+            System.Threading.Interlocked.Exchange(ref raiseUntilTicks, raiseUntilUtc.Ticks);
+            if (floatingStartButton != null)
+            {
+                StartOrbRaiserThread(floatingStartButton.Handle);
+            }
+            raiseOrbTimer ??= new DispatcherTimer(DispatcherPriority.Send, Dispatcher) { Interval = TimeSpan.FromMilliseconds(8) };
+            raiseOrbTimer.Tick -= RaiseOrbTimer_Tick;
+            raiseOrbTimer.Tick += RaiseOrbTimer_Tick;
+            raiseOrbTimer.Start();
+            RaiseOrbTimer_Tick(null, EventArgs.Empty);
+
+            // And at once whenever a window is shown or moves (the menu, and each step of its slide): the timer alone left the menu over the orb
+            // for up to its interval, a frame or more, at the start of the slide.
+            if (orbHook == IntPtr.Zero)
+            {
+                orbHookProc = (hook, eventType, hwnd, idObject, idChild, thread, time) =>
+                {
+                    if (idObject == 0 && floatingStartButton != null && hwnd != floatingStartButton.Handle)
+                    {
+                        RaiseOrbTimer_Tick(null, EventArgs.Empty);
+                    }
+                };
+                // EVENT_OBJECT_SHOW (0x8002) to EVENT_OBJECT_LOCATIONCHANGE (0x800B), out of context: called on this thread, from its message loop.
+                orbHook = SetWinEventHook(0x8002, 0x800B, IntPtr.Zero, orbHookProc, 0, 0, 0);
+            }
+        }
+
+        private IntPtr orbHook;
+        private WinEventDelegate? orbHookProc;
+
+        private delegate void WinEventDelegate(IntPtr hook, uint eventType, IntPtr hwnd, int idObject, int idChild, uint thread, uint time);
+
+        [System.Runtime.InteropServices.DllImport("user32.dll")]
+        private static extern IntPtr SetWinEventHook(uint eventMin, uint eventMax, IntPtr module, WinEventDelegate proc, uint processId, uint threadId, uint flags);
+
+        [System.Runtime.InteropServices.DllImport("user32.dll")]
+        private static extern bool UnhookWinEvent(IntPtr hook);
+
+        // While the floating orb exists, a start menu window being shown (or uncloaked, as the Windows 11 one is) starts keeping the orb above it
+        // at once - also when it is opened by the Windows key, which the button does not hear of until the poll sees the menu.
+        // RetroBar's own windows (the widgets' popups, which slide in by the orb, and their blur windows) are put at the top of the topmost windows
+        // each time they move, which is over the orb for a moment until the orb is raised again after them: they are put just under the orb
+        // instead, as the message that moves them is on its way (WM_WINDOWPOSCHANGING, seen by a hook on this thread's window procedures).
+        private IntPtr zOrderHook;
+        private HookProc? zOrderProc;
+
+        private delegate IntPtr HookProc(int code, IntPtr wParam, IntPtr lParam);
+
+        [StructLayout(LayoutKind.Sequential)]
+        private struct CallWndProcData
+        {
+            public IntPtr lParam;
+            public IntPtr wParam;
+            public uint message;
+            public IntPtr hwnd;
+        }
+
+        [DllImport("user32.dll", SetLastError = true)]
+        private static extern IntPtr SetWindowsHookEx(int hookId, HookProc proc, IntPtr module, uint threadId);
+
+        [DllImport("user32.dll")]
+        private static extern bool UnhookWindowsHookEx(IntPtr hook);
+
+        [DllImport("user32.dll")]
+        private static extern IntPtr CallNextHookEx(IntPtr hook, int code, IntPtr wParam, IntPtr lParam);
+
+        [DllImport("kernel32.dll")]
+        private static extern uint GetCurrentThreadId();
+
+        [DllImport("user32.dll")]
+        private static extern bool IsWindowVisible(IntPtr hWnd);
+
+        [DllImport("user32.dll", EntryPoint = "GetWindowLongW")]
+        private static extern int GetWindowLong32(IntPtr hWnd, int index);
+
+        private void InstallZOrderHook()
+        {
+            if (zOrderHook != IntPtr.Zero)
+            {
+                return;
+            }
+
+            zOrderProc = (code, wParam, lParam) =>
+            {
+                try
+                {
+                    if (code >= 0 && floatingStartButton != null)
+                    {
+                        CallWndProcData data = Marshal.PtrToStructure<CallWndProcData>(lParam);
+                        IntPtr orb = floatingStartButton.Handle;
+                        // WM_WINDOWPOSCHANGING (0x46); WINDOWPOS: hwnd, hwndInsertAfter, x, y, cx, cy, flags.
+                        if (data.message == 0x46 && data.hwnd != orb && orb != IntPtr.Zero)
+                        {
+                            IntPtr position = data.lParam;
+                            IntPtr insertAfter = Marshal.ReadIntPtr(position, IntPtr.Size);
+                            uint flags = (uint)Marshal.ReadInt32(position, IntPtr.Size * 2 + 16);
+                            bool topmost = (GetWindowLong32(data.hwnd, -20) & 0x8) != 0;
+                            // Put at the top of the topmost windows (HWND_TOPMOST, or HWND_TOP for one that is topmost): under the orb, which is there.
+                            if ((flags & 0x4 /* SWP_NOZORDER */) == 0 && (insertAfter == new IntPtr(-1) || (insertAfter == IntPtr.Zero && topmost)) &&
+                                (GetWindowLong32(orb, -20) & 0x8) != 0 && IsWindowVisible(orb))
+                            {
+                                Marshal.WriteIntPtr(position, IntPtr.Size, orb);
+                            }
+                        }
+                    }
+                }
+                catch (Exception)
+                {
+                    // never in the way of a window message
+                }
+
+                return CallNextHookEx(IntPtr.Zero, code, wParam, lParam);
+            };
+            zOrderHook = SetWindowsHookEx(4 /* WH_CALLWNDPROC */, zOrderProc, IntPtr.Zero, GetCurrentThreadId());
+        }
+
+        private void RemoveZOrderHook()
+        {
+            if (zOrderHook != IntPtr.Zero)
+            {
+                UnhookWindowsHookEx(zOrderHook);
+                zOrderHook = IntPtr.Zero;
+                zOrderProc = null;
+            }
+        }
+
+        [StructLayout(LayoutKind.Sequential)]
+        private struct RectData
+        {
+            public int Left, Top, Right, Bottom;
+        }
+
+        [DllImport("user32.dll")]
+        private static extern bool GetWindowRect(IntPtr hWnd, out RectData rect);
+
+        // Whether the orb is a topmost window now: it is not when it has been put under a full-screen program, and it must stay so.
+        private static bool OrbIsTopmost(IntPtr orb) => (GetWindowLong32(orb, -20) & 0x8) != 0;
+
+        // A visible window above the orb that is over it (not the system's invisible ones, nor windows elsewhere): null if there is none.
+        private static IntPtr WindowOverOrb(IntPtr orb)
+        {
+            if (!GetWindowRect(orb, out RectData mine))
+            {
+                return IntPtr.Zero;
+            }
+
+            for (IntPtr w = GetWindow(orb, 3 /* GW_HWNDPREV */); w != IntPtr.Zero; w = GetWindow(w, 3))
+            {
+                if (!IsWindowVisible(w) || !GetWindowRect(w, out RectData other))
+                {
+                    continue;
+                }
+
+                bool over = other.Left < mine.Right && other.Right > mine.Left && other.Top < mine.Bottom && other.Bottom > mine.Top;
+                if (over)
+                {
+                    var name = new System.Text.StringBuilder(64);
+                    GetClassName(w, name, name.Capacity);
+                    if (name.ToString() != "ForegroundStaging")
+                    {
+                        return w;
+                    }
+                }
+            }
+
+            return IntPtr.Zero;
+        }
+
+        private IntPtr showHook;
+        private IntPtr uncloakHook;
+        private WinEventDelegate? watchProc;
+
+        [System.Runtime.InteropServices.DllImport("user32.dll", CharSet = System.Runtime.InteropServices.CharSet.Unicode)]
+        private static extern int GetClassName(IntPtr hWnd, System.Text.StringBuilder className, int maxCount);
+
+        [System.Runtime.InteropServices.DllImport("user32.dll")]
+        private static extern uint GetWindowThreadProcessId(IntPtr hWnd, out uint processId);
+
+        private void WatchForStartMenu()
+        {
+            if (showHook != IntPtr.Zero)
+            {
+                return;
+            }
+
+            watchProc = (hook, eventType, hwnd, idObject, idChild, thread, time) =>
+            {
+                if (idObject != 0 || floatingStartButton == null || hwnd == floatingStartButton.Handle)
+                {
+                    return;
+                }
+
+                var name = new System.Text.StringBuilder(64);
+                GetClassName(hwnd, name, name.Capacity);
+                // The menus, and RetroBar's own popups (the weather widget's, which is by the orb, slides in over it as the menu does).
+                GetWindowThreadProcessId(hwnd, out uint processId);
+                if (name.ToString() is "DV2ControlHost" or "OpenShell.CMenuContainer" or "Windows.UI.Core.CoreWindow" or "XamlExplorerHostIslandWindow" ||
+                    processId == (uint)Environment.ProcessId)
+                {
+                    RaiseFloatingStartAboveMenu();
+                }
+            };
+            InstallZOrderHook();
+            showHook = SetWinEventHook(0x8002, 0x8002, IntPtr.Zero, watchProc, 0, 0, 0);
+            uncloakHook = SetWinEventHook(0x8018, 0x8018, IntPtr.Zero, watchProc, 0, 0, 0);
+        }
+
+        private void StopWatchingForStartMenu()
+        {
+            RemoveZOrderHook();
+            if (showHook != IntPtr.Zero)
+            {
+                UnhookWinEvent(showHook);
+                showHook = IntPtr.Zero;
+            }
+
+            if (uncloakHook != IntPtr.Zero)
+            {
+                UnhookWinEvent(uncloakHook);
+                uncloakHook = IntPtr.Zero;
+            }
+
+            watchProc = null;
+        }
+
+        private void StopRaisingOrb()
+        {
+            raiseOrbTimer?.Stop();
+            if (orbHook != IntPtr.Zero)
+            {
+                UnhookWinEvent(orbHook);
+                orbHook = IntPtr.Zero;
+                orbHookProc = null;
+            }
+        }
+
+        private void RaiseOrbTimer_Tick(object? sender, EventArgs e)
+        {
+            if (floatingStartButton == null || (Start.IsChecked != true && DateTime.UtcNow > raiseUntilUtc))
+            {
+                StopRaisingOrb();
+                return;
+            }
+
+            IntPtr orb = floatingStartButton.Handle;
+            // Something above it: the menu.
+            IntPtr above = OrbIsTopmost(orb) ? WindowOverOrb(orb) : IntPtr.Zero;
+            if (above != IntPtr.Zero)
+            {
+                NativeMethods.SetWindowPos(
+                    orb,
+                    new IntPtr(-1),
+                    0, 0, 0, 0,
+                    (int)NativeMethods.SetWindowPosFlags.SWP_NOSIZE | (int)NativeMethods.SetWindowPosFlags.SWP_NOMOVE | (int)NativeMethods.SetWindowPosFlags.SWP_NOACTIVATE);
+            }
+        }
+
+        [System.Runtime.InteropServices.DllImport("user32.dll")]
+        private static extern IntPtr GetWindow(IntPtr hWnd, uint uCmd);
 
         private void Start_OnClick(object sender, RoutedEventArgs e)
         {
@@ -233,6 +559,18 @@ namespace RetroBar.Controls
             SetStartMenuState(false);
         }
 
+        /// <summary>Opens the Start menu, or closes it if it is open: for the edge of a taskbar with no Start button of its own.</summary>
+        public void ToggleStartMenu()
+        {
+            if (Start.IsChecked == true)
+            {
+                SetStartMenuState(false);
+                return;
+            }
+
+            OpenStartMenu();
+        }
+
         private void OpenStartMenu()
         {
             // Open Shell positions its menu using the shell tray position. Moving the tray host to this
@@ -243,6 +581,8 @@ namespace RetroBar.Controls
                 Host?.SetTrayHost();
             }
 
+            // The orb is above the menu from the first moment of its slide, not from when the menu is seen to be open.
+            RaiseFloatingStartAboveMenu();
             Host?.SetStartMenuOpen(true);
             pendingOpenTimer.Start();
             if (Host != null && StartMenuMonitor != null && Settings.Instance.ShowMultiMon && Settings.Instance.ShowStartButtonMultiMon)
@@ -272,20 +612,33 @@ namespace RetroBar.Controls
 
         private void Start_OnMouseRightButtonUp(object sender, MouseButtonEventArgs e)
         {
+            if (ShowStartContextMenu(null))
+            {
+                e.Handled = true;
+            }
+        }
+
+        /// <summary>
+        /// The right-click menu of the Start button. With no button (the option is off) the edge of the taskbar where it was has it too,
+        /// the menu then opening over that edge (<paramref name="placementTarget"/>). Whether there was a menu to show.
+        /// </summary>
+        internal bool ShowStartContextMenu(UIElement? placementTarget)
+        {
             // Open Shell adds its own right-click menu to the Windows Start button, which doesn't exist here.
             // Like Open Shell, show its menu on a plain right-click and the Windows menu on Shift+right-click
             ShellLogger.Info($"StartButton: right-click, shift held = {(Keyboard.Modifiers & ModifierKeys.Shift) != 0}");
-            if ((Keyboard.Modifiers & ModifierKeys.Shift) == 0 && TryShowOpenShellMenu())
+            if ((Keyboard.Modifiers & ModifierKeys.Shift) == 0 && TryShowOpenShellMenu(placementTarget))
             {
-                e.Handled = true;
-                return;
+                return true;
             }
 
             if (EnvironmentHelper.IsWindows10OrBetter)
             {
                 ShellHelper.ShowStartContextMenu();
-                e.Handled = true;
+                return true;
             }
+
+            return false;
         }
 
         [DllImport("kernel32.dll", SetLastError = true)]
@@ -318,7 +671,7 @@ namespace RetroBar.Controls
             }
         }
 
-        private bool TryShowOpenShellMenu()
+        private bool TryShowOpenShellMenu(UIElement? placementTarget)
         {
             string? openShellPath;
             try
@@ -384,10 +737,15 @@ namespace RetroBar.Controls
             exit.Click += (s, args) => Run("-exit");
             menu.Items.Add(exit);
 
-            menu.PlacementTarget = Start;
+            menu.PlacementTarget = placementTarget ?? Start;
             menu.Placement = System.Windows.Controls.Primitives.PlacementMode.Top;
             menu.IsOpen = true;
             return true;
+        }
+
+        private void Start_OnChecked(object sender, RoutedEventArgs e)
+        {
+            RaiseFloatingStartAboveMenu();
         }
 
         private void UserControl_Loaded(object sender, RoutedEventArgs e)
@@ -395,6 +753,9 @@ namespace RetroBar.Controls
             StartMenuMonitor.StartMenuVisibilityChanged += AppVisibilityHelper_StartMenuVisibilityChanged;
 
             Settings.Instance.PropertyChanged += Settings_PropertyChanged;
+
+            // The menu starts to slide in before it is announced: the orb is kept above it from the click.
+            Start.Checked += Start_OnChecked;
 
             dragHandler = new DelayedActivationHandler(() =>
             {
@@ -418,6 +779,7 @@ namespace RetroBar.Controls
         private void UserControl_Unloaded(object sender, RoutedEventArgs e)
         {
             StartMenuMonitor.StartMenuVisibilityChanged -= AppVisibilityHelper_StartMenuVisibilityChanged;
+            Start.Checked -= Start_OnChecked;
 
             if (Host != null)
             {
@@ -494,6 +856,7 @@ namespace RetroBar.Controls
             {
                 floatingStartButton = new FloatingStartButton(this, getButtonRect());
                 floatingStartButton.Show();
+                WatchForStartMenu();
             }
             else
             {
@@ -518,6 +881,8 @@ namespace RetroBar.Controls
 
         private void closeFloatingStart()
         {
+            StopWatchingForStartMenu();
+            StopRaisingOrb();
             floatingStartButton?.Close();
             floatingStartButton = null;
         }

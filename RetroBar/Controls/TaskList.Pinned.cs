@@ -12,12 +12,59 @@ using System.Windows.Input;
 namespace RetroBar.Controls
 {
     // In the Windows 11 style of the taskbar (IconOnly) the pinned programs are among the tabs: a pinned program that is running is its
-    // tab, at the place of its pin, and one that is not running is its icon, which starts it. The tabs and the pins are one list, the pins
-    // first in the order of the pins, then the tabs of the other programs in the order they have.
+    // tab, at the place of its pin, and one that is not running is its icon, which starts it. The tabs and the pins are one list, in the order
+    // the user has put them in (Settings.TaskOrder): a pin and the tabs of a program that is not pinned can be among each other. Until it is
+    // put in an order, the pins are first, in the order of the pins, then the tabs of the other programs in the order they have.
     public partial class TaskList
     {
         private ObservableCollection<object> _mergedItems;
         private ShellFolder _pinFolder;
+        // The folders of the pins Windows keeps in other places than the taskbar's folder (see PinnedApps.ImplicitLinks), by folder.
+        private readonly Dictionary<string, ShellFolder> _extraPinFolders = new(StringComparer.OrdinalIgnoreCase);
+        private static readonly Dictionary<string, ShellFolder> PinFolders = new(StringComparer.OrdinalIgnoreCase);
+
+        private void PinFilesChanged(object sender, System.Collections.Specialized.NotifyCollectionChangedEventArgs e) => RebuildMerged();
+
+        // The folders of the pins that are not in the pins' folder, read the way it is (and kept from one time to the next).
+        private void EnsureExtraPinFolders()
+        {
+            if (_mergedItems == null)
+            {
+                return;
+            }
+
+            string main = Environment.ExpandEnvironmentVariables(Settings.Instance.QuickLaunchPath ?? "").TrimEnd(System.IO.Path.DirectorySeparatorChar);
+            foreach (string folder in PinnedApps.GetLinks().Select(Path.GetDirectoryName).Distinct(StringComparer.OrdinalIgnoreCase))
+            {
+                if (string.IsNullOrEmpty(folder) || string.Equals(folder.TrimEnd(System.IO.Path.DirectorySeparatorChar), main, StringComparison.OrdinalIgnoreCase) || _extraPinFolders.ContainsKey(folder))
+                {
+                    continue;
+                }
+
+                ShellFolder extra;
+                lock (PinFolders)
+                {
+                    if (!PinFolders.TryGetValue(folder, out extra))
+                    {
+                        extra = new ShellFolder(folder, IntPtr.Zero, true);
+                        PinFolders[folder] = extra;
+                    }
+                }
+
+                extra.Files.CollectionChanged += PinFilesChanged;
+                _extraPinFolders[folder] = extra;
+            }
+        }
+
+        // The file of a pin, from whichever folder it is in.
+        private ShellFile FindPinFile(string link)
+        {
+            ShellFile file = _pinFolder?.Files.FirstOrDefault(f => string.Equals(f.Path, link, StringComparison.OrdinalIgnoreCase));
+            return file ?? _extraPinFolders.Values.SelectMany(folder => folder.Files.ToList()).FirstOrDefault(f => string.Equals(f.Path, link, StringComparison.OrdinalIgnoreCase));
+        }
+
+        private ShellFolder FolderOf(ShellFile file) =>
+            _extraPinFolders.Values.FirstOrDefault(folder => folder.Files.Contains(file)) ?? _pinFolder;
 
         private void ApplyPinnedMerge()
         {
@@ -34,8 +81,19 @@ namespace RetroBar.Controls
                     string folder = Environment.ExpandEnvironmentVariables(Settings.Instance.QuickLaunchPath ?? "");
                     if (Directory.Exists(folder))
                     {
-                        _pinFolder = new ShellFolder(folder, IntPtr.Zero, true);
-                        _pinFolder.Files.CollectionChanged += (s, e) => RebuildMerged();
+                        // The folder of the pins is kept from one time to the next: made anew when the style came back, it had no files for a
+                        // moment (they are read in the background), the pins that are not running were not there, and came a second later, when
+                        // all the tabs moved to make room for them.
+                        lock (PinFolders)
+                        {
+                            if (!PinFolders.TryGetValue(folder, out _pinFolder))
+                            {
+                                _pinFolder = new ShellFolder(folder, IntPtr.Zero, true);
+                                PinFolders[folder] = _pinFolder;
+                            }
+                        }
+
+                        _pinFolder.Files.CollectionChanged += PinFilesChanged;
                     }
 
                     taskbarItems.CollectionChanged += TasksChangedForMerge;
@@ -43,6 +101,14 @@ namespace RetroBar.Controls
 
                 // The pins can be dragged to another place (see MergedDropHandler); the other tabs stay after them.
                 GongSolutions.Wpf.DragDrop.DragDrop.SetDropHandler(TasksList, new MergedDropHandler(this));
+                // A row of tabs is rearranged as Windows 7 does it: the tab follows the pointer and the others make room (LiveTabDrag), not
+                // with the library's mark at the place it would go. (A column keeps the library's.)
+                bool horizontal = Host?.Orientation != System.Windows.Controls.Orientation.Vertical;
+                GongSolutions.Wpf.DragDrop.DragDrop.SetIsDragSource(TasksList, !horizontal);
+                _liveDrag ??= new LiveTabDrag(TasksList,
+                    () => IconOnly && _mergedItems != null && Host?.Orientation != System.Windows.Controls.Orientation.Vertical,
+                    (data, index, positions) => new MergedDropHandler(this).MoveToPlace(data, index, positions),
+                    on => SetDragRoom(on));
                 TasksList.ItemsSource = _mergedItems;
                 RebuildMerged();
             }
@@ -51,8 +117,11 @@ namespace RetroBar.Controls
                 ReleasePinnedMerge();
                 TasksList.ItemsSource = taskbarItems;
                 GongSolutions.Wpf.DragDrop.DragDrop.SetDropHandler(TasksList, new RetroBar.Utilities.TaskListDropHandler(TasksList));
+                GongSolutions.Wpf.DragDrop.DragDrop.SetIsDragSource(TasksList, true);
             }
         }
+
+        private LiveTabDrag _liveDrag;
 
         // Lets go of the merged list (and of the folder of the pins it reads); the next ApplyPinnedMerge in the Windows 11 style makes it again.
         private void ReleasePinnedMerge()
@@ -64,9 +133,16 @@ namespace RetroBar.Controls
 
             if (_pinFolder != null)
             {
-                _pinFolder.Dispose();
+                _pinFolder.Files.CollectionChanged -= PinFilesChanged;
                 _pinFolder = null;
             }
+
+            foreach (ShellFolder extra in _extraPinFolders.Values)
+            {
+                extra.Files.CollectionChanged -= PinFilesChanged;
+            }
+
+            _extraPinFolders.Clear();
 
             _mergedItems = null;
         }
@@ -76,7 +152,96 @@ namespace RetroBar.Controls
             RebuildMerged();
         }
 
-        // The list the tabs show: for each pin, in order, the tab of its program if it has one, else the pin; then the other tabs.
+        // A place in the list: a pin (its tab if its program is running, else its icon) or the tab(s) of a program that is not pinned.
+        private sealed record TabUnit(string Key, bool IsPin, string ProgramFile, List<object> Items);
+
+        private static string PinKey(string link) => "pin|" + link.ToLowerInvariant();
+
+        private static string AppUnitKey(ApplicationWindow window) => "app|" + TaskOpenOrderComparer.AppKey(window);
+
+        // The places the list has, in the order they are shown: the order the user has put them in, and what is not in it yet (a pin, or a
+        // program that has just opened) after, the pins first.
+        private List<TabUnit> BuildUnits()
+        {
+            var units = new List<TabUnit>();
+            if (taskbarItems == null)
+            {
+                return units;
+            }
+
+            List<string> links = PinnedApps.GetLinks();
+            List<string> programs = links.Select(PinnedApps.TargetExe).ToList();
+            List<ApplicationWindow> tabs = taskbarItems.OfType<ApplicationWindow>().ToList();
+
+            var placed = new List<ApplicationWindow>();
+            for (int pin = 0; pin < links.Count; pin++)
+            {
+                ApplicationWindow tab = tabs.FirstOrDefault(w => !placed.Any(p => ReferenceEquals(p, w)) && PinnedApps.IndexOf(w, programs) == pin);
+                object item = tab;
+                if (tab != null)
+                {
+                    placed.Add(tab);
+                }
+                else
+                {
+                    item = FindPinFile(links[pin]);
+                }
+
+                if (item != null)
+                {
+                    units.Add(new TabUnit(PinKey(links[pin]), true, programs[pin], new List<object> { item }));
+                }
+            }
+
+            // The tabs of the programs that are not pinned, the windows of one program together (they are one tab when windows are combined).
+            foreach (ApplicationWindow tab in tabs.Where(w => !placed.Any(p => ReferenceEquals(p, w))))
+            {
+                string key = AppUnitKey(tab);
+                TabUnit unit = units.FirstOrDefault(u => !u.IsPin && u.Key == key);
+                if (unit == null)
+                {
+                    units.Add(new TabUnit(key, false, null, new List<object>()));
+                    unit = units[^1];
+                }
+
+                unit.Items.Add(tab);
+            }
+
+            List<string> order = Settings.Instance.TaskOrder ?? new List<string>();
+            if (order.Count == 0)
+            {
+                return units;
+            }
+
+            // A pin of a program that was a tab before it was pinned takes that tab's place.
+            int IndexOf(TabUnit unit)
+            {
+                int at = order.FindIndex(k => string.Equals(k, unit.Key, StringComparison.OrdinalIgnoreCase));
+                if (at < 0 && unit.IsPin)
+                {
+                    // A pin that is in another folder now (see PinnedApps.ImplicitLinks) keeps the place it had.
+                    string name = Path.GetFileName(unit.Key.Substring(4));
+                    at = order.FindIndex(k => k.StartsWith("pin|", StringComparison.Ordinal) && string.Equals(Path.GetFileName(k.Substring(4)), name, StringComparison.OrdinalIgnoreCase));
+                }
+
+                if (at < 0 && unit.IsPin && !string.IsNullOrEmpty(unit.ProgramFile))
+                {
+                    at = order.FindIndex(k => k.StartsWith("app|", StringComparison.Ordinal) &&
+                                              string.Equals(Path.GetFileName(k.Substring(4)), unit.ProgramFile, StringComparison.OrdinalIgnoreCase));
+                }
+
+                return at;
+            }
+
+            // Stable: what is not in the order yet keeps the order it has (the pins first), after the rest.
+            return units.Select((unit, position) => (unit, position, at: IndexOf(unit)))
+                .OrderBy(entry => entry.at < 0 ? int.MaxValue : entry.at)
+                .ThenBy(entry => entry.position)
+                .Select(entry => entry.unit)
+                .ToList();
+        }
+
+        // The list the tabs show (see BuildUnits).
         private void RebuildMerged()
         {
             if (_mergedItems == null || taskbarItems == null)
@@ -84,31 +249,12 @@ namespace RetroBar.Controls
                 return;
             }
 
-            List<string> links = PinnedApps.GetLinks();
-            List<string> programs = links.Select(PinnedApps.TargetExe).ToList();
-            List<ApplicationWindow> tabs = taskbarItems.OfType<ApplicationWindow>().ToList();
-
+            EnsureExtraPinFolders();
             var desired = new List<object>();
-            var placed = new List<ApplicationWindow>();
-            for (int pin = 0; pin < links.Count; pin++)
+            foreach (TabUnit unit in BuildUnits())
             {
-                ApplicationWindow tab = tabs.FirstOrDefault(w => !placed.Any(p => ReferenceEquals(p, w)) && PinnedApps.IndexOf(w, programs) == pin);
-                if (tab != null)
-                {
-                    desired.Add(tab);
-                    placed.Add(tab);
-                }
-                else
-                {
-                    ShellFile file = _pinFolder?.Files.FirstOrDefault(f => string.Equals(f.Path, links[pin], StringComparison.OrdinalIgnoreCase));
-                    if (file != null)
-                    {
-                        desired.Add(file);
-                    }
-                }
+                desired.AddRange(unit.Items);
             }
-
-            desired.AddRange(tabs.Where(w => !placed.Any(p => ReferenceEquals(p, w))));
 
             // In place, so a tab that stays is not made again (and the ones that move slide as the list is changed one step at a time).
             for (int i = 0; i < desired.Count; i++)
@@ -165,10 +311,9 @@ namespace RetroBar.Controls
         }
 
         /// <summary>
-        /// Drag and drop in the Windows 11 style: a pin (a tab of a pinned program, or the icon of one that is not running) goes to another
-        /// place among the pins, and the order of the pins is saved - the quick launch toolbar of the classic style has it too; the tab of a
-        /// program that is not pinned goes to another place among the other tabs. The pins are first: a place is taken to be the nearest
-        /// one in the group the dragged tab is of.
+        /// Drag and drop in the Windows 11 style: any tab - a pin (a tab of a pinned program, or the icon of one that is not running) or the
+        /// tab of a program that is not pinned - goes to any other place among the others, and the order is saved (Settings.TaskOrder). The
+        /// order of the pins is saved too (the quick launch toolbar of the classic style has it).
         /// </summary>
         private sealed class MergedDropHandler : GongSolutions.Wpf.DragDrop.IDropTarget
         {
@@ -177,15 +322,6 @@ namespace RetroBar.Controls
             public MergedDropHandler(TaskList owner)
             {
                 _owner = owner;
-            }
-
-            private int PinCount => _owner._mergedItems.Count(item => _owner.LinkOf(item) != null);
-
-            // The place in the list for a drop of this tab: among the pins for a pin, after them for any other tab.
-            private int Place(object dragged, int insertIndex)
-            {
-                int pins = PinCount;
-                return _owner.LinkOf(dragged) != null ? Math.Min(insertIndex, pins) : Math.Max(insertIndex, pins);
             }
 
             public void DragOver(GongSolutions.Wpf.DragDrop.IDropInfo dropInfo)
@@ -201,100 +337,104 @@ namespace RetroBar.Controls
 
             public void Drop(GongSolutions.Wpf.DragDrop.IDropInfo dropInfo)
             {
-                // The tabs are made again for the new order; they are not new windows coming in (see TaskButton.Animate).
-                TaskButton.SuppressSlideInUntilUtc = DateTime.UtcNow + TimeSpan.FromMilliseconds(600);
-                int place = Place(dropInfo.Data, dropInfo.InsertIndex);
-                Dictionary<object, System.Windows.Point> before = ItemSlideAnimation.Capture(_owner.TasksList);
-
-                string moved = _owner.LinkOf(dropInfo.Data);
-                if (moved != null)
-                {
-                    DropPin(moved, place);
-                }
-                else if (dropInfo.Data is ApplicationWindow window)
-                {
-                    DropTab(window, place);
-                }
-                else
+                if (dropInfo.Data is not (ApplicationWindow or ShellFile))
                 {
                     return;
                 }
 
+                MoveToPlace(dropInfo.Data, dropInfo.InsertIndex);
+            }
+
+            /// <summary>Puts the tab (or pin) before the item that is at this index of the list, among the others, and saves the order.</summary>
+            public void MoveToPlace(object data, int insertIndex, Dictionary<object, System.Windows.Point> positions = null)
+            {
+                // The tabs are made again for the new order; they are not new windows coming in (see TaskButton.Animate).
+                TaskButton.SuppressSlideInUntilUtc = DateTime.UtcNow + TimeSpan.FromMilliseconds(600);
+                Dictionary<object, System.Windows.Point> before = positions ?? ItemSlideAnimation.Capture(_owner.TasksList);
+
+                List<TabUnit> units = _owner.BuildUnits();
+                int moved = units.FindIndex(unit => unit.Items.Any(item => ReferenceEquals(item, data)));
+                if (moved < 0)
+                {
+                    return;
+                }
+
+                // The place, in places: the one the tab was dropped before (the place of a program with several tabs is all of them).
+                int target = units.Count;
+                int start = 0;
+                for (int i = 0; i < units.Count; i++)
+                {
+                    if (insertIndex <= start)
+                    {
+                        target = i;
+                        break;
+                    }
+
+                    start += units[i].Items.Count;
+                    if (insertIndex < start)
+                    {
+                        // In the middle of a place of several tabs: before it.
+                        target = i;
+                        break;
+                    }
+                }
+
+                TabUnit unitMoved = units[moved];
+                units.RemoveAt(moved);
+                if (target > moved)
+                {
+                    target--;
+                }
+
+                units.Insert(Math.Clamp(target, 0, units.Count), unitMoved);
+
+                SaveOrder(units);
                 _owner.RebuildMerged();
                 ItemSlideAnimation.Play(_owner.TasksList, before);
             }
 
-            private void DropPin(string moved, int place)
+            // The order of the places as shown is the order saved; the places that are not shown now (a program that is closed and not
+            // pinned) stay after the one that was before them.
+            private static void SaveOrder(List<TabUnit> units)
             {
-                var pins = _owner._mergedItems.Select(_owner.LinkOf).Where(link => link != null).ToList();
-                int from = pins.FindIndex(link => string.Equals(link, moved, StringComparison.OrdinalIgnoreCase));
-                if (from < 0)
+                List<string> shown = units.Select(unit => unit.Key).ToList();
+                List<string> previous = Settings.Instance.TaskOrder ?? new List<string>();
+                var result = new List<string>(shown);
+                for (int i = 0; i < previous.Count; i++)
                 {
-                    return;
+                    if (shown.Any(k => string.Equals(k, previous[i], StringComparison.OrdinalIgnoreCase)) || result.Any(k => string.Equals(k, previous[i], StringComparison.OrdinalIgnoreCase)))
+                    {
+                        continue;
+                    }
+
+                    // After the nearest one before it that is in the result.
+                    int after = -1;
+                    for (int j = i - 1; j >= 0 && after < 0; j--)
+                    {
+                        after = result.FindIndex(k => string.Equals(k, previous[j], StringComparison.OrdinalIgnoreCase));
+                    }
+
+                    result.Insert(after + 1, previous[i]);
                 }
 
-                int to = Math.Min(place, pins.Count);
-                if (to > from)
-                {
-                    to--;
-                }
+                Settings.Instance.TaskOrder = result;
 
-                if (to == from)
-                {
-                    return;
-                }
-
-                pins.RemoveAt(from);
-                pins.Insert(to, moved);
-
-                // The pins that are not shown keep their places after these.
-                pins.AddRange(PinnedApps.GetLinks().Where(link => !pins.Any(p => string.Equals(p, link, StringComparison.OrdinalIgnoreCase))));
-                PinnedApps.SaveOrder(pins);
-            }
-
-            // A tab of a program that is not pinned: its window goes to just before the one of the tab it was dropped before (or to the
-            // end), with the others of its program after it.
-            private void DropTab(ApplicationWindow window, int place)
-            {
-                ObservableCollection<ApplicationWindow> source = _owner.startupSortSource;
-                if (source == null)
-                {
-                    return;
-                }
-
-                List<object> others = _owner._mergedItems.Where(item => !ReferenceEquals(item, window)).ToList();
-                int pins = PinCount;
-                int index = place - (_owner._mergedItems.IndexOf(window) < place ? 1 : 0);
-                index = Math.Clamp(index, pins, others.Count);
-
-                int from = source.IndexOf(window);
-                if (from < 0)
-                {
-                    return;
-                }
-
-                int to;
-                if (index < others.Count && others[index] is ApplicationWindow next && source.IndexOf(next) is int nextAt && nextAt >= 0)
-                {
-                    to = nextAt > from ? nextAt - 1 : nextAt;
-                }
-                else
-                {
-                    to = source.Count - 1;
-                }
-
-                if (to != from)
-                {
-                    source.Move(from, to);
-                }
-
-                TaskOpenOrderComparer.KeepAppWindowsTogether(source, window);
+                // The pins in the order they are in now; the ones that are not shown keep their places after these.
+                List<string> pins = units.Where(unit => unit.IsPin).Select(unit => unit.Key.Substring(4)).ToList();
+                List<string> links = PinnedApps.GetLinks();
+                List<string> ordered = pins
+                    .Select(lowered => links.FirstOrDefault(link => string.Equals(link, lowered, StringComparison.OrdinalIgnoreCase)))
+                    .Where(link => link != null)
+                    .ToList();
+                ordered.AddRange(links.Where(link => !ordered.Any(p => string.Equals(p, link, StringComparison.OrdinalIgnoreCase))));
+                PinnedApps.SaveOrder(ordered);
             }
         }
 
         #region Pinned programs that are not running
         private void Launcher_OnPreviewMouseLeftButtonUp(object sender, MouseButtonEventArgs e)
         {
+            UserLaunchedUtc = DateTime.UtcNow;
             if (sender is ToolbarButton button && button.DataContext is ShellFile file && InvokePinMenu(file, false))
             {
                 e.Handled = true;
@@ -303,9 +443,82 @@ namespace RetroBar.Controls
 
         private void Launcher_OnPreviewMouseRightButtonUp(object sender, MouseButtonEventArgs e)
         {
-            if (sender is ToolbarButton button && button.DataContext is ShellFile file && InvokePinMenu(file, true))
+            if (sender is ToolbarButton button && button.DataContext is ShellFile file && (ShowPinMenu(button, file) || InvokePinMenu(file, true)))
             {
                 e.Handled = true;
+            }
+        }
+
+        // The right-click menu of a pin that is not running: the one a tab has (see TaskButton.AppButton_OnContextMenuOpening), without what
+        // is for a window - the program's jump list, the program (a click starts it), and taking the pin off. False when there is no
+        // shortcut to make it from (the shell's own menu is shown then).
+        private bool ShowPinMenu(ToolbarButton button, ShellFile file)
+        {
+            string link = file?.Path;
+            if (string.IsNullOrWhiteSpace(link) || !File.Exists(link))
+            {
+                return false;
+            }
+
+            try
+            {
+                string exe = PinnedApps.TargetPath(link);
+                bool explorer = string.Equals(PinnedApps.TargetExe(link), "explorer.exe", StringComparison.OrdinalIgnoreCase);
+
+                var menu = new System.Windows.Controls.ContextMenu { PlacementTarget = button, Placement = System.Windows.Controls.Primitives.PlacementMode.MousePoint };
+                menu.SetBinding(System.Windows.Media.TextOptions.TextRenderingModeProperty, new System.Windows.Data.Binding("AllowFontSmoothingMenu")
+                {
+                    Source = Settings.Instance,
+                    Converter = (System.Windows.Data.IValueConverter)FindResource("menuTextRenderingModeConverter"),
+                });
+
+                foreach (object entry in TaskButton.JumpListMenuEntries(this, string.IsNullOrEmpty(exe) ? null : exe, null, link, explorer))
+                {
+                    menu.Items.Add(entry);
+                }
+
+                // The program's name and icon (made as the tab's menu makes them): a click starts it.
+                System.Windows.Media.ImageSource icon = TaskButton.ProgramIconOf(string.IsNullOrEmpty(exe) ? link : exe, null);
+                System.Windows.Controls.Image image = null;
+                if (icon != null)
+                {
+                    image = new System.Windows.Controls.Image { Source = icon, Width = 16, Height = 16, UseLayoutRounding = true, SnapsToDevicePixels = true };
+                    System.Windows.Media.RenderOptions.SetBitmapScalingMode(image, System.Windows.Media.BitmapScalingMode.HighQuality);
+                    MonitorOffset.SetTag(image, "PreviewTitleIcon");
+                }
+
+                var start = new System.Windows.Controls.MenuItem
+                {
+                    Header = Path.GetFileNameWithoutExtension(link).Replace("_", "__"),
+                    Icon = image,
+                    FontWeight = System.Windows.FontWeights.Bold,
+                    Style = MenuItemStyle.Style,
+                };
+                start.Click += (s, args) => InvokePinMenu(file, false);
+                menu.Items.Add(start);
+
+                var unpin = new System.Windows.Controls.MenuItem { Header = FindResource("unpin_from_taskbar"), Style = MenuItemStyle.Style };
+                unpin.Click += (s, args) =>
+                {
+                    try
+                    {
+                        File.Delete(link);
+                    }
+                    catch (Exception ex)
+                    {
+                        ShellLogger.Error("TaskList: Unable to unpin the program", ex);
+                    }
+                };
+                menu.Items.Add(unpin);
+
+                Mouse.Capture(null);
+                menu.IsOpen = true;
+                return true;
+            }
+            catch (Exception ex)
+            {
+                ShellLogger.Error($"TaskList: Unable to show the menu of the pin {link}", ex);
+                return false;
             }
         }
 
@@ -320,7 +533,7 @@ namespace RetroBar.Controls
             Mouse.Capture(null);
             try
             {
-                var _ = new ShellItemContextMenu(new ShellItem[] { file }, _pinFolder, IntPtr.Zero, (action, items, allFolders) => false, interactive, false, new ShellMenuCommandBuilder(), new ShellMenuCommandBuilder());
+                var _ = new ShellItemContextMenu(new ShellItem[] { file }, FolderOf(file), IntPtr.Zero, (action, items, allFolders) => false, interactive, false, new ShellMenuCommandBuilder(), new ShellMenuCommandBuilder());
                 return true;
             }
             catch (Exception ex)

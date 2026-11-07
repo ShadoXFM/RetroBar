@@ -67,8 +67,10 @@ namespace RetroBar.Utilities
         // Throttles how often LevelUpdated fires, independent of the capture callback's own
         // (format/buffer-size dependent) cadence - the meter only needs to look smooth, not
         // update as fast as the raw audio buffers arrive.
-        private static readonly TimeSpan UpdateInterval = TimeSpan.FromMilliseconds(40);
+        private static readonly TimeSpan UpdateInterval = TimeSpan.FromMilliseconds(20);
+        private static readonly TimeSpan LevelInterval = TimeSpan.FromMilliseconds(4);
         private DateTime _lastUpdate = DateTime.MinValue;
+        private DateTime _lastSpectrum = DateTime.MinValue;
 
         private double _levelPeakLeft;
         private double _levelPeakRight;
@@ -157,7 +159,7 @@ namespace RetroBar.Utilities
                 {
                     if (device.FriendlyName.Contains(wanted, StringComparison.OrdinalIgnoreCase))
                     {
-                        return new WasapiCapture(device);
+                        return new WasapiCapture(device, false, 20);
                     }
                 }
 
@@ -166,7 +168,7 @@ namespace RetroBar.Utilities
                     if (device.FriendlyName.Contains(wanted, StringComparison.OrdinalIgnoreCase))
                     {
                         outputDevice = device;
-                        return new WasapiLoopbackCapture(device);
+                        return new LowLatencyLoopback(device);
                     }
                 }
 
@@ -177,7 +179,7 @@ namespace RetroBar.Utilities
             // render device, but doing it explicitly lets a device-enumeration failure surface
             // here (and be caught by Start's own try/catch) instead of inside NAudio's constructor.
             outputDevice = enumerator.GetDefaultAudioEndpoint(DataFlow.Render, Role.Multimedia);
-            return new WasapiLoopbackCapture(outputDevice);
+            return new LowLatencyLoopback(outputDevice);
         }
 
         private void OnRecordingStopped(object sender, StoppedEventArgs e)
@@ -244,7 +246,9 @@ namespace RetroBar.Utilities
 
         private void ProcessLevels(int sampleRate)
         {
-            if (DateTime.Now - _lastUpdate < UpdateInterval || _levelSampleCount == 0)
+            // The level is read more often than the spectrum (it costs nothing: the loudest sample of the last stretch), so that the meter is
+            // not up to 40 ms behind the sound; the spectrum, an FFT, keeps its 40 ms.
+            if (DateTime.Now - _lastUpdate < LevelInterval || _levelSampleCount == 0)
             {
                 return;
             }
@@ -260,8 +264,9 @@ namespace RetroBar.Utilities
             _levelSampleCount = 0;
             LevelUpdated?.Invoke(ToVuLevel(_vuLeft), ToVuLevel(_vuRight));
 
-            if (SpectrumUpdated != null && _fftFilled == FftSize)
+            if (SpectrumUpdated != null && _fftFilled == FftSize && DateTime.Now - _lastSpectrum >= UpdateInterval)
             {
+                _lastSpectrum = DateTime.Now;
                 SpectrumUpdated(ComputeSpectrum(sampleRate));
             }
         }

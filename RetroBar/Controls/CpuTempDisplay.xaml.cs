@@ -26,6 +26,41 @@ namespace RetroBar.Controls
         private DispatcherTimer _timer;
         private double? _celsius;
 
+        // The Windows 11 style's option (Settings.WidgetDetails): a small graph of the last five minutes at the right of the temperature.
+        private bool _details;
+        public bool Details
+        {
+            get => _details;
+            set
+            {
+                _details = value;
+                CpuGraphLine.Visibility = value ? Visibility.Visible : Visibility.Collapsed;
+                UpdateGraphLine();
+            }
+        }
+
+        private void UpdateGraphLine()
+        {
+            if (_details)
+            {
+                CpuGraphLine.MinSpan = 10;
+                CpuGraphLine.SetValues(CpuTemperatureHistory.Last().Select(s => s.Celsius).ToArray());
+            }
+        }
+
+        // The notification area's negative margin is laid over what is before it in the tray box (the classic style), so the last widget
+        // there has this much more room at its right (see RamDisplay.InTray): the CPU temperature, when the memory is not shown after it.
+        private double _trayRoom;
+        public double TrayRoom
+        {
+            get => _trayRoom;
+            set
+            {
+                _trayRoom = value;
+                CpuTempPanel.Margin = new Thickness(4, 0, 4 + value, 0);
+            }
+        }
+
         public CpuTempDisplay()
         {
             InitializeComponent();
@@ -107,6 +142,7 @@ namespace RetroBar.Controls
         {
             _celsius = _monitor.ReadTemperature();
             ShowTemperature();
+            UpdateGraphLine();
             if (GraphPopup.IsOpen)
             {
                 RefreshGraph();
@@ -144,6 +180,8 @@ namespace RetroBar.Controls
 
         private void InitializeGraphSlide()
         {
+            // (No blur window under the widgets' popups: their glass is the darker tint.)
+            PopupBlur.SetGate(GraphFrame, () => false);
             _slide = new PopupSlide(GraphPopup, GraphFrame, GraphSlideHost,
                 () => Settings.Instance.Edge switch
                 {
@@ -153,11 +191,13 @@ namespace RetroBar.Controls
                     _ => SlideDirection.Down,
                 },
                 GraphWindowOverlap);
+            _slide.KeepFrameNearEdges(GraphContent, ShadowRoom);
         }
+
 
         private static DispatcherTimer MakeTimer(TimeSpan interval, Action tick)
         {
-            var timer = new DispatcherTimer { Interval = interval };
+            var timer = new DispatcherTimer(DispatcherPriority.Normal) { Interval = interval };
             timer.Tick += (s, e) =>
             {
                 timer.Stop();
@@ -205,7 +245,7 @@ namespace RetroBar.Controls
 
         private void OpenGraph()
         {
-            if ((GraphPopup.IsOpen && !_slide.Closing) || !CpuTempPanel.IsMouseOver || !_celsius.HasValue)
+            if ((GraphPopup.IsOpen && !_slide.Closing) || !IsMouseOver || !_celsius.HasValue)
             {
                 return;
             }
@@ -213,7 +253,7 @@ namespace RetroBar.Controls
             // One at a time with the weather's forecast: if that is open it slides away first (see HoverPopups).
             HoverPopups.Open(_slide, () =>
             {
-                if (!CpuTempPanel.IsMouseOver)
+                if (!IsMouseOver)
                 {
                     return;
                 }
@@ -285,7 +325,7 @@ namespace RetroBar.Controls
 
                 string[] parts = (TryFindResource(key) as string ?? fallback).Split("{0}");
                 block.Inlines.Add(new System.Windows.Documents.Run(parts[0]));
-                block.Inlines.Add(new System.Windows.Documents.Run(Degrees(celsius.Value)) { FontFamily = new System.Windows.Media.FontFamily("Tahoma"), FontWeight = FontWeights.Bold });
+                block.Inlines.Add(new System.Windows.Documents.Run(Degrees(celsius.Value)) { FontFamily = (TryFindResource("WidgetBoldFontFamily") as System.Windows.Media.FontFamily ?? new System.Windows.Media.FontFamily("Tahoma")), FontWeight = TryFindResource("WidgetFontWeight") is FontWeight weight ? weight : FontWeights.Bold });
                 if (parts.Length > 1 && parts[1].Length > 0)
                 {
                     block.Inlines.Add(new System.Windows.Documents.Run(parts[1]));

@@ -1,8 +1,10 @@
 <ResourceDictionary xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
                     xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
                     xmlns:controls="clr-namespace:RetroBar.Controls"
-                    xmlns:converters="clr-namespace:RetroBar.Converters">
+                    xmlns:converters="clr-namespace:RetroBar.Converters"
+                    xmlns:utilities="clr-namespace:RetroBar.Utilities">
     <converters:ScaleConverter x:Key="menuScaleConverter" />
+    <converters:BoolToTextRenderingModeConverter x:Key="menuSmoothingConverter" />
     <!-- The one look of every item of every context menu (see MenuItemStyle.cs, which gives it to them): the taskbar's font and text color,
          a check mark or an icon in a narrow first column, a highlight bar, and a frame of the theme's own for the items that
          open a menu of their own. Row heights are those of WPF's default items. -->
@@ -10,11 +12,19 @@
         <Setter Property="FontFamily" Value="{DynamicResource GlobalFontFamily}" />
         <Setter Property="FontSize" Value="{DynamicResource GlobalFontSize}" />
         <Setter Property="Foreground" Value="{DynamicResource ButtonForeground}" />
+        <!-- On the item itself too (what is inside its submenu inherits it from here): the menus' smoothing setting, not what the window
+             the menu opens from has. -->
+        <Setter Property="TextOptions.TextRenderingMode"
+                Value="{Binding Source={x:Static utilities:Settings.Instance}, Path=AllowFontSmoothingMenu, Converter={StaticResource menuSmoothingConverter}}" />
         <Setter Property="Template">
             <Setter.Value>
                 <ControlTemplate TargetType="MenuItem">
                     <Grid SnapsToDevicePixels="True">
-                        <Border x:Name="ItemBorder" Background="Transparent">
+                        <Border x:Name="ItemBorder" Background="Transparent" BorderThickness="{DynamicResource MenuItemBorderThickness}" BorderBrush="Transparent" CornerRadius="{DynamicResource MenuHighlightCornerRadius}">
+                            <Grid>
+                                <!-- A theme can draw the highlight as a picture (MenuSelectionImage, cut at MenuSelectionMargins), which is
+                                     shown behind the item while it is highlighted. -->
+                                <utilities:NineSlice x:Name="ItemSelection" Visibility="Collapsed" Source="{DynamicResource MenuSelectionImage}" Margins="{DynamicResource MenuSelectionMargins}" />
                             <Grid>
                                 <Grid.ColumnDefinitions>
                                     <ColumnDefinition Width="Auto" SharedSizeGroup="RetroBarMenuItemIcon" />
@@ -34,7 +44,7 @@
                                            Foreground="{TemplateBinding Foreground}"
                                            VerticalAlignment="Center"
                                            Visibility="Collapsed" />
-                                <ContentPresenter Grid.Column="1" ContentSource="Header" Margin="0,2,10,2" VerticalAlignment="Center" RecognizesAccessKey="True" SnapsToDevicePixels="True" />
+                                <ContentPresenter Grid.Column="1" ContentSource="Header" Margin="{DynamicResource MenuItemTextMargin}" VerticalAlignment="Center" RecognizesAccessKey="True" SnapsToDevicePixels="True" />
                                 <Path x:Name="SubmenuArrow"
                                       Grid.Column="2"
                                       Data="M 0,0 L 4,4 L 0,8 Z"
@@ -42,6 +52,7 @@
                                       Fill="{TemplateBinding Foreground}"
                                       VerticalAlignment="Center"
                                       Visibility="Collapsed" />
+                            </Grid>
                             </Grid>
                         </Border>
                         <Popup x:Name="PART_Popup"
@@ -53,20 +64,18 @@
                                VerticalOffset="-3"
                                PopupAnimation="{DynamicResource {x:Static SystemParameters.MenuPopupAnimationKey}}">
                             <Grid Margin="0,0,10,10" UseLayoutRounding="True" SnapsToDevicePixels="True">
+                                <!-- The submenu is a window of its own: its text takes the menus' smoothing setting from here, not from the menu it opens from. -->
+                                <TextOptions.TextRenderingMode>
+                                    <Binding Source="{x:Static utilities:Settings.Instance}" Path="AllowFontSmoothingMenu" Converter="{StaticResource menuSmoothingConverter}" />
+                                </TextOptions.TextRenderingMode>
                                 <controls:PopupShadow Margin="0,0,-10,-10" Room="0,0,10,10" Strength="0.67" />
-                                <Border BorderThickness="0,0,1,1" BorderBrush="{DynamicResource ButtonDarkShadow}" SnapsToDevicePixels="True">
-                                    <Border BorderThickness="1,1,0,0" BorderBrush="{DynamicResource ButtonHighlight}">
-                                        <Border BorderThickness="0,0,1,1" BorderBrush="{DynamicResource ButtonShadow}">
-                                            <Border BorderThickness="1,1,0,0" BorderBrush="{DynamicResource ButtonLight}" Background="{DynamicResource ButtonFace}">
-                                                <Grid RenderOptions.ClearTypeHint="Enabled" Margin="1,0">
-                                                    <ItemsPresenter Grid.IsSharedSizeScope="True"
-                                                                    KeyboardNavigation.DirectionalNavigation="Cycle"
-                                                                    SnapsToDevicePixels="{TemplateBinding SnapsToDevicePixels}" />
-                                                </Grid>
-                                            </Border>
-                                        </Border>
-                                    </Border>
-                                </Border>
+                                <ContentControl Style="{DynamicResource MenuFrame}" Focusable="False" IsTabStop="False">
+                                    <Grid RenderOptions.ClearTypeHint="Enabled" Margin="1,0">
+                                        <ItemsPresenter Grid.IsSharedSizeScope="True"
+                                                        KeyboardNavigation.DirectionalNavigation="Cycle"
+                                                        SnapsToDevicePixels="{TemplateBinding SnapsToDevicePixels}" />
+                                    </Grid>
+                                </ContentControl>
                             </Grid>
                         </Popup>
                     </Grid>
@@ -78,12 +87,16 @@
                             <Setter TargetName="SubmenuArrow" Property="Visibility" Value="Visible" />
                         </Trigger>
                         <Trigger Property="IsHighlighted" Value="True">
-                            <Setter TargetName="ItemBorder" Property="Background" Value="{DynamicResource {x:Static SystemColors.HighlightBrushKey}}" />
-                            <Setter Property="Foreground" Value="{DynamicResource {x:Static SystemColors.HighlightTextBrushKey}}" />
+                            <Setter TargetName="ItemBorder" Property="Background" Value="{DynamicResource MenuHighlightBrush}" />
+                            <Setter TargetName="ItemBorder" Property="BorderBrush" Value="{DynamicResource MenuHighlightBorder}" />
+                            <Setter TargetName="ItemSelection" Property="Visibility" Value="Visible" />
+                            <Setter Property="Foreground" Value="{DynamicResource MenuHighlightForeground}" />
                         </Trigger>
                         <Trigger Property="IsSubmenuOpen" Value="True">
-                            <Setter TargetName="ItemBorder" Property="Background" Value="{DynamicResource {x:Static SystemColors.HighlightBrushKey}}" />
-                            <Setter Property="Foreground" Value="{DynamicResource {x:Static SystemColors.HighlightTextBrushKey}}" />
+                            <Setter TargetName="ItemBorder" Property="Background" Value="{DynamicResource MenuHighlightBrush}" />
+                            <Setter TargetName="ItemBorder" Property="BorderBrush" Value="{DynamicResource MenuHighlightBorder}" />
+                            <Setter TargetName="ItemSelection" Property="Visibility" Value="Visible" />
+                            <Setter Property="Foreground" Value="{DynamicResource MenuHighlightForeground}" />
                         </Trigger>
                         <Trigger Property="IsEnabled" Value="False">
                             <Setter Property="Foreground" Value="{DynamicResource {x:Static SystemColors.GrayTextBrushKey}}" />

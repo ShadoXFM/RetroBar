@@ -196,6 +196,23 @@ namespace RetroBar.Utilities
             set => Set(ref _showCpuTemp, value);
         }
 
+        // The Windows 11 style: a small graph to the right of each temperature (the weather's, the CPU's) and of the memory in use, and the weather
+        // in words after the weather's temperature.
+        private bool _widgetDetails;
+        public bool WidgetDetails
+        {
+            get => _widgetDetails;
+            set => Set(ref _widgetDetails, value);
+        }
+
+        // The memory in use, after the CPU temperature (see RamDisplay).
+        private bool _showRam = true;
+        public bool ShowRam
+        {
+            get => _showRam;
+            set => Set(ref _showRam, value);
+        }
+
         // Which audio device the media player's VU meter listens to, matched against device names
         // (case-insensitive substring), searching recording devices first and then playback devices
         // (loopback). Empty = the Windows default playback device. Needed when the default output
@@ -442,6 +459,15 @@ namespace RetroBar.Utilities
             set => Set(ref _taskbarWidthLimit, value);
         }
 
+        // The order of the tabs of the Windows 11 style, pins and the tabs of the programs that are not pinned among them: "pin|<shortcut>"
+        // for a pin and "app|<program>" for a program that is not pinned (see TaskList.Pinned.cs). Empty: the pins first, then the other tabs.
+        private List<string> _taskOrder = [];
+        public List<string> TaskOrder
+        {
+            get => _taskOrder;
+            set => Set(ref _taskOrder, value);
+        }
+
         private List<string> _quickLaunchOrder = [];
         public List<string> QuickLaunchOrder
         {
@@ -550,6 +576,15 @@ namespace RetroBar.Utilities
             set => SetEnum(ref _taskbarStyle, value);
         }
 
+        // How the Start button looks, in either style of the taskbar: with its text (the classic button) or only its logo (on a square button, as
+        // the Windows 11 style has it). Automatic: the text in the classic style, only the logo in the Windows 11 style.
+        private StartButtonLookOption _startButtonLook = StartButtonLookOption.Automatic;
+        public StartButtonLookOption StartButtonLook
+        {
+            get => _startButtonLook;
+            set => SetEnum(ref _startButtonLook, value);
+        }
+
         private bool _showTaskBadges = true;
         public bool ShowTaskBadges
         {
@@ -606,6 +641,13 @@ namespace RetroBar.Utilities
         {
             get => _showEndTaskButton;
             set => Set(ref _showEndTaskButton, value);
+        }
+
+        private bool _showStartButton = true;
+        public bool ShowStartButton
+        {
+            get => _showStartButton;
+            set => Set(ref _showStartButton, value);
         }
 
         private bool _showStartButtonMultiMon = false;
@@ -698,6 +740,13 @@ namespace RetroBar.Utilities
     {
         Classic,
         Windows11
+    }
+
+    public enum StartButtonLookOption
+    {
+        Automatic,
+        WithText,
+        LogoOnly
     }
 
     public enum InvertIconsOption

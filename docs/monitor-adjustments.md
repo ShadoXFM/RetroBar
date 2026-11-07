@@ -16,7 +16,21 @@ It is keyed by the monitor's device name (`\\.\DISPLAY1`), then by a tag; a tag 
 ```
 
 Values are in DIPs (1 DIP is 1.25 pixels at 125% scale), so `0.8` is one pixel there.
-A monitor can also have `RowCount` (the number of taskbar rows) and `HeightAdjustment` (DIPs added to the taskbar's height).
+A monitor can also have `RowCount` (the number of taskbar rows), `HeightAdjustment` (DIPs added to the taskbar's height) and `TabWidthAdjustment` (DIPs added to how much wider a tab is than it is tall, in the Windows 11 style). A monitor can also have `MonitorId` (the hardware id of the monitor it is for, such as `DEL4239`: Windows numbers the connections by which have a monitor on, so with one of two monitors off the one that is on can be `DISPLAY2`; an entry with a `MonitorId` is for that monitor wherever it is connected).
+
+An adjustment is measured against one theme's own buttons, so on another theme it lands on elements of a different size (a Start button of a fixed height squashed to another's height) and the taskbar looks wrong. A monitor can have `Theme` (the theme the top of its entry was tuned for, such as `Windows XFM`: the top applies to that theme only and the other themes keep their own design; without it the top applies to every theme) and `Themes` (the tuning of other themes, `{ "Windows Vista Aero": { "StartButtonBox": { "Y": -1 } } }`: for the theme in use its section is laid over the top of the entry, so a tag or field it has wins and the rest comes from the top).
+
+```json
+{
+  "\\\\.\\DISPLAY1": {
+    "Theme": "Windows XFM",
+    "TaskIcon": { "Y": 1 },
+    "Themes": {
+      "Windows Vista Aero": { "StartButtonBox": { "Y": -1 } }
+    }
+  }
+}
+```
 
 ## Fields of a tag
 
@@ -80,24 +94,27 @@ A tag that is chosen by a state has variants: `Playing` (media is playing), `NoC
 | `MediaTrackTextMax` | `Controls/MediaPlayer.Marquee.cs` |  |
 | `MediaTransportButtonsArea` | `Controls/MediaPlayer.xaml` |  |
 | `PreviewCloseButton` | `Controls/TaskButton.xaml` |  |
-| `PreviewTitleIcon` | `Controls/TaskButton.JumpList.cs`, `Controls/TaskButton.xaml`, `Controls/TaskButton.xaml.cs` |  |
+| `PreviewTitleIcon` | `Controls/TaskButton.JumpList.cs`, `Controls/TaskButton.xaml`, `Controls/TaskButton.xaml.cs`, `Controls/TaskList.Pinned.cs` |  |
 | `PreviewTitleRow` | `Controls/TaskButton.xaml` |  |
 | `PreviewTitleText` | `Controls/TaskButton.xaml` |  |
 | `QuickLaunchToolbar` | `Taskbar.xaml` |  |
+| `RamChip` | `Controls/RamDisplay.xaml` |  |
+| `RamText` | `Controls/RamDisplay.xaml` |  |
 | `StartButtonBox` | `Controls/StartButton.xaml` |  |
 | `StartIcon` | `Controls/StartButton.xaml` |  |
 | `StartLabel` | `Controls/StartButton.xaml` |  |
+| `TaskBadgeBar` | `Controls/TaskButton.IconOnly.cs` |  |
 | `TaskButton` | `Controls/TaskButton.xaml.cs` | `TaskButtonActive` |
 | `TaskButtonActive` | `Controls/TaskButton.xaml.cs` |  |
 | `TaskIcon` | `Controls/TaskButton.xaml.cs`, `Utilities/MonitorOffset.cs` | `TaskIconActive` |
 | `TaskIconActive` | `Controls/TaskButton.xaml.cs` |  |
-| `TaskIconBar` | `Controls/TaskButton.IconOnly.cs` |  |
+| `TaskIconBar` | `Controls/TaskButton.IconOnly.cs`, `Controls/ToolbarButton.xaml.cs` |  |
 | `TaskLabel` | `Controls/TaskButton.xaml.cs` | `TaskLabelActive` |
 | `TaskLabelActive` | `Controls/TaskButton.xaml.cs` |  |
 | `TaskOverlayIcon` | `Controls/TaskButton.xaml.cs` | `TaskOverlayIconActive` |
 | `TaskOverlayIconActive` | `Controls/TaskButton.xaml.cs` |  |
 | `ToolbarButtonBox` | `Controls/ToolbarButton.xaml`, `Controls/ToolbarButton.xaml.cs` |  |
-| `ToolbarIcon` | `Controls/ToolbarButton.xaml` |  |
+| `ToolbarIcon` | `Controls/ToolbarButton.xaml`, `Controls/ToolbarButton.xaml.cs` |  |
 | `TrayBox` | `Taskbar.xaml` |  |
 | `TrayBoxBevel` | `Themes/System.xaml`, `Themes/Windows XFM.xaml` | `TrayBoxBevelPlaying` |
 | `TrayBoxBevelPlaying` | `Themes/System.xaml`, `Themes/Windows XFM.xaml` |  |
@@ -120,6 +137,7 @@ A tag that is chosen by a state has variants: `Playing` (media is playing), `NoC
 | `TrayToggleHoverFill` | `Themes/System.xaml`, `Themes/Windows XFM.xaml` |  |
 | `VuMeterContainer` | `Controls/MediaPlayer.xaml.cs` |  |
 | `VuMeterContainerNoArt` | `Controls/MediaPlayer.xaml.cs` |  |
+| `WeatherDescription` | `Controls/WeatherDisplay.xaml` |  |
 | `WeatherGroup` | `Taskbar.xaml` | `WeatherGroupPlaying` |
 | `WeatherGroupBar` | `Taskbar.Layout.cs` |  |
 | `WeatherGroupPlaying` | `Taskbar.xaml` |  |
@@ -130,3 +148,4 @@ A tag that is chosen by a state has variants: `Playing` (media is playing), `NoC
 | `WeatherTaskGapNoCpuTemp` | `Taskbar.xaml` |  |
 | `WeatherTemp` | `Controls/WeatherDisplay.xaml` | `WeatherTempNoCpuTemp` |
 | `WeatherTempNoCpuTemp` | `Controls/WeatherDisplay.xaml` |  |
+| `WidgetSparkline` | `Controls/CpuTempDisplay.xaml`, `Controls/RamDisplay.xaml` |  |

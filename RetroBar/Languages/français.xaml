@@ -48,6 +48,9 @@
     <s:String x:Key="media_source_browser">Navigateur</s:String>
     <s:String x:Key="media_source_none">Aucun média en cours</s:String>
     <s:String x:Key="show_cpu_temp">Afficher la température du _CPU</s:String>
+    <s:String x:Key="widget_details">Style Windows 11 : _graphiques et météo en toutes lettres</s:String>
+    <s:String x:Key="widget_details_tip">Dans le style Windows 11, un petit graphique à droite des températures et de la mémoire utilisée, et la météo en toutes lettres après la température.</s:String>
+    <s:String x:Key="show_ram">Afficher la _mémoire utilisée</s:String>
     <s:String x:Key="media_previous">Précédent</s:String>
     <s:String x:Key="media_play_pause">Lecture/Pause</s:String>
     <s:String x:Key="media_next">Suivant</s:String>
@@ -94,6 +97,14 @@
         <s:String>La même barre des tâches que la fenêtre</s:String>
         <s:String>La même barre des tâches que la fenêtre et la barre des tâches primaire</s:String>
     </x:Array>
+    <s:String x:Key="start_button_look_text">_Aspect du bouton Démarrer :</s:String>
+    <s:String x:Key="start_button_look_tip">Automatique : avec son texte dans le style classique, seulement son logo dans le style Windows 11. Avec texte : le bouton classique, dans l'un et l'autre style. Logo seul : un bouton carré avec seulement le logo, dans l'un et l'autre style.</s:String>
+    <x:Array x:Key="start_button_look_values" Type="s:String">
+        <s:String>Automatique</s:String>
+        <s:String>Avec texte</s:String>
+        <s:String>Logo seul</s:String>
+    </x:Array>
+    <s:String x:Key="show_start_button">Afficher le _bouton Démarrer</s:String>
     <s:String x:Key="taskbar_style_text">St_yle de la barre des tâches :</s:String>
     <s:String x:Key="taskbar_style_tip">Classique : les onglets occupent la largeur de la barre, avec le bouton Démarrer à gauche. Windows 11 : de petits onglets avec seulement les icônes, les programmes épinglés parmi eux, au milieu avec le bouton Démarrer à leur gauche ; le lecteur multimédia est dans un cadre à gauche. Pour une barre en haut ou en bas.</s:String>
     <x:Array x:Key="taskbar_style_values" Type="s:String">

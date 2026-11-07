@@ -123,6 +123,56 @@ namespace RetroBar.Controls
             }
         }
 
+        // The wheel over the media part also seeks at the very edge of the screen, in the rows of the bar the media part itself does not reach
+        // (its own height is less than the bar's, by a different amount on each monitor): the bar's window gets the wheel there, and passes it
+        // on when the pointer is in the columns of the media part.
+        private Window _wheelWindow;
+
+        private void AttachBarWheel()
+        {
+            DetachBarWheel();
+            _wheelWindow = Window.GetWindow(this);
+            if (_wheelWindow != null)
+            {
+                _wheelWindow.MouseWheel += BarWindow_OnMouseWheel;
+            }
+        }
+
+        private void DetachBarWheel()
+        {
+            if (_wheelWindow != null)
+            {
+                _wheelWindow.MouseWheel -= BarWindow_OnMouseWheel;
+                _wheelWindow = null;
+            }
+        }
+
+        private void BarWindow_OnMouseWheel(object sender, MouseWheelEventArgs e)
+        {
+            if (e.Handled || !IsVisible || ActualWidth <= 0 || _wheelWindow == null)
+            {
+                return;
+            }
+
+            Point inWindow = e.GetPosition(_wheelWindow);
+            if (inWindow.Y < 0 || inWindow.Y > _wheelWindow.ActualHeight)
+            {
+                return;
+            }
+
+            try
+            {
+                Point inside = _wheelWindow.TranslatePoint(inWindow, this);
+                if (inside.X >= 0 && inside.X <= ActualWidth)
+                {
+                    MediaPlayer_OnMouseWheel(this, e);
+                }
+            }
+            catch (InvalidOperationException)
+            {
+            }
+        }
+
         private void TrackTextCanvas_OnMouseLeftButtonUp(object sender, MouseButtonEventArgs e)
         {
             // Only the click that closed the popup (its mouse-up arrives right after): a popup closed some other way - by this very click
@@ -386,6 +436,27 @@ namespace RetroBar.Controls
 
         private void InitializeSeekSlide()
         {
+            // The blur window under the popup only when it is a window of its own (moved, or on top). Attached to the taskbar its glass is the
+            // darker tint (the frame's Tag: see the theme's MediaPopupFrame), which has no blur to be late while it slides.
+            PopupBlur.SetGate(SeekPopupRoot, () =>
+            {
+                bool independent = _seekPopupMovedTo != null || _seekPopupPinned;
+                string tag = independent ? null : "Attached";
+                if (!Equals(SeekFrame.Tag, tag))
+                {
+                    SeekFrame.Tag = tag;
+                    if (independent)
+                    {
+                        // The darker glass is put back over it and fades away as the blur comes in.
+                        _seekSlide?.FadeGlassIn();
+                    }
+                }
+
+                return independent;
+            });
+
+
+
             // The slider handles the press itself (it moves the thumb to the point) and marks it handled, so an ordinary handler never hears of
             // it: without this the display was not held still while the button was down, and the release seeked to the old position.
             SeekSlider.AddHandler(UIElement.PreviewMouseLeftButtonDownEvent, new MouseButtonEventHandler(SeekSlider_OnPreviewMouseDown), true);
@@ -400,13 +471,70 @@ namespace RetroBar.Controls
                 // placed in whole pixels, so the layout can be a pixel out), or else from the layout (the shadow's room under the frame).
                 return PopupSlide.MeasureOverlap(SeekPopupRoot, taskbar) ?? Math.Max(0, (GetSeekFrameBottom(taskbar) ?? 0) + SeekFrameShadowRoom);
             });
+
+            // Against the edge of the screen its frame is as near it as it is to the taskbar (see PopupSlide.KeepFrameNearEdges).
+            _seekSlide.KeepFrameNearEdges(SeekFrame, SeekFrameShadowRoom);
         }
+
+        private bool _seekPopupReplaceFlip;
+
+        // The popup is placed once, for the size it has then: when it gets taller (the lyrics of a song after one with none) its window grew
+        // down from where it was, over the taskbar, instead of up. It is placed again for its new size - up from the taskbar, as it opened -
+        // unless it has been moved or is on top, which have their own place.
+        private void SeekPopupRoot_OnSizeChanged(object sender, SizeChangedEventArgs e)
+        {
+            if (!e.HeightChanged || !SeekPopup.IsOpen || _seekSlide == null || _seekSlide.Closing || _seekPopupMovedTo != null || _seekPopupPinned)
+            {
+                return;
+            }
+
+            // Where the window's bottom is now, before the window takes its new size (the resize comes after the layout that raised this):
+            // the first one seen since the last correction is the one the popup was placed with.
+            if (_seekPopupBottomBefore == null && !_seekSlide.Sliding && e.PreviousSize.Height > 0 && PresentationSource.FromVisual(SeekPopupRoot) is HwndSource before && GetWindowRect(before.Handle, out RECT was))
+            {
+                _seekPopupBottomBefore = was.Bottom;
+            }
+
+            Dispatcher.BeginInvoke(new Action(() =>
+            {
+                if (!SeekPopup.IsOpen || _seekSlide.Closing || _seekPopupMovedTo != null || _seekPopupPinned)
+                {
+                    _seekPopupBottomBefore = null;
+                    return;
+                }
+
+                // Changing an offset is what makes a popup place itself again; a thousandth of a DIP, which is not seen.
+                _seekPopupReplaceFlip = !_seekPopupReplaceFlip;
+                SeekPopup.VerticalOffset = SeekPopupOffset + (_seekPopupReplaceFlip ? 0.001 : 0);
+                _seekSlide.UpdateClip();
+            }), System.Windows.Threading.DispatcherPriority.Render);
+
+            // Placing it again did not always keep its bottom where it was (on the 96 DPI monitor the window still grew down over the
+            // taskbar): once that has run and the window has its new size, it is moved so its bottom is where it was.
+            Dispatcher.BeginInvoke(new Action(() =>
+            {
+                int? bottom = _seekPopupBottomBefore;
+                _seekPopupBottomBefore = null;
+                if (bottom == null || !SeekPopup.IsOpen || _seekSlide.Closing || _seekSlide.Sliding || _seekPopupMovedTo != null || _seekPopupPinned
+                    || PresentationSource.FromVisual(SeekPopupRoot) is not HwndSource source || !GetWindowRect(source.Handle, out RECT now)
+                    || now.Bottom == bottom.Value)
+                {
+                    return;
+                }
+
+                SetWindowPos(source.Handle, IntPtr.Zero, now.Left, now.Top + bottom.Value - now.Bottom, 0, 0, SWP_NOSIZE | SWP_NOZORDER | SWP_NOACTIVATE);
+                _seekSlide.UpdateClip();
+            }), System.Windows.Threading.DispatcherPriority.Background);
+        }
+
+        private int? _seekPopupBottomBefore;
 
         private void OpenSeekPopupAnimated()
         {
             // The weather's forecast or the CPU temperature's graph, if one is open, slides away first (see HoverPopups).
             HoverPopups.CloseThen(() =>
             {
+                _seekPopupReplaceFlip = false;
                 SeekPopup.VerticalOffset = SeekPopupOffset;
                 _seekSlide.Show();
             });
@@ -431,6 +559,9 @@ namespace RetroBar.Controls
 
             StartSeekWatching();
             UpdateVisualizerCapture(_sessionManager?.PlaybackState == MediaPlaybackState.Playing);
+
+            // The lines' fades follow their slides from the first frame (the frame hook lets go of itself while no line of an open popup slides).
+            EnsureFadeRendering();
 
             // One popup at a time, whichever monitor's player it belongs to.
             if (_openSeekPlayer != null && _openSeekPlayer != this)

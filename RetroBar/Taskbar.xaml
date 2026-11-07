@@ -74,6 +74,24 @@
                              RelativeSource="{RelativeSource Mode=FindAncestor, AncestorType=Window}" />
                 </DockPanel.Dock>
             </controls:StartButton>
+            <!-- With no Start button, the edge of the taskbar where it was opens the Start menu when it is clicked (as the corner of the
+                 desktop's peek button does at the other edge), not when the pointer is only over it. It takes no room of its own (the
+                 negative margin): what is docked after it is drawn over it, so only the strip at the very edge is left to click.
+                 Shown by Taskbar.UpdateStartButton. -->
+            <Border x:Name="StartEdge"
+                    Width="6"
+                    Margin="0,0,-6,0"
+                    Background="Transparent"
+                    Visibility="Collapsed"
+                    PreviewMouseLeftButtonUp="StartEdge_OnPreviewMouseLeftButtonUp"
+                    PreviewMouseRightButtonUp="StartEdge_OnPreviewMouseRightButtonUp">
+                <DockPanel.Dock>
+                    <Binding Converter="{StaticResource dockOrientationConverter}"
+                             ConverterParameter="leading"
+                             Path="Orientation"
+                             RelativeSource="{RelativeSource Mode=FindAncestor, AncestorType=Window}" />
+                </DockPanel.Dock>
+            </Border>
             <controls:Toolbar x:Name="QuickLaunchToolbar"
                               Visibility="Collapsed"
                               Path="{Binding Source={x:Static utilities:Settings.Instance}, Path=QuickLaunchPath}"
@@ -132,6 +150,7 @@
                     </StackPanel.Orientation>
                     <controls:MediaPlayer x:Name="MediaPlayerControl"
                                           VerticalAlignment="Center"
+                                          utilities:MonitorOffset.Tag="MediaPlayerGroup"
                                           ShellManager="{Binding}" />
                     <!-- Weather and the CPU temperature sit right after the media buttons, inside the tray box (they were in front of the
                          media player). The tray box moves what is in it by a pixel or two (its padding and offsets), so this group has its
@@ -142,8 +161,9 @@
                                 VerticalAlignment="Center"
                                 Margin="5,0,0,0"
                                 utilities:MonitorOffset.Tag="{Binding Path=(utilities:TrayBoxState.MediaPlaying), RelativeSource={RelativeSource Self}, Converter={StaticResource mediaPlayingToMonitorTagConverter}, ConverterParameter=WeatherGroup}">
-                        <controls:WeatherDisplay VerticalAlignment="Center" />
-                        <controls:CpuTempDisplay VerticalAlignment="Center" />
+                        <controls:WeatherDisplay x:Name="WeatherDisplayControl" VerticalAlignment="Center" />
+                        <controls:CpuTempDisplay x:Name="CpuTempDisplayControl" VerticalAlignment="Center" />
+                        <controls:RamDisplay x:Name="RamDisplayControl" VerticalAlignment="Center" />
                     </StackPanel>
                     <!-- TrayNotifyListAlone (a Margin, say) is for the tray box with no media, weather or CPU temperature in it: the gap
                          between the tray box's left side and the hide button, which does not touch the others' layouts. -->

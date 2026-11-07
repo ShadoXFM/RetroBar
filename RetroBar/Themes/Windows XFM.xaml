@@ -8,23 +8,16 @@
     <system:Double x:Key="GlobalFontSize">10</system:Double>
 
  <!-- Dark Mode Colors -->
-    <SolidColorBrush x:Key="ButtonHighlight" Color="#737373" />
+    <SolidColorBrush x:Key="ButtonHighlight" Color="#666666" />
     <SolidColorBrush x:Key="ButtonInnerHighlight" Color="#00000000" />
-    <SolidColorBrush x:Key="ButtonLight" Color="#333333" />
-    <SolidColorBrush x:Key="ButtonFace" Color="#121014" />
-    <SolidColorBrush x:Key="ButtonShadow" Color="#0a0a0a" />
+    <SolidColorBrush x:Key="ButtonLight" Color="#222222" />
+    <SolidColorBrush x:Key="ButtonFace" Color="#0E0E0E" /> <!-- 121014 -->
+    <SolidColorBrush x:Key="ButtonShadow" Color="#0A0A0A" />
     <SolidColorBrush x:Key="ButtonDarkShadow" Color="#000000" />
     <SolidColorBrush x:Key="ButtonFlashingFace" Color="#3c159e" />
+    <SolidColorBrush x:Key="TaskbarTopLineOuter" Color="#4d4d4d" />
+    <SolidColorBrush x:Key="TaskbarTopLine" Color="#1A1A1A" />
 
-    <!-- The two lines along the top of the taskbar, the one under the other: darker shades of ButtonHighlight (#737373) and
-         ButtonLight (#333333), which are what the other bevels use. Take either out to have the taskbar use the bevel color again. -->
-    <SolidColorBrush x:Key="TaskbarTopLineOuter" Color="#222222" />
-    <SolidColorBrush x:Key="TaskbarTopLine" Color="#4d4d4d" />
-
-    <!-- The taskbar's background as a gradient across the whole taskbar: the Start color at its left edge, fading to the End color
-         at its right edge. Left transparent (#00000000) an end is the face color (ButtonFace), and with both left that way the
-         taskbar is plain ButtonFace. Give either an opaque color, e.g. <Color x:Key="TaskbarBackgroundEnd">#3C159E</Color>, to get
-         a gradient. -->
     <Color x:Key="TaskbarBackgroundStart">#00000000</Color>
     <Color x:Key="TaskbarBackgroundEnd">#00000000</Color>
 
@@ -138,7 +131,7 @@
                             Padding="2"
                             UseLayoutRounding="True"
                             SnapsToDevicePixels="True"
-                            utilities:MonitorOffset.Tag="{Binding Path=IsMediaPlaying, RelativeSource={RelativeSource Mode=FindAncestor, AncestorType={x:Type Window}}, Converter={StaticResource mediaPlayingToMonitorTagConverter}, ConverterParameter=TrayBoxOuter}">
+                            utilities:MonitorOffset.Tag="{Binding Path=(utilities:TrayBoxState.MediaPlaying), RelativeSource={RelativeSource Self}, Converter={StaticResource mediaPlayingToMonitorTagConverter}, ConverterParameter=TrayBoxOuter}">
                         <Grid UseLayoutRounding="True"
                               SnapsToDevicePixels="True">
                             <Border BorderThickness="0"
@@ -146,7 +139,7 @@
                                     Padding="1"
                                     UseLayoutRounding="True"
                                     SnapsToDevicePixels="True"
-                                    utilities:MonitorOffset.Tag="{Binding Path=IsMediaPlaying, RelativeSource={RelativeSource Mode=FindAncestor, AncestorType={x:Type Window}}, Converter={StaticResource mediaPlayingToMonitorTagConverter}, ConverterParameter=TrayBoxBevel}">
+                                    utilities:MonitorOffset.Tag="{Binding Path=(utilities:TrayBoxState.MediaPlaying), RelativeSource={RelativeSource Self}, Converter={StaticResource mediaPlayingToMonitorTagConverter}, ConverterParameter=TrayBoxBevel}">
                                 <ContentPresenter />
                             </Border>
                             <Rectangle Height="1"
@@ -200,7 +193,7 @@
                     <Border x:Name="ButtonBorder"
                             Background="Transparent"
                             Padding="0,2"
-                            utilities:MonitorOffset.Tag="{Binding Path=IsMediaPlaying, RelativeSource={RelativeSource Mode=FindAncestor, AncestorType={x:Type Window}}, Converter={StaticResource mediaPlayingToMonitorTagConverter}, ConverterParameter=TrayToggleButton}"
+                            utilities:MonitorOffset.Tag="{Binding Path=(utilities:TrayBoxState.MediaPlaying), RelativeSource={RelativeSource Self}, Converter={StaticResource mediaPlayingToMonitorTagConverter}, ConverterParameter=TrayToggleButton}"
                             SnapsToDevicePixels="True"
                             UseLayoutRounding="True">
                         <Grid Background="{TemplateBinding Background}">

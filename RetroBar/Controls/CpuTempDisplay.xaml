@@ -6,16 +6,17 @@
              Loaded="CpuTempDisplay_OnLoaded"
              Unloaded="CpuTempDisplay_OnUnloaded"
              Visibility="Collapsed">
-    <Grid>
+    <Grid MouseEnter="CpuTempPanel_OnMouseEnter" MouseLeave="CpuTempPanel_OnMouseLeave">
+        <!-- The pointer's area: the widget's own width and a little more at each side, and the bar's height (reaching past the widget's box, top
+             and bottom, which takes no room), so it is easy to hover (the Windows XFM Aero theme has the widgets close together and tight). The mouse handlers are on the grid, so the area and the widget are one for them. -->
+        <Border Background="Transparent" Margin="-3,-24" />
     <!-- Transparent background so the whole widget takes the pointer that opens the graph. -->
     <StackPanel x:Name="CpuTempPanel"
                 Orientation="Horizontal"
                 VerticalAlignment="Center"
                 HorizontalAlignment="Center"
                 Margin="4,0"
-                Background="Transparent"
-                MouseEnter="CpuTempPanel_OnMouseEnter"
-                MouseLeave="CpuTempPanel_OnMouseLeave">
+                Background="Transparent">
         <!-- A small chip socket (a hollow body with a pin on each side, twice), in place of the "/" that used to sit here: with
              it the number reads as the processor's, not as the other half of the weather's. It sits inside this same UserControl
              (rather than as a separate element in Taskbar.xaml) so it only ever appears alongside CpuTempText - collapsing this
@@ -36,6 +37,13 @@
                    Style="{DynamicResource CpuTempStyle}"
                    Foreground="{DynamicResource ClockForeground}"
                    utilities:MonitorOffset.Tag="CpuTemp" />
+        <controls:Sparkline x:Name="CpuGraphLine"
+                            Width="24"
+                            Height="10"
+                            Margin="3,0,2,2"
+                            VerticalAlignment="Center"
+                            Visibility="Collapsed"
+                            utilities:MonitorOffset.Tag="WidgetSparkline" />
     </StackPanel>
     <!-- The graph of the temperature of the last five minutes: opens and closes as the weather's forecast does (the same frame, the same
          slide; see CpuTempDisplay.xaml.cs). -->
@@ -53,7 +61,7 @@
               RenderOptions.ClearTypeHint="Enabled">
             <Grid x:Name="GraphSlideHost">
                 <controls:PopupShadow />
-                <ContentControl Margin="6"
+                <ContentControl x:Name="GraphContent" Margin="6" Tag="WidgetPopup"
                                 Style="{DynamicResource TaskButtonThumbnail}"
                                 MouseEnter="GraphPopup_OnMouseEnter"
                                 MouseLeave="GraphPopup_OnMouseLeave">
@@ -63,9 +71,9 @@
                         <TextBlock x:Name="GraphHeader"
                                    Style="{DynamicResource GlobalFonts}"
                                    Foreground="{DynamicResource ButtonForeground}"
-                                   FontFamily="Tahoma"
+                                   FontFamily="{DynamicResource WidgetBoldFontFamily}"
                                    FontSize="12"
-                                   FontWeight="Bold"
+                                   FontWeight="{DynamicResource WidgetFontWeight}"
                                    TextTrimming="CharacterEllipsis"
                                    Margin="2,0,2,0" />
                         <controls:CpuTempGraph x:Name="Graph"
@@ -78,19 +86,19 @@
                                        HorizontalAlignment="Left"
                                        Style="{DynamicResource GlobalFonts}"
                                        Foreground="{DynamicResource ButtonForeground}"
-                                       FontFamily="Microsoft Sans Serif"
+                                       FontFamily="{DynamicResource WidgetLabelFontFamily}"
                                        FontWeight="Normal" />
                             <TextBlock x:Name="GraphAverage"
                                        HorizontalAlignment="Center"
                                        Style="{DynamicResource GlobalFonts}"
                                        Foreground="{DynamicResource ButtonForeground}"
-                                       FontFamily="Microsoft Sans Serif"
+                                       FontFamily="{DynamicResource WidgetLabelFontFamily}"
                                        FontWeight="Normal" />
                             <TextBlock x:Name="GraphMax"
                                        HorizontalAlignment="Right"
                                        Style="{DynamicResource GlobalFonts}"
                                        Foreground="{DynamicResource ButtonForeground}"
-                                       FontFamily="Microsoft Sans Serif"
+                                       FontFamily="{DynamicResource WidgetLabelFontFamily}"
                                        FontWeight="Normal" />
                         </Grid>
                     </StackPanel>

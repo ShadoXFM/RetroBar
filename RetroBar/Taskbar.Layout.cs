@@ -14,6 +14,23 @@ namespace RetroBar
     public partial class Taskbar
     {
         private FrameworkElement _mediaBox;
+        private Thickness _weatherBaseMargin;
+
+        private void StartButton_IsVisibleChangedForWeather(object sender, DependencyPropertyChangedEventArgs e) => UpdateWeatherMargin();
+
+        // With no Start button before it (the option is off, or this is a taskbar that has none) the weather is further from the edge.
+        private void UpdateWeatherMargin()
+        {
+            if (!_windows11Applied)
+            {
+                return;
+            }
+
+            double dpi = System.Windows.Media.VisualTreeHelper.GetDpi(this).DpiScaleX;
+            // 2 pixels more on the main taskbar, 1 on another one (which has no Start button as a rule).
+            double extra = StartButton.Visibility == Visibility.Visible ? 0 : (Screen.Primary ? 2 : 1) / (dpi > 0 ? dpi : 1);
+            WeatherGroup.Margin = new Thickness(_weatherBaseMargin.Left + extra, _weatherBaseMargin.Top, _weatherBaseMargin.Right, _weatherBaseMargin.Bottom);
+        }
         private BindingBase _weatherTag;
         private StackPanel _weatherPlace;
         private Grid _centerStrip;
@@ -27,6 +44,7 @@ namespace RetroBar
         {
             Settings.Instance.PropertyChanged += TaskbarStyle_SettingChanged;
             ApplyTaskbarStyle();
+            UpdateStartButtonLook();
         }
 
         // A taskbar that is closed (the theme can make the taskbars again) no longer follows the style; left listening, it moved the controls of a
@@ -42,6 +60,14 @@ namespace RetroBar
             {
                 Dispatcher.BeginInvoke(new System.Action(ApplyTaskbarStyle));
             }
+            else if (e.PropertyName == nameof(Settings.WidgetDetails))
+            {
+                Dispatcher.BeginInvoke(new System.Action(UpdateTrayContentFlags));
+            }
+            else if (e.PropertyName == nameof(Settings.StartButtonLook))
+            {
+                Dispatcher.BeginInvoke(new System.Action(UpdateStartButtonLook));
+            }
             else if (e.PropertyName == nameof(Settings.ShowQuickLaunch) && _windows11Applied)
             {
                 // The pinned programs are among the tabs; the toolbar of them stays away.
@@ -49,8 +75,20 @@ namespace RetroBar
             }
         }
 
+        // The Start button with its text or only its logo: what the setting says, or by the style (the text in the classic one).
+        private void UpdateStartButtonLook()
+        {
+            StartButton.IconOnly = Settings.Instance.StartButtonLook switch
+            {
+                StartButtonLookOption.WithText => false,
+                StartButtonLookOption.LogoOnly => true,
+                _ => _windows11Applied,
+            };
+        }
+
         private void ApplyTaskbarStyle()
         {
+            OpenShellHint.Update();
             bool windows11 = WantsWindows11Style;
             if (windows11 == _windows11Applied)
             {
@@ -71,6 +109,9 @@ namespace RetroBar
                 TrayContent.Children.Insert(weatherAt, _weatherPlace);
 
                 _mediaBox = WeatherGroup;
+                _weatherBaseMargin = WeatherGroup.Margin;
+                StartButton.IsVisibleChanged += StartButton_IsVisibleChangedForWeather;
+                UpdateWeatherMargin();
 
                 // On the bar it has a tag of its own (WeatherGroupBar): the tag it has in the tray box (WeatherGroup, with Playing) is tuned
                 // for being level with the clock in the box.
@@ -82,30 +123,37 @@ namespace RetroBar
                 // The tabs: out of the dock, into a row that is centered in what the other boxes leave. The Start button stays where it
                 // was, at the left edge, with the media player's box after it.
                 TaskbarDock.Children.Remove(TaskListControl);
-                _centerRow = new StackPanel { Orientation = Orientation.Horizontal, HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Stretch };
+                // At the left, with a margin that is worked out in whole pixels (see ApplyCenterMargin): left to be centered by the layout,
+                // the row moved by a pixel whenever a box beside it changed by a fraction of one, and its tabs with it.
+                _centerRow = new StackPanel { Orientation = Orientation.Horizontal, HorizontalAlignment = HorizontalAlignment.Left, VerticalAlignment = VerticalAlignment.Stretch };
+                _centerRowLeft = double.NaN;
                 _centerRow.Children.Add(TaskListControl);
                 _centerStrip = new Grid();
                 _centerStrip.Children.Add(_centerRow);
                 _centerStrip.SizeChanged += (s, e) => UpdateCenterWidth();
+                TaskListControl.SizeChanged += (s, e) => UpdateCenterWidth();
                 _mediaBox.SizeChanged += (s, e) => UpdateCenterWidth();
                 StartButton.SizeChanged += (s, e) => UpdateCenterWidth();
                 TrayBox.SizeChanged += (s, e) => UpdateCenterWidth();
 
-                TaskbarDock.Children.Insert(TaskbarDock.Children.IndexOf(StartButton) + 1, _mediaBox);
+                // After the Start button and the edge that opens the menu when there is no button: before it, the edge came after the weather.
+                TaskbarDock.Children.Insert(TaskbarDock.Children.IndexOf(StartEdge) + 1, _mediaBox);
                 TaskbarDock.Children.Add(_centerStrip);
 
                 QuickLaunchToolbar.Visibility = Visibility.Collapsed;
                 TaskListControl.IconOnly = true;
-                StartButton.IconOnly = true;
+                UpdateStartButtonLook();
             }
             else
             {
                 TaskListControl.IconOnly = false;
-                StartButton.IconOnly = false;
+                UpdateStartButtonLook();
 
                 _centerRow.Children.Remove(TaskListControl);
                 TaskbarDock.Children.Remove(_centerStrip);
                 TaskbarDock.Children.Remove(_mediaBox);
+                StartButton.IsVisibleChanged -= StartButton_IsVisibleChangedForWeather;
+                WeatherGroup.Margin = _weatherBaseMargin;
                 WeatherGroup.ClearValue(MonitorOffset.TagProperty);
                 if (_weatherTag != null)
                 {
@@ -135,14 +183,34 @@ namespace RetroBar
                 return;
             }
 
-            double left = StartButton.ActualWidth + (_mediaBox?.ActualWidth ?? 0) + (_mediaBox?.Margin.Left ?? 0);
-            double right = TrayBox.ActualWidth;
-            double shift = right - left + _centerCorrection;
-            double difference = Math.Abs(shift);
-            _centerRow.Margin = shift > 0 ? new Thickness(difference, 0, 0, 0) : new Thickness(0, 0, difference, 0);
+            double difference = Math.Abs(CenterShift());
+            ApplyCenterMargin();
             TaskListControl.AvailableWidth = Math.Max(0, _centerStrip.ActualWidth - difference);
 
             Dispatcher.BeginInvoke(new Action(() => CenterTabs(0)), System.Windows.Threading.DispatcherPriority.Loaded);
+        }
+
+        private double _centerRowLeft = double.NaN;
+
+        // How much more room there is at the left of the middle than at the right (the boxes either side), and what is left over from it.
+        private double CenterShift()
+        {
+            double left = StartButton.ActualWidth + (_mediaBox?.ActualWidth ?? 0) + (_mediaBox?.Margin.Left ?? 0);
+            return TrayBox.ActualWidth - left + _centerCorrection;
+        }
+
+        // The row of tabs is put in whole pixels, and moved only when it is off by more than a pixel: the boxes beside it are as wide as their text
+        // is (a fraction of a pixel more or less), and with the row centered by the layout that was a pixel to the left or the right, all the
+        // tabs together, now and then.
+        private void ApplyCenterMargin()
+        {
+            double pixel = 1 / System.Windows.Media.VisualTreeHelper.GetDpi(this).DpiScaleX;
+            double wanted = (_centerStrip.ActualWidth + CenterShift() - TaskListControl.ActualWidth) / 2;
+            if (double.IsNaN(_centerRowLeft) || Math.Abs(wanted - _centerRowLeft) > pixel * 0.75)
+            {
+                _centerRowLeft = Math.Max(0, Math.Round(wanted / pixel) * pixel);
+                _centerRow.Margin = new Thickness(_centerRowLeft, 0, 0, 0);
+            }
         }
 
         // What is left over from the sum above (the room beside the tabs in their list, the gaps the boxes have): the middle of the tabs is
@@ -167,9 +235,8 @@ namespace RetroBar
                 }
 
                 _centerCorrection += Math.Round(2 * off / pixel) * pixel;
-                double left = StartButton.ActualWidth + (_mediaBox?.ActualWidth ?? 0) + (_mediaBox?.Margin.Left ?? 0);
-                double shift = TrayBox.ActualWidth - left + _centerCorrection;
-                _centerRow.Margin = shift > 0 ? new Thickness(shift, 0, 0, 0) : new Thickness(0, 0, -shift, 0);
+                _centerRowLeft = double.NaN;
+                ApplyCenterMargin();
                 Dispatcher.BeginInvoke(new Action(() => CenterTabs(pass + 1)), System.Windows.Threading.DispatcherPriority.Loaded);
             }
             catch (InvalidOperationException)
