@@ -168,14 +168,18 @@
                                                              blurry. It falls on the right and bottom only (see PopupShadow). The 6 of margin around the
                                                              frame is the room it has to spread into (the converters that place the popup take it
                                                              off again, see PreviewShadowRoom). -->
-                                                        <controls:PopupShadow />
+                                                        <controls:PopupShadow Blur="{DynamicResource PreviewBlurBehind}" />
+                                                        <!-- (The tag is for a theme that gives the previews the widgets' frame, see Windows XFM Aero.) -->
                                                         <ContentControl Style="{DynamicResource TaskButtonThumbnail}"
+                                                                        Tag="PreviewPopup"
+                                                                        Padding="8"
                                                                         ClipToBounds="True"
                                                                         Margin="6">
                                                             <!-- One block per window of the tab (just the one, unless windows of an app are
                                                                  combined - see TaskButton.GroupWindows, kept in the button's Tag). Side by side
                                                                  on a top/bottom taskbar, stacked on a left/right one. -->
                                                             <ItemsControl x:Name="PreviewItems"
+                                                                          Effect="{DynamicResource PopupContentShadow}"
                                                                           ItemsSource="{Binding Path=PlacementTarget.Tag, RelativeSource={RelativeSource TemplatedParent}}">
                                                                 <ItemsControl.Style>
                                                                     <Style TargetType="ItemsControl">
@@ -271,7 +275,9 @@
                                                                                  instead of widening the whole preview. -->
                                                                             <!-- MonitorOffset.Tag: PreviewTitleRow - its Margin (the gap between the title/close
                                                                                  button row and the thumbnail) is tunable per monitor in monitor-adjustments.json. -->
-                                                                            <Grid Margin="0,0,0,3"
+                                                                            <!-- (6 under it, with the frame's padding of 8 over it: the 3 and 5 it had before the previews were given more
+                                                                                 room - the title is as far from the frame's top as from the picture, as it was.) -->
+                                                                            <Grid Margin="0,0,0,6"
                                                                                   utilities:MonitorOffset.Tag="PreviewTitleRow"
                                                                                   Width="{Binding ElementName=PreviewThumbnail, Path=Width}">
                                                                                 <Grid.ColumnDefinitions>
@@ -283,7 +289,7 @@
                                                                                 <Image x:Name="PreviewTitleIcon"
                                                                                        Width="16"
                                                                                        Height="16"
-                                                                                       Margin="1,0,2.4,0"
+                                                                                       Margin="1,0,5,0"
                                                                                        VerticalAlignment="Center"
                                                                                        UseLayoutRounding="True"
                                                                                        SnapsToDevicePixels="True"

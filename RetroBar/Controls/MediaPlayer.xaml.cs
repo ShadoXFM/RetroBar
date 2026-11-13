@@ -150,6 +150,7 @@ namespace RetroBar.Controls
 
             Settings.Instance.PropertyChanged += Settings_PropertyChanged;
             MonitorAdjustments.Changed += MonitorAdjustments_Changed;
+            PopupSlide.WindowSlideChanged += OnWindowSlideChanged;
 
             if (!Settings.Instance.ShowMediaPlayer)
             {
@@ -630,22 +631,102 @@ namespace RetroBar.Controls
             return hasPixels ? image : null;
         }
 
+        private bool _seekArtWidthHooked;
+
+        // The slider takes what the width of the art (or of what it would be) leaves of the row: that less the buttons, the time and 12.8
+        // (what the binding it was gave: RemainingWidthConverter with "12.8,30").
+        private System.Windows.Data.MultiBinding _sliderWidthBinding;
+
+        // With a picture the slider's width is the XAML's binding, as it always was. With none it is set here (replacing the binding, which is
+        // put back when there is a picture again): there is no picture to line the row up with, and it left a gap at each end, so the row is
+        // as wide as the popup's room and the slider takes the rest.
+        private void UpdateSeekSliderWidth()
+        {
+            if (_sliderWidthBinding == null)
+            {
+                _sliderWidthBinding = System.Windows.Data.BindingOperations.GetMultiBinding(SeekSlider, FrameworkElement.WidthProperty);
+            }
+
+            if (SeekAlbumArtImage.Visibility == Visibility.Visible)
+            {
+                if (_sliderWidthBinding != null && System.Windows.Data.BindingOperations.GetMultiBindingExpression(SeekSlider, FrameworkElement.WidthProperty) == null)
+                {
+                    System.Windows.Data.BindingOperations.SetBinding(SeekSlider, FrameworkElement.WidthProperty, _sliderWidthBinding);
+                }
+
+                return;
+            }
+
+            double total = SeekArtWidthRef.ActualWidth > 0 ? SeekArtWidthRef.ActualWidth : SeekArtWidthRef.Width;
+            if (double.IsNaN(total) || total <= 0 || SeekControlsRow.ActualWidth <= 0 || SeekSlider.ActualWidth <= 0)
+            {
+                return;
+            }
+
+            double width = Math.Max(30, total - (SeekControlsRow.ActualWidth - SeekSlider.ActualWidth));
+            if (double.IsNaN(SeekSlider.Width) || Math.Abs(SeekSlider.Width - width) > 0.01)
+            {
+                SeekSlider.Width = width;
+            }
+        }
+
+        // The popup is as wide as its art is, whatever the track: with no art the art's width is what it would be (its height is worked out
+        // from the buttons and the time whether there is a picture or not), so the slider and the popup do not shrink to nothing.
+        private void UpdateSeekArtWidthRef()
+        {
+            if (!_seekArtWidthHooked)
+            {
+                _seekArtWidthHooked = true;
+                SeekAlbumArtImage.SizeChanged += (s, e) => UpdateSeekArtWidthRef();
+                SeekFrame.LayoutUpdated += (s, e) =>
+                {
+                    if (SeekPopup.IsOpen)
+                    {
+                        UpdateSeekSliderWidth();
+                    }
+                };
+                UpdateSeekSliderWidth();
+                System.ComponentModel.DependencyPropertyDescriptor.FromProperty(FrameworkElement.HeightProperty, typeof(System.Windows.Controls.Image))
+                    ?.AddValueChanged(SeekAlbumArtImage, (s, e) => UpdateSeekArtWidthRef());
+            }
+
+            // With a picture the popup is as wide as the picture and this has no width at all, so nothing is changed from how it was.
+            double width = 0;
+            if (SeekAlbumArtImage.Visibility != Visibility.Visible)
+            {
+                double height = SeekAlbumArtImage.Height;
+                // The width the art would have, and what its margins (8.4 each side) hold between the row and the frame less the 2 this has
+                // (with a picture the row is that much wider than the picture, so the gap to the frame is the picture's margin less that).
+                width = double.IsNaN(height) || height <= 0 ? 0 : Math.Min(height, SeekAlbumArtImage.MaxHeight) + 12.8;
+            }
+
+            if (double.IsNaN(SeekArtWidthRef.Width) || Math.Abs(SeekArtWidthRef.Width - width) > 0.01)
+            {
+                SeekArtWidthRef.Width = width;
+            }
+
+            UpdateSeekSliderWidth();
+        }
+
         private void UpdateAlbumArt()
         {
             // Falls back to the source app's own taskbar icon (e.g. foobar2000's) when the track
             // itself has no embedded/reported cover art, instead of showing nothing - any player,
             // not just one specific app. FindSourceAppWindow does a small linear search, so it's
             // looked up once and reused for both images below rather than twice.
-            ApplicationWindow sourceWindow = Settings.Instance.ShowMediaPlayerAlbumArt ? FindSourceAppWindow() : null;
+            // (No longer: a track with no cover has no art, not the app's icon - see below.)
 
             // An image with nothing in it (a source that has no cover, and an icon the system gives blank) is no art: it left an empty
-            // gap where the art would be.
+            // gap where the art would be. Nor is a logo the player gives as the cover when it has none (VLC's cone, foobar2000's logo): it is
+            // the app's icon by another way, and the track has no art.
             ImageSource cover = Settings.Instance.ShowMediaPlayerAlbumArt ? Visible(_sessionManager?.Thumbnail) : null;
-            ImageSource art = cover ?? (Settings.Instance.ShowMediaPlayerAlbumArt ? Visible(sourceWindow?.Icon) : null);
+            if (cover != null && IsTransparentLogo(cover))
+            {
+                cover = null;
+            }
 
-            // The app's icon in place of a cover, or a logo the player gives as the cover (VLC's cone, foobar2000's logo): it has clear parts,
-            // which the VU meter shows behind.
-            _albumArtIsAppIcon = art != null && (cover == null || IsTransparentLogo(cover));
+            ImageSource art = cover;
+            _albumArtIsAppIcon = false;
 
             AlbumArtImage.Source = art;
             // Hidden, not Visible/Collapsed: it still reserves its normal layout slot (used
@@ -659,9 +740,15 @@ namespace RetroBar.Controls
             // taskbar row uses, since the popup shows it much bigger - the app icon fallback has
             // no separate large version, so it's reused as-is here too (a small icon, upscaled by
             // the popup's own Image, beats nothing).
-            ImageSource largeArt = Settings.Instance.ShowMediaPlayerAlbumArt ? Visible(_sessionManager?.LargeThumbnail) ?? Visible(sourceWindow?.Icon) : null;
+            ImageSource largeArt = Settings.Instance.ShowMediaPlayerAlbumArt ? Visible(_sessionManager?.LargeThumbnail) : null;
+            if (largeArt != null && (cover == null || IsTransparentLogo(largeArt)))
+            {
+                largeArt = null;
+            }
+
             SeekAlbumArtImage.Source = largeArt;
             SeekAlbumArtImage.Visibility = largeArt == null ? Visibility.Collapsed : Visibility.Visible;
+            UpdateSeekArtWidthRef();
             UpdateSeekAccent(largeArt ?? art);
 
             if (art == null)
@@ -1244,6 +1331,7 @@ namespace RetroBar.Controls
         {
             Settings.Instance.PropertyChanged -= Settings_PropertyChanged;
             MonitorAdjustments.Changed -= MonitorAdjustments_Changed;
+            PopupSlide.WindowSlideChanged -= OnWindowSlideChanged;
             DetachBarWheel();
             Stop();
             _isLoaded = false;

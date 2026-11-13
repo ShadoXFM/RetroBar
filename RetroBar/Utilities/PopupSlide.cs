@@ -111,6 +111,14 @@ namespace RetroBar.Utilities
             Thickness margin = _edgeFrame.Margin;
             _edgeFrame.Margin = new Thickness(_edgeRoom, margin.Top, _edgeRoom, margin.Bottom);
 
+            // A theme with a strong shadow keeps the room for it at the edge of the screen too (PopupShadowKeepRoom): the frame there is as far
+            // from the edge as the shadow needs, not as near as it is to the taskbar - the shadow was cut by the edge of the screen on that side
+            // and was a fraction of what it is on the others.
+            if (_edgeFrame.TryFindResource("PopupShadowKeepRoom") is true)
+            {
+                return;
+            }
+
             _edgeFrame.Dispatcher.BeginInvoke(new Action(() =>
             {
                 if (Window.GetWindow(_popup) is not Window taskbar ||
@@ -178,8 +186,10 @@ namespace RetroBar.Utilities
                 return null;
             }
 
+            // Negative when the popup's window ends above the taskbar (the widgets' popups sit a good way over it): the edge it is cut at while
+            // it slides is still the top of the taskbar, not where the window ends (it was cut there, above the bar, with a gap).
             double scale = VisualTreeHelper.GetDpi(clipRoot).DpiScaleY;
-            return Math.Max(0, (popup.Bottom - bar.Top) / scale);
+            return (popup.Bottom - bar.Top) / scale;
         }
 
         /// <summary>True while it slides away (the popup closes when that is done).</summary>
@@ -304,9 +314,7 @@ namespace RetroBar.Utilities
         private int _winLeft, _winTop, _winWidth, _winHeight, _winEdge;
         private double _winDistance;
         private double _winD;
-        private double _winLastD;
         private int _winAnimId;
-        private EventHandler _winTick;
 
         private const uint SWP_NOSIZE = 0x0001;
         private const uint SWP_NOZORDER = 0x0004;
@@ -344,8 +352,7 @@ namespace RetroBar.Utilities
                 return false;
             }
 
-            int edge = r.Bottom - (int)Math.Round(overlap.Value * VisualTreeHelper.GetDpi(_clipRoot).DpiScaleY);
-            if (edge - r.Top <= 0 || r.Right - r.Left <= 0)
+            int edge = r.Bottom - (int)Math.Round(overlap.Value * VisualTreeHelper.GetDpi(_clipRoot).DpiScaleY);            if (edge - r.Top <= 0 || r.Right - r.Left <= 0)
             {
                 return false;
             }
@@ -362,25 +369,52 @@ namespace RetroBar.Utilities
             PopupBlur.SetEdge(_winHandle, edge);
             _winDistance = edge - r.Top;
             _winD = 0;
-            _winLastD = 0;
             _winActive = true;
             return true;
         }
 
         // d pixels down from where the window rests; what is below the taskbar's edge is not shown.
+        // The window's region and its place are two calls, and the compositor takes what it has been given at the start of each frame it
+        // composes: when that start fell between the two calls the frame had one of them and not the other, and for that frame the popup was
+        // either over the taskbar (up to the distance it moves in a frame, 20-30 px at the fastest) or cut short above it. Measured on a window
+        // of the same kind: 12-20% of the frames with the calls made at a random time, and none with both made 0.5 to 3 ms after the compositor
+        // had finished a frame (see StartWindowAnimation). So the cut is where the window is, with no lead.
+        // What is left of that, when a frame still has one call and not the other, is made the harmless one: going up (coming in) the window is
+        // moved first and cut after, so a frame that has only the move shows the popup cut a little short above the bar; going down (away) it
+        // is cut first and moved after, so a frame that has only the cut shows it short too. The other way round each was the popup over the
+        // bar for a frame (measured: the cut first going up, and the move first going down, were the only ones with a popup over the bar).
         private void ApplyWindowD(double d)
         {
-            // The window's region reaches the screen a frame after the window's place does: going down, the part below the taskbar's edge was
-            // seen for that frame (up to 40 px of the popup over the bar while it went away). So the cut is made where the window will be: one
-            // frame of travel further down, and before the window moves.
-            double delta = d - _winLastD;
-            _winLastD = d;
+            // Measured on the real popup (a solid colour over its frame, the screen recorded): the move first and the cut after was right in every
+            // frame (open: 274 of 274), and the cut first and the move after had the popup cut short by a frame of travel in the frames going
+            // down - the redraw the cut asks for was drawn at the place the window had before the move, for a frame. So always this order.
+            const bool goingUp = true;
             _winD = d;
             int top = _winTop + (int)Math.Round(d);
-            int lead = delta > 0 ? (int)Math.Round(delta) : 0;
-            int visible = Math.Max(0, Math.Min(_winHeight, _winEdge - top - lead));
-            SetWindowRgn(_winHandle, CreateRectRgn(0, 0, _winWidth, visible), true);
-            SetWindowPos(_winHandle, IntPtr.Zero, _winLeft, top, 0, 0, SWP_NOSIZE | SWP_NOZORDER | SWP_NOACTIVATE);
+            int visible = Math.Max(0, Math.Min(_winHeight, _winEdge - top));
+            long t0 = System.Diagnostics.Stopwatch.GetTimestamp();
+            long t1, t2;
+            if (goingUp)
+            {
+                SetWindowPos(_winHandle, IntPtr.Zero, _winLeft, top, 0, 0, SWP_NOSIZE | SWP_NOZORDER | SWP_NOACTIVATE);
+                t1 = System.Diagnostics.Stopwatch.GetTimestamp();
+                SetWindowRgn(_winHandle, CreateRectRgn(0, 0, _winWidth, visible), true);
+                t2 = System.Diagnostics.Stopwatch.GetTimestamp();
+            }
+            else
+            {
+                SetWindowRgn(_winHandle, CreateRectRgn(0, 0, _winWidth, visible), true);
+                t1 = System.Diagnostics.Stopwatch.GetTimestamp();
+                SetWindowPos(_winHandle, IntPtr.Zero, _winLeft, top, 0, 0, SWP_NOSIZE | SWP_NOZORDER | SWP_NOACTIVATE);
+                t2 = System.Diagnostics.Stopwatch.GetTimestamp();
+            }
+
+            double f = 1000.0 / System.Diagnostics.Stopwatch.Frequency;
+            if (_winRun != null)
+            {
+                _winRun.RgnTotal += (goingUp ? t2 - t1 : t1 - t0) * f;
+                _winRun.PosTotal += (goingUp ? t1 - t0 : t2 - t1) * f;
+            }
         }
 
         private IntPtr _earlyHandle;
@@ -434,40 +468,214 @@ namespace RetroBar.Utilities
             return true;
         }
 
+        [DllImport("dwmapi.dll")]
+        private static extern int DwmFlush();
+
+        // The calls that move the window are made at the right time in the compositor's cycle: a thread of its own waits for the compositor to
+        // finish a frame (DwmFlush), waits a moment more, and has the window moved on the UI thread, from the time (not from a count of
+        // frames: a frame that comes late does not make the slide late). A frame that the UI thread could not take up by then is left out
+        // (the next one is as good) rather than moved at a time when the compositor may be starting its own.
+        private const double SlidePhaseMilliseconds = 1.0;
+        private const double SlideLateMilliseconds = 2.2;
+
+        private sealed class SlideRun
+        {
+            public volatile bool Cancelled;
+            public bool Counted;
+            public int Skipped;
+            public int Moved, Left, Late;
+            public double MaxLate, ApplyTotal, ApplyMax;
+            public double RgnTotal, PosTotal, GapTotal;
+            public System.Windows.Threading.DispatcherTimer Fallback;
+        }
+
+        private SlideRun _winRun;
+
+        // While a popup's window is moved (and cut) nothing else of this program that is drawn in a layered window should be redrawn in every
+        // frame (the taskbar's VU meter, the lyrics): the system takes the window's place and its cut in two calls, and a window that is drawn
+        // again at that time holds them up (the move took 3-4 ms instead of 0.7, and 40-70% of the frames had the popup over the bar or cut
+        // short above it). Those draw nothing for the 150-200 ms of the slide.
+        public static int ActiveWindowSlides { get; private set; }
+
+        /// <summary>Raised (on the UI thread) when the first popup window starts to slide (true) and when the last one has stopped (false):
+        /// what draws in every frame holds still for it (the taskbar's title slides, see MediaPlayer.Marquee).</summary>
+        public static event Action<bool> WindowSlideChanged;
+
+        /// <summary>The same for a popup window that is dragged by the user (the media popup): what draws in every frame holds still while it is.</summary>
+        public static void CountMotion(int change) => CountSlide(change);
+
+        private static void CountSlide(int change)
+        {
+            int before = ActiveWindowSlides;
+            ActiveWindowSlides = Math.Max(0, ActiveWindowSlides + change);
+            if ((before == 0) != (ActiveWindowSlides == 0))
+            {
+                WindowSlideChanged?.Invoke(ActiveWindowSlides > 0);
+            }
+        }
+
         private void StartWindowAnimation(double from, double to, Duration duration, IEasingFunction ease, Action done)
         {
             StopWindowAnimation();
             int id = ++_winAnimId;
-            _winTick = (s, e) =>
+            var run = new SlideRun();
+            _winRun = run;
+            CountSlide(1);
+            run.Counted = true;
+            System.Windows.Threading.Dispatcher dispatcher = _slideHost.Dispatcher;
+            double length = duration.HasTimeSpan ? duration.TimeSpan.TotalMilliseconds : 0;
+            var clock = System.Diagnostics.Stopwatch.StartNew();
+            bool finished = false;
+            long[] probeTicks = (long[])SlideProbe.Ticks.Clone();
+            int[] probeCount = (int[])SlideProbe.Count.Clone();
+
+            void Finish()
             {
-                if (_winActive)
-                {
-                    ApplyWindowD(_transform.Y);
-                }
-            };
-            CompositionTarget.Rendering += _winTick;
-            var slide = new DoubleAnimation(from, to, duration) { EasingFunction = ease };
-            slide.Completed += (s, e) =>
-            {
-                if (id != _winAnimId || !_winActive)
+                if (finished || run.Cancelled || id != _winAnimId || !_winActive)
                 {
                     return;
                 }
 
+                finished = true;
+                run.Cancelled = true;
+                run.Fallback?.Stop();
+                if (run.Counted)
+                {
+                    run.Counted = false;
+                    CountSlide(-1);
+                }
+
+                string hooks = "";
+                string[] hookNames = { "blur", "barblur", "orb", "orbmenu", "z" };
+                for (int h = 0; h < hookNames.Length; h++)
+                {
+                    hooks += $" {hookNames[h]} {(SlideProbe.Ticks[h] - probeTicks[h]) * 1000.0 / System.Diagnostics.Stopwatch.Frequency:F1}ms/{SlideProbe.Count[h] - probeCount[h]}";
+                }
+
+                ManagedShell.Common.Logging.ShellLogger.Info($"PopupSlide[{_popup.Name}]: {length:F0} ms slide, {run.Moved} frames moved, {run.Left} left out (UI thread late), {run.Late} moved late, latest start {run.MaxLate:F1} ms after the compositor's frame, a move takes {run.ApplyTotal / Math.Max(1, run.Moved):F2} ms (longest {run.ApplyMax:F2}), of it the region {run.RgnTotal / Math.Max(1, run.Moved):F2} ms and the place {run.PosTotal / Math.Max(1, run.Moved):F2} ms; hooks on this thread during it:{hooks}");
                 ApplyWindowD(to);
                 done();
-            };
-            _winLastD = from;
+            }
+
+            void Frame(long flushed)
+            {
+                if (run.Cancelled || id != _winAnimId || !_winActive)
+                {
+                    return;
+                }
+
+                double t = length > 0 ? clock.Elapsed.TotalMilliseconds / length : 1;
+                if (t >= 1)
+                {
+                    Finish();
+                    return;
+                }
+
+                double late = (System.Diagnostics.Stopwatch.GetTimestamp() - flushed) * 1000.0 / System.Diagnostics.Stopwatch.Frequency;
+                if (late > SlideLateMilliseconds && run.Skipped < 2)
+                {
+                    run.Skipped++;
+                    run.Left++;
+                    return;
+                }
+
+                if (late > SlideLateMilliseconds)
+                {
+                    run.Late++;
+                }
+
+                run.MaxLate = Math.Max(run.MaxLate, late);
+                run.Moved++;
+                run.Skipped = 0;
+                long applyStart = System.Diagnostics.Stopwatch.GetTimestamp();
+                ApplyWindowD(from + (to - from) * ease.Ease(t));
+                double took = (System.Diagnostics.Stopwatch.GetTimestamp() - applyStart) * 1000.0 / System.Diagnostics.Stopwatch.Frequency;
+                run.ApplyTotal += took;
+                run.ApplyMax = Math.Max(run.ApplyMax, took);
+            }
+
             ApplyWindowD(from);
-            _transform.BeginAnimation(TranslateTransform.YProperty, slide);
+
+            // One thread only waits for the compositor, and goes on waiting at once: how long a move takes on the UI thread (a few ms, with what
+            // the popup does when its window moves) does not make it miss the next frame, which a single loop did (a move every other frame).
+            long lastFlush = 0;
+            var flushed = new System.Threading.AutoResetEvent(false);
+            var flusher = new System.Threading.Thread(() =>
+            {
+                while (!run.Cancelled)
+                {
+                    if (DwmFlush() != 0)
+                    {
+                        System.Threading.Thread.Sleep(4);
+                    }
+
+                    System.Threading.Volatile.Write(ref lastFlush, System.Diagnostics.Stopwatch.GetTimestamp());
+                    flushed.Set();
+                }
+            })
+            {
+                IsBackground = true,
+                Priority = System.Threading.ThreadPriority.AboveNormal,
+                Name = "PopupSlide frames",
+            };
+            var mover = new System.Threading.Thread(() =>
+            {
+                while (!run.Cancelled)
+                {
+                    if (!flushed.WaitOne(50))
+                    {
+                        continue;
+                    }
+
+                    long flush = System.Threading.Volatile.Read(ref lastFlush);
+                    long until = flush + (long)(SlidePhaseMilliseconds * System.Diagnostics.Stopwatch.Frequency / 1000.0);
+                    while (System.Diagnostics.Stopwatch.GetTimestamp() < until)
+                    {
+                        System.Threading.Thread.SpinWait(20);
+                    }
+
+                    if (run.Cancelled)
+                    {
+                        break;
+                    }
+
+                    try
+                    {
+                        dispatcher.Invoke(() => Frame(flush), System.Windows.Threading.DispatcherPriority.Send);
+                    }
+                    catch (Exception)
+                    {
+                        break;
+                    }
+                }
+            })
+            {
+                IsBackground = true,
+                Priority = System.Threading.ThreadPriority.AboveNormal,
+                Name = "PopupSlide moves",
+            };
+            flusher.Start();
+            mover.Start();
+
+            // If the compositor gives no frames (nothing is being shown) the slide still ends.
+            run.Fallback = new System.Windows.Threading.DispatcherTimer { Interval = TimeSpan.FromMilliseconds(length + 300) };
+            run.Fallback.Tick += (s, e) => Finish();
+            run.Fallback.Start();
         }
 
         private void StopWindowAnimation()
         {
-            if (_winTick != null)
+            if (_winRun != null)
             {
-                CompositionTarget.Rendering -= _winTick;
-                _winTick = null;
+                _winRun.Cancelled = true;
+                _winRun.Fallback?.Stop();
+                if (_winRun.Counted)
+                {
+                    _winRun.Counted = false;
+                    CountSlide(-1);
+                }
+
+                _winRun = null;
             }
 
             ++_winAnimId;
@@ -633,7 +841,9 @@ namespace RetroBar.Utilities
                     // (The blur goes when the darker glass is there to take its place.)
                     PopupBlur.Suppress(_winHandle, true);
                     PopupBlur.Refresh(_winHandle);
-                    StartWindowAnimation(_winD, _winDistance, duration, new CubicEase { EasingMode = EasingMode.EaseIn }, () =>
+                    // (A quadratic ease: the cubic one ended at three times the average speed, and a frame with the cut and the move not together
+                    // showed the popup short by that much - 20 px - where this ends at twice, 13.)
+                    StartWindowAnimation(_winD, _winDistance, duration, new QuadraticEase { EasingMode = EasingMode.EaseIn }, () =>
                     {
                         if (Closing)
                         {
@@ -751,7 +961,8 @@ namespace RetroBar.Utilities
                 return;
             }
 
-            _clipRoot.Clip = new RectangleGeometry(new Rect(0, 0, _clipRoot.ActualWidth, Math.Max(0, _clipRoot.ActualHeight - overlap.Value)));
+            _clipRoot.Clip = new RectangleGeometry(new Rect(0, 0, _clipRoot.ActualWidth, Math.Max(0, _clipRoot.ActualHeight - Math.Max(0, overlap.Value))));
         }
     }
 }
+

@@ -17,7 +17,14 @@
     <!-- The popups' shadow falls all round them (it is what sets the glass frames off) and is stronger. -->
     <system:Boolean x:Key="PopupShadowAllSides">True</system:Boolean>
     <system:Double x:Key="PopupShadowBoost">1.4</system:Double>
-    <system:Double x:Key="MediaPopupShadowStrength">0.75</system:Double>
+    <!-- A stronger and bigger shadow: a second one under the first, wider, and both spread 10 instead of 8. The rectangle that casts them reaches
+         only half a DIP past the frame (3 left a thick black line round it). -->
+    <system:Double x:Key="PopupShadowSpread">0.5</system:Double>
+    <system:Double x:Key="PopupShadowBlur">10</system:Double>
+    <system:Boolean x:Key="PopupShadowSecond">True</system:Boolean>
+    <system:Boolean x:Key="PopupShadowKeepRoom">True</system:Boolean>
+    <!-- A tab's frame is as tall as the bar's room for it: only a frame measured as tall is taken as the size of the tabs (see TaskList.PlausibleTabHeight). -->
+    <system:Boolean x:Key="TaskFrameFillsBar">True</system:Boolean>    <system:Double x:Key="MediaPopupShadowStrength">0.75</system:Double>
     <!-- The popups' frames are blurred behind like the bar's glass (see PopupBlur). -->
     <system:Boolean x:Key="PopupBlurBehind">True</system:Boolean>
     <!-- The words of the media popup's lyrics have a faint shadow under them (see MediaPlayer.Lyrics.cs). -->
@@ -63,6 +70,24 @@
                 Stretch="Fill"
                 ViewportUnits="Absolute"
                 Viewport="0,-283,1130,600" />
+    <!-- The same reflection for a popup, which is not tiled: the bar is 40 tall and shows the middle of the picture, but a popup (the weather's
+         forecast, the media popup) is taller than the 317 that the picture's tile has under the bar's offset, and the picture began again
+         there, its streaks not meeting the ones above. From the top of the picture, which is 600 tall, and once. -->
+    <ImageBrush x:Key="PopupSheenBrush"
+                ImageSource="{StaticResource Win7ReflectionImage}"
+                TileMode="None"
+                Stretch="Fill"
+                ViewportUnits="Absolute"
+                Viewport="0,0,1130,600" />
+    <!-- The tab previews have no blur window under them, as the widgets' popups have none (and their frame, see TaskButtonThumbnail). -->
+    <system:Boolean x:Key="PreviewBlurBehind">False</system:Boolean>
+    <!-- A soft dark glow behind the text, the icons and the lines of the popups (the widgets', the previews', the media popup's): they are drawn
+         over glass, which is as light as what is behind it. One effect on a whole block of them, not one on each. -->
+    <DropShadowEffect x:Key="PopupContentShadow"
+                      BlurRadius="3.5"
+                      ShadowDepth="0"
+                      Opacity="0.92"
+                      Color="Black" />
     <SolidColorBrush x:Key="TaskbarWindowBackground" Color="Transparent" />
     <SolidColorBrush x:Key="TaskbarTopBorder" Color="#e5474747" />
     <SolidColorBrush x:Key="TaskbarTopInnerBorder" Color="#e59e9e9e" />
@@ -518,7 +543,7 @@
                          the bar on half pixels (soft glass, soft text): on for what is in the bar. -->
                     <Grid UseLayoutRounding="True"
                           SnapsToDevicePixels="True">
-                        <Border Background="#B80C0C0C" />
+                        <Border x:Name="BarBackdrop" Background="#B80C0C0C" />
                         <utilities:NineSlice x:Name="BarGlass"
                                             Source="{StaticResource Win7TaskbarImage}"
                                             Margins="0,2,0,0" />
@@ -530,6 +555,13 @@
                         <ContentPresenter Name="Content" />
                     </Grid>
                     <ControlTemplate.Triggers>
+                        <!-- "Allow blur behind transparent taskbar" off: nothing is seen through the glass - what is behind it is black. -->
+                        <DataTrigger Binding="{Binding Source={x:Static utilities:Settings.Instance}, Path=AllowBlurBehind}"
+                                     Value="False">
+                            <Setter TargetName="BarBackdrop"
+                                    Property="Background"
+                                    Value="Black" />
+                        </DataTrigger>
                         <DataTrigger Binding="{Binding Path=Orientation, RelativeSource={RelativeSource Mode=FindAncestor, AncestorType={x:Type Window}}}"
                                      Value="Vertical">
                             <DataTrigger.Setters>
@@ -855,7 +887,8 @@
                                                 StateCount="10"
                                                 State="6"
                                                 Opacity="0" />
-                            <Border x:Name="HotGlow" utilities:HotTrackGlow.Enabled="True" Opacity="0" IsHitTestVisible="False" Margin="2" CornerRadius="2" />
+                            <!-- A tab that flashes for attention: the light under the pointer is the amber of its glass, not the icon's colour. -->
+                            <Border x:Name="HotGlow" utilities:HotTrackGlow.Enabled="True" utilities:HotTrackGlow.FixedColor="#F2B52A" Opacity="0" IsHitTestVisible="False" Margin="2" CornerRadius="2" />
                             <ContentPresenter Margin="4,6"
                                               x:Name="Content" />
                             </Grid>
@@ -965,6 +998,29 @@
         </Setter>
     </Style>
 
+    <!-- What has been played, in the groove: the same box as the groove (5 tall, in the same place, so the two come out on the same pixels at any scale)
+         with the fill inside its border, one in from the top and the bottom, and a little in from the left, where the groove's end is rounded (from
+         its very edge the fill stuck out of it). -->
+    <Style TargetType="RepeatButton"
+           x:Key="MediaSeekSliderProgressButtonStyle"
+           BasedOn="{StaticResource MediaSeekSliderProgressButtonStyle}">
+        <Setter Property="Template">
+            <Setter.Value>
+                <ControlTemplate TargetType="RepeatButton">
+                    <Border Background="Transparent">
+                        <Border VerticalAlignment="Center"
+                                Height="5">
+                            <!-- (From the groove's own border inwards, with its end's roundness: no black gap between the fill and the groove's end.) -->
+                            <Border Margin="1,1,0,1"
+                                    CornerRadius="1.5,0,0,1.5"
+                                    Background="{DynamicResource MediaSeekProgress}" />
+                        </Border>
+                    </Border>
+                </ControlTemplate>
+            </Setter.Value>
+        </Setter>
+    </Style>
+
     <Style TargetType="Slider"
            x:Key="MediaSeekSliderStyle"
            BasedOn="{StaticResource MediaSeekSliderStyle}">
@@ -1066,6 +1122,12 @@
     <!-- The same frame, darker and nearly opaque: the glass of the popups that have no blur under them (attached to the taskbar, the widgets'). -->
     <BitmapImage x:Key="MediaPopupAttachedImage"
                  UriSource="../Resources/popupframe-attached.png" />
+    <!-- The same with next to no fill: the glass of a popup that has the system's blur behind it (OpenGlass), which is all its glass is. -->
+    <BitmapImage x:Key="GlassPopupFrameImage"
+                 UriSource="../Resources/popupframe-glass.png" />
+    <!-- The same, with the fill more see-through (a little over half as strong): the tab previews'. -->
+    <BitmapImage x:Key="PreviewPopupFrameImage"
+                 UriSource="../Resources/popupframe-preview.png" />
     <BitmapImage x:Key="MenuFrameImage"
                  UriSource="../Resources/xfmmenuframe.png" />
     <BitmapImage x:Key="MenuSelectionImage"
@@ -1189,10 +1251,11 @@
                                              Crisp="True"
                                              Margins="8,8,8,8" />
                         <!-- The glass reflection of Windows 7 over the glass, as on the taskbar. -->
-                        <Border CornerRadius="6"
+                        <Border x:Name="Sheen"
+                                CornerRadius="6"
                                 Margin="1"
                                 IsHitTestVisible="False"
-                                Background="{DynamicResource TaskbarSheenBrush}" />
+                                Background="{DynamicResource PopupSheenBrush}" />
                         <Border Padding="3,4">
                             <ContentPresenter />
                         </Border>
@@ -1202,6 +1265,11 @@
                         <Trigger Property="Tag" Value="Attached">
                             <Setter TargetName="Frame" Property="Source" Value="{DynamicResource MediaPopupAttachedImage}" />
                         </Trigger>
+                        <!-- With the system's blur behind it (OpenGlass) the glass is that blur, with no black over it. -->
+                        <DataTrigger Binding="{Binding Available, Source={x:Static utilities:DwmBlurState.Instance}}" Value="True">
+                            <Setter TargetName="Frame" Property="Source" Value="{DynamicResource GlassPopupFrameImage}" />
+                            <Setter TargetName="Sheen" Property="Visibility" Value="Collapsed" />
+                        </DataTrigger>
                     </ControlTemplate.Triggers>
                 </ControlTemplate>
             </Setter.Value>
@@ -1212,6 +1280,8 @@
            x:Key="TaskButtonThumbnail">
         <Setter Property="UseLayoutRounding" Value="True" />
         <Setter Property="SnapsToDevicePixels" Value="True" />
+        <!-- The room between the frame and what is in it: the widgets' popups have this, and the tab previews a little more (see TaskButton.xaml). -->
+        <Setter Property="Padding" Value="5" />
         <Setter Property="Template">
             <Setter.Value>
                 <ControlTemplate TargetType="ContentControl">
@@ -1225,8 +1295,8 @@
                                 Margin="1"
                                 IsHitTestVisible="False"
                                 Visibility="Collapsed"
-                                Background="{DynamicResource TaskbarSheenBrush}" />
-                        <Border Padding="5">
+                                Background="{DynamicResource PopupSheenBrush}" />
+                        <Border x:Name="PreviewPadding" Padding="{TemplateBinding Padding}">
                             <ContentPresenter />
                         </Border>
                     </Grid>
@@ -1236,6 +1306,18 @@
                             <Setter TargetName="Frame" Property="Source" Value="{DynamicResource MediaPopupAttachedImage}" />
                             <Setter TargetName="Sheen" Property="Visibility" Value="Visible" />
                         </Trigger>
+                        <Trigger Property="Tag" Value="PreviewPopup">
+                            <Setter TargetName="Frame" Property="Source" Value="{DynamicResource PreviewPopupFrameImage}" />
+                            <Setter TargetName="Sheen" Property="Visibility" Value="Visible" />
+                        </Trigger>
+                        <!-- With the blur made by the system (OpenGlass) behind the popup the frame is the see-through one, which is all the glass
+                             there is, for the widgets' popups and the previews both (after them: it is the last that counts). -->
+                        <DataTrigger Binding="{Binding Available, Source={x:Static utilities:DwmBlurState.Instance}}" Value="True">
+                            <Setter TargetName="Frame" Property="Source" Value="{DynamicResource GlassPopupFrameImage}" />
+                            <!-- (And no sheen of ours: the system's blur has the reflection of Windows 7 of its own, and with both the glass had
+                                 two sets of streaks, which lit the corners differently.) -->
+                            <Setter TargetName="Sheen" Property="Visibility" Value="Collapsed" />
+                        </DataTrigger>
                     </ControlTemplate.Triggers>
                 </ControlTemplate>
             </Setter.Value>

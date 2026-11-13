@@ -166,11 +166,105 @@ namespace RetroBar.Utilities
             {
                 if (current is FrameworkElement fe && Gates.TryGetValue(fe, out Func<bool> gate))
                 {
-                    return gate();
+                    // (Called for what it does when the blur is made by the system: see DirectAvailable.)
+                    bool allowed = gate();
+                    return allowed || DirectAvailable;
                 }
             }
 
             return true;
+        }
+
+        // ---- The blur made by the system itself (OpenGlass, in the desktop window manager) ----
+        // A glass tool that draws the blur in the compositor (OpenGlass) takes the shape of the blur from DwmEnableBlurBehindWindow, on any window
+        // - a layered popup too, which the blur of the accent policy fills whole (a black box with OpenGlass). Asked of the popup's own window,
+        // the blur is drawn in the same frame the window is moved in (no second window a few frames behind it), is cut with the window's region
+        // when it slides over the taskbar, and needs no gate, no darker glass while it moves, nor fade-in. Measured with a test window of the same
+        // kind: the blur in the frame's rounded shape, over a cut, and over a move. Without such a tool the old way (below) is what there is.
+        private static long _directCheckedAt;
+        private static bool _directAvailable;
+
+        /// <summary>True when the system draws a blur for DwmEnableBlurBehindWindow (OpenGlass is running).</summary>
+        internal static bool DirectAvailable
+        {
+            get
+            {
+                long now = Environment.TickCount64;
+                if (now - _directCheckedAt > 5000)
+                {
+                    _directCheckedAt = now;
+                    try
+                    {
+                        var hosts = System.Diagnostics.Process.GetProcessesByName("OpenGlassHost");
+                        _directAvailable = hosts.Length > 0;
+                        foreach (var host in hosts)
+                        {
+                            host.Dispose();
+                        }
+                    }
+                    catch (Exception)
+                    {
+                        _directAvailable = false;
+                    }
+                }
+
+                return _directAvailable;
+            }
+        }
+
+        private static readonly System.Collections.Generic.Dictionary<IntPtr, (int, int, int, int, int)> DirectApplied = new();
+
+        // Below this opacity (a preview fading in or away) the system's blur is off: it is drawn at full strength whatever the popup's opacity,
+        // a grey box with nothing on it while the frame was still transparent.
+        private const double DirectMinOpacity = 0.85;
+
+        private static void ApplyDirect(IntPtr popup, RECT window, Point frameTopLeft, Point frameBottomRight, double radius, double dpi, bool on = true)
+        {
+            if (!on)
+            {
+                var off = (-1, -1, -1, -1, -1);
+                if (DirectApplied.TryGetValue(popup, out var was) && was == off)
+                {
+                    return;
+                }
+
+                DirectApplied[popup] = off;
+                var none = new DwmBlurBehind { Flags = 1 /* DWM_BB_ENABLE */, Enable = false, Region = IntPtr.Zero };
+                DwmEnableBlurBehindWindow(popup, ref none);
+                return;
+            }
+
+            int width = window.Right - window.Left, height = window.Bottom - window.Top;
+            int l = Math.Max(0, (int)Math.Round(frameTopLeft.X) - window.Left);
+            int t = Math.Max(0, (int)Math.Round(frameTopLeft.Y) - window.Top);
+            int r = Math.Min(width, (int)Math.Round(frameBottomRight.X) - window.Left);
+            int b = Math.Min(height, (int)Math.Round(frameBottomRight.Y) - window.Top);
+            if (r <= l || b <= t)
+            {
+                return;
+            }
+
+            // The corners of the frame's image are 4 device pixels in radius whatever the scale (it is drawn pixel for pixel): the blur is cut to
+            // those, not to the radius in DIPs the old way's window was rounded by (6, which at 125% is 7.5 pixels: the blur showed round of
+            // the frame at each corner, and not alike, with the pixels of the region and of the image falling differently at each).
+            int diameter = 8;
+            var key = (l, t, r, b, diameter);
+            if (DirectApplied.TryGetValue(popup, out var applied) && applied == key)
+            {
+                return;
+            }
+
+            DirectApplied[popup] = key;
+            if (DirectApplied.Count > 64)
+            {
+                DirectApplied.Clear();
+                DirectApplied[popup] = key;
+            }
+
+            IntPtr region = diameter > 0 ? CreateRoundRectRgn(l, t, r + 1, b + 1, diameter, diameter) : CreateRectRgn(l, t, r, b);
+            var blur = new DwmBlurBehind { Flags = 3 /* DWM_BB_ENABLE | DWM_BB_BLURREGION */, Enable = true, Region = region };
+            DwmEnableBlurBehindWindow(popup, ref blur);
+            DeleteObject(region);
         }
 
         // While a popup's window slides over the taskbar (see PopupSlide), what is below the taskbar's edge is not shown: nor may the blur be, or
@@ -214,9 +308,9 @@ namespace RetroBar.Utilities
             }
         }
 
-        /// <summary>True when the theme asks for it: its glass blurs what is behind (AllowsBlurBehind), and its popups' frames are see-through.</summary>
+        /// <summary>True when the theme asks for it: its glass blurs what is behind (AllowsBlurBehind), and its popups' frames are see-through.
+        /// (Not the "allow blur behind transparent taskbar" setting: that one is for the taskbar's own glass.)</summary>
         private static bool Wanted(FrameworkElement element) =>
-            Settings.Instance.AllowBlurBehind &&
             element.TryFindResource("AllowsBlurBehind") is true &&
             element.TryFindResource("PopupBlurBehind") is true;
 
@@ -299,7 +393,8 @@ namespace RetroBar.Utilities
             {
                 IntPtr popup = source.Handle;
                 LastUpdated[popup] = (element, room);
-                if (Suppressed.Contains(popup))
+                bool direct = DirectAvailable;
+                if (Suppressed.Contains(popup) && !direct)
                 {
                     Hide(element);
                     return;
@@ -330,6 +425,17 @@ namespace RetroBar.Utilities
                         Math.Max(0, element.ActualHeight - room.Top - room.Bottom));
                     frameTopLeft = element.PointToScreen(byRoom.TopLeft);
                     frameBottomRight = element.PointToScreen(byRoom.BottomRight);
+                }
+
+                if (direct)
+                {
+                    // The system draws the blur in the popup's own window, in the shape of the frame (a slide over the taskbar cuts it with the
+                    // window's region, as it cuts the popup); the blur window of the old way is not wanted.
+                    ApplyDirect(popup, window, frameTopLeft, frameBottomRight,
+                        element.TryFindResource("PopupBlurCornerRadius") is double cornerRadius ? cornerRadius : 0, toDevice.M11,
+                        EffectiveOpacity(element) >= DirectMinOpacity);
+                    Hide(element);
+                    return;
                 }
 
                 int left = Math.Max(window.Left, (int)Math.Round(frameTopLeft.X));

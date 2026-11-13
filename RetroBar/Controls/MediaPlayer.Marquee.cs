@@ -104,6 +104,11 @@ namespace RetroBar.Controls
 
         private void FadeRendering(object sender, EventArgs e)
         {
+            if (PopupSlide.ActiveWindowSlides > 0)
+            {
+                return;
+            }
+
             UpdateFades();
 
             // Only while a line slides: every frame of an idle taskbar is a frame it would not have to draw.
@@ -357,7 +362,14 @@ namespace RetroBar.Controls
         {
             DoubleAnimationUsingKeyFrames animation = CreateMarqueeAnimation(overflow);
 
-            TrackTextTransform.BeginAnimation(TranslateTransform.XProperty, animation);
+            // On a clock of its own, so that it can be held while a popup's window slides (see PauseMarquees).
+            AnimationClock clock = animation.CreateClock();
+            _marqueeClock = clock;
+            TrackTextTransform.ApplyAnimationClock(TranslateTransform.XProperty, clock);
+            if (PopupSlide.ActiveWindowSlides > 0)
+            {
+                clock.Controller.Pause();
+            }
 
             _marqueeRunning = true;
             _marqueeOverflow = overflow;
@@ -424,7 +436,8 @@ namespace RetroBar.Controls
             }
 
             _seekMarqueeOverflow[text] = overflow;
-            text.BeginAnimation(Canvas.LeftProperty, null);
+            text.ApplyAnimationClock(Canvas.LeftProperty, null);
+            _seekMarqueeClocks.Remove(text);
             Canvas.SetLeft(text, 0);
             fadeLeft.Opacity = 0;
             fadeRight.Opacity = 1;
@@ -432,8 +445,47 @@ namespace RetroBar.Controls
 
             if (overflow > 0)
             {
-                text.BeginAnimation(Canvas.LeftProperty, CreateMarqueeAnimation(overflow));
+                AnimationClock clock = CreateMarqueeAnimation(overflow).CreateClock();
+                _seekMarqueeClocks[text] = clock;
+                text.ApplyAnimationClock(Canvas.LeftProperty, clock);
+                if (PopupSlide.ActiveWindowSlides > 0)
+                {
+                    clock.Controller.Pause();
+                }
+
                 EnsureFadeRendering();
+            }
+        }
+
+        // The title slides are held while a popup's window slides (and go on from where they were): each redraws the taskbar's window, or the
+        // popup's own, in every frame, which holds up the calls that move and cut the sliding window (the move took 3-5 ms instead of 1, and
+        // the popup was seen cut or over the taskbar for a frame).
+        private AnimationClock _marqueeClock;
+        private readonly System.Collections.Generic.Dictionary<TextBlock, AnimationClock> _seekMarqueeClocks = new();
+
+        private void OnWindowSlideChanged(bool sliding)
+        {
+            var clocks = new System.Collections.Generic.List<AnimationClock>(_seekMarqueeClocks.Values);
+            if (_marqueeClock != null)
+            {
+                clocks.Add(_marqueeClock);
+            }
+
+            foreach (AnimationClock clock in clocks)
+            {
+                if (clock.Controller == null)
+                {
+                    continue;
+                }
+
+                if (sliding)
+                {
+                    clock.Controller.Pause();
+                }
+                else
+                {
+                    clock.Controller.Resume();
+                }
             }
         }
 
@@ -459,7 +511,8 @@ namespace RetroBar.Controls
         {
             if (_marqueeRunning)
             {
-                TrackTextTransform.BeginAnimation(TranslateTransform.XProperty, null);
+                TrackTextTransform.ApplyAnimationClock(TranslateTransform.XProperty, null);
+                _marqueeClock = null;
                 _marqueeRunning = false;
                 _marqueeOverflow = 0;
             }

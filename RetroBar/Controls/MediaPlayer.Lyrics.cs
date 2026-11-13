@@ -185,6 +185,7 @@ namespace RetroBar.Controls
             _lyricRows = new TextBlock[lines.Length];
             _lyricHosts = new Grid[lines.Length];
             _lyricGhosts = new TextBlock[lines.Length];
+            _lyricShadowDone = new bool[lines.Length];
             _lyricRuns = new Run[lines.Length][];
 
             // A duet has its second singer's lines on the right and the first one's on the left; the other lyrics are centered.
@@ -234,19 +235,86 @@ namespace RetroBar.Controls
                 var host = new Grid();
                 // A faint shadow under the words, in a theme that asks for one: a dark copy of the line behind it, a pixel lower and a little
                 // blurred (an effect on the line itself would soften its text, which the lines in focus avoid).
-                if (TryFindResource("MediaLyricsShadow") is true)
-                {
-                    // Under the words and at both sides of them: a wide soft one under, one at each side, and a tight one under that makes the edge.
-                    host.Children.Add(LyricShadowOf(row, 6.5, 2.4, 0, 0.7));
-                    host.Children.Add(LyricShadowOf(row, 3, 0.8, -2.4, 0.8));
-                    host.Children.Add(LyricShadowOf(row, 3, 0.8, 2.4, 0.8));
-                    host.Children.Add(LyricShadowOf(row, 2.6, 1.8, 0, 1));
-                }
-
                 host.Children.Add(row);
                 _lyricHosts[i] = host;
                 SeekLyricsPanel.Children.Add(host);
             }
+        }
+
+        private bool[] _lyricShadowDone;
+
+        // The shadows of the rows from first to last, made once the rows have a width to be laid out in (the popup has been shown).
+        private void EnsureLyricShadows(int first, int last)
+        {
+            if (_lyricShadowDone == null || TryFindResource("MediaLyricsShadow") is not true || SeekLyricsPanel.ActualWidth <= 0)
+            {
+                return;
+            }
+
+            for (int i = Math.Max(0, first); i <= Math.Min(last, _lyricRows.Length - 1); i++)
+            {
+                if (_lyricShadowDone[i])
+                {
+                    continue;
+                }
+
+                _lyricShadowDone[i] = true;
+                Image shadow = RenderLyricShadow(_lyricRows[i]);
+                if (shadow != null)
+                {
+                    _lyricHosts[i].Children.Insert(0, shadow);
+                }
+            }
+        }
+
+        // The shadows of a row (four blurred copies of its words: wide and soft under it, one at each side, a tight one for the edge) drawn once
+        // into a picture. As live blur effects they were drawn again, in software, in every frame the lyrics moved (a window like this one has no
+        // other way to draw them), which held the scroll to about 40 pictures a second.
+        private Image RenderLyricShadow(TextBlock row)
+        {
+            double width = SeekLyricsPanel.ActualWidth;
+            const double pad = 12;
+            DpiScale dpi = GetSeekDpi();
+            var content = new Grid { Width = width };
+            content.Children.Add(LyricShadowOf(row, 6.5, 2.4, 0, 0.7));
+            content.Children.Add(LyricShadowOf(row, 3, 0.8, -2.4, 0.8));
+            content.Children.Add(LyricShadowOf(row, 3, 0.8, 2.4, 0.8));
+            content.Children.Add(LyricShadowOf(row, 2.6, 1.8, 0, 1));
+            // (Their opacity is the row's, in the picture's own place: not in the copies, which are drawn at full.)
+            foreach (UIElement copy in content.Children)
+            {
+                BindingOperations.ClearBinding(copy, OpacityProperty);
+                copy.Opacity = 1;
+            }
+
+            var frame = new Border { Padding = new Thickness(pad), Child = content };
+            frame.Measure(new Size(width + 2 * pad, double.PositiveInfinity));
+            frame.Arrange(new Rect(frame.DesiredSize));
+            frame.UpdateLayout();
+            int pixelsX = (int)Math.Ceiling(frame.ActualWidth * dpi.DpiScaleX);
+            int pixelsY = (int)Math.Ceiling(frame.ActualHeight * dpi.DpiScaleY);
+            if (pixelsX <= 0 || pixelsY <= 0)
+            {
+                return null;
+            }
+
+            var bitmap = new System.Windows.Media.Imaging.RenderTargetBitmap(pixelsX, pixelsY, 96 * dpi.DpiScaleX, 96 * dpi.DpiScaleY, PixelFormats.Pbgra32);
+            bitmap.Render(frame);
+            bitmap.Freeze();
+            var image = new Image
+            {
+                Source = bitmap,
+                Stretch = Stretch.None,
+                Width = frame.ActualWidth,
+                Height = frame.ActualHeight,
+                Margin = new Thickness(-pad),
+                HorizontalAlignment = HorizontalAlignment.Left,
+                VerticalAlignment = VerticalAlignment.Top,
+                IsHitTestVisible = false,
+                SnapsToDevicePixels = true,
+            };
+            BindingOperations.SetBinding(image, OpacityProperty, new Binding(nameof(Opacity)) { Source = row, Mode = BindingMode.OneWay });
+            return image;
         }
 
         // A dark copy of a lyric row, which goes behind it as its shadow: the same words, a pixel and a half lower and a half to the right, blurred, as faint as the theme
@@ -282,7 +350,7 @@ namespace RetroBar.Controls
         }
 
         // The cover's colour, a little lighter than the one the meter and the spectrum have, to read on the popup's dark ground at this size.
-        private const double LyricAccentLighten = 0.3;
+        private const double LyricAccentLighten = 0.45;
 
         // The artist's name, brighter still (it is a short line, on the popup's dark ground).
         private const double ArtistAccentLighten = 0.55;
@@ -424,10 +492,17 @@ namespace RetroBar.Controls
             _lyricScrollToken++;
             SeekLyricsPanel.BeginAnimation(Canvas.TopProperty, null);
             Canvas.SetTop(SeekLyricsPanel, 0);
+            if (SeekLyricsPanel.RenderTransform is TranslateTransform scrolled)
+            {
+                scrolled.BeginAnimation(TranslateTransform.YProperty, null);
+                scrolled.Y = 0;
+            }
+
             SeekLyricsPanel.Children.Clear();
             _lyricRows = null;
             _lyricHosts = null;
             _lyricGhosts = null;
+            _lyricShadowDone = null;
             _lyricRuns = null;
             _lyricNeutral = null;
             StopLyricWords();
@@ -682,6 +757,33 @@ namespace RetroBar.Controls
             return ghost;
         }
 
+        // The shadows of a row follow its opacity (see LyricShadowOf), which in a cross-fade between the sharp look and the blurred one goes to 0 and
+        // back (the sharp text fades out under the copy that fades in): the shadows went with it, and came back at once at the end. They fade from
+        // what they were to what they are to be, as the copy does, and follow the row again when that is over.
+        private void FadeLyricShadows(int i, double from, double to, Duration duration, bool easeOut = false)
+        {
+            if (_lyricHosts?[i] is not Grid host)
+            {
+                return;
+            }
+
+            foreach (FrameworkElement shadow in host.Children.OfType<FrameworkElement>())
+            {
+                if (!ReferenceEquals(shadow, _lyricRows[i]) && !ReferenceEquals(shadow, _lyricGhosts?[i]))
+                {
+                    var animation = new DoubleAnimation(from, to, duration) { FillBehavior = FillBehavior.Stop };
+                    if (easeOut)
+                    {
+                        // As the scroll goes (fast at first): the glow of a line coming into focus is there while it is still on its way to the middle,
+                        // not when it has got there.
+                        animation.EasingFunction = new QuadraticEase { EasingMode = EasingMode.EaseOut };
+                    }
+
+                    shadow.BeginAnimation(OpacityProperty, animation);
+                }
+            }
+        }
+
         private void RemoveLyricGhost(int i)
         {
             if (_lyricGhosts?[i] is TextBlock ghost)
@@ -751,6 +853,7 @@ namespace RetroBar.Controls
                 };
                 ghost.BeginAnimation(OpacityProperty, ghostIn);
                 row.BeginAnimation(OpacityProperty, new DoubleAnimation(1, 0, LyricColorFadeOut));
+                FadeLyricShadows(i, 1, opacity, LyricColorFadeOut);
             }
             else if (fadingIn)
             {
@@ -766,34 +869,20 @@ namespace RetroBar.Controls
                 };
                 ghost.BeginAnimation(OpacityProperty, ghostOut);
                 row.BeginAnimation(OpacityProperty, new DoubleAnimation(0, opacity, LyricScroll));
+                FadeLyricShadows(i, oldOpacity, opacity, LyricScroll, easeOut: true);
             }
             else if (blur > 0 || oldBlur > 0)
             {
                 bool moves = animate && (oldBlur != blur || oldOpacity != opacity);
-                var effect = new BlurEffect { Radius = moves ? oldBlur : blur, RenderingBias = RenderingBias.Performance };
-                row.Effect = effect;
+                // The blur takes its new radius at once, and only the brightness changes over the scroll: the radius of a blur is not drawn by the
+                // render thread (it is worked out again, and the line drawn in software, in every frame, on the thread that is busy with the rest)
+                // and a scroll of a dozen lines blurring more or less came out at a low rate. A step of the radius from one distance to the next
+                // is a fraction of a pixel.
+                row.Effect = blur > 0 ? new BlurEffect { Radius = blur, RenderingBias = RenderingBias.Performance } : null;
                 if (moves)
                 {
                     var ease = new QuadraticEase { EasingMode = EasingMode.EaseOut };
                     row.BeginAnimation(OpacityProperty, new DoubleAnimation(oldOpacity, opacity, LyricScroll) { EasingFunction = ease });
-                    var radius = new DoubleAnimation(oldBlur, blur, LyricScroll) { EasingFunction = ease };
-                    if (blur == 0)
-                    {
-                        // A blur effect, even of nothing, softens the text: the lines in focus have none at rest.
-                        radius.Completed += (s, e) =>
-                        {
-                            if (token == _lyricScrollToken && IsInFocus(i))
-                            {
-                                row.Effect = null;
-                            }
-                        };
-                    }
-
-                    effect.BeginAnimation(BlurEffect.RadiusProperty, radius);
-                }
-                else if (blur == 0)
-                {
-                    row.Effect = null;
                 }
             }
 
@@ -872,6 +961,7 @@ namespace RetroBar.Controls
 
             int first = Math.Max(0, low - LyricStyledDistance - 1);
             int last = Math.Min(_lyricRows.Length - 1, high + LyricStyledDistance + 1);
+            EnsureLyricShadows(first, last);
             for (int i = first; i <= last; i++)
             {
                 StyleLyricRow(i, index, previous, before, animate, token);
@@ -885,12 +975,24 @@ namespace RetroBar.Controls
                 : LyricScrollFor(-1, -1, out visibleTop, out visibleBottom);
             UpdateLyricMask(visibleTop, visibleBottom, animate);
             double top = -scroll;
+            // The panel is put at its new place at once and moved there by a transform: an animation of Canvas.Top lays the panel out again in
+            // every frame, on the thread that is busy with everything else, and the scroll came out at a low rate. A transform's animation is
+            // drawn by the render thread, at the rate of the screen.
+            var move = SeekLyricsPanel.RenderTransform as TranslateTransform;
+            if (move == null)
+            {
+                move = new TranslateTransform();
+                SeekLyricsPanel.RenderTransform = move;
+            }
+
+            double from = Canvas.GetTop(SeekLyricsPanel) + move.Y;
             SeekLyricsPanel.BeginAnimation(Canvas.TopProperty, null);
-            double from = Canvas.GetTop(SeekLyricsPanel);
+            move.BeginAnimation(TranslateTransform.YProperty, null);
+            move.Y = 0;
             Canvas.SetTop(SeekLyricsPanel, top);
             if (animate && from != top)
             {
-                SeekLyricsPanel.BeginAnimation(Canvas.TopProperty, new DoubleAnimation(from, top, LyricScroll)
+                move.BeginAnimation(TranslateTransform.YProperty, new DoubleAnimation(from - top, 0, LyricScroll)
                 {
                     EasingFunction = new QuadraticEase { EasingMode = EasingMode.EaseOut },
                     FillBehavior = FillBehavior.Stop,
@@ -1091,6 +1193,11 @@ namespace RetroBar.Controls
                 return;
             }
 
+            if (RetroBar.Utilities.PopupSlide.ActiveWindowSlides > 0)
+            {
+                return;
+            }
+
             TimeSpan position = EstimatedSeekPosition() + LyricsLead;
             long now = Stopwatch.GetTimestamp();
             foreach (ActiveWordLine active in _activeLines)
@@ -1178,3 +1285,4 @@ namespace RetroBar.Controls
         }
     }
 }
+

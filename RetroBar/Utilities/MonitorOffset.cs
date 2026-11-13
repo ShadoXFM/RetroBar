@@ -283,7 +283,16 @@ namespace RetroBar.Utilities
 
             ApplyGeometry(element, offset.Geometry);
 
-            element.Effect = offset.Blur > 0 ? new System.Windows.Media.Effects.BlurEffect { Radius = offset.Blur.Value } : null;
+            // (Only the blur this sets: an element with an effect of its own - the glow behind a popup's text - keeps it. Setting null here took
+            // the glow off the media popup's controls row and lyrics, which have a tag.)
+            if (offset.Blur > 0)
+            {
+                element.Effect = new System.Windows.Media.Effects.BlurEffect { Radius = offset.Blur.Value };
+            }
+            else if (element.Effect is System.Windows.Media.Effects.BlurEffect)
+            {
+                element.Effect = null;
+            }
 
             if (offset.Bold.HasValue)
             {

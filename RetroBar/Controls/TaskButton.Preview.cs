@@ -1002,15 +1002,10 @@ namespace RetroBar.Controls
         // The hover fill reaches out over the padding between the previews and the frame's inner edge. That
         // padding is snapped to whole device pixels (see ButtonChromeDpiSnap), so at a scale like 125% it is a
         // little more than the 3 DIPs written in the XAML - and the fill, left at 3, fell a pixel short.
-        private static void FitHoverToFrame(PreviewItem item)
+        private static void FitHoverToFrame(PreviewItem item, List<PreviewItem> items)
         {
-            if (item.Hover.Tag != null)
-            {
-                return;
-            }
-
             DependencyObject parent = VisualTreeHelper.GetParent(item.Root);
-            while (parent != null && !(parent is Border { Name: "SnapBorder4" }))
+            while (parent != null && !(parent is Border { Name: "SnapBorder4" or "PreviewPadding" }))
             {
                 parent = VisualTreeHelper.GetParent(parent);
             }
@@ -1018,8 +1013,57 @@ namespace RetroBar.Controls
             if (parent is Border frame)
             {
                 Thickness padding = frame.Padding;
-                item.Hover.Margin = new Thickness(-padding.Left, -padding.Top, -padding.Right, -padding.Bottom);
-                item.Hover.Tag = "fitted";
+                // (A theme whose frame has a rounded outline, PreviewPadding: the fill stops a DIP inside it and is rounded, so it does not
+                // go out over the corners.)
+                double inset = frame.Name == "PreviewPadding" ? 1 : 0;
+                // Towards another preview the fill stops half way across the gap between them, not at the frame's edge (it went over the
+                // neighbour's fill, and over the neighbour itself).
+                double left = padding.Left, top = padding.Top, right = padding.Right, bottom = padding.Bottom;
+                try
+                {
+                    Rect mine = item.Root.TransformToAncestor(frame).TransformBounds(new Rect(0, 0, item.Root.ActualWidth, item.Root.ActualHeight));
+                    foreach (PreviewItem other in items)
+                    {
+                        if (ReferenceEquals(other, item) || other.Root == null || other.Root.ActualWidth <= 0)
+                        {
+                            continue;
+                        }
+
+                        Rect theirs = other.Root.TransformToAncestor(frame).TransformBounds(new Rect(0, 0, other.Root.ActualWidth, other.Root.ActualHeight));
+                        bool sameRow = theirs.Top < mine.Bottom - 1 && theirs.Bottom > mine.Top + 1;
+                        bool sameColumn = theirs.Left < mine.Right - 1 && theirs.Right > mine.Left + 1;
+                        if (sameRow && theirs.Left >= mine.Right - 1)
+                        {
+                            right = Math.Min(right, Math.Max(0, (theirs.Left - mine.Right) / 2));
+                        }
+                        else if (sameRow && theirs.Right <= mine.Left + 1)
+                        {
+                            left = Math.Min(left, Math.Max(0, (mine.Left - theirs.Right) / 2));
+                        }
+                        else if (sameColumn && theirs.Top >= mine.Bottom - 1)
+                        {
+                            bottom = Math.Min(bottom, Math.Max(0, (theirs.Top - mine.Bottom) / 2));
+                        }
+                        else if (sameColumn && theirs.Bottom <= mine.Top + 1)
+                        {
+                            top = Math.Min(top, Math.Max(0, (mine.Top - theirs.Bottom) / 2));
+                        }
+                    }
+                }
+                catch (InvalidOperationException)
+                {
+                }
+
+                var margin = new Thickness(-left + inset, -top + inset, -right + inset, -bottom + inset);
+                if (item.Hover.Margin != margin)
+                {
+                    item.Hover.Margin = margin;
+                }
+
+                if (inset > 0)
+                {
+                    item.Hover.CornerRadius = new CornerRadius(4);
+                }
             }
         }
 
@@ -1034,7 +1078,7 @@ namespace RetroBar.Controls
 
                 if (item.Hover != null)
                 {
-                    FitHoverToFrame(item);
+                    FitHoverToFrame(item, items);
                     item.Hover.Opacity = !isHovered ? 0 : (isPressed && _previewPressedHit == PreviewHit.Body ? 0.16 : 0.1);
                 }
 
