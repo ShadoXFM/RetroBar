@@ -315,19 +315,6 @@ namespace RetroBar.Utilities
 
         private static void OnWinEvent(IntPtr hook, uint eventType, IntPtr hwnd, int idObject, int idChild, uint thread, uint time)
         {
-            long probe = SlideProbe.Start();
-            try
-            {
-                OnWinEventCore(eventType, hwnd, idObject);
-            }
-            finally
-            {
-                SlideProbe.Stop(0, probe);
-            }
-        }
-
-        private static void OnWinEventCore(uint eventType, IntPtr hwnd, int idObject)
-        {
             if (idObject != 0 || hwnd == IntPtr.Zero)
             {
                 return;

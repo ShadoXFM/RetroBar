@@ -526,8 +526,6 @@ namespace RetroBar.Utilities
             double length = duration.HasTimeSpan ? duration.TimeSpan.TotalMilliseconds : 0;
             var clock = System.Diagnostics.Stopwatch.StartNew();
             bool finished = false;
-            long[] probeTicks = (long[])SlideProbe.Ticks.Clone();
-            int[] probeCount = (int[])SlideProbe.Count.Clone();
 
             void Finish()
             {
@@ -545,14 +543,6 @@ namespace RetroBar.Utilities
                     CountSlide(-1);
                 }
 
-                string hooks = "";
-                string[] hookNames = { "blur", "barblur", "orb", "orbmenu", "z" };
-                for (int h = 0; h < hookNames.Length; h++)
-                {
-                    hooks += $" {hookNames[h]} {(SlideProbe.Ticks[h] - probeTicks[h]) * 1000.0 / System.Diagnostics.Stopwatch.Frequency:F1}ms/{SlideProbe.Count[h] - probeCount[h]}";
-                }
-
-                ManagedShell.Common.Logging.ShellLogger.Info($"PopupSlide[{_popup.Name}]: {length:F0} ms slide, {run.Moved} frames moved, {run.Left} left out (UI thread late), {run.Late} moved late, latest start {run.MaxLate:F1} ms after the compositor's frame, a move takes {run.ApplyTotal / Math.Max(1, run.Moved):F2} ms (longest {run.ApplyMax:F2}), of it the region {run.RgnTotal / Math.Max(1, run.Moved):F2} ms and the place {run.PosTotal / Math.Max(1, run.Moved):F2} ms; hooks on this thread during it:{hooks}");
                 ApplyWindowD(to);
                 done();
             }
