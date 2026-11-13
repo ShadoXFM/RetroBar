@@ -109,14 +109,26 @@ namespace RetroBar.Controls
                         frame = tab.AppButton;
                     }
 
+                    // A button measured while the bar is still being made (at the start of the PC, with the windows coming up one after the other)
+                    // can be a fraction of what a tab is: 14 where it is 27, and every tab was that size, kept (it was taken as the truth, and a
+                    // measure that is a square agrees with itself). A tab much smaller than the bar's room for it is not measured.
+                    if (!PlausibleTabHeight(frame.ActualHeight, exact: true))
+                    {
+                        continue;
+                    }
+
                     try
                     {
                         // Where the frame is in its slot: the room it leaves at the left less the room at the right (the theme's margins are not even).
                         Rect bounds = frame.TransformToAncestor(tab).TransformBounds(new Rect(0, 0, frame.ActualWidth, frame.ActualHeight));
                         // A frame measured while the tab is still being laid out (a tab just made) is a little off, and the pins were made its
                         // size: when it comes to be another size the pins are lined up with it again.
-                        bool changed = _frameWidth > 0 && _frameHeight > 0 &&
-                            (Math.Abs(bounds.Width - _frameWidth) >= PixelStep * 0.5 || Math.Abs(bounds.Height - _frameHeight) >= PixelStep * 0.5);
+                        // (The first frame measured counts as a change too: the pins were made before there was one, from the margins, and are
+                        // lined up with the frame when there is. When a button measured too small is left out - see PlausibleTabHeight - the
+                        // first frame is the real one, and with no change taken from it the pins stayed where the margins had put them: off
+                        // centre on a bar whose frame has an offset of its own.)
+                        bool changed = !(_frameWidth > 0 && _frameHeight > 0) ||
+                            Math.Abs(bounds.Width - _frameWidth) >= PixelStep * 0.5 || Math.Abs(bounds.Height - _frameHeight) >= PixelStep * 0.5;
                         _frameShift = bounds.Left - (tab.ActualWidth - bounds.Right);
                         _frameLeft = bounds.Left;
                         _frameTop = bounds.Top;
@@ -139,6 +151,24 @@ namespace RetroBar.Controls
             }
 
             return _lastTabMeasure;
+        }
+
+        // Whether a measured frame is about as tall as the room the bar has for a tab (the bar's height less the margins the theme gives a tab).
+        private bool PlausibleTabHeight(double frameHeight, bool exact = false)
+        {
+            // (The bar's own height when it has one: the list can be as short as the tabs themselves while the bar is being made, and a tab
+            // measured against that was always plausible.)
+            double barHeight = Host != null && Host.BarHeight > 0 ? Host.BarHeight : ActualHeight;
+            double room = barHeight - TaskButtonTopMargin - TaskButtonBottomMargin;
+            // A theme whose tab frame is as tall as the room the bar has for it (TaskFrameFillsBar) has no other height to be: a frame measured
+            // while the tab is still being laid out (a pixel or two short) was taken as the size of every tab, and kept (the tabs on the second
+            // display came out narrower and shorter than on every start of RetroBar by hand).
+            if (exact && room > 0 && Application.Current.TryFindResource("TaskFrameFillsBar") is true)
+            {
+                return Math.Abs(frameHeight - room) < PixelStep * 0.5;
+            }
+
+            return room <= 0 || frameHeight >= room * 0.6;
         }
 
         private bool AnyTabPressed()
@@ -431,9 +461,9 @@ namespace RetroBar.Controls
                 return;
             }
 
-            if (!double.IsNaN(panel.ItemHeight) && Math.Abs(_rowHeightKey - ActualHeight) > 0.5)
+            if (!double.IsNaN(panel.ItemHeight) && (Math.Abs(_rowHeightKey - ActualHeight) > 0.5 || !PlausibleTabHeight(panel.ItemHeight)))
             {
-                // The bar was made another height (a theme, a DPI): measured again.
+                // The bar was made another height (a theme, a DPI): measured again. So is a height that is a fraction of what a row is (see below).
                 panel.ClearValue(System.Windows.Controls.WrapPanel.ItemHeightProperty);
             }
 
@@ -444,9 +474,16 @@ namespace RetroBar.Controls
 
             for (int i = 0; i < TasksList.Items.Count; i++)
             {
-                if (TasksList.ItemContainerGenerator.ContainerFromIndex(i) is FrameworkElement container && FindLauncherButton(container) != null && container.ActualHeight > 8)
+                // (A pin measured while the bar is still being made, at the start of the PC, can be a fraction of a tab's height - 14 where it is
+                // 27, the room of its icon alone - and kept as the height of the row every tab was drawn at half its height, frames and all, until
+                // the bar's height changed. Only a height about the bar's room for a tab is taken.)
+                if (TasksList.ItemContainerGenerator.ContainerFromIndex(i) is FrameworkElement container && FindLauncherButton(container) != null && container.ActualHeight > 8 &&
+                    PlausibleTabHeight(container.ActualHeight))
                 {
-                    panel.ItemHeight = container.ActualHeight;
+                    // The row is as tall as the bar is (what it came to on every start of RetroBar by hand): not as tall as the pin was when it was
+                    // looked at, which at the start of the PC was a pixel less on the second display (29 where the bar is 30), and every tab was
+                    // that much smaller, and narrower, until RetroBar was started again.
+                    panel.ItemHeight = Host != null && Host.BarHeight > 0 && Math.Abs(Host.BarHeight - container.ActualHeight) <= 3 ? Host.BarHeight : container.ActualHeight;
                     _rowHeightKey = ActualHeight;
                     return;
                 }
@@ -799,8 +836,45 @@ namespace RetroBar.Controls
                     ApplyRowHeight(double.NaN);
                     _rowLockAllowed = true;
                 }), DispatcherPriority.ApplicationIdle);
+
+                // What the tabs measure, written to the log as the bar settles (the tabs of the second display came out a pixel or two smaller after
+                // the start of the PC than when RetroBar is started on a computer at rest; the log says what was different).
+                foreach (int seconds in new[] { 9, 37 })
+                {
+                    var again = new DispatcherTimer { Interval = TimeSpan.FromSeconds(seconds) };
+                    again.Tick += (s2, a2) =>
+                    {
+                        again.Stop();
+                        LogTabSizes();
+                    };
+                    again.Start();
+                }
             };
             timer.Start();
+        }
+
+        private void LogTabSizes()
+        {
+            try
+            {
+                var row = FindItemsPanel(TasksList) as System.Windows.Controls.WrapPanel;
+                string tabs = "";
+                for (int i = 0; i < TasksList.Items.Count && i < 3; i++)
+                {
+                    if (TasksList.ItemContainerGenerator.ContainerFromIndex(i) is DependencyObject container && FindTabButton(container) is TaskButton tab)
+                    {
+                        var frame = tab.AppButton.Template?.FindName("ButtonOuterBottomBorder", tab.AppButton) as FrameworkElement;
+                        tabs += $" [{tab.AppButton.ActualWidth:F1}x{tab.AppButton.ActualHeight:F1} margin {tab.AppButton.Margin.Left:F1},{tab.AppButton.Margin.Top:F1},{tab.AppButton.Margin.Right:F1},{tab.AppButton.Margin.Bottom:F1} frame {frame?.ActualWidth:F1}x{frame?.ActualHeight:F1} tag {Utilities.MonitorOffset.GetTag(tab.AppButton)}]";
+                    }
+                }
+
+                ManagedShell.Common.Logging.ShellLogger.Info(
+                    $"TaskList sizes ({Host?.Screen?.DeviceName}, {(DateTime.Now - System.Diagnostics.Process.GetCurrentProcess().StartTime).TotalSeconds:F0}s after the start): " +
+                    $"list {ActualWidth:F1}x{ActualHeight:F1}, bar {Host?.BarHeight:F1}, row item height {row?.ItemHeight:F1}, measured frame {_frameWidth:F1}x{_frameHeight:F1} locked {_measureLocked}, ButtonWidth {ButtonWidth:F1}, LauncherHeight {LauncherHeight:F1}, tabs{tabs}");
+            }
+            catch (Exception ex) when (ex is InvalidOperationException or NullReferenceException)
+            {
+            }
         }
 
         private void TaskList_OnLoaded(object sender, RoutedEventArgs e)

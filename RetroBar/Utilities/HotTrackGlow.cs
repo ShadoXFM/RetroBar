@@ -28,9 +28,17 @@ namespace RetroBar.Utilities
         public static bool GetEnabled(DependencyObject obj) => (bool)obj.GetValue(EnabledProperty);
         public static void SetEnabled(DependencyObject obj, bool value) => obj.SetValue(EnabledProperty, value);
 
+        /// <summary>A colour the light always has, instead of the icon's (the template of a tab that flashes for attention: the amber of its glass).</summary>
+        public static readonly DependencyProperty FixedColorProperty = DependencyProperty.RegisterAttached(
+            "FixedColor", typeof(Color?), typeof(HotTrackGlow), new PropertyMetadata(null));
+
+        public static Color? GetFixedColor(DependencyObject obj) => (Color?)obj.GetValue(FixedColorProperty);
+        public static void SetFixedColor(DependencyObject obj, Color? value) => obj.SetValue(FixedColorProperty, value);
+
         private static readonly ConditionalWeakTable<ImageSource, object> ColorCache = new();
         private static readonly ConditionalWeakTable<Border, Action<DateTime>> Launches = new();
         private static readonly ConditionalWeakTable<Border, object> PendingLaunches = new();
+        private static readonly ConditionalWeakTable<Border, Action> Resubscribers = new();
 
         private static void OnEnabledChanged(DependencyObject d, DependencyPropertyChangedEventArgs e)
         {
@@ -71,7 +79,18 @@ namespace RetroBar.Utilities
 
         private static void Attach(Border glow)
         {
-            if (glow.TemplatedParent is not ButtonBase button || glow.Tag is "attached")
+            if (glow.Tag is "attached")
+            {
+                // Back in the tree after having left it: its handlers (taken off when it left) go back on the button.
+                if (Resubscribers.TryGetValue(glow, out Action resubscribe))
+                {
+                    resubscribe();
+                }
+
+                return;
+            }
+
+            if (glow.TemplatedParent is not ButtonBase button)
             {
                 return;
             }
@@ -122,7 +141,7 @@ namespace RetroBar.Utilities
 
             void Recolor()
             {
-                Color color = IconColor(button);
+                Color color = GetFixedColor(glow) ?? IconColor(button);
                 Color light = Lighter(color, 0.12);
                 // Under the pointer the glass is only a little in the colour (the grey glass of the tab shows, as in Windows 7): the colour is
                 // mostly the light at the bottom edge.
@@ -187,11 +206,20 @@ namespace RetroBar.Utilities
                 if (!button.IsVisible || !CursorOver(button))
                 {
                     GoDown();
+                    // WPF can go on thinking the pointer is over the button (its own hover look stays too) when it left while another window
+                    // took the mouse (the preview, or another program): it is made to look again.
+                    if (button.IsMouseOver)
+                    {
+                        Mouse.Synchronize();
+                    }
                 }
             };
 
-            button.MouseEnter += (s, args) => GoUp(args);
-            button.MouseMove += (s, args) =>
+            // The handlers sit on the button, which outlives the template this light is in: a tab whose template is made again (the tab of a
+            // window that becomes the active one, or stops being) would keep every light it ever had - each with its whole tree - and run all
+            // their handlers at every move of the pointer. They are taken off when the light leaves the tree, and put back if it returns.
+            MouseEventHandler onEnter = (s, args) => GoUp(args);
+            MouseEventHandler onMove = (s, args) =>
             {
                 if (!hot)
                 {
@@ -202,7 +230,35 @@ namespace RetroBar.Utilities
 
                 Follow(args);
             };
-            button.MouseLeave += (s, args) => GoDown();
+            MouseEventHandler onLeave = (s, args) => GoDown();
+
+            void Subscribe()
+            {
+                button.MouseEnter -= onEnter;
+                button.MouseMove -= onMove;
+                button.MouseLeave -= onLeave;
+                button.MouseEnter += onEnter;
+                button.MouseMove += onMove;
+                button.MouseLeave += onLeave;
+                // A button whose template was just made again under the pointer: nothing tells this light when the pointer goes, so it looks.
+                if (button.IsMouseOver)
+                {
+                    watch.Start();
+                }
+            }
+
+            void Unsubscribe()
+            {
+                button.MouseEnter -= onEnter;
+                button.MouseMove -= onMove;
+                button.MouseLeave -= onLeave;
+                hot = false;
+                watch.Stop();
+            }
+
+            Subscribe();
+            glow.Unloaded += (s, args) => Unsubscribe();
+            Resubscribers.AddOrUpdate(glow, Subscribe);
             static bool PointerInside(FrameworkElement element)
             {
                 // (IsMouseOver is not up to date for a button that has just come under the pointer.)
@@ -262,6 +318,10 @@ namespace RetroBar.Utilities
 
                 if (over)
                 {
+                    // The light stays up while the pointer is on it: the cursor is watched (no MouseLeave comes if the pointer goes onto the
+                    // preview, and the light stayed on the tab for good).
+                    hot = true;
+                    watch.Start();
                     tint.BeginAnimation(UIElement.OpacityProperty, new DoubleAnimation(1, TimeSpan.FromMilliseconds(800)));
 
                     // If the pointer has gone by the time it has settled, the colour goes (nothing else would tell it to).

@@ -279,9 +279,19 @@ namespace RetroBar.Controls
             // The window is only ever moved from this thread: moving it from another one froze the popup when it crossed to a monitor of
             // another DPI, where this thread resizes it in the same moment.
             _seekPopupDragTimer.Stop();
+            // The title's slide, the meter and the lyrics are redrawn in every frame and hold up the calls that move the window (as they did the
+            // slide of a popup, see PopupSlide.ActiveWindowSlides): they hold still while it is dragged.
+            if (!_seekDragCounted)
+            {
+                _seekDragCounted = true;
+                PopupSlide.CountMotion(1);
+            }
+
             var thread = new System.Threading.Thread(PaceDrag) { IsBackground = true, Name = "SeekPopupDrag" };
             thread.Start();
         }
+
+        private bool _seekDragCounted;
 
         private int _seekPopupDragMovePending;
 
@@ -307,6 +317,12 @@ namespace RetroBar.Controls
                 lock (_seekPopupDragLock)
                 {
                     _seekPopupDragging = false;
+                }
+
+                if (_seekDragCounted)
+                {
+                    _seekDragCounted = false;
+                    PopupSlide.CountMotion(-1);
                 }
             }), DispatcherPriority.Send);
         }
@@ -478,10 +494,14 @@ namespace RetroBar.Controls
 
         private void SeekInput_OnMouseDown(int x, int y)
         {
-            if (!SeekPopup.IsOpen || _seekSlide.Closing || _seekMenuOpen || _seekPopupMovedTo != null || _seekPopupPinned || CursorIsOnSeekPopup(x, y))
+            // Only a popup kept on top (always on top) stays when something else is clicked; one that was moved to be a window of its own
+            // goes as the attached one does (without the slide: there is no taskbar edge to slide to).
+            if (!SeekPopup.IsOpen || _seekSlide.Closing || _seekMenuOpen || _seekPopupPinned || CursorIsOnSeekPopup(x, y))
             {
                 return;
             }
+
+            bool independent = _seekPopupMovedTo != null;
 
             // The click on the track text that closes it must not open it again when the button comes up.
             try
@@ -497,7 +517,7 @@ namespace RetroBar.Controls
             {
             }
 
-            Dispatcher.BeginInvoke(new Action(CloseSeekPopupAnimated), DispatcherPriority.Send);
+            Dispatcher.BeginInvoke(independent ? new Action(CloseSeekPopupNow) : new Action(CloseSeekPopupAnimated), DispatcherPriority.Send);
         }
 
         // The monitor the popup is on decides which adjustments of monitor-adjustments.json apply to it, and the pixel art is drawn for

@@ -12,15 +12,28 @@
          no tail of it shows above or to the left. See PopupShadow.xaml.cs for the two properties. -->
     <Border x:Name="ShadowClip"
             ClipToBounds="True">
-        <Border x:Name="ShadowShape"
-                Background="Black">
-            <Border.Effect>
-                <DropShadowEffect BlurRadius="8"
-                                  ShadowDepth="3"
-                                  Direction="300"
-                                  Opacity="0.75"
-                                  Color="Black" />
-            </Border.Effect>
-        </Border>
+        <Grid>
+            <!-- A second, wider and fainter shadow under the first, for a stronger and bigger one (see PopupShadow.xaml.cs; the same rectangle). -->
+            <Border x:Name="ShadowShape2"
+                    Background="Black"
+                    Visibility="Collapsed">
+                <Border.Effect>
+                    <DropShadowEffect BlurRadius="18"
+                                      ShadowDepth="0"
+                                      Opacity="0.6"
+                                      Color="Black" />
+                </Border.Effect>
+            </Border>
+            <Border x:Name="ShadowShape"
+                    Background="Black">
+                <Border.Effect>
+                    <DropShadowEffect BlurRadius="8"
+                                      ShadowDepth="3"
+                                      Direction="300"
+                                      Opacity="0.75"
+                                      Color="Black" />
+                </Border.Effect>
+            </Border>
+        </Grid>
     </Border>
 </UserControl>

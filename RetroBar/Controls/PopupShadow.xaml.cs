@@ -28,6 +28,27 @@ namespace RetroBar.Controls
             nameof(Room), typeof(Thickness), typeof(PopupShadow),
             new PropertyMetadata(new Thickness(10), (d, e) => ((PopupShadow)d).Apply()));
 
+        /// <summary>
+        /// Whether the popup has the blur window under it when the theme asks for one (default). A popup that says no (the tab previews, in
+        /// a theme that gives them the widgets' look) is drawn over what is behind it, with the glass of the frame alone, as the widgets' are.
+        /// </summary>
+        public static readonly DependencyProperty BlurProperty = DependencyProperty.Register(
+            nameof(Blur), typeof(bool), typeof(PopupShadow),
+            new PropertyMetadata(true, (d, e) =>
+            {
+                var shadow = (PopupShadow)d;
+                if (e.NewValue is false)
+                {
+                    PopupBlur.SetGate(shadow, () => false);
+                }
+            }));
+
+        public bool Blur
+        {
+            get => (bool)GetValue(BlurProperty);
+            set => SetValue(BlurProperty, value);
+        }
+
         public static readonly DependencyProperty AllSidesProperty = DependencyProperty.Register(
             nameof(AllSides), typeof(bool), typeof(PopupShadow),
             new PropertyMetadata(false, (d, e) => ((PopupShadow)d).Apply()));
@@ -147,7 +168,10 @@ namespace RetroBar.Controls
                 ShadowClip.Margin = new Thickness(0);
                 // (Flush with the frame, not past it: the rectangle itself is solid black, and a pixel of it outside the frame showed as a black
                 // line along the top and left.)
-                ShadowShape.Margin = new Thickness(room.Left + Tuck, room.Top + Tuck, room.Right + Tuck, room.Bottom + Tuck);
+                // A theme can have the shadow's rectangle reach out past the frame (PopupShadowSpread, DIPs) for a stronger shadow: the part of
+                // it inside the frame is cut out (see below), so it only makes the shadow denser outside it.
+                double spread = TryFindResource("PopupShadowSpread") is double s ? s : 0;
+                ShadowShape.Margin = new Thickness(room.Left + Tuck - spread, room.Top + Tuck - spread, room.Right + Tuck - spread, room.Bottom + Tuck - spread);
             }
             else
             {
@@ -160,11 +184,28 @@ namespace RetroBar.Controls
                 effect.Opacity = System.Math.Min(1, Strength * boost);
                 // All round, it is not thrown as far down and to the right (so it reaches as much on the left and above).
                 effect.ShadowDepth = allSides ? 0 : 3;
+                effect.BlurRadius = System.Math.Min(TryFindResource("PopupShadowBlur") is double blur ? blur : 8, ReachLimit(room, allSides));
             }
 
             // The black rectangle that casts the shadow has the frame's rounded corners too (a square one showed as a black corner through the
             // frame's smoothed edge, over a light background).
             ShadowShape.CornerRadius = TryFindResource("PopupShadowOutsideOnly") is true ? new CornerRadius(FrameRadius()) : new CornerRadius(0);
+
+            // A theme can have a second shadow under the first, wider (up to the room the window has round the frame), for a stronger one.
+            bool second = allSides && TryFindResource("PopupShadowSecond") is true;
+            ShadowShape2.Visibility = second ? Visibility.Visible : Visibility.Collapsed;
+            if (second)
+            {
+                ShadowShape2.Margin = ShadowShape.Margin;
+                // (Square corners: the shadow of a rectangle is thinner at its corners than along its sides, and rounded as well it was thinner
+                // still there. This one is under the other and wider, so its corners fill in the other's.)
+                ShadowShape2.CornerRadius = new CornerRadius(0);
+                if (ShadowShape2.Effect is DropShadowEffect effect2)
+                {
+                    effect2.Opacity = System.Math.Min(1, Strength * boost);
+                    effect2.BlurRadius = System.Math.Min((TryFindResource("PopupShadowBlur") is double blur2 ? blur2 : 8) * 1.6, ReachLimit(room, allSides));
+                }
+            }
 
             // A theme whose frames are see-through (PopupShadowOutsideOnly = True) must not have the black rectangle behind them: the shadow is
             // then only what spreads outside the frame, and the frame's own area is cut out of it.
@@ -186,6 +227,16 @@ namespace RetroBar.Controls
             }
 
             PopupBlur.Update(this, Room);
+        }
+
+        // How far a shadow can spread before the window's edge cuts it (a hard edge where it was still dark): the room the window has between
+        // the frame and its edge on the side that has the least, a little more than it as the rectangle that casts it is inside the frame by
+        // a little. A popup at the edge of the screen has less room on that side (see PopupSlide.KeepFrameNearEdges); the shadow is the same
+        // all round, so it is that much smaller everywhere. (The bottom is not counted: it is at the taskbar.)
+        private static double ReachLimit(Thickness room, bool allSides)
+        {
+            double least = allSides ? System.Math.Min(System.Math.Min(room.Left, room.Top), room.Right) : System.Math.Min(room.Right, room.Bottom);
+            return System.Math.Max(3, least + 0.5);
         }
 
         private static double Snap(double dips, double scale) => System.Math.Round(dips * scale, MidpointRounding.AwayFromZero) / scale;

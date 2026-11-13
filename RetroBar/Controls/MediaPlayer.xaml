@@ -251,6 +251,14 @@
                                      the popup itself - to fit. -->
                                 <!-- The frame pads 2 at the sides and 3 at the top, so these margins leave the same 10.4 DIP above the art as to its left
                                      and right. -->
+                                <!-- The width the art has, or the width it would have if there were some (the popup does not shrink to the controls
+                                     row when a track has no art): a thing of no height of that width, which the slider's width is worked out
+                                     from and which keeps the popup that wide (see UpdateSeekArtWidthRef). -->
+                                <Border x:Name="SeekArtWidthRef"
+                                        Height="0"
+                                        Margin="2,0,2,0"
+                                        HorizontalAlignment="Center"
+                                        IsHitTestVisible="False" />
                                 <Image x:Name="SeekAlbumArtImage"
                                        MaxHeight="280"
                                        MaxWidth="500"
@@ -262,6 +270,11 @@
                                        UseLayoutRounding="True"
                                        RenderOptions.BitmapScalingMode="HighQuality"
                                        utilities:MonitorOffset.Tag="MediaSeekAlbumArt">
+                                    <!-- A shadow all round the art, wider than the one under the text and glyphs (it has room: the art is 8 DIPs in from the
+                                         frame). -->
+                                    <Image.Effect>
+                                        <DropShadowEffect BlurRadius="8" ShadowDepth="0" Opacity="0.85" Color="Black" />
+                                    </Image.Effect>
                                     <Image.Height>
                                         <MultiBinding Converter="{StaticResource sumWidthsConverter}" ConverterParameter="104.8">
                                             <Binding ElementName="SeekBackButton" Path="ActualWidth" />
@@ -274,6 +287,8 @@
                                 <!-- The lyrics (see MediaPlayer.Lyrics.cs), under the art, as wide as the controls row: a window of a fixed height
                                      (set in code) onto the lines, whose rows are added in code and which is scrolled by moving the panel up. Its room is
                                      kept from when the lyrics are asked for, so the popup does not change height when they arrive. -->
+                                <!-- (No shadow effect on the whole block: each line has its own shadows - see LyricShadowOf - and an effect over the block
+                                     was drawn in software again in every frame the lyrics changed, which held the scroll to about 40 frames a second.) -->
                                 <Grid x:Name="SeekLyricsHost"
                                       HorizontalAlignment="Center"
                                       Width="{Binding ActualWidth, ElementName=SeekControlsRow}"
@@ -317,6 +332,7 @@
                                                utilities:MonitorOffset.Tag="MediaSeekTimeText" />
                                 </Canvas>
                                 <Grid x:Name="SeekTextRow"
+                                      Effect="{DynamicResource PopupContentShadow}"
                                       HorizontalAlignment="Center"
                                       Width="{Binding ActualWidth, ElementName=SeekControlsRow}"
                                       Margin="0,5,0,5">
@@ -412,6 +428,7 @@
                                      buttons+slider+time - regardless of how wide its siblings
                                      get. -->
                                 <StackPanel x:Name="SeekControlsRow"
+                                            Effect="{DynamicResource PopupContentShadow}"
                                             Orientation="Horizontal"
                                             HorizontalAlignment="Center"
                                             Margin="0,0,0,2"

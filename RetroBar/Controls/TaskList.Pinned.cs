@@ -155,6 +155,55 @@ namespace RetroBar.Controls
         // A place in the list: a pin (its tab if its program is running, else its icon) or the tab(s) of a program that is not pinned.
         private sealed record TabUnit(string Key, bool IsPin, string ProgramFile, List<object> Items);
 
+        // The programs that are not pinned whose place was set by hand in this session (and have stayed open): the only ones of them that have a
+        // remembered place. Not saved: a program that is opened again, or at the next start, is at the right end.
+        private static readonly HashSet<string> SessionPlaced = new(StringComparer.OrdinalIgnoreCase);
+
+        private static readonly DateTime StartedUtc = DateTime.UtcNow;
+        private static readonly TimeSpan StartupWindow = TimeSpan.FromSeconds(12);
+        private static List<string> _lastShownOrder;
+
+        // The order the places are shown in is saved when it changes (after the start: while the windows are still being listed it is not
+        // the order they were in), so that after a restart the programs that are open are where they were, the new ones at the right end.
+        private static void PersistShownOrder(List<TabUnit> units)
+        {
+            if (DateTime.UtcNow - StartedUtc < StartupWindow)
+            {
+                return;
+            }
+
+            List<string> shown = units.Select(unit => unit.Key).ToList();
+            if (_lastShownOrder != null && _lastShownOrder.SequenceEqual(shown, StringComparer.OrdinalIgnoreCase))
+            {
+                return;
+            }
+
+            _lastShownOrder = shown;
+            List<string> previous = Settings.Instance.TaskOrder ?? new List<string>();
+            var result = new List<string>(shown);
+            for (int i = 0; i < previous.Count; i++)
+            {
+                if (result.Any(k => string.Equals(k, previous[i], StringComparison.OrdinalIgnoreCase)))
+                {
+                    continue;
+                }
+
+                // After the nearest one before it that is in the result.
+                int after = -1;
+                for (int j = i - 1; j >= 0 && after < 0; j--)
+                {
+                    after = result.FindIndex(k => string.Equals(k, previous[j], StringComparison.OrdinalIgnoreCase));
+                }
+
+                result.Insert(after + 1, previous[i]);
+            }
+
+            if (!result.SequenceEqual(previous, StringComparer.OrdinalIgnoreCase))
+            {
+                Settings.Instance.TaskOrder = result;
+            }
+        }
+
         private static string PinKey(string link) => "pin|" + link.ToLowerInvariant();
 
         private static string AppUnitKey(ApplicationWindow window) => "app|" + TaskOpenOrderComparer.AppKey(window);
@@ -213,9 +262,28 @@ namespace RetroBar.Controls
                 return units;
             }
 
+            // The places that are remembered are the pins'. A program that is not pinned opens at the right end of the tabs, whatever place it had
+            // when it was last open - unless it was put where it is by hand in this session, and is still open (the place is kept while it is).
+            // The programs that are already open when RetroBar starts are in the order they were in (the order is saved as it changes, see
+            // PersistShownOrder), not in the order the system lists them.
+            if (DateTime.UtcNow - StartedUtc < StartupWindow)
+            {
+                foreach (TabUnit unit in units.Where(u => !u.IsPin))
+                {
+                    SessionPlaced.Add(unit.Key);
+                }
+            }
+
+            SessionPlaced.RemoveWhere(key => !units.Any(u => !u.IsPin && string.Equals(u.Key, key, StringComparison.OrdinalIgnoreCase)));
+
             // A pin of a program that was a tab before it was pinned takes that tab's place.
             int IndexOf(TabUnit unit)
             {
+                if (!unit.IsPin && !SessionPlaced.Contains(unit.Key))
+                {
+                    return -1;
+                }
+
                 int at = order.FindIndex(k => string.Equals(k, unit.Key, StringComparison.OrdinalIgnoreCase));
                 if (at < 0 && unit.IsPin)
                 {
@@ -251,10 +319,13 @@ namespace RetroBar.Controls
 
             EnsureExtraPinFolders();
             var desired = new List<object>();
-            foreach (TabUnit unit in BuildUnits())
+            List<TabUnit> shownUnits = BuildUnits();
+            foreach (TabUnit unit in shownUnits)
             {
                 desired.AddRange(unit.Items);
             }
+
+            PersistShownOrder(shownUnits);
 
             // In place, so a tab that stays is not made again (and the ones that move slide as the list is changed one step at a time).
             for (int i = 0; i < desired.Count; i++)
@@ -387,6 +458,12 @@ namespace RetroBar.Controls
                 }
 
                 units.Insert(Math.Clamp(target, 0, units.Count), unitMoved);
+
+                // The programs that are not pinned, as they are laid out after this move, keep their places while they stay open (see BuildUnits).
+                foreach (TabUnit unit in units.Where(u => !u.IsPin))
+                {
+                    SessionPlaced.Add(unit.Key);
+                }
 
                 SaveOrder(units);
                 _owner.RebuildMerged();

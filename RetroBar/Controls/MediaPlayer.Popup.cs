@@ -436,16 +436,23 @@ namespace RetroBar.Controls
 
         private void InitializeSeekSlide()
         {
+
+
+
+
+
             // The blur window under the popup only when it is a window of its own (moved, or on top). Attached to the taskbar its glass is the
             // darker tint (the frame's Tag: see the theme's MediaPopupFrame), which has no blur to be late while it slides.
             PopupBlur.SetGate(SeekPopupRoot, () =>
             {
                 bool independent = _seekPopupMovedTo != null || _seekPopupPinned;
-                string tag = independent ? null : "Attached";
+                // With the blur made by the system (see PopupBlur.DirectAvailable) it is the same attached or not: the glass is its own always.
+                bool direct = PopupBlur.DirectAvailable;
+                string tag = independent || direct ? null : "Attached";
                 if (!Equals(SeekFrame.Tag, tag))
                 {
                     SeekFrame.Tag = tag;
-                    if (independent)
+                    if (independent && !direct)
                     {
                         // The darker glass is put back over it and fades away as the blur comes in.
                         _seekSlide?.FadeGlassIn();

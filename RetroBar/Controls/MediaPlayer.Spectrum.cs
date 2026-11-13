@@ -1,4 +1,4 @@
-﻿using ManagedShell;
+using ManagedShell;
 using ManagedShell.Common.Logging;
 using ManagedShell.WindowsTasks;
 using RetroBar.Converters;
@@ -313,7 +313,7 @@ namespace RetroBar.Controls
         // smoothly as the screen can show, not in steps of the 40 ms the audio is analysed at (a reading is shown one interval after it is taken).
         private void VisualizerFrame(object sender, EventArgs e)
         {
-            if (_visualizerCapture == null)
+            if (_visualizerCapture == null || RetroBar.Utilities.PopupSlide.ActiveWindowSlides > 0)
             {
                 return;
             }
@@ -560,3 +560,4 @@ namespace RetroBar.Controls
         }
     }
 }
+
