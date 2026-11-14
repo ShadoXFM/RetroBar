@@ -1,4 +1,6 @@
 using System;
+using System.Collections.Generic;
+using System.Linq;
 using System.Runtime.InteropServices;
 using System.Windows;
 using System.Windows.Interop;
@@ -83,6 +85,15 @@ namespace RetroBar.Utilities
 
         [DllImport("user32.dll")]
         private static extern IntPtr MonitorFromWindow(IntPtr hWnd, uint flags);
+
+        [StructLayout(LayoutKind.Sequential)]
+        private struct POINT
+        {
+            public int X, Y;
+        }
+
+        [DllImport("user32.dll")]
+        private static extern IntPtr MonitorFromPoint(POINT point, uint flags);
 
         [DllImport("user32.dll")]
         private static extern bool GetMonitorInfo(IntPtr hMonitor, ref MONITORINFO info);
@@ -195,11 +206,48 @@ namespace RetroBar.Utilities
         /// <summary>True while it slides away (the popup closes when that is done).</summary>
         public bool Closing { get; private set; }
 
+        /// <summary>True for a popup that comes in from the right edge of its monitor (SlideDirection.Right on a taskbar at the top or bottom): its
+        /// window is moved sideways, the part past the monitor's edge cut off, as the other popups' windows are moved up and down.</summary>
+        public bool SidewaysWindowSlide { get; set; }
+
+        /// <summary>
+        /// The slide whose animation moves this popup's window too (the clock flyout's notifications are moved by its calendar's): both windows
+        /// are moved in the same step, once per frame, which gave the compositor both moves together where two animations of their own each took a
+        /// share of the UI thread's frame and left a part of the frames out.
+        /// </summary>
+        public PopupSlide Leader { get; set; }
+
+        private sealed class Follow
+        {
+            public PopupSlide Slide;
+            public double From, To;
+            public Action Done;
+        }
+
+        private readonly List<Follow> _followers = new();
+
+        // A follower asks to be moved with this one's animation; false if this one is not moving (it then has an animation of its own).
+        private bool JoinFollower(PopupSlide slide, double from, double to, Action done)
+        {
+            if (_winRun == null || _winRun.Cancelled || !_winActive)
+            {
+                return false;
+            }
+
+            _followers.RemoveAll(f => f.Slide == slide);
+            _followers.Add(new Follow { Slide = slide, From = from, To = to, Done = done });
+            slide.ApplyWindowD(from);
+            return true;
+        }
+
         /// <summary>True while the popup is open (sliding in or away included).</summary>
         public bool IsOpen => _popup.IsOpen;
 
         /// <summary>Raised when the popup has closed, after it slid away or by CloseNow.</summary>
         public event Action Closed;
+
+        /// <summary>Raised when the popup starts to slide away (with the time it was asked to take, if one was given), or is closed by CloseNow.</summary>
+        public event Action<TimeSpan?> Hiding;
 
         private (DependencyProperty Property, double Hidden) Axis()
         {
@@ -223,6 +271,7 @@ namespace RetroBar.Utilities
         /// <summary>Opens the popup, sliding in (from where it is, if it was still on screen sliding away).</summary>
         public void Show()
         {
+            CancelGrowth();
             if (_winActive)
             {
                 // It was sliding away as a window (see BeginWindowMode): it comes back in from where it is.
@@ -310,6 +359,9 @@ namespace RetroBar.Utilities
         private const bool UseWindowSlide = true;
 
         private bool _winActive;
+        private bool _winSideways;
+        private bool _winCutAtEdge;
+        private bool _winRegionCleared;
         private IntPtr _winHandle;
         private int _winLeft, _winTop, _winWidth, _winHeight, _winEdge;
         private double _winDistance;
@@ -338,7 +390,8 @@ namespace RetroBar.Utilities
         // The window is where it rests: its place, size and where the taskbar's edge cuts it are taken.
         private bool BeginWindowMode()
         {
-            if (!UseWindowSlide || _direction() != SlideDirection.Down
+            bool sideways = SidewaysWindowSlide && _direction() == SlideDirection.Right;
+            if (!UseWindowSlide || (_direction() != SlideDirection.Down && !sideways)
                 || PresentationSource.FromVisual(_clipRoot) is not HwndSource source
                 || !GetWindowRect(source.Handle, out RECT r))
             {
@@ -346,15 +399,35 @@ namespace RetroBar.Utilities
             }
 
             _sliding = true;
-            double? overlap = _clipRoot.ActualHeight > 0 ? _clipOverlap() : null;
-            if (overlap == null)
+            int edge;
+            if (sideways)
             {
-                return false;
-            }
+                // The monitor's right edge: what is past it is cut off, so the window does not show on the screen next to it.
+                var info = new MONITORINFO { Size = Marshal.SizeOf<MONITORINFO>() };
+                if (r.Right - r.Left <= 0 || !GetMonitorInfo(MonitorFromWindow(source.Handle, 2), ref info))
+                {
+                    _sliding = false;
+                    return false;
+                }
 
-            int edge = r.Bottom - (int)Math.Round(overlap.Value * VisualTreeHelper.GetDpi(_clipRoot).DpiScaleY);            if (edge - r.Top <= 0 || r.Right - r.Left <= 0)
+                edge = info.Monitor.Right;
+                // With no screen beyond that edge what is moved past it is not seen: the window is only moved, with no region to cut it at the
+                // edge (setting one costs a redraw of the window in every frame).
+                _winCutAtEdge = MonitorFromPoint(new POINT { X = edge + 1, Y = (r.Top + r.Bottom) / 2 }, 0) != IntPtr.Zero;
+            }
+            else
             {
-                return false;
+                double? overlap = _clipRoot.ActualHeight > 0 ? _clipOverlap() : null;
+                if (overlap == null)
+                {
+                    return false;
+                }
+
+                edge = r.Bottom - (int)Math.Round(overlap.Value * VisualTreeHelper.GetDpi(_clipRoot).DpiScaleY);
+                if (edge - r.Top <= 0 || r.Right - r.Left <= 0)
+                {
+                    return false;
+                }
             }
 
             // Above the taskbar's window while it slides over it (what is below the bar's edge is cut off by the region).
@@ -366,10 +439,16 @@ namespace RetroBar.Utilities
             _winWidth = r.Right - r.Left;
             _winHeight = r.Bottom - r.Top;
             _winEdge = edge;
-            PopupBlur.SetEdge(_winHandle, edge);
-            _winDistance = edge - r.Top;
+            _winSideways = sideways;
+            if (!sideways)
+            {
+                PopupBlur.SetEdge(_winHandle, edge);
+            }
+
+            _winDistance = sideways ? edge - r.Left : edge - r.Top;
             _winD = 0;
             _winActive = true;
+            _winRegionCleared = false;
             return true;
         }
 
@@ -390,6 +469,26 @@ namespace RetroBar.Utilities
             // down - the redraw the cut asks for was drawn at the place the window had before the move, for a frame. So always this order.
             const bool goingUp = true;
             _winD = d;
+            if (_winSideways)
+            {
+                // The same, to the right: the window is moved first and the part past the monitor's edge is cut after.
+                int left = _winLeft + (int)Math.Round(d);
+                int visibleWidth = Math.Max(0, Math.Min(_winWidth, _winEdge - left));
+                SetWindowPos(_winHandle, IntPtr.Zero, left, _winTop, 0, 0, SWP_NOSIZE | SWP_NOZORDER | SWP_NOACTIVATE);
+                if (_winCutAtEdge)
+                {
+                    SetWindowRgn(_winHandle, CreateRectRgn(0, 0, visibleWidth, _winHeight), true);
+                }
+                else if (!_winRegionCleared)
+                {
+                    // (the empty region it was made with, see TryHideWindowEarly, is taken off: it is out of sight where it is now)
+                    _winRegionCleared = true;
+                    SetWindowRgn(_winHandle, IntPtr.Zero, false);
+                }
+
+                return;
+            }
+
             int top = _winTop + (int)Math.Round(d);
             int visible = Math.Max(0, Math.Min(_winHeight, _winEdge - top));
             long t0 = System.Diagnostics.Stopwatch.GetTimestamp();
@@ -421,7 +520,8 @@ namespace RetroBar.Utilities
 
         private bool TryHideWindowEarly()
         {
-            if (!UseWindowSlide || _direction() != SlideDirection.Down || PresentationSource.FromVisual(_clipRoot) is not HwndSource source || source.Handle == IntPtr.Zero)
+            if (!UseWindowSlide || (_direction() != SlideDirection.Down && !(SidewaysWindowSlide && _direction() == SlideDirection.Right)) ||
+                PresentationSource.FromVisual(_clipRoot) is not HwndSource source || source.Handle == IntPtr.Zero)
             {
                 return false;
             }
@@ -462,6 +562,8 @@ namespace RetroBar.Utilities
             _earlyHandle = IntPtr.Zero;
             _transform.BeginAnimation(TranslateTransform.YProperty, null);
             _transform.Y = 0;
+            _transform.BeginAnimation(TranslateTransform.XProperty, null);
+            _transform.X = 0;
             _slideHost.RenderTransform = null;
             UpdateClip();
             StartWindowAnimation(_winDistance, 0, ShowDuration, new CubicEase { EasingMode = EasingMode.EaseOut }, FinishWindowShow);
@@ -516,6 +618,11 @@ namespace RetroBar.Utilities
 
         private void StartWindowAnimation(double from, double to, Duration duration, IEasingFunction ease, Action done)
         {
+            if (Leader != null && Leader.JoinFollower(this, from, to, done))
+            {
+                return;
+            }
+
             StopWindowAnimation();
             int id = ++_winAnimId;
             var run = new SlideRun();
@@ -526,8 +633,6 @@ namespace RetroBar.Utilities
             double length = duration.HasTimeSpan ? duration.TimeSpan.TotalMilliseconds : 0;
             var clock = System.Diagnostics.Stopwatch.StartNew();
             bool finished = false;
-            long[] probeTicks = (long[])SlideProbe.Ticks.Clone();
-            int[] probeCount = (int[])SlideProbe.Count.Clone();
 
             void Finish()
             {
@@ -545,15 +650,15 @@ namespace RetroBar.Utilities
                     CountSlide(-1);
                 }
 
-                string hooks = "";
-                string[] hookNames = { "blur", "barblur", "orb", "orbmenu", "z" };
-                for (int h = 0; h < hookNames.Length; h++)
+                ApplyWindowD(to);
+                List<Follow> followers = _followers.ToList();
+                _followers.Clear();
+                foreach (Follow follower in followers)
                 {
-                    hooks += $" {hookNames[h]} {(SlideProbe.Ticks[h] - probeTicks[h]) * 1000.0 / System.Diagnostics.Stopwatch.Frequency:F1}ms/{SlideProbe.Count[h] - probeCount[h]}";
+                    follower.Slide.ApplyWindowD(follower.To);
+                    follower.Done();
                 }
 
-                ManagedShell.Common.Logging.ShellLogger.Info($"PopupSlide[{_popup.Name}]: {length:F0} ms slide, {run.Moved} frames moved, {run.Left} left out (UI thread late), {run.Late} moved late, latest start {run.MaxLate:F1} ms after the compositor's frame, a move takes {run.ApplyTotal / Math.Max(1, run.Moved):F2} ms (longest {run.ApplyMax:F2}), of it the region {run.RgnTotal / Math.Max(1, run.Moved):F2} ms and the place {run.PosTotal / Math.Max(1, run.Moved):F2} ms; hooks on this thread during it:{hooks}");
-                ApplyWindowD(to);
                 done();
             }
 
@@ -588,7 +693,13 @@ namespace RetroBar.Utilities
                 run.Moved++;
                 run.Skipped = 0;
                 long applyStart = System.Diagnostics.Stopwatch.GetTimestamp();
-                ApplyWindowD(from + (to - from) * ease.Ease(t));
+                double eased = ease.Ease(t);
+                ApplyWindowD(from + (to - from) * eased);
+                foreach (Follow follower in _followers)
+                {
+                    follower.Slide.ApplyWindowD(follower.From + (follower.To - follower.From) * eased);
+                }
+
                 double took = (System.Diagnostics.Stopwatch.GetTimestamp() - applyStart) * 1000.0 / System.Diagnostics.Stopwatch.Frequency;
                 run.ApplyTotal += took;
                 run.ApplyMax = Math.Max(run.ApplyMax, took);
@@ -663,8 +774,152 @@ namespace RetroBar.Utilities
             run.Fallback.Start();
         }
 
+        /// <summary>Raised when the cut of a window that was grown or shrunk by <see cref="WindowGrow"/> has been taken off.</summary>
+        public event Action GrowCleared;
+
+        /// <summary>True while a window is being grown or shrunk by <see cref="WindowGrow"/>.</summary>
+        public bool IsGrowing { get; private set; }
+
+        /// <summary>
+        /// A popup that gets taller or lower (a list opened up or closed) with its bottom edge where it is: its window is moved, and cut at that
+        /// edge, as when it slides in and away from below - not resized in every frame, which is what the window of a popup of this kind cannot do
+        /// at the monitor's pace. The window rests at (left, top) with the given size, its bottom at 'bottom' and the cut cutInset pixels above it - where the frame's own bottom edge is, so that the panel's bottom stays where it is - (all in pixels); d is how far down from there
+        /// it is, from 'from' to 'to'; what is below the edge is cut off. finished runs when it has got there (the popup's content can be changed
+        /// then), and the cut is taken off after it.
+        /// </summary>
+        public void WindowGrow(int left, int top, int width, int height, int bottom, int cutInset, double from, double to, TimeSpan time, Func<int> change, Action finished)
+        {
+            if (!_popup.IsOpen || _winActive || PresentationSource.FromVisual(_clipRoot) is not HwndSource source || source.Handle == IntPtr.Zero)
+            {
+                change?.Invoke();
+                finished?.Invoke();
+                return;
+            }
+
+            _winHandle = source.Handle;
+            _winLeft = left;
+            _winTop = top;
+            _winWidth = width;
+            _winHeight = height;
+            _winEdge = bottom - cutInset;
+            _winSideways = false;
+            _winDistance = Math.Max(from, to);
+            _winD = 0;
+            _winActive = true;
+            IsGrowing = true;
+            // The popup puts its window where it belongs (its own place) when what is in it changes size, which for a frame had the window at its final
+            // place before the first move of the animation: every move of the window is made to go where the animation has it while it grows.
+            if (_growHooked != source)
+            {
+                _growHooked?.RemoveHook(GrowHook);
+                source.AddHook(GrowHook);
+                _growHooked = source;
+            }
+
+            if (change != null)
+            {
+                ApplyWindowD(from);
+                // The list is changed with the window held where it is. The height that was worked out for the window (from the heights of the lists)
+                // can be a few pixels off what the popup made it (the rows and the lines are on whole pixels): the window is as high as it really is,
+                // with its bottom where it was, which is where the popup would put it.
+                int real = change();
+                if (real > 0 && real != height)
+                {
+                    double heightBefore = height - from;
+                    height = real;
+                    _winHeight = real;
+                    _winTop = bottom - real;
+                    from = real - heightBefore;
+                    _winDistance = Math.Max(from, to);
+                    ApplyWindowD(from);
+                }
+            }
+
+            StartWindowAnimation(from, to, new Duration(time), new CubicEase { EasingMode = EasingMode.EaseOut }, () =>
+            {
+                _winActive = false;
+                IsGrowing = false;
+                StopWindowAnimation();
+                finished?.Invoke();
+                // (the cut is taken off once what is in the window has been laid out again, so that nothing of the old size shows below the edge)
+                IntPtr handle = _winHandle;
+                int windowLeft = _winLeft, windowBottom = bottom;
+                _slideHost.Dispatcher.BeginInvoke(new Action(() =>
+                {
+                    if (!IsGrowing && !_winActive && IsWindow(handle))
+                    {
+                        // The window is as high as the popup made it, with its bottom where it was (the height worked out for it can be a few
+                        // pixels off, and the popup does not always put its window again when it is only made lower).
+                        if (GetWindowRect(handle, out RECT now) && now.Bottom != windowBottom)
+                        {
+                            SetWindowPos(handle, IntPtr.Zero, windowLeft, windowBottom - (now.Bottom - now.Top), 0, 0, SWP_NOSIZE | SWP_NOZORDER | SWP_NOACTIVATE);
+                        }
+
+                        SetWindowRgn(handle, IntPtr.Zero, false);
+                        // (what was shown in place of what the cut hid goes in the same breath: both drawn at once are darker, neither is a hole)
+                        GrowCleared?.Invoke();
+                    }
+                }), System.Windows.Threading.DispatcherPriority.Background);
+            });
+        }
+
+        private HwndSource _growHooked;
+
+        [StructLayout(LayoutKind.Sequential)]
+        private struct WINDOWPOS
+        {
+            public IntPtr hwnd, hwndInsertAfter;
+            public int x, y, cx, cy;
+            public uint flags;
+        }
+
+        private IntPtr GrowHook(IntPtr hwnd, int msg, IntPtr wParam, IntPtr lParam, ref bool handled)
+        {
+            const int WM_WINDOWPOSCHANGING = 0x0046;
+            const uint SWP_NOMOVE = 0x0002;
+            if (msg == WM_WINDOWPOSCHANGING && IsGrowing && _winActive && !_winSideways)
+            {
+                var pos = Marshal.PtrToStructure<WINDOWPOS>(lParam);
+                pos.flags &= ~SWP_NOMOVE;
+                pos.x = _winLeft;
+                pos.y = _winTop + (int)Math.Round(_winD);
+                Marshal.StructureToPtr(pos, lParam, false);
+            }
+
+            return IntPtr.Zero;
+        }
+
+        // A slide that is asked for while the window is being grown: the growing is over at once (where it is, uncut).
+        private void CancelGrowth()
+        {
+            if (!IsGrowing)
+            {
+                return;
+            }
+
+            IsGrowing = false;
+            _winActive = false;
+            StopWindowAnimation();
+            if (IsWindow(_winHandle))
+            {
+                SetWindowRgn(_winHandle, IntPtr.Zero, false);
+            }
+        }
+
         private void StopWindowAnimation()
         {
+            // The ones that were moved with it are put where they were going: they have no animation of their own to finish them.
+            if (_followers.Count > 0 && _winRun != null)
+            {
+                List<Follow> orphans = _followers.ToList();
+                _followers.Clear();
+                foreach (Follow orphan in orphans)
+                {
+                    orphan.Slide.ApplyWindowD(orphan.To);
+                    orphan.Done();
+                }
+            }
+
             if (_winRun != null)
             {
                 _winRun.Cancelled = true;
@@ -800,6 +1055,7 @@ namespace RetroBar.Utilities
             }
 
             _winActive = false;
+            _winSideways = false;
             PopupBlur.SetEdge(_winHandle, null);
             PopupBlur.Suppress(_winHandle, false);
             _transform.BeginAnimation(TranslateTransform.YProperty, null);
@@ -825,6 +1081,7 @@ namespace RetroBar.Utilities
                 return;
             }
 
+            CancelGrowth();
             Closing = true;
             Duration duration = time is TimeSpan quickTime ? new Duration(quickTime) : HideDuration;
             if (_winActive || (!_showPending && BeginWindowMode()))
@@ -866,6 +1123,8 @@ namespace RetroBar.Utilities
                     start();
                 }
 
+                // (after the animation has started: the popups that go with this one join it)
+                Hiding?.Invoke(time);
                 return;
             }
 
@@ -891,11 +1150,13 @@ namespace RetroBar.Utilities
                 }
             };
             _transform.BeginAnimation(axis, slide);
+            Hiding?.Invoke(time);
         }
 
         /// <summary>Closes the popup at once, with no slide.</summary>
         public void CloseNow()
         {
+            Hiding?.Invoke(null);
             Closing = false;
             _popup.IsOpen = false;
             Reset();

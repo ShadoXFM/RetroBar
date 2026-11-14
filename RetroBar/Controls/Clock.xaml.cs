@@ -242,6 +242,10 @@ namespace RetroBar.Controls
                     IntPtr hWnd = (PresentationSource.FromVisual(this) as System.Windows.Interop.HwndSource).Handle;
                     ClockFlyoutLauncher.ShowAeroClockFlyout(hWnd);
                     break;
+                case ClockClickOption.OpenGadgetCalendar:
+                case ClockClickOption.OpenGadgetSidebar:
+                    ToggleFlyout();
+                    break;
                 case ClockClickOption.OpenNotificationCenter:
                     if (EnvironmentHelper.IsWindows10RS4OrBetter)
                     {

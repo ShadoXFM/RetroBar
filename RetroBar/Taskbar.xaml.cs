@@ -508,19 +508,6 @@ namespace RetroBar
 
         private static void OnBlurWinEvent(IntPtr hook, uint eventType, IntPtr hwnd, int idObject, int idChild, uint thread, uint time)
         {
-            long probe = RetroBar.Utilities.SlideProbe.Start();
-            try
-            {
-                OnBlurWinEventCore(hwnd, idObject);
-            }
-            finally
-            {
-                RetroBar.Utilities.SlideProbe.Stop(1, probe);
-            }
-        }
-
-        private static void OnBlurWinEventCore(IntPtr hwnd, int idObject)
-        {
             if (idObject != 0 || hwnd == IntPtr.Zero || !GetWindowRect(hwnd, out NativeMethods.Rect moved))
             {
                 return;

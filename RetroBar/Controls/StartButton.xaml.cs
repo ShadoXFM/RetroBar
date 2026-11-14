@@ -305,13 +305,10 @@ namespace RetroBar.Controls
             {
                 orbHookProc = (hook, eventType, hwnd, idObject, idChild, thread, time) =>
                 {
-                    long probe = RetroBar.Utilities.SlideProbe.Start();
                     if (idObject == 0 && floatingStartButton != null && hwnd != floatingStartButton.Handle)
                     {
                         RaiseOrbTimer_Tick(null, EventArgs.Empty);
                     }
-
-                    RetroBar.Utilities.SlideProbe.Stop(2, probe);
                 };
                 // EVENT_OBJECT_SHOW (0x8002) to EVENT_OBJECT_LOCATIONCHANGE (0x800B), out of context: called on this thread, from its message loop.
                 orbHook = SetWinEventHook(0x8002, 0x800B, IntPtr.Zero, orbHookProc, 0, 0, 0);
@@ -375,7 +372,6 @@ namespace RetroBar.Controls
 
             zOrderProc = (code, wParam, lParam) =>
             {
-                long probe = RetroBar.Utilities.SlideProbe.Start();
                 try
                 {
                     if (code >= 0 && floatingStartButton != null)
@@ -403,7 +399,6 @@ namespace RetroBar.Controls
                     // never in the way of a window message
                 }
 
-                RetroBar.Utilities.SlideProbe.Stop(4, probe);
                 return CallNextHookEx(IntPtr.Zero, code, wParam, lParam);
             };
             zOrderHook = SetWindowsHookEx(4 /* WH_CALLWNDPROC */, zOrderProc, IntPtr.Zero, GetCurrentThreadId());
@@ -485,9 +480,6 @@ namespace RetroBar.Controls
                     return;
                 }
 
-                long probe = RetroBar.Utilities.SlideProbe.Start();
-                try
-                {
                 var name = new System.Text.StringBuilder(64);
                 GetClassName(hwnd, name, name.Capacity);
                 // The menus, and RetroBar's own popups (the weather widget's, which is by the orb, slides in over it as the menu does).
@@ -496,11 +488,6 @@ namespace RetroBar.Controls
                     processId == (uint)Environment.ProcessId)
                 {
                     RaiseFloatingStartAboveMenu();
-                }
-                }
-                finally
-                {
-                    RetroBar.Utilities.SlideProbe.Stop(3, probe);
                 }
             };
             InstallZOrderHook();

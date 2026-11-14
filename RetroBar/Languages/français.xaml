@@ -129,6 +129,8 @@
         <s:String>Ouvrir le calendrier "Aero"</s:String>
         <s:String>Ouvrir le calendrier "Modern"</s:String>
         <s:String>Ouvrir le Centre de notifications</s:String>
+        <s:String>Ouvrir le calendrier gadget</s:String>
+        <s:String>Ouvrir la barre latérale gadget</s:String>
     </x:Array>
     <s:String x:Key="task_wheel_action">Action de la _molette de la souris:</s:String>
     <x:Array x:Key="task_wheel_action_values" Type="s:String">
@@ -267,4 +269,9 @@
     <s:String x:Key="ime_conversion_general">Général</s:String>
     <s:String x:Key="ime_conversion_none">Aucune conversion</s:String>
     <s:String x:Key="input_switcher_item_format">{0} — {1}</s:String>
+    <s:String x:Key="clock_flyout_notifications">Notifications</s:String>
+    <s:String x:Key="clock_flyout_clear_all">Tout effacer</s:String>
+    <s:String x:Key="clock_flyout_no_notifications">Aucune nouvelle notification</s:String>
+    <s:String x:Key="clock_flyout_more">autres</s:String>
+    <s:String x:Key="clock_flyout_show_less">Réduire</s:String>
 </ResourceDictionary>

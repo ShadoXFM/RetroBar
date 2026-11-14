@@ -137,6 +137,8 @@
         <s:String>Open Aero calendar</s:String>
         <s:String>Open Modern calendar</s:String>
         <s:String>Open Notification Center</s:String>
+        <s:String>Open gadget calendar</s:String>
+        <s:String>Open gadget sidebar</s:String>
     </x:Array>
     <s:String x:Key="task_wheel_action">_Mouse wheel action:</s:String>
     <x:Array x:Key="task_wheel_action_values" Type="s:String">
@@ -271,4 +273,9 @@
     <!-- Items below are settings, and should always be in English -->
     <FlowDirection x:Key="flow_direction">LeftToRight</FlowDirection>
     <FontFamily x:Key="start_text_xp_font_family">Franklin Gothic</FontFamily>
+    <s:String x:Key="clock_flyout_notifications">Notifications</s:String>
+    <s:String x:Key="clock_flyout_clear_all">Clear all</s:String>
+    <s:String x:Key="clock_flyout_no_notifications">No new notifications</s:String>
+    <s:String x:Key="clock_flyout_more">more</s:String>
+    <s:String x:Key="clock_flyout_show_less">Show less</s:String>
 </ResourceDictionary>
