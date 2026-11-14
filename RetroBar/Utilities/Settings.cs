@@ -781,6 +781,8 @@ namespace RetroBar.Utilities
         OpenAeroCalendar,
         OpenModernCalendar,
         OpenNotificationCenter,
+        OpenGadgetCalendar,
+        OpenGadgetSidebar,
     }
 
     public enum WinNumHotkeysOption

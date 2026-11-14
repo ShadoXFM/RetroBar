@@ -1119,6 +1119,14 @@
     <!-- The same frame with a black fill (the media popup's; the others keep the grey one). -->
     <BitmapImage x:Key="MediaPopupFrameImage"
                  UriSource="../Resources/popupframe-black.png" />
+    <!-- The push button of the visual style in use (aero10p1_seven.msstyles, Button / PushButton): six states one over the other (normal, hot,
+         pressed, disabled, default, default pulsing), 40x26 each; drawn with utilities:NineSlice. -->
+    <BitmapImage x:Key="Win7PushButtonImage"
+                 UriSource="../Resources/win7-pushbutton.png" />
+    <!-- The glass button of the same visual style that is used for what is under the pointer and what is chosen (the days of the clock's
+         calendar): four states one over the other (normal, hot, pressed, disabled), 38x24 each. -->
+    <BitmapImage x:Key="Win7GlassButtonImage"
+                 UriSource="../Resources/win7-glassbutton.png" />
     <!-- The same frame, darker and nearly opaque: the glass of the popups that have no blur under them (attached to the taskbar, the widgets'). -->
     <BitmapImage x:Key="MediaPopupAttachedImage"
                  UriSource="../Resources/popupframe-attached.png" />
